@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>系统设计实战：即时通讯系统架构 · zt&#39;s Blog</title>
+  <meta name="description" content="从零设计一个即时通讯系统，涵盖WebSocket长连接、消息存储、群聊扩散、在线状态、推送通知、消息排序、已读回执与水平扩展方案。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/system-design-chat-system/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="系统设计实战：即时通讯系统架构">
+  <meta property="og:description" content="从零设计一个即时通讯系统，涵盖WebSocket长连接、消息存储、群聊扩散、在线状态、推送通知、消息排序、已读回执与水平扩展方案。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/system-design-chat-system/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2024-04-16T16:00:00.000Z">
+  <meta property="article:modified_time" content="2024-04-16T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="系统设计实战：即时通讯系统架构">
+  <meta name="twitter:description" content="从零设计一个即时通讯系统，涵盖WebSocket长连接、消息存储、群聊扩散、在线状态、推送通知、消息排序、已读回执与水平扩展方案。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"系统设计实战：即时通讯系统架构","description":"从零设计一个即时通讯系统，涵盖WebSocket长连接、消息存储、群聊扩散、在线状态、推送通知、消息排序、已读回执与水平扩展方案。","datePublished":"2024-04-16T16:00:00.000Z","dateModified":"2024-04-16T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/system-design-chat-system/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Architecture","item":"https://withesse.co/categories/Architecture/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:152">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Architecture/">Architecture</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/system-design/"><span class="hash">#</span>system-design</a><a class="tag" href="/tags/im/"><span class="hash">#</span>im</a><a class="tag" href="/tags/websocket/"><span class="hash">#</span>websocket</a>
+        
+      </div>
+
+      <h1>系统设计实战：即时通讯系统架构</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2024.04.17</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 10 min</span>
+        </span>
+        <span class="wc"><span class="num">3.9k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%9C%80%E6%B1%82%E5%88%86%E6%9E%90"><span class="toc-text">需求分析</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8A%9F%E8%83%BD%E9%9C%80%E6%B1%82"><span class="toc-text">功能需求</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%9D%9E%E5%8A%9F%E8%83%BD%E9%9C%80%E6%B1%82"><span class="toc-text">非功能需求</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%B9%E9%87%8F%E4%BC%B0%E7%AE%97"><span class="toc-text">容量估算</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%B3%BB%E7%BB%9F%E6%9E%B6%E6%9E%84%E6%80%BB%E8%A7%88"><span class="toc-text">系统架构总览</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#websocket-%E9%95%BF%E8%BF%9E%E6%8E%A5"><span class="toc-text">WebSocket 长连接</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BF%9E%E6%8E%A5%E7%AE%A1%E7%90%86"><span class="toc-text">连接管理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BF%9E%E6%8E%A5%E6%B3%A8%E5%86%8C%E8%A1%A8"><span class="toc-text">连接注册表</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%B6%88%E6%81%AF%E6%8A%95%E9%80%92%E6%B5%81%E7%A8%8B"><span class="toc-text">消息投递流程</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8D%95%E8%81%8A%E6%B6%88%E6%81%AF"><span class="toc-text">单聊消息</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%B6%88%E6%81%AF%E5%AD%98%E5%82%A8"><span class="toc-text">消息存储</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AD%98%E5%82%A8%E6%A8%A1%E5%9E%8B"><span class="toc-text">存储模型</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%B6%88%E6%81%AF%E5%BA%8F%E5%8F%B7%E6%9C%8D%E5%8A%A1"><span class="toc-text">消息序号服务</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BE%A4%E8%81%8A%E6%B6%88%E6%81%AF"><span class="toc-text">群聊消息</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%BE%A4%E6%B6%88%E6%81%AF%E6%89%A9%E6%95%A3"><span class="toc-text">群消息扩散</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9C%A8%E7%BA%BF%E7%8A%B6%E6%80%81%E6%9C%8D%E5%8A%A1presence"><span class="toc-text">在线状态服务（Presence）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%8E%A8%E9%80%81%E9%80%9A%E7%9F%A5"><span class="toc-text">推送通知</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%B6%88%E6%81%AF%E6%8E%92%E5%BA%8F%E4%B8%8E%E5%90%8C%E6%AD%A5"><span class="toc-text">消息排序与同步</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9F%BA%E4%BA%8E-seq-%E7%9A%84%E5%A2%9E%E9%87%8F%E5%90%8C%E6%AD%A5"><span class="toc-text">基于 seq 的增量同步</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%B7%B2%E8%AF%BB%E5%9B%9E%E6%89%A7"><span class="toc-text">已读回执</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%B0%B4%E5%B9%B3%E6%89%A9%E5%B1%95"><span class="toc-text">水平扩展</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#gateway-%E6%89%A9%E5%B1%95"><span class="toc-text">Gateway 扩展</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%B6%88%E6%81%AF%E6%9C%8D%E5%8A%A1%E6%89%A9%E5%B1%95"><span class="toc-text">消息服务扩展</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E5%BA%93%E6%89%A9%E5%B1%95"><span class="toc-text">数据库扩展</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%B3%E9%94%AE%E8%AE%BE%E8%AE%A1%E5%86%B3%E7%AD%96%E6%80%BB%E7%BB%93"><span class="toc-text">关键设计决策总结</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="前言">前言</h2>
+<p>即时通讯（IM）系统是最具挑战性的分布式系统之一，它要求低延迟的实时消息投递、海量消息的可靠存储、复杂的群聊消息扩散，以及在线状态管理等能力。本文将从需求分析出发，逐步设计一个支持千万级用户的
+IM 系统架构。</p>
+<h2 id="需求分析">需求分析</h2>
+<h3 id="功能需求">功能需求</h3>
+<ol type="1">
+<li><strong>单聊</strong>：一对一实时消息</li>
+<li><strong>群聊</strong>：支持数百人的群组聊天</li>
+<li><strong>消息类型</strong>：文本、图片、语音、文件</li>
+<li><strong>在线状态</strong>：显示好友在线/离线</li>
+<li><strong>消息状态</strong>：已发送、已送达、已读</li>
+<li><strong>离线消息</strong>：用户上线后拉取离线消息</li>
+<li><strong>推送通知</strong>：离线用户收到推送</li>
+</ol>
+<h3 id="非功能需求">非功能需求</h3>
+<ul>
+<li><strong>低延迟</strong>：消息端到端延迟 &lt; 200ms</li>
+<li><strong>可靠性</strong>：消息不丢失、不重复</li>
+<li><strong>有序性</strong>：保证消息顺序</li>
+<li><strong>高并发</strong>：支持千万在线连接</li>
+</ul>
+<h3 id="容量估算">容量估算</h3>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><code class="hljs plaintext">用户数: 1000万 DAU<br>平均每人每天发送: 30 条消息<br>消息平均大小: 200 bytes<br><br>日消息量: 1000万 × 30 = 3亿条<br>每秒消息数: 3亿 / 86400 ≈ 3,500 msg/s (峰值 × 5 ≈ 17,500 msg/s)<br>日存储量: 3亿 × 200B = 60GB<br>并发连接: 1000万 × 30% = 300万 (同时在线)<br></code></pre></td></tr></table></figure>
+<h2 id="系统架构总览">系统架构总览</h2>
+<pre class="mermaid">graph TB
+    subgraph 客户端
+        iOS[iOS App]
+        Android[Android App]
+        Web[Web App]
+    end
+
+    iOS --&gt; LB[负载均衡 L4]
+    Android --&gt; LB
+    Web --&gt; LB
+
+    LB --&gt; GW1[Gateway 1&lt;br/&gt;WebSocket]
+    LB --&gt; GW2[Gateway 2&lt;br/&gt;WebSocket]
+    LB --&gt; GWN[Gateway N&lt;br/&gt;WebSocket]
+
+    GW1 --&gt; MsgService[消息服务]
+    GW2 --&gt; MsgService
+
+    MsgService --&gt; Router[消息路由]
+    Router --&gt; GW1
+    Router --&gt; GW2
+
+    MsgService --&gt; MQ[Kafka]
+    MQ --&gt; Storage[存储服务]
+    MQ --&gt; Push[推送服务]
+    MQ --&gt; Search[搜索服务]
+
+    Storage --&gt; MsgDB[(消息DB&lt;br/&gt;TiDB/MongoDB)]
+    Storage --&gt; SeqDB[(序号DB&lt;br/&gt;Redis)]
+
+    subgraph 辅助服务
+        Presence[在线状态服务]
+        Group[群组服务]
+        User[用户服务]
+    end
+
+    GW1 &lt;--&gt; Presence
+    MsgService --&gt; Group</pre>
+<h2 id="websocket-长连接">WebSocket 长连接</h2>
+<h3 id="连接管理">连接管理</h3>
+<pre class="mermaid">sequenceDiagram
+    participant Client
+    participant LB as 负载均衡
+    participant GW as Gateway
+    participant Auth as 认证服务
+    participant Registry as 连接注册表
+
+    Client-&gt;&gt;LB: WebSocket 握手
+    LB-&gt;&gt;GW: 转发(基于IP Hash)
+    GW-&gt;&gt;Auth: 验证Token
+    Auth--&gt;&gt;GW: userId=123
+
+    GW-&gt;&gt;GW: 建立WebSocket连接
+    GW-&gt;&gt;Registry: 注册连接&lt;br/&gt;userId:123 → gateway:1
+
+    loop 心跳保活
+        Client-&gt;&gt;GW: PING (每30s)
+        GW--&gt;&gt;Client: PONG
+    end
+
+    Note over Client,GW: 连接断开时
+    GW-&gt;&gt;Registry: 注销连接</pre>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-comment">// WebSocket Gateway 核心逻辑</span><br><span class="hljs-keyword">type</span> Gateway <span class="hljs-keyword">struct</span> &#123;<br>    connections sync.Map  <span class="hljs-comment">// userId -&gt; *Connection</span><br>    registry   Registry  <span class="hljs-comment">// 分布式连接注册表 (Redis)</span><br>    router     Router    <span class="hljs-comment">// 消息路由</span><br>&#125;<br><br><span class="hljs-keyword">type</span> Connection <span class="hljs-keyword">struct</span> &#123;<br>    userId    <span class="hljs-type">string</span><br>    conn      *websocket.Conn<br>    sendChan  <span class="hljs-keyword">chan</span> []<span class="hljs-type">byte</span><br>    closeChan <span class="hljs-keyword">chan</span> <span class="hljs-keyword">struct</span>&#123;&#125;<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-params">(gw *Gateway)</span></span> HandleWebSocket(w http.ResponseWriter, r *http.Request) &#123;<br>    <span class="hljs-comment">// 1. 升级为 WebSocket</span><br>    conn, err := upgrader.Upgrade(w, r, <span class="hljs-literal">nil</span>)<br>    <span class="hljs-keyword">if</span> err != <span class="hljs-literal">nil</span> &#123;<br>        <span class="hljs-keyword">return</span><br>    &#125;<br><br>    <span class="hljs-comment">// 2. 认证</span><br>    token := r.URL.Query().Get(<span class="hljs-string">&quot;token&quot;</span>)<br>    userId, err := gw.authService.Verify(token)<br>    <span class="hljs-keyword">if</span> err != <span class="hljs-literal">nil</span> &#123;<br>        conn.Close()<br>        <span class="hljs-keyword">return</span><br>    &#125;<br><br>    <span class="hljs-comment">// 3. 创建连接对象</span><br>    c := &amp;Connection&#123;<br>        userId:    userId,<br>        conn:      conn,<br>        sendChan:  <span class="hljs-built_in">make</span>(<span class="hljs-keyword">chan</span> []<span class="hljs-type">byte</span>, <span class="hljs-number">256</span>),<br>        closeChan: <span class="hljs-built_in">make</span>(<span class="hljs-keyword">chan</span> <span class="hljs-keyword">struct</span>&#123;&#125;),<br>    &#125;<br><br>    <span class="hljs-comment">// 4. 踢掉旧连接（同一用户只允许一个设备在线，或支持多端）</span><br>    <span class="hljs-keyword">if</span> old, ok := gw.connections.Load(userId); ok &#123;<br>        old.(*Connection).Close()<br>    &#125;<br>    gw.connections.Store(userId, c)<br><br>    <span class="hljs-comment">// 5. 注册到分布式注册表</span><br>    gw.registry.Register(userId, gw.nodeId)<br><br>    <span class="hljs-comment">// 6. 启动读写协程</span><br>    <span class="hljs-keyword">go</span> c.readPump(gw)<br>    <span class="hljs-keyword">go</span> c.writePump()<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-params">(c *Connection)</span></span> readPump(gw *Gateway) &#123;<br>    <span class="hljs-keyword">defer</span> <span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">()</span></span> &#123;<br>        gw.connections.Delete(c.userId)<br>        gw.registry.Unregister(c.userId)<br>        c.conn.Close()<br>    &#125;()<br><br>    c.conn.SetReadDeadline(time.Now().Add(<span class="hljs-number">60</span> * time.Second))<br>    c.conn.SetPongHandler(<span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">(<span class="hljs-type">string</span>)</span></span> <span class="hljs-type">error</span> &#123;<br>        c.conn.SetReadDeadline(time.Now().Add(<span class="hljs-number">60</span> * time.Second))<br>        <span class="hljs-keyword">return</span> <span class="hljs-literal">nil</span><br>    &#125;)<br><br>    <span class="hljs-keyword">for</span> &#123;<br>        _, message, err := c.conn.ReadMessage()<br>        <span class="hljs-keyword">if</span> err != <span class="hljs-literal">nil</span> &#123;<br>            <span class="hljs-keyword">break</span><br>        &#125;<br>        gw.handleMessage(c.userId, message)<br>    &#125;<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-params">(c *Connection)</span></span> writePump() &#123;<br>    ticker := time.NewTicker(<span class="hljs-number">30</span> * time.Second)<br>    <span class="hljs-keyword">defer</span> ticker.Stop()<br><br>    <span class="hljs-keyword">for</span> &#123;<br>        <span class="hljs-keyword">select</span> &#123;<br>        <span class="hljs-keyword">case</span> message := &lt;-c.sendChan:<br>            c.conn.SetWriteDeadline(time.Now().Add(<span class="hljs-number">10</span> * time.Second))<br>            c.conn.WriteMessage(websocket.TextMessage, message)<br>        <span class="hljs-keyword">case</span> &lt;-ticker.C:<br>            c.conn.WriteMessage(websocket.PingMessage, <span class="hljs-literal">nil</span>)<br>        <span class="hljs-keyword">case</span> &lt;-c.closeChan:<br>            <span class="hljs-keyword">return</span><br>        &#125;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="连接注册表">连接注册表</h3>
+<p>使用 Redis 维护用户到 Gateway 节点的映射：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-keyword">type</span> RedisRegistry <span class="hljs-keyword">struct</span> &#123;<br>    client *redis.Client<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-params">(r *RedisRegistry)</span></span> Register(userId, nodeId <span class="hljs-type">string</span>) &#123;<br>    <span class="hljs-comment">// HSET user_connections userId nodeId</span><br>    r.client.HSet(ctx, <span class="hljs-string">&quot;user_conn&quot;</span>, userId, nodeId)<br>    r.client.Expire(ctx, <span class="hljs-string">&quot;user_conn:&quot;</span>+userId, <span class="hljs-number">90</span>*time.Second)<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-params">(r *RedisRegistry)</span></span> Lookup(userId <span class="hljs-type">string</span>) (<span class="hljs-type">string</span>, <span class="hljs-type">error</span>) &#123;<br>    <span class="hljs-keyword">return</span> r.client.HGet(ctx, <span class="hljs-string">&quot;user_conn&quot;</span>, userId).Result()<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="消息投递流程">消息投递流程</h2>
+<h3 id="单聊消息">单聊消息</h3>
+<pre class="mermaid">sequenceDiagram
+    participant A as 用户A&lt;br/&gt;(Gateway 1)
+    participant GW1 as Gateway 1
+    participant MS as 消息服务
+    participant MQ as Kafka
+    participant Store as 存储服务
+    participant GW2 as Gateway 2
+    participant B as 用户B&lt;br/&gt;(Gateway 2)
+
+    A-&gt;&gt;GW1: 发送消息&lt;br/&gt;{to: B, content: "Hello"}
+    GW1-&gt;&gt;MS: 转发消息
+
+    MS-&gt;&gt;MS: 1. 生成消息ID(Snowflake)
+    MS-&gt;&gt;MS: 2. 生成序号(递增seq)
+    MS-&gt;&gt;MQ: 3. 投递到Kafka
+
+    par 并行处理
+        MQ-&gt;&gt;Store: 持久化消息
+        Store-&gt;&gt;Store: 写入消息表
+    and
+        MS-&gt;&gt;MS: 查找B的Gateway
+        MS-&gt;&gt;GW2: 路由消息到Gateway 2
+        GW2-&gt;&gt;B: 推送消息
+    end
+
+    B--&gt;&gt;GW2: ACK
+    GW2--&gt;&gt;MS: ACK
+    MS--&gt;&gt;GW1: 已送达
+    GW1--&gt;&gt;A: 消息已送达 ✓✓</pre>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-meta">@Service</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">MessageService</span> &#123;<br>    <span class="hljs-meta">@Autowired</span><br>    <span class="hljs-keyword">private</span> SnowflakeIdGenerator idGen;<br>    <span class="hljs-meta">@Autowired</span><br>    <span class="hljs-keyword">private</span> SequenceService seqService;<br>    <span class="hljs-meta">@Autowired</span><br>    <span class="hljs-keyword">private</span> KafkaTemplate&lt;String, Message&gt; kafka;<br>    <span class="hljs-meta">@Autowired</span><br>    <span class="hljs-keyword">private</span> RedisRegistry registry;<br>    <span class="hljs-meta">@Autowired</span><br>    <span class="hljs-keyword">private</span> GatewayRouter router;<br><br>    <span class="hljs-keyword">public</span> SendResult <span class="hljs-title function_">sendMessage</span><span class="hljs-params">(String fromUserId, SendMessageRequest req)</span> &#123;<br>        <span class="hljs-comment">// 1. 生成消息ID</span><br>        <span class="hljs-type">long</span> <span class="hljs-variable">msgId</span> <span class="hljs-operator">=</span> idGen.nextId();<br><br>        <span class="hljs-comment">// 2. 获取会话序号（保证消息有序）</span><br>        <span class="hljs-type">String</span> <span class="hljs-variable">convId</span> <span class="hljs-operator">=</span> generateConversationId(fromUserId, req.getToUserId());<br>        <span class="hljs-type">long</span> <span class="hljs-variable">seq</span> <span class="hljs-operator">=</span> seqService.getNextSeq(convId);<br><br>        <span class="hljs-comment">// 3. 构建消息对象</span><br>        <span class="hljs-type">Message</span> <span class="hljs-variable">message</span> <span class="hljs-operator">=</span> Message.builder()<br>            .msgId(msgId)<br>            .conversationId(convId)<br>            .fromUserId(fromUserId)<br>            .toUserId(req.getToUserId())<br>            .content(req.getContent())<br>            .msgType(req.getMsgType())<br>            .seq(seq)<br>            .timestamp(System.currentTimeMillis())<br>            .build();<br><br>        <span class="hljs-comment">// 4. 投递到 Kafka 持久化</span><br>        kafka.send(<span class="hljs-string">&quot;chat-messages&quot;</span>, convId, message);<br><br>        <span class="hljs-comment">// 5. 实时推送给接收方</span><br>        pushToUser(req.getToUserId(), message);<br><br>        <span class="hljs-keyword">return</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">SendResult</span>(msgId, seq);<br>    &#125;<br><br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">pushToUser</span><span class="hljs-params">(String userId, Message message)</span> &#123;<br>        <span class="hljs-type">String</span> <span class="hljs-variable">gatewayNode</span> <span class="hljs-operator">=</span> registry.lookup(userId);<br>        <span class="hljs-keyword">if</span> (gatewayNode != <span class="hljs-literal">null</span>) &#123;<br>            <span class="hljs-comment">// 在线：通过 Gateway 推送</span><br>            router.routeToGateway(gatewayNode, userId, message);<br>        &#125; <span class="hljs-keyword">else</span> &#123;<br>            <span class="hljs-comment">// 离线：发送推送通知</span><br>            pushNotificationService.send(userId, message);<br>        &#125;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="消息存储">消息存储</h2>
+<h3 id="存储模型">存储模型</h3>
+<pre class="mermaid">graph TB
+    subgraph 写扩散 Write Diffusion
+        Msg[消息] --&gt; Inbox1[用户A收件箱]
+        Msg --&gt; Inbox2[用户B收件箱]
+        Note1[每条消息写入每个接收者的收件箱&lt;br/&gt;写放大N倍，读简单]
+    end
+
+    subgraph 读扩散 Read Diffusion
+        Msg2[消息] --&gt; Timeline[会话时间线]
+        User1[用户A] --&gt;|读取| Timeline
+        User2[用户B] --&gt;|读取| Timeline
+        Note2[消息只存一份&lt;br/&gt;读时聚合，读放大]
+    end</pre>
+<p>单聊采用<strong>写扩散</strong>（消息写入双方的收件箱），群聊采用<strong>读扩散</strong>（消息只存在群时间线中）。对于大群（&gt;
+500 人），如果用写扩散，一条消息要写 500 次，开销太大。</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 会话表</span><br><span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">TABLE</span> conversation (<br>    id              <span class="hljs-type">VARCHAR</span>(<span class="hljs-number">64</span>) <span class="hljs-keyword">PRIMARY</span> KEY,<br>    type            TINYINT <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span>,       <span class="hljs-comment">-- 1:单聊 2:群聊</span><br>    last_msg_id     <span class="hljs-type">BIGINT</span>,<br>    last_msg_seq    <span class="hljs-type">BIGINT</span>,<br>    last_msg_time   <span class="hljs-type">BIGINT</span>,<br>    updated_at      <span class="hljs-type">TIMESTAMP</span><br>) ENGINE<span class="hljs-operator">=</span>InnoDB;<br><br><span class="hljs-comment">-- 消息表 (按会话ID分片)</span><br><span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">TABLE</span> message (<br>    msg_id          <span class="hljs-type">BIGINT</span> <span class="hljs-keyword">PRIMARY</span> KEY,<br>    conversation_id <span class="hljs-type">VARCHAR</span>(<span class="hljs-number">64</span>) <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span>,<br>    from_user_id    <span class="hljs-type">VARCHAR</span>(<span class="hljs-number">36</span>) <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span>,<br>    msg_type        TINYINT <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span>,       <span class="hljs-comment">-- 1:text 2:image 3:voice</span><br>    content         TEXT,<br>    seq             <span class="hljs-type">BIGINT</span> <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span>,<br>    status          TINYINT <span class="hljs-keyword">DEFAULT</span> <span class="hljs-number">1</span>,      <span class="hljs-comment">-- 1:正常 2:撤回 3:删除</span><br>    created_at      <span class="hljs-type">BIGINT</span> <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span>,<br><br>    INDEX idx_conv_seq (conversation_id, seq)<br>) ENGINE<span class="hljs-operator">=</span>InnoDB;<br><br><span class="hljs-comment">-- 用户收件箱 (写扩散-单聊)</span><br><span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">TABLE</span> user_inbox (<br>    user_id         <span class="hljs-type">VARCHAR</span>(<span class="hljs-number">36</span>) <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span>,<br>    conversation_id <span class="hljs-type">VARCHAR</span>(<span class="hljs-number">64</span>) <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span>,<br>    last_read_seq   <span class="hljs-type">BIGINT</span> <span class="hljs-keyword">DEFAULT</span> <span class="hljs-number">0</span>,<br>    muted           <span class="hljs-type">BOOLEAN</span> <span class="hljs-keyword">DEFAULT</span> <span class="hljs-literal">FALSE</span>,<br>    pinned          <span class="hljs-type">BOOLEAN</span> <span class="hljs-keyword">DEFAULT</span> <span class="hljs-literal">FALSE</span>,<br><br>    <span class="hljs-keyword">PRIMARY</span> KEY (user_id, conversation_id),<br>    INDEX idx_user (user_id)<br>) ENGINE<span class="hljs-operator">=</span>InnoDB;<br></code></pre></td></tr></table></figure>
+<h3 id="消息序号服务">消息序号服务</h3>
+<p>消息序号（seq）保证了消息的顺序性和客户端的增量同步。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-comment">// 基于 Redis 的序号生成器</span><br><span class="hljs-keyword">type</span> SequenceService <span class="hljs-keyword">struct</span> &#123;<br>    redis *redis.Client<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-params">(s *SequenceService)</span></span> GetNextSeq(conversationId <span class="hljs-type">string</span>) (<span class="hljs-type">int64</span>, <span class="hljs-type">error</span>) &#123;<br>    key := <span class="hljs-string">&quot;seq:&quot;</span> + conversationId<br>    <span class="hljs-comment">// INCR 原子递增</span><br>    <span class="hljs-keyword">return</span> s.redis.Incr(ctx, key).Result()<br>&#125;<br><br><span class="hljs-comment">// 批量获取序号（减少 Redis 调用）</span><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-params">(s *SequenceService)</span></span> GetNextSeqBatch(conversationId <span class="hljs-type">string</span>, count <span class="hljs-type">int64</span>) (<span class="hljs-type">int64</span>, <span class="hljs-type">error</span>) &#123;<br>    key := <span class="hljs-string">&quot;seq:&quot;</span> + conversationId<br>    endSeq, err := s.redis.IncrBy(ctx, key, count).Result()<br>    <span class="hljs-keyword">if</span> err != <span class="hljs-literal">nil</span> &#123;<br>        <span class="hljs-keyword">return</span> <span class="hljs-number">0</span>, err<br>    &#125;<br>    <span class="hljs-keyword">return</span> endSeq - count + <span class="hljs-number">1</span>, <span class="hljs-literal">nil</span> <span class="hljs-comment">// 返回起始序号</span><br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="群聊消息">群聊消息</h2>
+<h3 id="群消息扩散">群消息扩散</h3>
+<pre class="mermaid">sequenceDiagram
+    participant Sender as 发送者
+    participant MS as 消息服务
+    participant GS as 群组服务
+    participant MQ as Kafka
+    participant Store as 存储服务
+    participant GW as Gateway(s)
+    participant Members as 群成员(在线)
+
+    Sender-&gt;&gt;MS: 发送群消息&lt;br/&gt;{groupId, content}
+    MS-&gt;&gt;GS: 获取群成员列表
+    GS--&gt;&gt;MS: [user1, user2, ..., userN]
+
+    MS-&gt;&gt;MS: 生成消息ID和seq
+    MS-&gt;&gt;MQ: 写入消息(只存一份)
+
+    MQ-&gt;&gt;Store: 持久化到群消息表
+
+    loop 每个在线成员
+        MS-&gt;&gt;GW: 推送消息
+        GW-&gt;&gt;Members: WebSocket推送
+    end
+
+    Note over MS: 离线成员上线后&lt;br/&gt;拉取未读消息</pre>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">sendGroupMessage</span><span class="hljs-params">(String fromUserId, String groupId, SendMessageRequest req)</span> &#123;<br>    <span class="hljs-comment">// 1. 检查群成员资格</span><br>    <span class="hljs-type">GroupInfo</span> <span class="hljs-variable">group</span> <span class="hljs-operator">=</span> groupService.getGroup(groupId);<br>    <span class="hljs-keyword">if</span> (!group.isMember(fromUserId)) &#123;<br>        <span class="hljs-keyword">throw</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">NotGroupMemberException</span>();<br>    &#125;<br><br>    <span class="hljs-comment">// 2. 生成消息</span><br>    <span class="hljs-type">long</span> <span class="hljs-variable">msgId</span> <span class="hljs-operator">=</span> idGen.nextId();<br>    <span class="hljs-type">long</span> <span class="hljs-variable">seq</span> <span class="hljs-operator">=</span> seqService.getNextSeq(<span class="hljs-string">&quot;group:&quot;</span> + groupId);<br><br>    <span class="hljs-type">Message</span> <span class="hljs-variable">message</span> <span class="hljs-operator">=</span> Message.builder()<br>        .msgId(msgId)<br>        .conversationId(<span class="hljs-string">&quot;group:&quot;</span> + groupId)<br>        .fromUserId(fromUserId)<br>        .msgType(req.getMsgType())<br>        .content(req.getContent())<br>        .seq(seq)<br>        .timestamp(System.currentTimeMillis())<br>        .build();<br><br>    <span class="hljs-comment">// 3. 持久化（只写一份到群消息表）</span><br>    kafka.send(<span class="hljs-string">&quot;group-messages&quot;</span>, groupId, message);<br><br>    <span class="hljs-comment">// 4. 推送给在线成员（读扩散）</span><br>    List&lt;String&gt; memberIds = group.getMemberIds();<br>    <span class="hljs-keyword">for</span> (String memberId : memberIds) &#123;<br>        <span class="hljs-keyword">if</span> (memberId.equals(fromUserId)) <span class="hljs-keyword">continue</span>;<br>        pushToUser(memberId, message);<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="在线状态服务presence">在线状态服务（Presence）</h2>
+<pre class="mermaid">graph TB
+    subgraph Presence Service
+        GW[Gateway] --&gt;|连接/断开事件| PS[Presence Service]
+        PS --&gt; Redis[(Redis&lt;br/&gt;在线状态)]
+        PS --&gt; PubSub[Redis PubSub&lt;br/&gt;状态变更通知]
+    end
+
+    Client[好友客户端] --&gt;|订阅好友状态| PubSub</pre>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-keyword">type</span> PresenceService <span class="hljs-keyword">struct</span> &#123;<br>    redis *redis.Client<br>&#125;<br><br><span class="hljs-comment">// 用户上线</span><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-params">(ps *PresenceService)</span></span> Online(userId <span class="hljs-type">string</span>) &#123;<br>    pipe := ps.redis.Pipeline()<br>    <span class="hljs-comment">// 设置在线状态，60s过期（需要心跳续期）</span><br>    pipe.Set(ctx, <span class="hljs-string">&quot;presence:&quot;</span>+userId, <span class="hljs-string">&quot;online&quot;</span>, <span class="hljs-number">60</span>*time.Second)<br>    <span class="hljs-comment">// 更新最后活跃时间</span><br>    pipe.Set(ctx, <span class="hljs-string">&quot;last_active:&quot;</span>+userId, time.Now().Unix(), <span class="hljs-number">0</span>)<br>    pipe.Exec(ctx)<br><br>    <span class="hljs-comment">// 通知好友</span><br>    ps.redis.Publish(ctx, <span class="hljs-string">&quot;presence:change&quot;</span>, userId+<span class="hljs-string">&quot;:online&quot;</span>)<br>&#125;<br><br><span class="hljs-comment">// 用户下线</span><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-params">(ps *PresenceService)</span></span> Offline(userId <span class="hljs-type">string</span>) &#123;<br>    ps.redis.Del(ctx, <span class="hljs-string">&quot;presence:&quot;</span>+userId)<br>    ps.redis.Set(ctx, <span class="hljs-string">&quot;last_active:&quot;</span>+userId, time.Now().Unix(), <span class="hljs-number">0</span>)<br>    ps.redis.Publish(ctx, <span class="hljs-string">&quot;presence:change&quot;</span>, userId+<span class="hljs-string">&quot;:offline&quot;</span>)<br>&#125;<br><br><span class="hljs-comment">// 心跳续期</span><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-params">(ps *PresenceService)</span></span> Heartbeat(userId <span class="hljs-type">string</span>) &#123;<br>    ps.redis.Expire(ctx, <span class="hljs-string">&quot;presence:&quot;</span>+userId, <span class="hljs-number">60</span>*time.Second)<br>&#125;<br><br><span class="hljs-comment">// 批量查询在线状态</span><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-params">(ps *PresenceService)</span></span> GetPresence(userIds []<span class="hljs-type">string</span>) <span class="hljs-keyword">map</span>[<span class="hljs-type">string</span>]<span class="hljs-type">bool</span> &#123;<br>    pipe := ps.redis.Pipeline()<br>    cmds := <span class="hljs-built_in">make</span>([]*redis.StringCmd, <span class="hljs-built_in">len</span>(userIds))<br>    <span class="hljs-keyword">for</span> i, uid := <span class="hljs-keyword">range</span> userIds &#123;<br>        cmds[i] = pipe.Get(ctx, <span class="hljs-string">&quot;presence:&quot;</span>+uid)<br>    &#125;<br>    pipe.Exec(ctx)<br><br>    result := <span class="hljs-built_in">make</span>(<span class="hljs-keyword">map</span>[<span class="hljs-type">string</span>]<span class="hljs-type">bool</span>)<br>    <span class="hljs-keyword">for</span> i, uid := <span class="hljs-keyword">range</span> userIds &#123;<br>        _, err := cmds[i].Result()<br>        result[uid] = err == <span class="hljs-literal">nil</span><br>    &#125;<br>    <span class="hljs-keyword">return</span> result<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="推送通知">推送通知</h2>
+<p>当用户离线时，通过 APNs（iOS）或 FCM（Android）发送推送通知。</p>
+<pre class="mermaid">graph LR
+    MS[消息服务] --&gt;|用户离线| PushService[推送服务]
+    PushService --&gt; APNs[Apple APNs]
+    PushService --&gt; FCM[Google FCM]
+    PushService --&gt; HW[华为推送]
+    PushService --&gt; XM[小米推送]
+
+    APNs --&gt; iPhone[iOS设备]
+    FCM --&gt; Android[Android设备]</pre>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-meta">@Service</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">PushNotificationService</span> &#123;<br>    <span class="hljs-meta">@Autowired</span><br>    <span class="hljs-keyword">private</span> DeviceTokenMapper deviceTokenMapper;<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">send</span><span class="hljs-params">(String userId, Message message)</span> &#123;<br>        List&lt;DeviceToken&gt; tokens = deviceTokenMapper.findByUserId(userId);<br><br>        <span class="hljs-keyword">for</span> (DeviceToken token : tokens) &#123;<br>            <span class="hljs-type">PushPayload</span> <span class="hljs-variable">payload</span> <span class="hljs-operator">=</span> PushPayload.builder()<br>                .title(message.getFromUserName())<br>                .body(truncateContent(message))<br>                .badge(getUnreadCount(userId))<br>                .data(Map.of(<br>                    <span class="hljs-string">&quot;conversationId&quot;</span>, message.getConversationId(),<br>                    <span class="hljs-string">&quot;msgId&quot;</span>, String.valueOf(message.getMsgId())<br>                ))<br>                .build();<br><br>            <span class="hljs-keyword">switch</span> (token.getPlatform()) &#123;<br>                <span class="hljs-keyword">case</span> <span class="hljs-string">&quot;ios&quot;</span> -&gt; apnsClient.send(token.getToken(), payload);<br>                <span class="hljs-keyword">case</span> <span class="hljs-string">&quot;android&quot;</span> -&gt; fcmClient.send(token.getToken(), payload);<br>                <span class="hljs-keyword">case</span> <span class="hljs-string">&quot;huawei&quot;</span> -&gt; huaweiClient.send(token.getToken(), payload);<br>            &#125;<br>        &#125;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="消息排序与同步">消息排序与同步</h2>
+<h3 id="基于-seq-的增量同步">基于 seq 的增量同步</h3>
+<p>客户端只需要记住本地最大 seq，上线后拉取大于该 seq 的消息即可。</p>
+<pre class="mermaid">sequenceDiagram
+    participant Client
+    participant API as API Server
+    participant DB as 消息DB
+
+    Note over Client: 本地最大seq=100
+
+    Client-&gt;&gt;API: 同步消息&lt;br/&gt;{conversationId, lastSeq: 100, limit: 50}
+    API-&gt;&gt;DB: SELECT * FROM message&lt;br/&gt;WHERE conv_id=? AND seq &gt; 100&lt;br/&gt;ORDER BY seq LIMIT 50
+    DB--&gt;&gt;API: messages (seq: 101-150)
+    API--&gt;&gt;Client: 返回50条消息
+
+    Note over Client: 更新本地seq=150
+    Note over Client: 如果返回满50条&lt;br/&gt;继续拉取</pre>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-meta">@GetMapping(&quot;/messages/sync&quot;)</span><br><span class="hljs-keyword">public</span> SyncResponse <span class="hljs-title function_">syncMessages</span><span class="hljs-params">(</span><br><span class="hljs-params">        <span class="hljs-meta">@RequestParam</span> String conversationId,</span><br><span class="hljs-params">        <span class="hljs-meta">@RequestParam</span> <span class="hljs-type">long</span> lastSeq,</span><br><span class="hljs-params">        <span class="hljs-meta">@RequestParam(defaultValue = &quot;50&quot;)</span> <span class="hljs-type">int</span> limit)</span> &#123;<br><br>    List&lt;Message&gt; messages = messageMapper.selectByConvIdAndSeqGreaterThan(<br>        conversationId, lastSeq, limit);<br><br>    <span class="hljs-type">boolean</span> <span class="hljs-variable">hasMore</span> <span class="hljs-operator">=</span> messages.size() == limit;<br>    <span class="hljs-type">long</span> <span class="hljs-variable">maxSeq</span> <span class="hljs-operator">=</span> messages.isEmpty() ? lastSeq :<br>        messages.get(messages.size() - <span class="hljs-number">1</span>).getSeq();<br><br>    <span class="hljs-keyword">return</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">SyncResponse</span>(messages, hasMore, maxSeq);<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="已读回执">已读回执</h2>
+<pre class="mermaid">sequenceDiagram
+    participant A as 用户A
+    participant Server as 服务器
+    participant B as 用户B
+
+    A-&gt;&gt;Server: 消息(seq=5)
+    Server-&gt;&gt;B: 推送消息
+    B-&gt;&gt;B: 用户阅读消息
+    B-&gt;&gt;Server: 已读回执&lt;br/&gt;{conversationId, readSeq: 5}
+    Server-&gt;&gt;Server: 更新B的已读位置
+    Server-&gt;&gt;A: 推送已读回执
+    Note over A: 消息显示 ✓✓(已读)</pre>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">// 已读回执处理</span><br><span class="hljs-meta">@Service</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">ReadReceiptService</span> &#123;<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">markAsRead</span><span class="hljs-params">(String userId, String conversationId, <span class="hljs-type">long</span> readSeq)</span> &#123;<br>        <span class="hljs-comment">// 1. 更新用户收件箱的已读位置</span><br>        userInboxMapper.updateLastReadSeq(userId, conversationId, readSeq);<br><br>        <span class="hljs-comment">// 2. 通知消息发送者</span><br>        <span class="hljs-type">String</span> <span class="hljs-variable">otherUserId</span> <span class="hljs-operator">=</span> getOtherUserId(conversationId, userId);<br>        <span class="hljs-type">ReadReceipt</span> <span class="hljs-variable">receipt</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">ReadReceipt</span>(conversationId, userId, readSeq);<br>        pushToUser(otherUserId, receipt);<br><br>        <span class="hljs-comment">// 3. 更新未读计数</span><br>        redis.delete(<span class="hljs-string">&quot;unread:&quot;</span> + userId + <span class="hljs-string">&quot;:&quot;</span> + conversationId);<br>    &#125;<br><br>    <span class="hljs-comment">// 获取未读消息数</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-type">long</span> <span class="hljs-title function_">getUnreadCount</span><span class="hljs-params">(String userId, String conversationId)</span> &#123;<br>        <span class="hljs-type">String</span> <span class="hljs-variable">cacheKey</span> <span class="hljs-operator">=</span> <span class="hljs-string">&quot;unread:&quot;</span> + userId + <span class="hljs-string">&quot;:&quot;</span> + conversationId;<br>        <span class="hljs-type">Long</span> <span class="hljs-variable">cached</span> <span class="hljs-operator">=</span> redis.opsForValue().get(cacheKey);<br>        <span class="hljs-keyword">if</span> (cached != <span class="hljs-literal">null</span>) <span class="hljs-keyword">return</span> cached;<br><br>        <span class="hljs-type">long</span> <span class="hljs-variable">lastReadSeq</span> <span class="hljs-operator">=</span> userInboxMapper.getLastReadSeq(userId, conversationId);<br>        <span class="hljs-type">long</span> <span class="hljs-variable">lastMsgSeq</span> <span class="hljs-operator">=</span> seqService.getCurrentSeq(conversationId);<br>        <span class="hljs-type">long</span> <span class="hljs-variable">unread</span> <span class="hljs-operator">=</span> lastMsgSeq - lastReadSeq;<br><br>        redis.opsForValue().set(cacheKey, unread, Duration.ofMinutes(<span class="hljs-number">5</span>));<br>        <span class="hljs-keyword">return</span> unread;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="水平扩展">水平扩展</h2>
+<h3 id="gateway-扩展">Gateway 扩展</h3>
+<p>Gateway 是无状态的（连接信息注册在 Redis 中），可以直接水平扩展。使用
+L4 负载均衡（基于连接的负载均衡）分配新连接。</p>
+<h3 id="消息服务扩展">消息服务扩展</h3>
+<p>消息服务按会话 ID 进行 Kafka
+分区路由，保证同一会话的消息有序处理。</p>
+<h3 id="数据库扩展">数据库扩展</h3>
+<pre class="mermaid">graph TB
+    subgraph 分片策略
+        Router[路由] --&gt;|conversation_id hash| S1[Shard 1&lt;br/&gt;消息表]
+        Router --&gt; S2[Shard 2&lt;br/&gt;消息表]
+        Router --&gt; S3[Shard 3&lt;br/&gt;消息表]
+        Router --&gt; S4[Shard 4&lt;br/&gt;消息表]
+    end
+
+    subgraph 冷热分离
+        Hot[热数据 &lt; 3个月&lt;br/&gt;TiDB/MySQL] --&gt; Cold[冷数据&lt;br/&gt;HBase/对象存储]
+    end</pre>
+<pre class="mermaid">graph TB
+    subgraph 完整部署架构
+        LB[L4 负载均衡] --&gt; GW1[Gateway ×N&lt;br/&gt;WebSocket]
+        GW1 --&gt; MS[消息服务 ×N]
+        MS --&gt; Kafka[Kafka Cluster]
+        Kafka --&gt; Store[存储服务 ×N]
+
+        Store --&gt; TiDB[TiDB Cluster&lt;br/&gt;消息存储]
+        Store --&gt; Redis[Redis Cluster&lt;br/&gt;序号/状态/缓存]
+
+        MS --&gt; Presence[Presence Service ×N]
+        Presence --&gt; Redis
+
+        Kafka --&gt; Push[推送服务 ×N]
+        Push --&gt; APNs[APNs/FCM]
+    end</pre>
+<h2 id="关键设计决策总结">关键设计决策总结</h2>
+<table>
+<thead>
+<tr class="header">
+<th>决策点</th>
+<th>选择</th>
+<th>原因</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>通信协议</td>
+<td>WebSocket</td>
+<td>双向实时通信</td>
+</tr>
+<tr class="even">
+<td>消息ID</td>
+<td>Snowflake</td>
+<td>趋势递增、全局唯一</td>
+</tr>
+<tr class="odd">
+<td>消息排序</td>
+<td>会话级递增seq</td>
+<td>保证有序、支持增量同步</td>
+</tr>
+<tr class="even">
+<td>单聊存储</td>
+<td>写扩散</td>
+<td>读取简单，适合小规模扩散</td>
+</tr>
+<tr class="odd">
+<td>群聊存储</td>
+<td>读扩散</td>
+<td>避免大群的写放大</td>
+</tr>
+<tr class="even">
+<td>在线状态</td>
+<td>Redis + TTL</td>
+<td>简单高效，自动过期</td>
+</tr>
+<tr class="odd">
+<td>消息队列</td>
+<td>Kafka</td>
+<td>高吞吐、有序、持久化</td>
+</tr>
+</tbody>
+</table>
+<h2 id="总结">总结</h2>
+<p>IM 系统的核心挑战在于：WebSocket
+长连接的管理和路由、消息的可靠有序投递、群聊消息的高效扩散，以及在线状态的实时同步。通过将
+Gateway 层（连接管理）与消息服务层（业务逻辑）分离，使用 Redis
+作为连接注册表和序号生成器，使用 Kafka
+实现消息的可靠异步处理，可以构建一个支持千万级用户的 IM
+系统。在实际实现中，还需要关注消息加密（端到端加密）、消息审计、敏感词过滤等安全需求。</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2024-04-17</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">3.9k 字 · 10 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/kubernetes-networking/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Kubernetes网络模型与CNI插件详解</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/system-design-url-shortener/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">系统设计实战：短链接服务架构</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%9C%80%E6%B1%82%E5%88%86%E6%9E%90"><span class="toc-text">需求分析</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8A%9F%E8%83%BD%E9%9C%80%E6%B1%82"><span class="toc-text">功能需求</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%9D%9E%E5%8A%9F%E8%83%BD%E9%9C%80%E6%B1%82"><span class="toc-text">非功能需求</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%B9%E9%87%8F%E4%BC%B0%E7%AE%97"><span class="toc-text">容量估算</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%B3%BB%E7%BB%9F%E6%9E%B6%E6%9E%84%E6%80%BB%E8%A7%88"><span class="toc-text">系统架构总览</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#websocket-%E9%95%BF%E8%BF%9E%E6%8E%A5"><span class="toc-text">WebSocket 长连接</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BF%9E%E6%8E%A5%E7%AE%A1%E7%90%86"><span class="toc-text">连接管理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BF%9E%E6%8E%A5%E6%B3%A8%E5%86%8C%E8%A1%A8"><span class="toc-text">连接注册表</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%B6%88%E6%81%AF%E6%8A%95%E9%80%92%E6%B5%81%E7%A8%8B"><span class="toc-text">消息投递流程</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8D%95%E8%81%8A%E6%B6%88%E6%81%AF"><span class="toc-text">单聊消息</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%B6%88%E6%81%AF%E5%AD%98%E5%82%A8"><span class="toc-text">消息存储</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AD%98%E5%82%A8%E6%A8%A1%E5%9E%8B"><span class="toc-text">存储模型</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%B6%88%E6%81%AF%E5%BA%8F%E5%8F%B7%E6%9C%8D%E5%8A%A1"><span class="toc-text">消息序号服务</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BE%A4%E8%81%8A%E6%B6%88%E6%81%AF"><span class="toc-text">群聊消息</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%BE%A4%E6%B6%88%E6%81%AF%E6%89%A9%E6%95%A3"><span class="toc-text">群消息扩散</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9C%A8%E7%BA%BF%E7%8A%B6%E6%80%81%E6%9C%8D%E5%8A%A1presence"><span class="toc-text">在线状态服务（Presence）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%8E%A8%E9%80%81%E9%80%9A%E7%9F%A5"><span class="toc-text">推送通知</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%B6%88%E6%81%AF%E6%8E%92%E5%BA%8F%E4%B8%8E%E5%90%8C%E6%AD%A5"><span class="toc-text">消息排序与同步</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9F%BA%E4%BA%8E-seq-%E7%9A%84%E5%A2%9E%E9%87%8F%E5%90%8C%E6%AD%A5"><span class="toc-text">基于 seq 的增量同步</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%B7%B2%E8%AF%BB%E5%9B%9E%E6%89%A7"><span class="toc-text">已读回执</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%B0%B4%E5%B9%B3%E6%89%A9%E5%B1%95"><span class="toc-text">水平扩展</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#gateway-%E6%89%A9%E5%B1%95"><span class="toc-text">Gateway 扩展</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%B6%88%E6%81%AF%E6%9C%8D%E5%8A%A1%E6%89%A9%E5%B1%95"><span class="toc-text">消息服务扩展</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E5%BA%93%E6%89%A9%E5%B1%95"><span class="toc-text">数据库扩展</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%B3%E9%94%AE%E8%AE%BE%E8%AE%A1%E5%86%B3%E7%AD%96%E6%80%BB%E7%BB%93"><span class="toc-text">关键设计决策总结</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

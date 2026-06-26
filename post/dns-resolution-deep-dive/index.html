@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DNS解析全链路分析 · zt&#39;s Blog</title>
+  <meta name="description" content="全面分析DNS解析链路，涵盖DNS层级结构、递归/迭代查询、记录类型、DNSSEC安全扩展和DNS over HTTPS/TLS加密方案。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/dns-resolution-deep-dive/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="DNS解析全链路分析">
+  <meta property="og:description" content="全面分析DNS解析链路，涵盖DNS层级结构、递归/迭代查询、记录类型、DNSSEC安全扩展和DNS over HTTPS/TLS加密方案。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/dns-resolution-deep-dive/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2025-05-16T16:00:00.000Z">
+  <meta property="article:modified_time" content="2025-05-16T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="DNS解析全链路分析">
+  <meta name="twitter:description" content="全面分析DNS解析链路，涵盖DNS层级结构、递归/迭代查询、记录类型、DNSSEC安全扩展和DNS over HTTPS/TLS加密方案。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"DNS解析全链路分析","description":"全面分析DNS解析链路，涵盖DNS层级结构、递归/迭代查询、记录类型、DNSSEC安全扩展和DNS over HTTPS/TLS加密方案。","datePublished":"2025-05-16T16:00:00.000Z","dateModified":"2025-05-16T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/dns-resolution-deep-dive/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Network","item":"https://withesse.co/categories/Network/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:235">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Network/">Network</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/network/"><span class="hash">#</span>network</a><a class="tag" href="/tags/dns/"><span class="hash">#</span>dns</a><a class="tag" href="/tags/resolution/"><span class="hash">#</span>resolution</a>
+        
+      </div>
+
+      <h1>DNS解析全链路分析</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2025.05.17</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 7 min</span>
+        </span>
+        <span class="wc"><span class="num">2.7k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#dns%E5%B1%82%E7%BA%A7%E7%BB%93%E6%9E%84"><span class="toc-text">DNS层级结构</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#dns%E6%9F%A5%E8%AF%A2%E6%B5%81%E7%A8%8B"><span class="toc-text">DNS查询流程</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%80%92%E5%BD%92%E6%9F%A5%E8%AF%A2-vs-%E8%BF%AD%E4%BB%A3%E6%9F%A5%E8%AF%A2"><span class="toc-text">递归查询 vs 迭代查询</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%8C%E6%95%B4%E7%9A%84%E8%A7%A3%E6%9E%90%E8%B7%AF%E5%BE%84"><span class="toc-text">完整的解析路径</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#dns%E8%AE%B0%E5%BD%95%E7%B1%BB%E5%9E%8B"><span class="toc-text">DNS记录类型</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%AE%B0%E5%BD%95%E7%B1%BB%E5%9E%8B%E9%80%9F%E6%9F%A5%E8%A1%A8"><span class="toc-text">记录类型速查表</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#dns%E7%BC%93%E5%AD%98%E6%9C%BA%E5%88%B6"><span class="toc-text">DNS缓存机制</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#ttl%E7%AE%A1%E7%90%86"><span class="toc-text">TTL管理</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#dnssec%E5%AE%89%E5%85%A8%E6%89%A9%E5%B1%95"><span class="toc-text">DNSSEC安全扩展</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#dnssec%E8%AE%B0%E5%BD%95%E7%B1%BB%E5%9E%8B"><span class="toc-text">DNSSEC记录类型</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#dns-over-httpstls"><span class="toc-text">DNS over HTTPS&#x2F;TLS</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#dns-over-https-doh"><span class="toc-text">DNS over HTTPS (DoH)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#dns-over-tls-dot"><span class="toc-text">DNS over TLS (DoT)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%BB%E8%A6%81dohdot%E6%8F%90%E4%BE%9B%E5%95%86"><span class="toc-text">主要DoH&#x2F;DoT提供商</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#dns%E6%95%85%E9%9A%9C%E6%8E%92%E6%9F%A5"><span class="toc-text">DNS故障排查</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#dig%E5%91%BD%E4%BB%A4%E8%AF%A6%E8%A7%A3"><span class="toc-text">dig命令详解</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#nslookup%E5%B8%B8%E7%94%A8%E5%91%BD%E4%BB%A4"><span class="toc-text">nslookup常用命令</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%B8%B8%E8%A7%81%E9%97%AE%E9%A2%98%E6%8E%92%E6%9F%A5%E6%B5%81%E7%A8%8B"><span class="toc-text">常见问题排查流程</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#dns%E6%80%A7%E8%83%BD%E6%B5%8B%E8%AF%95"><span class="toc-text">DNS性能测试</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BC%81%E4%B8%9Adns%E6%9E%B6%E6%9E%84%E5%BB%BA%E8%AE%AE"><span class="toc-text">企业DNS架构建议</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="前言">前言</h2>
+<p>DNS（Domain Name
+System）是互联网的”电话簿”，将人类可读的域名转换为IP地址。看似简单的域名解析背后，涉及复杂的分层查询、缓存策略、安全机制。本文将从DNS层级结构出发，深入分析DNS解析的完整链路。</p>
+<h2 id="dns层级结构">DNS层级结构</h2>
+<pre class="mermaid">graph TB
+    ROOT[". (Root)&lt;br&gt;13组根服务器"] --&gt; COM[".com"]
+    ROOT --&gt; ORG[".org"]
+    ROOT --&gt; NET[".net"]
+    ROOT --&gt; CN[".cn"]
+
+    COM --&gt; GOOGLE["google.com"]
+    COM --&gt; EXAMPLE["example.com"]
+    COM --&gt; GITHUB["github.com"]
+
+    CN --&gt; BAIDU["baidu.com"]
+
+    EXAMPLE --&gt; WWW["www.example.com"]
+    EXAMPLE --&gt; API["api.example.com"]
+    EXAMPLE --&gt; MAIL["mail.example.com"]
+
+    style ROOT fill:#d32f2f,color:#fff
+    style COM fill:#f57c00,color:#fff
+    style ORG fill:#f57c00,color:#fff
+    style NET fill:#f57c00,color:#fff
+    style CN fill:#f57c00,color:#fff</pre>
+<p>DNS采用树形层级结构： -
+<strong>根域（Root）</strong>：全球13组根服务器（a.root-servers.net 到
+m.root-servers.net），通过Anycast部署了上千个实例 -
+<strong>顶级域（TLD）</strong>：<code>.com</code>、<code>.org</code>、<code>.cn</code>等
+-
+<strong>权威域（Authoritative）</strong>：具体的域名如<code>example.com</code>
+-
+<strong>子域名</strong>：<code>www.example.com</code>、<code>api.example.com</code></p>
+<h2 id="dns查询流程">DNS查询流程</h2>
+<h3 id="递归查询-vs-迭代查询">递归查询 vs 迭代查询</h3>
+<pre class="mermaid">sequenceDiagram
+    participant App as Application
+    participant Stub as Stub Resolver&lt;br&gt;(OS)
+    participant Local as Local DNS&lt;br&gt;(Recursive Resolver)
+    participant Root as Root DNS
+    participant TLD as TLD DNS (.com)
+    participant Auth as Authoritative DNS&lt;br&gt;(example.com)
+
+    App-&gt;&gt;Stub: gethostbyname("www.example.com")
+    Note over Stub: 检查 /etc/hosts 和本地缓存
+
+    Stub-&gt;&gt;Local: 递归查询: www.example.com?
+    Note over Local: 检查缓存，未命中
+
+    Local-&gt;&gt;Root: 迭代查询: www.example.com?
+    Root--&gt;&gt;Local: 返回 .com TLD 服务器地址
+
+    Local-&gt;&gt;TLD: 迭代查询: www.example.com?
+    TLD--&gt;&gt;Local: 返回 example.com 权威服务器地址
+
+    Local-&gt;&gt;Auth: 迭代查询: www.example.com?
+    Auth--&gt;&gt;Local: 返回 A 记录: 93.184.216.34
+
+    Local--&gt;&gt;Stub: www.example.com = 93.184.216.34
+    Note over Local: 缓存结果 (TTL=300)
+
+    Stub--&gt;&gt;App: 93.184.216.34</pre>
+<p>关键区别： -
+<strong>递归查询</strong>：客户端发出请求，DNS服务器负责完成所有查找，返回最终结果
+-
+<strong>迭代查询</strong>：DNS服务器返回”下一步该去哪里问”的信息，让查询者自己继续</p>
+<h3 id="完整的解析路径">完整的解析路径</h3>
+<pre class="mermaid">flowchart TB
+    START[应用请求解析域名] --&gt; CACHE1{浏览器DNS缓存?}
+    CACHE1 --&gt;|命中| DONE[返回IP]
+    CACHE1 --&gt;|未命中| CACHE2{OS DNS缓存?}
+    CACHE2 --&gt;|命中| DONE
+    CACHE2 --&gt;|未命中| HOSTS{/etc/hosts?}
+    HOSTS --&gt;|命中| DONE
+    HOSTS --&gt;|未命中| RESOLVER[本地递归解析器&lt;br&gt;如 8.8.8.8]
+    RESOLVER --&gt; CACHE3{解析器缓存?}
+    CACHE3 --&gt;|命中| RETURN[返回缓存结果]
+    CACHE3 --&gt;|未命中| ROOT_Q[查询根服务器]
+    ROOT_Q --&gt; TLD_Q[查询TLD服务器]
+    TLD_Q --&gt; AUTH_Q[查询权威服务器]
+    AUTH_Q --&gt; CACHE_STORE[缓存结果]
+    CACHE_STORE --&gt; RETURN
+    RETURN --&gt; DONE</pre>
+<h2 id="dns记录类型">DNS记录类型</h2>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 查看各种记录类型</span><br><br><span class="hljs-comment"># A记录 - IPv4地址</span><br>dig example.com A +short<br><span class="hljs-comment"># 93.184.216.34</span><br><br><span class="hljs-comment"># AAAA记录 - IPv6地址</span><br>dig example.com AAAA +short<br><span class="hljs-comment"># 2606:2800:220:1:248:1893:25c8:1946</span><br><br><span class="hljs-comment"># CNAME记录 - 别名</span><br>dig www.github.com CNAME +short<br><span class="hljs-comment"># github.com.</span><br><br><span class="hljs-comment"># MX记录 - 邮件服务器</span><br>dig gmail.com MX +short<br><span class="hljs-comment"># 5 gmail-smtp-in.l.google.com.</span><br><span class="hljs-comment"># 10 alt1.gmail-smtp-in.l.google.com.</span><br><br><span class="hljs-comment"># TXT记录 - 文本信息（SPF、DKIM等）</span><br>dig google.com TXT +short<br><span class="hljs-comment"># &quot;v=spf1 include:_spf.google.com ~all&quot;</span><br><br><span class="hljs-comment"># NS记录 - 域名服务器</span><br>dig example.com NS +short<br><span class="hljs-comment"># a.iana-servers.net.</span><br><span class="hljs-comment"># b.iana-servers.net.</span><br><br><span class="hljs-comment"># SRV记录 - 服务定位</span><br>dig _sip._tcp.example.com SRV +short<br><span class="hljs-comment"># 10 60 5060 sipserver.example.com.</span><br><br><span class="hljs-comment"># SOA记录 - 起始授权</span><br>dig example.com SOA +short<br><span class="hljs-comment"># ns.icann.org. noc.dns.icann.org. 2024012345 7200 3600 1209600 3600</span><br><br><span class="hljs-comment"># CAA记录 - 证书颁发授权</span><br>dig example.com CAA +short<br><span class="hljs-comment"># 0 issue &quot;letsencrypt.org&quot;</span><br></code></pre></td></tr></table></figure>
+<h3 id="记录类型速查表">记录类型速查表</h3>
+<table>
+<thead>
+<tr class="header">
+<th>记录类型</th>
+<th>用途</th>
+<th>示例值</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>A</td>
+<td>IPv4地址映射</td>
+<td><code>93.184.216.34</code></td>
+</tr>
+<tr class="even">
+<td>AAAA</td>
+<td>IPv6地址映射</td>
+<td><code>2606:2800:220:1::</code></td>
+</tr>
+<tr class="odd">
+<td>CNAME</td>
+<td>域名别名</td>
+<td><code>www.example.com -&gt; example.com</code></td>
+</tr>
+<tr class="even">
+<td>MX</td>
+<td>邮件路由</td>
+<td><code>10 mail.example.com</code></td>
+</tr>
+<tr class="odd">
+<td>TXT</td>
+<td>文本记录</td>
+<td>SPF、DKIM、域名验证</td>
+</tr>
+<tr class="even">
+<td>NS</td>
+<td>域名服务器</td>
+<td><code>ns1.example.com</code></td>
+</tr>
+<tr class="odd">
+<td>SRV</td>
+<td>服务发现</td>
+<td><code>_http._tcp.example.com</code></td>
+</tr>
+<tr class="even">
+<td>SOA</td>
+<td>区域授权信息</td>
+<td>序列号、刷新间隔</td>
+</tr>
+<tr class="odd">
+<td>CAA</td>
+<td>证书授权</td>
+<td><code>0 issue "letsencrypt.org"</code></td>
+</tr>
+<tr class="even">
+<td>PTR</td>
+<td>反向解析</td>
+<td>IP -&gt; 域名</td>
+</tr>
+</tbody>
+</table>
+<h2 id="dns缓存机制">DNS缓存机制</h2>
+<pre class="mermaid">graph TB
+    subgraph "缓存层级"
+        L1[浏览器缓存&lt;br&gt;Chrome: chrome://net-internals/#dns&lt;br&gt;TTL: 通常60s]
+        L2[OS缓存&lt;br&gt;macOS: mDNSResponder&lt;br&gt;Linux: systemd-resolved]
+        L3[路由器缓存]
+        L4[ISP递归解析器缓存&lt;br&gt;遵循TTL]
+    end
+
+    L1 --&gt; L2 --&gt; L3 --&gt; L4</pre>
+<h3 id="ttl管理">TTL管理</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 查看记录的TTL</span><br>dig example.com A<br><br>;; ANSWER SECTION:<br>;example.com.     300     IN      A       93.184.216.34<br><span class="hljs-comment">#                  ^^^</span><br><span class="hljs-comment">#                  TTL=300秒</span><br><br><span class="hljs-comment"># 不同场景的TTL建议</span><br><span class="hljs-comment"># 静态网站:        3600-86400 (1小时-1天)</span><br><span class="hljs-comment"># 动态服务:        60-300 (1-5分钟)</span><br><span class="hljs-comment"># 故障切换:        30-60 (30秒-1分钟)</span><br><span class="hljs-comment"># 迁移前:          先降低TTL到60秒，等待旧TTL过期后再切换</span><br></code></pre></td></tr></table></figure>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-comment"># DNS迁移的正确步骤</span><br>migration_plan = &#123;<br>    <span class="hljs-string">&quot;T-48h&quot;</span>: <span class="hljs-string">&quot;将TTL从3600降到60&quot;</span>,<br>    <span class="hljs-string">&quot;T-0h&quot;</span>:  <span class="hljs-string">&quot;等待旧缓存过期后，修改DNS记录指向新IP&quot;</span>,<br>    <span class="hljs-string">&quot;T+1h&quot;</span>:  <span class="hljs-string">&quot;监控流量，确认切换完成&quot;</span>,<br>    <span class="hljs-string">&quot;T+24h&quot;</span>: <span class="hljs-string">&quot;将TTL恢复到3600&quot;</span>,<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="dnssec安全扩展">DNSSEC安全扩展</h2>
+<p>DNSSEC通过数字签名保护DNS响应的完整性和真实性，防止DNS劫持和缓存投毒。</p>
+<pre class="mermaid">graph TB
+    ROOT_KSK[Root KSK&lt;br&gt;Key Signing Key] --&gt; ROOT_ZSK[Root ZSK&lt;br&gt;Zone Signing Key]
+    ROOT_ZSK --&gt; |DS记录| COM_KSK[.com KSK]
+    COM_KSK --&gt; COM_ZSK[.com ZSK]
+    COM_ZSK --&gt; |DS记录| EX_KSK[example.com KSK]
+    EX_KSK --&gt; EX_ZSK[example.com ZSK]
+    EX_ZSK --&gt; |RRSIG| RECORDS[DNS Records&lt;br&gt;A, AAAA, MX...]
+
+    style ROOT_KSK fill:#d32f2f,color:#fff
+    style ROOT_ZSK fill:#e57373,color:#fff</pre>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 验证DNSSEC</span><br>dig example.com A +dnssec<br><br><span class="hljs-comment"># 检查DS记录</span><br>dig example.com DS<br><br><span class="hljs-comment"># 完整的DNSSEC验证链</span><br>dig +sigchase +trusted-key=./root.keys example.com A<br><br><span class="hljs-comment"># 使用delv验证（BIND工具）</span><br>delv @8.8.8.8 example.com A +rtrace<br></code></pre></td></tr></table></figure>
+<h3 id="dnssec记录类型">DNSSEC记录类型</h3>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs plaintext">RRSIG  - 资源记录签名<br>DNSKEY - 公钥（KSK和ZSK）<br>DS     - 委派签名者（父区域指向子区域的KSK哈希）<br>NSEC   - 证明不存在（下一个安全记录）<br>NSEC3  - NSEC的哈希版本（防止区域遍历）<br></code></pre></td></tr></table></figure>
+<h2 id="dns-over-httpstls">DNS over HTTPS/TLS</h2>
+<p>传统DNS使用明文UDP/TCP传输，存在隐私泄露和中间人篡改风险。</p>
+<pre class="mermaid">graph LR
+    subgraph "传统DNS (端口53)"
+        C1[Client] --&gt;|明文UDP| R1[Resolver]
+        R1 --&gt;|可被窃听/篡改| NOTE1[ISP/中间人]
+    end
+
+    subgraph "DoT (端口853)"
+        C2[Client] --&gt;|TLS加密| R2[Resolver]
+    end
+
+    subgraph "DoH (端口443)"
+        C3[Client] --&gt;|HTTPS加密| R3[Resolver]
+        NOTE3[与正常HTTPS流量混合&lt;br&gt;难以识别和封锁]
+    end</pre>
+<h3 id="dns-over-https-doh">DNS over HTTPS (DoH)</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 使用curl测试DoH</span><br>curl -s -H <span class="hljs-string">&#x27;accept: application/dns-json&#x27;</span> \<br>  <span class="hljs-string">&#x27;https://cloudflare-dns.com/dns-query?name=example.com&amp;type=A&#x27;</span> | jq<br><br><span class="hljs-comment"># 响应示例</span><br>&#123;<br>  <span class="hljs-string">&quot;Status&quot;</span>: 0,<br>  <span class="hljs-string">&quot;TC&quot;</span>: <span class="hljs-literal">false</span>,<br>  <span class="hljs-string">&quot;RD&quot;</span>: <span class="hljs-literal">true</span>,<br>  <span class="hljs-string">&quot;RA&quot;</span>: <span class="hljs-literal">true</span>,<br>  <span class="hljs-string">&quot;AD&quot;</span>: <span class="hljs-literal">true</span>,<br>  <span class="hljs-string">&quot;Answer&quot;</span>: [<br>    &#123;<br>      <span class="hljs-string">&quot;name&quot;</span>: <span class="hljs-string">&quot;example.com&quot;</span>,<br>      <span class="hljs-string">&quot;type&quot;</span>: 1,<br>      <span class="hljs-string">&quot;TTL&quot;</span>: 300,<br>      <span class="hljs-string">&quot;data&quot;</span>: <span class="hljs-string">&quot;93.184.216.34&quot;</span><br>    &#125;<br>  ]<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="dns-over-tls-dot">DNS over TLS (DoT)</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 使用kdig测试DoT</span><br>kdig -d @1.1.1.1 +tls-ca example.com A<br><br><span class="hljs-comment"># 系统级配置（systemd-resolved）</span><br><span class="hljs-comment"># /etc/systemd/resolved.conf</span><br>[Resolve]<br>DNS=1.1.1.1<span class="hljs-comment">#cloudflare-dns.com</span><br>DNSOverTLS=<span class="hljs-built_in">yes</span><br></code></pre></td></tr></table></figure>
+<h3 id="主要dohdot提供商">主要DoH/DoT提供商</h3>
+<table>
+<thead>
+<tr class="header">
+<th>提供商</th>
+<th>DoH URL</th>
+<th>DoT地址</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Cloudflare</td>
+<td><code>https://cloudflare-dns.com/dns-query</code></td>
+<td><code>1.1.1.1:853</code></td>
+</tr>
+<tr class="even">
+<td>Google</td>
+<td><code>https://dns.google/dns-query</code></td>
+<td><code>8.8.8.8:853</code></td>
+</tr>
+<tr class="odd">
+<td>Quad9</td>
+<td><code>https://dns.quad9.net/dns-query</code></td>
+<td><code>9.9.9.9:853</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="dns故障排查">DNS故障排查</h2>
+<h3 id="dig命令详解">dig命令详解</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 基本查询</span><br>dig example.com<br><br><span class="hljs-comment"># 简洁输出</span><br>dig example.com +short<br><br><span class="hljs-comment"># 指定DNS服务器</span><br>dig @8.8.8.8 example.com<br><br><span class="hljs-comment"># 跟踪完整解析链路</span><br>dig example.com +trace<br><br><span class="hljs-comment"># 输出示例（trace）：</span><br><span class="hljs-comment"># .                       518400  IN  NS  a.root-servers.net.</span><br><span class="hljs-comment"># com.                    172800  IN  NS  a.gtld-servers.net.</span><br><span class="hljs-comment"># example.com.            172800  IN  NS  a.iana-servers.net.</span><br><span class="hljs-comment"># example.com.            86400   IN  A   93.184.216.34</span><br><br><span class="hljs-comment"># 反向解析</span><br>dig -x 8.8.8.8<br><br><span class="hljs-comment"># 查询所有记录</span><br>dig example.com ANY<br><br><span class="hljs-comment"># TCP查询（大响应或验证用）</span><br>dig example.com +tcp<br><br><span class="hljs-comment"># 查看完整响应包</span><br>dig example.com +all<br></code></pre></td></tr></table></figure>
+<h3 id="nslookup常用命令">nslookup常用命令</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 基本查询</span><br>nslookup example.com<br><br><span class="hljs-comment"># 指定DNS服务器</span><br>nslookup example.com 8.8.8.8<br><br><span class="hljs-comment"># 查询特定类型</span><br>nslookup -<span class="hljs-built_in">type</span>=MX example.com<br>nslookup -<span class="hljs-built_in">type</span>=TXT example.com<br><br><span class="hljs-comment"># 交互模式</span><br>nslookup<br>&gt; server 8.8.8.8<br>&gt; <span class="hljs-built_in">set</span> <span class="hljs-built_in">type</span>=NS<br>&gt; example.com<br></code></pre></td></tr></table></figure>
+<h3 id="常见问题排查流程">常见问题排查流程</h3>
+<pre class="mermaid">flowchart TB
+    ISSUE[DNS解析失败] --&gt; CHECK1{ping IP是否通?}
+    CHECK1 --&gt;|通| DNS_ISSUE[DNS问题]
+    CHECK1 --&gt;|不通| NET_ISSUE[网络问题]
+
+    DNS_ISSUE --&gt; CHECK2{dig @8.8.8.8 能解析?}
+    CHECK2 --&gt;|能| LOCAL_DNS[本地DNS服务器问题]
+    CHECK2 --&gt;|不能| CHECK3{dig @权威NS 能解析?}
+
+    CHECK3 --&gt;|能| PROPAGATION[DNS传播未完成&lt;br&gt;等待TTL过期]
+    CHECK3 --&gt;|不能| AUTH_ISSUE[权威DNS配置问题&lt;br&gt;检查DNS记录]
+
+    LOCAL_DNS --&gt; FIX1[检查 /etc/resolv.conf&lt;br&gt;尝试更换DNS服务器]
+    PROPAGATION --&gt; FIX2[等待或清除缓存&lt;br&gt;ipconfig /flushdns]
+    AUTH_ISSUE --&gt; FIX3[登录DNS控制面板&lt;br&gt;检查记录配置]</pre>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 清除DNS缓存</span><br><span class="hljs-comment"># macOS</span><br>sudo dscacheutil -flushcache &amp;&amp; sudo killall -HUP mDNSResponder<br><br><span class="hljs-comment"># Linux (systemd-resolved)</span><br>sudo systemd-resolve --flush-caches<br><br><span class="hljs-comment"># Windows</span><br>ipconfig /flushdns<br><br><span class="hljs-comment"># Chrome浏览器</span><br><span class="hljs-comment"># 访问 chrome://net-internals/#dns 点击 &quot;Clear host cache&quot;</span><br></code></pre></td></tr></table></figure>
+<h3 id="dns性能测试">DNS性能测试</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 使用dnsperf测试DNS服务器性能</span><br>dnsperf -s 8.8.8.8 -d queryfile.txt -c 100 -T 10<br><br><span class="hljs-comment"># queryfile.txt格式：</span><br><span class="hljs-comment"># example.com A</span><br><span class="hljs-comment"># google.com AAAA</span><br><span class="hljs-comment"># github.com A</span><br><br><span class="hljs-comment"># 使用dnstop监控DNS流量</span><br>sudo dnstop eth0<br><br><span class="hljs-comment"># 测量解析时间</span><br>time dig example.com @8.8.8.8<br><br><span class="hljs-comment"># 批量测试多个DNS服务器</span><br><span class="hljs-keyword">for</span> dns <span class="hljs-keyword">in</span> 8.8.8.8 1.1.1.1 9.9.9.9; <span class="hljs-keyword">do</span><br>    <span class="hljs-built_in">echo</span> <span class="hljs-string">&quot;Testing <span class="hljs-variable">$dns</span>:&quot;</span><br>    dig @<span class="hljs-variable">$dns</span> example.com +stats | grep <span class="hljs-string">&quot;Query time&quot;</span><br><span class="hljs-keyword">done</span><br></code></pre></td></tr></table></figure>
+<h2 id="企业dns架构建议">企业DNS架构建议</h2>
+<pre class="mermaid">graph TB
+    subgraph "Internal"
+        APP[Applications] --&gt; INTERNAL_DNS[Internal DNS&lt;br&gt;CoreDNS / BIND]
+        INTERNAL_DNS --&gt; |内部域名| INT_ZONE[Internal Zones&lt;br&gt;*.internal.company.com]
+        INTERNAL_DNS --&gt; |外部域名| FORWARDER[Forwarder]
+    end
+
+    subgraph "External"
+        FORWARDER --&gt; RECURSIVE[Recursive Resolver&lt;br&gt;Unbound]
+        RECURSIVE --&gt; PUBLIC_DNS[Public DNS&lt;br&gt;Root/TLD/Auth]
+    end
+
+    subgraph "Public Facing"
+        USERS[Users] --&gt; CDN_DNS[CDN DNS&lt;br&gt;CloudFlare / Route53]
+        CDN_DNS --&gt; ORIGIN[Origin Servers]
+    end</pre>
+<h2 id="总结">总结</h2>
+<p>DNS虽然是最基础的互联网服务，但深入理解其机制对于故障排查和性能优化至关重要：</p>
+<ol type="1">
+<li><strong>层级结构</strong>：根、TLD、权威三级架构，递归与迭代查询协同工作</li>
+<li><strong>缓存</strong>：多级缓存（浏览器、OS、路由器、ISP）减少查询延迟，TTL控制缓存时间</li>
+<li><strong>安全</strong>：DNSSEC保护数据完整性，DoH/DoT保护隐私</li>
+<li><strong>排查</strong>：<code>dig +trace</code>是最强大的DNS调试工具，能展示完整的解析链路</li>
+<li><strong>记录类型</strong>：A、AAAA、CNAME、MX、TXT等各有用途，选择正确的记录类型至关重要</li>
+</ol>
+<p>对于新系统部署，建议启用DNSSEC和DoH/DoT，并根据场景合理设置TTL值。</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2025-05-17</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">2.7k 字 · 7 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/typescript-advanced-types/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">TypeScript高级类型编程</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/netty-source-analysis/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Netty核心架构与源码分析</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#dns%E5%B1%82%E7%BA%A7%E7%BB%93%E6%9E%84"><span class="toc-text">DNS层级结构</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#dns%E6%9F%A5%E8%AF%A2%E6%B5%81%E7%A8%8B"><span class="toc-text">DNS查询流程</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%80%92%E5%BD%92%E6%9F%A5%E8%AF%A2-vs-%E8%BF%AD%E4%BB%A3%E6%9F%A5%E8%AF%A2"><span class="toc-text">递归查询 vs 迭代查询</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%8C%E6%95%B4%E7%9A%84%E8%A7%A3%E6%9E%90%E8%B7%AF%E5%BE%84"><span class="toc-text">完整的解析路径</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#dns%E8%AE%B0%E5%BD%95%E7%B1%BB%E5%9E%8B"><span class="toc-text">DNS记录类型</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%AE%B0%E5%BD%95%E7%B1%BB%E5%9E%8B%E9%80%9F%E6%9F%A5%E8%A1%A8"><span class="toc-text">记录类型速查表</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#dns%E7%BC%93%E5%AD%98%E6%9C%BA%E5%88%B6"><span class="toc-text">DNS缓存机制</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#ttl%E7%AE%A1%E7%90%86"><span class="toc-text">TTL管理</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#dnssec%E5%AE%89%E5%85%A8%E6%89%A9%E5%B1%95"><span class="toc-text">DNSSEC安全扩展</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#dnssec%E8%AE%B0%E5%BD%95%E7%B1%BB%E5%9E%8B"><span class="toc-text">DNSSEC记录类型</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#dns-over-httpstls"><span class="toc-text">DNS over HTTPS&#x2F;TLS</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#dns-over-https-doh"><span class="toc-text">DNS over HTTPS (DoH)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#dns-over-tls-dot"><span class="toc-text">DNS over TLS (DoT)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%BB%E8%A6%81dohdot%E6%8F%90%E4%BE%9B%E5%95%86"><span class="toc-text">主要DoH&#x2F;DoT提供商</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#dns%E6%95%85%E9%9A%9C%E6%8E%92%E6%9F%A5"><span class="toc-text">DNS故障排查</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#dig%E5%91%BD%E4%BB%A4%E8%AF%A6%E8%A7%A3"><span class="toc-text">dig命令详解</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#nslookup%E5%B8%B8%E7%94%A8%E5%91%BD%E4%BB%A4"><span class="toc-text">nslookup常用命令</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%B8%B8%E8%A7%81%E9%97%AE%E9%A2%98%E6%8E%92%E6%9F%A5%E6%B5%81%E7%A8%8B"><span class="toc-text">常见问题排查流程</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#dns%E6%80%A7%E8%83%BD%E6%B5%8B%E8%AF%95"><span class="toc-text">DNS性能测试</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BC%81%E4%B8%9Adns%E6%9E%B6%E6%9E%84%E5%BB%BA%E8%AE%AE"><span class="toc-text">企业DNS架构建议</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

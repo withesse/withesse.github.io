@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Netty核心架构与源码分析 · zt&#39;s Blog</title>
+  <meta name="description" content="深入分析Netty的核心架构设计，从Reactor模式、EventLoop、Channel Pipeline到ByteBuf内存管理，结合源码解读Netty的高性能之道。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/netty-source-analysis/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Netty核心架构与源码分析">
+  <meta property="og:description" content="深入分析Netty的核心架构设计，从Reactor模式、EventLoop、Channel Pipeline到ByteBuf内存管理，结合源码解读Netty的高性能之道。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/netty-source-analysis/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2025-05-13T16:00:00.000Z">
+  <meta property="article:modified_time" content="2025-05-13T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Netty核心架构与源码分析">
+  <meta name="twitter:description" content="深入分析Netty的核心架构设计，从Reactor模式、EventLoop、Channel Pipeline到ByteBuf内存管理，结合源码解读Netty的高性能之道。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Netty核心架构与源码分析","description":"深入分析Netty的核心架构设计，从Reactor模式、EventLoop、Channel Pipeline到ByteBuf内存管理，结合源码解读Netty的高性能之道。","datePublished":"2025-05-13T16:00:00.000Z","dateModified":"2025-05-13T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/netty-source-analysis/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Java","item":"https://withesse.co/categories/Java/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:25">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Java/">Java</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/network/"><span class="hash">#</span>network</a><a class="tag" href="/tags/java/"><span class="hash">#</span>java</a><a class="tag" href="/tags/netty/"><span class="hash">#</span>netty</a><a class="tag" href="/tags/nio/"><span class="hash">#</span>nio</a>
+        
+      </div>
+
+      <h1>Netty核心架构与源码分析</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2025.05.14</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          <span class="row gap8" style="align-items:center"><span class="lang-dot" style="background:#E76F00"></span>Java</span>
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 9 min</span>
+        </span>
+        <span class="wc"><span class="num">3.7k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#reactor-%E6%A8%A1%E5%BC%8F"><span class="toc-text">Reactor 模式</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#netty-%E6%A0%B8%E5%BF%83%E6%9E%B6%E6%9E%84"><span class="toc-text">Netty 核心架构</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E7%BB%84%E4%BB%B6%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90"><span class="toc-text">核心组件源码分析</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#eventloopgroup-%E4%B8%8E-eventloop"><span class="toc-text">1. EventLoopGroup 与 EventLoop</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#eventloop-%E6%A0%B8%E5%BF%83%E8%BF%90%E8%A1%8C%E5%BE%AA%E7%8E%AF"><span class="toc-text">EventLoop 核心运行循环</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#channel-pipeline"><span class="toc-text">2. Channel Pipeline</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#bytebuf%E9%AB%98%E6%80%A7%E8%83%BD%E7%BC%93%E5%86%B2%E5%8C%BA"><span class="toc-text">3. ByteBuf：高性能缓冲区</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%86%85%E5%AD%98%E6%B1%A0%E5%8C%96%E6%9C%BA%E5%88%B6"><span class="toc-text">4. 内存池化机制</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BC%96%E8%A7%A3%E7%A0%81%E6%A1%86%E6%9E%B6"><span class="toc-text">编解码框架</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%87%AA%E5%AE%9A%E4%B9%89%E5%8D%8F%E8%AE%AE%E7%BC%96%E8%A7%A3%E7%A0%81"><span class="toc-text">自定义协议编解码</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BF%83%E8%B7%B3%E6%9C%BA%E5%88%B6"><span class="toc-text">心跳机制</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96%E8%A6%81%E7%82%B9"><span class="toc-text">性能优化要点</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#netty%E8%B0%83%E4%BC%98%E5%8F%82%E6%95%B0"><span class="toc-text">Netty调优参数</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%B3%E9%94%AE%E4%BC%98%E5%8C%96%E7%AD%96%E7%95%A5"><span class="toc-text">关键优化策略</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="前言">前言</h2>
+<p>Netty是Java生态中最流行的异步事件驱动网络框架，被广泛应用于各种高性能网络应用中：Dubbo、gRPC-Java、Elasticsearch、Kafka的网络层都基于Netty构建。理解Netty的核心架构和设计理念，不仅有助于用好Netty，更能提升对高性能网络编程的整体认知。本文将从架构设计、核心组件、源码分析三个维度深入解析Netty。</p>
+<h2 id="reactor-模式">Reactor 模式</h2>
+<p>Netty的线程模型基于经典的Reactor模式。理解Reactor模式是理解Netty的前提。</p>
+<pre class="mermaid">graph TB
+    subgraph 主从Reactor模型
+        CLIENT1[客户端1] --&gt; BOSS
+        CLIENT2[客户端2] --&gt; BOSS
+        CLIENT3[客户端3] --&gt; BOSS
+
+        BOSS[BossGroup&lt;br/&gt;MainReactor&lt;br/&gt;负责Accept] --&gt;|分配连接| WORKER1[WorkerGroup-1&lt;br/&gt;SubReactor]
+        BOSS --&gt;|分配连接| WORKER2[WorkerGroup-2&lt;br/&gt;SubReactor]
+        BOSS --&gt;|分配连接| WORKER3[WorkerGroup-N&lt;br/&gt;SubReactor]
+
+        WORKER1 --&gt;|读写事件| H1[Handler&lt;br/&gt;编解码+业务]
+        WORKER2 --&gt;|读写事件| H2[Handler&lt;br/&gt;编解码+业务]
+        WORKER3 --&gt;|读写事件| H3[Handler&lt;br/&gt;编解码+业务]
+    end
+
+    style BOSS fill:#f96,stroke:#333,stroke-width:2px
+    style WORKER1 fill:#9cf,stroke:#333
+    style WORKER2 fill:#9cf,stroke:#333
+    style WORKER3 fill:#9cf,stroke:#333</pre>
+<ul>
+<li><strong>BossGroup</strong>（MainReactor）：负责接收客户端连接（Accept事件），通常1个线程足够</li>
+<li><strong>WorkerGroup</strong>（SubReactor）：负责处理已建立连接的I/O读写事件，通常设置为CPU核心数*2</li>
+</ul>
+<h2 id="netty-核心架构">Netty 核心架构</h2>
+<pre class="mermaid">graph TB
+    subgraph Netty架构层次
+        TRANSPORT[传输层&lt;br/&gt;Channel / EventLoop / ChannelFuture]
+        PIPELINE[管道层&lt;br/&gt;ChannelPipeline / ChannelHandler]
+        CODEC[编解码层&lt;br/&gt;ByteToMessageDecoder / MessageToByteEncoder]
+        PROTOCOL[协议层&lt;br/&gt;HTTP / WebSocket / 自定义协议]
+        BIZ[业务层&lt;br/&gt;SimpleChannelInboundHandler]
+    end
+
+    TRANSPORT --&gt; PIPELINE --&gt; CODEC --&gt; PROTOCOL --&gt; BIZ
+
+    subgraph 支撑组件
+        BYTEBUF[ByteBuf&lt;br/&gt;内存管理]
+        BOOTSTRAP[Bootstrap&lt;br/&gt;启动引导]
+        FUTURE[Promise/Future&lt;br/&gt;异步编程]
+    end
+
+    TRANSPORT ---|依赖| BYTEBUF
+    TRANSPORT ---|依赖| BOOTSTRAP
+    TRANSPORT ---|依赖| FUTURE
+
+    style TRANSPORT fill:#f96,stroke:#333
+    style PIPELINE fill:#ff6,stroke:#333
+    style CODEC fill:#9f6,stroke:#333</pre>
+<h2 id="核心组件源码分析">核心组件源码分析</h2>
+<h3 id="eventloopgroup-与-eventloop">1. EventLoopGroup 与 EventLoop</h3>
+<p>EventLoop是Netty的核心调度引擎。每个EventLoop绑定一个线程，负责处理多个Channel的I/O事件。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">/**</span><br><span class="hljs-comment"> * Netty服务端启动代码</span><br><span class="hljs-comment"> */</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">NettyServer</span> &#123;<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">main</span><span class="hljs-params">(String[] args)</span> <span class="hljs-keyword">throws</span> Exception &#123;<br>        <span class="hljs-comment">// BossGroup: 处理连接请求，1个线程足够</span><br>        <span class="hljs-type">EventLoopGroup</span> <span class="hljs-variable">bossGroup</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">NioEventLoopGroup</span>(<span class="hljs-number">1</span>);<br>        <span class="hljs-comment">// WorkerGroup: 处理I/O读写，默认为CPU核心数*2</span><br>        <span class="hljs-type">EventLoopGroup</span> <span class="hljs-variable">workerGroup</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">NioEventLoopGroup</span>();<br><br>        <span class="hljs-keyword">try</span> &#123;<br>            <span class="hljs-type">ServerBootstrap</span> <span class="hljs-variable">bootstrap</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">ServerBootstrap</span>();<br>            bootstrap.group(bossGroup, workerGroup)<br>                .channel(NioServerSocketChannel.class)<br>                .option(ChannelOption.SO_BACKLOG, <span class="hljs-number">1024</span>)       <span class="hljs-comment">// 连接队列大小</span><br>                .option(ChannelOption.SO_REUSEADDR, <span class="hljs-literal">true</span>)<br>                .childOption(ChannelOption.TCP_NODELAY, <span class="hljs-literal">true</span>)  <span class="hljs-comment">// 禁用Nagle算法</span><br>                .childOption(ChannelOption.SO_KEEPALIVE, <span class="hljs-literal">true</span>)<br>                .childHandler(<span class="hljs-keyword">new</span> <span class="hljs-title class_">ChannelInitializer</span>&lt;SocketChannel&gt;() &#123;<br>                    <span class="hljs-meta">@Override</span><br>                    <span class="hljs-keyword">protected</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">initChannel</span><span class="hljs-params">(SocketChannel ch)</span> &#123;<br>                        <span class="hljs-type">ChannelPipeline</span> <span class="hljs-variable">pipeline</span> <span class="hljs-operator">=</span> ch.pipeline();<br>                        <span class="hljs-comment">// 编解码器</span><br>                        pipeline.addLast(<span class="hljs-keyword">new</span> <span class="hljs-title class_">LengthFieldBasedFrameDecoder</span>(<br>                            <span class="hljs-number">65535</span>, <span class="hljs-number">0</span>, <span class="hljs-number">4</span>, <span class="hljs-number">0</span>, <span class="hljs-number">4</span>));<br>                        pipeline.addLast(<span class="hljs-keyword">new</span> <span class="hljs-title class_">LengthFieldPrepender</span>(<span class="hljs-number">4</span>));<br>                        pipeline.addLast(<span class="hljs-keyword">new</span> <span class="hljs-title class_">StringDecoder</span>(CharsetUtil.UTF_8));<br>                        pipeline.addLast(<span class="hljs-keyword">new</span> <span class="hljs-title class_">StringEncoder</span>(CharsetUtil.UTF_8));<br>                        <span class="hljs-comment">// 心跳检测</span><br>                        pipeline.addLast(<span class="hljs-keyword">new</span> <span class="hljs-title class_">IdleStateHandler</span>(<span class="hljs-number">60</span>, <span class="hljs-number">30</span>, <span class="hljs-number">0</span>));<br>                        <span class="hljs-comment">// 业务处理器</span><br>                        pipeline.addLast(<span class="hljs-keyword">new</span> <span class="hljs-title class_">ServerBusinessHandler</span>());<br>                    &#125;<br>                &#125;);<br><br>            <span class="hljs-comment">// 绑定端口并启动</span><br>            <span class="hljs-type">ChannelFuture</span> <span class="hljs-variable">future</span> <span class="hljs-operator">=</span> bootstrap.bind(<span class="hljs-number">8080</span>).sync();<br>            System.out.println(<span class="hljs-string">&quot;Server started on port 8080&quot;</span>);<br><br>            <span class="hljs-comment">// 等待服务器关闭</span><br>            future.channel().closeFuture().sync();<br>        &#125; <span class="hljs-keyword">finally</span> &#123;<br>            bossGroup.shutdownGracefully();<br>            workerGroup.shutdownGracefully();<br>        &#125;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="eventloop-核心运行循环">EventLoop 核心运行循环</h3>
+<p>NioEventLoop的核心是一个无限循环，不断执行三件事：</p>
+<pre class="mermaid">flowchart TB
+    START[NioEventLoop.run] --&gt; SELECT[1. select&lt;br/&gt;轮询I/O事件]
+    SELECT --&gt; PROCESS[2. processSelectedKeys&lt;br/&gt;处理I/O事件]
+    PROCESS --&gt; RUNTASKS[3. runAllTasks&lt;br/&gt;执行异步任务队列]
+    RUNTASKS --&gt; SELECT
+
+    SELECT -.-&gt;|JDK epoll bug&lt;br/&gt;空轮询| REBUILD[重建Selector&lt;br/&gt;规避Bug]
+    REBUILD --&gt; SELECT
+
+    style SELECT fill:#f96,stroke:#333
+    style PROCESS fill:#9cf,stroke:#333
+    style RUNTASKS fill:#9f6,stroke:#333</pre>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">/**</span><br><span class="hljs-comment"> * NioEventLoop核心逻辑简化版（源码位于io.netty.channel.nio.NioEventLoop）</span><br><span class="hljs-comment"> *</span><br><span class="hljs-comment"> * 关键设计：</span><br><span class="hljs-comment"> * 1. I/O事件和任务处理共享同一个线程，避免线程切换</span><br><span class="hljs-comment"> * 2. ioRatio控制I/O处理和任务处理的时间比例（默认50:50）</span><br><span class="hljs-comment"> * 3. 内置JDK epoll空轮询bug的检测和修复机制</span><br><span class="hljs-comment"> */</span><br><span class="hljs-comment">// 以下为源码核心流程的简化表示</span><br><span class="hljs-comment">// 实际源码在 NioEventLoop#run() 方法中</span><br><span class="hljs-comment">//</span><br><span class="hljs-comment">// for (;;) &#123;</span><br><span class="hljs-comment">//     // Step 1: 调用selector.select()，等待I/O事件</span><br><span class="hljs-comment">//     int selectedKeys = select(curDeadlineNanos);</span><br><span class="hljs-comment">//</span><br><span class="hljs-comment">//     // Step 2: 处理所有就绪的I/O事件</span><br><span class="hljs-comment">//     if (selectedKeys != 0) &#123;</span><br><span class="hljs-comment">//         processSelectedKeys();</span><br><span class="hljs-comment">//     &#125;</span><br><span class="hljs-comment">//</span><br><span class="hljs-comment">//     // Step 3: 执行taskQueue中的异步任务</span><br><span class="hljs-comment">//     runAllTasks(ioTime * (100 - ioRatio) / ioRatio);</span><br><span class="hljs-comment">//</span><br><span class="hljs-comment">//     // 检测epoll空轮询bug</span><br><span class="hljs-comment">//     if (unexpectedSelectorWakeup(selectCnt)) &#123;</span><br><span class="hljs-comment">//         rebuildSelector();  // 重建Selector</span><br><span class="hljs-comment">//     &#125;</span><br><span class="hljs-comment">// &#125;</span><br></code></pre></td></tr></table></figure>
+<h3 id="channel-pipeline">2. Channel Pipeline</h3>
+<p>ChannelPipeline是Netty的事件处理链，采用责任链模式。每个Channel都有一个Pipeline，Pipeline中包含多个ChannelHandler。</p>
+<pre class="mermaid">graph LR
+    subgraph ChannelPipeline
+        HEAD[HeadContext&lt;br/&gt;head] --&gt; IN1[Decoder&lt;br/&gt;Inbound]
+        IN1 --&gt; IN2[BusinessHandler&lt;br/&gt;Inbound]
+        IN2 --&gt; TAIL[TailContext&lt;br/&gt;tail]
+
+        TAIL --&gt; OUT1[Encoder&lt;br/&gt;Outbound]
+        OUT1 --&gt; HEAD
+    end
+
+    SOCKET[Socket] --&gt;|读取数据| HEAD
+    HEAD --&gt;|写出数据| SOCKET
+
+    IN_FLOW[入站事件流向] -.-&gt;|从Head到Tail| TAIL
+    OUT_FLOW[出站事件流向] -.-&gt;|从Tail到Head| HEAD
+
+    style HEAD fill:#f96,stroke:#333
+    style TAIL fill:#f96,stroke:#333
+    style IN1 fill:#9cf,stroke:#333
+    style IN2 fill:#9cf,stroke:#333
+    style OUT1 fill:#fc9,stroke:#333</pre>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">/**</span><br><span class="hljs-comment"> * 入站处理器：处理接收到的数据</span><br><span class="hljs-comment"> */</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">ServerBusinessHandler</span> <span class="hljs-keyword">extends</span> <span class="hljs-title class_">SimpleChannelInboundHandler</span>&lt;String&gt; &#123;<br><br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">final</span> <span class="hljs-type">Logger</span> <span class="hljs-variable">log</span> <span class="hljs-operator">=</span> LoggerFactory.getLogger(ServerBusinessHandler.class);<br><br>    <span class="hljs-meta">@Override</span><br>    <span class="hljs-keyword">protected</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">channelRead0</span><span class="hljs-params">(ChannelHandlerContext ctx, String msg)</span> &#123;<br>        log.info(<span class="hljs-string">&quot;Received from &#123;&#125;: &#123;&#125;&quot;</span>, ctx.channel().remoteAddress(), msg);<br><br>        <span class="hljs-comment">// 业务处理</span><br>        <span class="hljs-type">String</span> <span class="hljs-variable">response</span> <span class="hljs-operator">=</span> processMessage(msg);<br><br>        <span class="hljs-comment">// 写回响应</span><br>        ctx.writeAndFlush(response).addListener(future -&gt; &#123;<br>            <span class="hljs-keyword">if</span> (!future.isSuccess()) &#123;<br>                log.error(<span class="hljs-string">&quot;Failed to send response&quot;</span>, future.cause());<br>            &#125;<br>        &#125;);<br>    &#125;<br><br>    <span class="hljs-meta">@Override</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">channelActive</span><span class="hljs-params">(ChannelHandlerContext ctx)</span> &#123;<br>        log.info(<span class="hljs-string">&quot;Client connected: &#123;&#125;&quot;</span>, ctx.channel().remoteAddress());<br>    &#125;<br><br>    <span class="hljs-meta">@Override</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">channelInactive</span><span class="hljs-params">(ChannelHandlerContext ctx)</span> &#123;<br>        log.info(<span class="hljs-string">&quot;Client disconnected: &#123;&#125;&quot;</span>, ctx.channel().remoteAddress());<br>    &#125;<br><br>    <span class="hljs-meta">@Override</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">exceptionCaught</span><span class="hljs-params">(ChannelHandlerContext ctx, Throwable cause)</span> &#123;<br>        log.error(<span class="hljs-string">&quot;Exception in channel &#123;&#125;&quot;</span>, ctx.channel().remoteAddress(), cause);<br>        ctx.close();<br>    &#125;<br><br>    <span class="hljs-meta">@Override</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">userEventTriggered</span><span class="hljs-params">(ChannelHandlerContext ctx, Object evt)</span> &#123;<br>        <span class="hljs-keyword">if</span> (evt <span class="hljs-keyword">instanceof</span> IdleStateEvent idleEvent) &#123;<br>            <span class="hljs-keyword">switch</span> (idleEvent.state()) &#123;<br>                <span class="hljs-keyword">case</span> READER_IDLE -&gt; &#123;<br>                    log.warn(<span class="hljs-string">&quot;Reader idle, closing: &#123;&#125;&quot;</span>, ctx.channel().remoteAddress());<br>                    ctx.close();<br>                &#125;<br>                <span class="hljs-keyword">case</span> WRITER_IDLE -&gt; &#123;<br>                    <span class="hljs-comment">// 发送心跳</span><br>                    ctx.writeAndFlush(<span class="hljs-string">&quot;HEARTBEAT&quot;</span>);<br>                &#125;<br>                <span class="hljs-keyword">default</span> -&gt; &#123;&#125;<br>            &#125;<br>        &#125;<br>    &#125;<br><br>    <span class="hljs-keyword">private</span> String <span class="hljs-title function_">processMessage</span><span class="hljs-params">(String msg)</span> &#123;<br>        <span class="hljs-keyword">return</span> <span class="hljs-string">&quot;Echo: &quot;</span> + msg;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="bytebuf高性能缓冲区">3. ByteBuf：高性能缓冲区</h3>
+<p>ByteBuf是Netty对NIO
+ByteBuffer的增强替代，解决了ByteBuffer的诸多不便。</p>
+<pre class="mermaid">graph TB
+    subgraph ByteBuf内存布局
+        direction LR
+        DISCARD[已丢弃区域&lt;br/&gt;0..readerIndex]
+        READABLE[可读区域&lt;br/&gt;readerIndex..writerIndex]
+        WRITABLE[可写区域&lt;br/&gt;writerIndex..capacity]
+        RESERVE[保留区域&lt;br/&gt;capacity..maxCapacity]
+    end
+
+    RI[readerIndex] --&gt; READABLE
+    WI[writerIndex] --&gt; WRITABLE
+    CAP[capacity] --&gt; RESERVE
+
+    style DISCARD fill:#ccc,stroke:#333
+    style READABLE fill:#9f6,stroke:#333
+    style WRITABLE fill:#9cf,stroke:#333
+    style RESERVE fill:#ffa,stroke:#333</pre>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">/**</span><br><span class="hljs-comment"> * ByteBuf核心特性演示</span><br><span class="hljs-comment"> */</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">ByteBufExamples</span> &#123;<br><br>    <span class="hljs-comment">/**</span><br><span class="hljs-comment">     * 基本读写操作</span><br><span class="hljs-comment">     */</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">basicOperations</span><span class="hljs-params">()</span> &#123;<br>        <span class="hljs-comment">// 堆缓冲区</span><br>        <span class="hljs-type">ByteBuf</span> <span class="hljs-variable">heapBuf</span> <span class="hljs-operator">=</span> Unpooled.buffer(<span class="hljs-number">256</span>);<br>        <span class="hljs-comment">// 直接缓冲区（零拷贝，适合I/O操作）</span><br>        <span class="hljs-type">ByteBuf</span> <span class="hljs-variable">directBuf</span> <span class="hljs-operator">=</span> Unpooled.directBuffer(<span class="hljs-number">256</span>);<br>        <span class="hljs-comment">// 池化缓冲区（生产推荐）</span><br>        <span class="hljs-type">ByteBuf</span> <span class="hljs-variable">pooledBuf</span> <span class="hljs-operator">=</span> PooledByteBufAllocator.DEFAULT.buffer(<span class="hljs-number">256</span>);<br><br>        <span class="hljs-keyword">try</span> &#123;<br>            <span class="hljs-comment">// 写入数据，writerIndex自动后移</span><br>            heapBuf.writeInt(<span class="hljs-number">42</span>);<br>            heapBuf.writeLong(System.currentTimeMillis());<br>            heapBuf.writeBytes(<span class="hljs-string">&quot;Hello Netty&quot;</span>.getBytes(CharsetUtil.UTF_8));<br><br>            <span class="hljs-comment">// 读取数据，readerIndex自动后移</span><br>            <span class="hljs-type">int</span> <span class="hljs-variable">value</span> <span class="hljs-operator">=</span> heapBuf.readInt();<br>            <span class="hljs-type">long</span> <span class="hljs-variable">timestamp</span> <span class="hljs-operator">=</span> heapBuf.readLong();<br><br>            <span class="hljs-comment">// 读取指定长度的字节</span><br>            <span class="hljs-type">byte</span>[] bytes = <span class="hljs-keyword">new</span> <span class="hljs-title class_">byte</span>[heapBuf.readableBytes()];<br>            heapBuf.readBytes(bytes);<br>            <span class="hljs-type">String</span> <span class="hljs-variable">message</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">String</span>(bytes, CharsetUtil.UTF_8);<br>        &#125; <span class="hljs-keyword">finally</span> &#123;<br>            <span class="hljs-comment">// 释放引用计数</span><br>            heapBuf.release();<br>            directBuf.release();<br>            pooledBuf.release();<br>        &#125;<br>    &#125;<br><br>    <span class="hljs-comment">/**</span><br><span class="hljs-comment">     * 零拷贝：CompositeByteBuf</span><br><span class="hljs-comment">     * 将多个ByteBuf逻辑组合为一个，无需内存拷贝</span><br><span class="hljs-comment">     */</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">zeroCopyComposite</span><span class="hljs-params">()</span> &#123;<br>        <span class="hljs-type">ByteBuf</span> <span class="hljs-variable">header</span> <span class="hljs-operator">=</span> Unpooled.wrappedBuffer(<span class="hljs-string">&quot;HEADER|&quot;</span>.getBytes());<br>        <span class="hljs-type">ByteBuf</span> <span class="hljs-variable">body</span> <span class="hljs-operator">=</span> Unpooled.wrappedBuffer(<span class="hljs-string">&quot;message body&quot;</span>.getBytes());<br><br>        <span class="hljs-comment">// 逻辑组合，不发生内存拷贝</span><br>        <span class="hljs-type">CompositeByteBuf</span> <span class="hljs-variable">composite</span> <span class="hljs-operator">=</span> Unpooled.compositeBuffer();<br>        composite.addComponents(<span class="hljs-literal">true</span>, header, body);<br><br>        <span class="hljs-comment">// 像操作单个ByteBuf一样使用</span><br>        <span class="hljs-type">byte</span>[] all = <span class="hljs-keyword">new</span> <span class="hljs-title class_">byte</span>[composite.readableBytes()];<br>        composite.readBytes(all);<br>        System.out.println(<span class="hljs-keyword">new</span> <span class="hljs-title class_">String</span>(all)); <span class="hljs-comment">// HEADER|message body</span><br><br>        composite.release();<br>    &#125;<br><br>    <span class="hljs-comment">/**</span><br><span class="hljs-comment">     * 零拷贝：slice</span><br><span class="hljs-comment">     * 对ByteBuf进行切片，共享底层内存</span><br><span class="hljs-comment">     */</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">zeroCopySlice</span><span class="hljs-params">()</span> &#123;<br>        <span class="hljs-type">ByteBuf</span> <span class="hljs-variable">original</span> <span class="hljs-operator">=</span> Unpooled.wrappedBuffer(<span class="hljs-string">&quot;Hello, World!&quot;</span>.getBytes());<br><br>        <span class="hljs-comment">// slice共享底层内存，不发生拷贝</span><br>        <span class="hljs-type">ByteBuf</span> <span class="hljs-variable">hello</span> <span class="hljs-operator">=</span> original.slice(<span class="hljs-number">0</span>, <span class="hljs-number">5</span>);<br>        <span class="hljs-type">ByteBuf</span> <span class="hljs-variable">world</span> <span class="hljs-operator">=</span> original.slice(<span class="hljs-number">7</span>, <span class="hljs-number">6</span>);<br><br>        <span class="hljs-comment">// 注意：slice后的ByteBuf和原始ByteBuf共享内存</span><br>        <span class="hljs-comment">// 修改一个会影响另一个</span><br><br>        original.release();<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="内存池化机制">4. 内存池化机制</h3>
+<p>Netty通过内存池化大幅减少GC压力和内存分配开销。</p>
+<pre class="mermaid">graph TB
+    subgraph PooledByteBufAllocator
+        ARENA[PoolArena]
+        ARENA --&gt; TC[PoolThreadCache&lt;br/&gt;线程本地缓存]
+        ARENA --&gt; CHUNK[PoolChunk 16MB]
+        CHUNK --&gt; PAGE[PoolSubpage 8KB]
+
+        TC --&gt;|优先从线程缓存分配| ALLOC[分配ByteBuf]
+        CHUNK --&gt;|线程缓存未命中| ALLOC
+    end
+
+    subgraph 内存分级
+        TINY[Tiny: 16B ~ 512B]
+        SMALL[Small: 512B ~ 8KB]
+        NORMAL[Normal: 8KB ~ 16MB]
+        HUGE[Huge: &gt; 16MB&lt;br/&gt;不池化]
+    end
+
+    style TC fill:#ffa,stroke:#333
+    style CHUNK fill:#aff,stroke:#333
+    style ARENA fill:#f96,stroke:#333</pre>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">/**</span><br><span class="hljs-comment"> * 内存泄漏检测</span><br><span class="hljs-comment"> * Netty使用引用计数管理ByteBuf生命周期</span><br><span class="hljs-comment"> */</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">MemoryLeakPrevention</span> &#123;<br><br>    <span class="hljs-comment">/**</span><br><span class="hljs-comment">     * 正确释放ByteBuf</span><br><span class="hljs-comment">     */</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">SafeHandler</span> <span class="hljs-keyword">extends</span> <span class="hljs-title class_">ChannelInboundHandlerAdapter</span> &#123;<br><br>        <span class="hljs-meta">@Override</span><br>        <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">channelRead</span><span class="hljs-params">(ChannelHandlerContext ctx, Object msg)</span> &#123;<br>            <span class="hljs-type">ByteBuf</span> <span class="hljs-variable">buf</span> <span class="hljs-operator">=</span> (ByteBuf) msg;<br>            <span class="hljs-keyword">try</span> &#123;<br>                <span class="hljs-comment">// 处理数据</span><br>                processData(buf);<br>            &#125; <span class="hljs-keyword">finally</span> &#123;<br>                <span class="hljs-comment">// 必须释放，否则内存泄漏</span><br>                ReferenceCountUtil.release(msg);<br>            &#125;<br>        &#125;<br>    &#125;<br><br>    <span class="hljs-comment">/**</span><br><span class="hljs-comment">     * SimpleChannelInboundHandler会自动释放</span><br><span class="hljs-comment">     */</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">AutoReleaseHandler</span> <span class="hljs-keyword">extends</span> <span class="hljs-title class_">SimpleChannelInboundHandler</span>&lt;ByteBuf&gt; &#123;<br>        <span class="hljs-meta">@Override</span><br>        <span class="hljs-keyword">protected</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">channelRead0</span><span class="hljs-params">(ChannelHandlerContext ctx, ByteBuf msg)</span> &#123;<br>            <span class="hljs-comment">// 处理数据</span><br>            <span class="hljs-comment">// msg会在方法返回后自动释放</span><br>            processData(msg);<br>        &#125;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<p>启用内存泄漏检测：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 开发环境：高级检测（对每个ByteBuf进行采样跟踪）</span><br>java -Dio.netty.leakDetection.level=ADVANCED -jar app.jar<br><br><span class="hljs-comment"># 测试环境：偏执级检测（跟踪所有ByteBuf，性能开销大）</span><br>java -Dio.netty.leakDetection.level=PARANOID -jar app.jar<br><br><span class="hljs-comment"># 生产环境：简单检测（默认，仅采样1%）</span><br>java -Dio.netty.leakDetection.level=SIMPLE -jar app.jar<br></code></pre></td></tr></table></figure>
+<h2 id="编解码框架">编解码框架</h2>
+<h3 id="自定义协议编解码">自定义协议编解码</h3>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">/**</span><br><span class="hljs-comment"> * 自定义协议格式：</span><br><span class="hljs-comment"> * +--------+--------+--------+--------+</span><br><span class="hljs-comment"> * | Magic  | Version| MsgType| Length  |</span><br><span class="hljs-comment"> * | 2 bytes| 1 byte | 1 byte | 4 bytes|</span><br><span class="hljs-comment"> * +--------+--------+--------+--------+</span><br><span class="hljs-comment"> * |              Body                  |</span><br><span class="hljs-comment"> * |          (Length bytes)            |</span><br><span class="hljs-comment"> * +------------------------------------+</span><br><span class="hljs-comment"> */</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">CustomProtocol</span> &#123;<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">final</span> <span class="hljs-type">short</span> <span class="hljs-variable">MAGIC</span> <span class="hljs-operator">=</span> (<span class="hljs-type">short</span>) <span class="hljs-number">0xCAFE</span>;<br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">final</span> <span class="hljs-type">byte</span> <span class="hljs-variable">VERSION</span> <span class="hljs-operator">=</span> <span class="hljs-number">1</span>;<br><br>    <span class="hljs-comment">// 消息类型</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">final</span> <span class="hljs-type">byte</span> <span class="hljs-variable">MSG_REQUEST</span> <span class="hljs-operator">=</span> <span class="hljs-number">1</span>;<br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">final</span> <span class="hljs-type">byte</span> <span class="hljs-variable">MSG_RESPONSE</span> <span class="hljs-operator">=</span> <span class="hljs-number">2</span>;<br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">final</span> <span class="hljs-type">byte</span> <span class="hljs-variable">MSG_HEARTBEAT</span> <span class="hljs-operator">=</span> <span class="hljs-number">3</span>;<br>&#125;<br><br><span class="hljs-comment">/**</span><br><span class="hljs-comment"> * 解码器</span><br><span class="hljs-comment"> */</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">CustomDecoder</span> <span class="hljs-keyword">extends</span> <span class="hljs-title class_">ByteToMessageDecoder</span> &#123;<br><br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">final</span> <span class="hljs-type">int</span> <span class="hljs-variable">HEADER_LENGTH</span> <span class="hljs-operator">=</span> <span class="hljs-number">8</span>; <span class="hljs-comment">// 2+1+1+4</span><br><br>    <span class="hljs-meta">@Override</span><br>    <span class="hljs-keyword">protected</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">decode</span><span class="hljs-params">(ChannelHandlerContext ctx, ByteBuf in,</span><br><span class="hljs-params">                           List&lt;Object&gt; out)</span> &#123;<br><br>        <span class="hljs-comment">// 可读字节不够头部长度，等待更多数据</span><br>        <span class="hljs-keyword">if</span> (in.readableBytes() &lt; HEADER_LENGTH) &#123;<br>            <span class="hljs-keyword">return</span>;<br>        &#125;<br><br>        in.markReaderIndex();<br><br>        <span class="hljs-comment">// 读取Magic Number</span><br>        <span class="hljs-type">short</span> <span class="hljs-variable">magic</span> <span class="hljs-operator">=</span> in.readShort();<br>        <span class="hljs-keyword">if</span> (magic != CustomProtocol.MAGIC) &#123;<br>            in.resetReaderIndex();<br>            <span class="hljs-keyword">throw</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">DecoderException</span>(<span class="hljs-string">&quot;Invalid magic number: &quot;</span> + magic);<br>        &#125;<br><br>        <span class="hljs-type">byte</span> <span class="hljs-variable">version</span> <span class="hljs-operator">=</span> in.readByte();<br>        <span class="hljs-type">byte</span> <span class="hljs-variable">msgType</span> <span class="hljs-operator">=</span> in.readByte();<br>        <span class="hljs-type">int</span> <span class="hljs-variable">bodyLength</span> <span class="hljs-operator">=</span> in.readInt();<br><br>        <span class="hljs-comment">// 校验body长度合法性</span><br>        <span class="hljs-keyword">if</span> (bodyLength &lt; <span class="hljs-number">0</span> || bodyLength &gt; <span class="hljs-number">1024</span> * <span class="hljs-number">1024</span>) &#123;<br>            <span class="hljs-keyword">throw</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">DecoderException</span>(<span class="hljs-string">&quot;Invalid body length: &quot;</span> + bodyLength);<br>        &#125;<br><br>        <span class="hljs-comment">// body数据不够，等待</span><br>        <span class="hljs-keyword">if</span> (in.readableBytes() &lt; bodyLength) &#123;<br>            in.resetReaderIndex();<br>            <span class="hljs-keyword">return</span>;<br>        &#125;<br><br>        <span class="hljs-comment">// 读取body</span><br>        <span class="hljs-type">byte</span>[] body = <span class="hljs-keyword">new</span> <span class="hljs-title class_">byte</span>[bodyLength];<br>        in.readBytes(body);<br><br>        <span class="hljs-comment">// 反序列化为消息对象</span><br>        <span class="hljs-type">Message</span> <span class="hljs-variable">message</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">Message</span>();<br>        message.setVersion(version);<br>        message.setMsgType(msgType);<br>        message.setBody(body);<br><br>        out.add(message);<br>    &#125;<br>&#125;<br><br><span class="hljs-comment">/**</span><br><span class="hljs-comment"> * 编码器</span><br><span class="hljs-comment"> */</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">CustomEncoder</span> <span class="hljs-keyword">extends</span> <span class="hljs-title class_">MessageToByteEncoder</span>&lt;Message&gt; &#123;<br><br>    <span class="hljs-meta">@Override</span><br>    <span class="hljs-keyword">protected</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">encode</span><span class="hljs-params">(ChannelHandlerContext ctx, Message msg,</span><br><span class="hljs-params">                           ByteBuf out)</span> &#123;<br>        out.writeShort(CustomProtocol.MAGIC);<br>        out.writeByte(msg.getVersion());<br>        out.writeByte(msg.getMsgType());<br>        out.writeInt(msg.getBody().length);<br>        out.writeBytes(msg.getBody());<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="心跳机制">心跳机制</h2>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">/**</span><br><span class="hljs-comment"> * 完整的心跳处理方案</span><br><span class="hljs-comment"> */</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">HeartbeatHandler</span> <span class="hljs-keyword">extends</span> <span class="hljs-title class_">ChannelInboundHandlerAdapter</span> &#123;<br><br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">final</span> <span class="hljs-type">Logger</span> <span class="hljs-variable">log</span> <span class="hljs-operator">=</span> LoggerFactory.getLogger(HeartbeatHandler.class);<br>    <span class="hljs-keyword">private</span> <span class="hljs-type">int</span> <span class="hljs-variable">missedHeartbeats</span> <span class="hljs-operator">=</span> <span class="hljs-number">0</span>;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">final</span> <span class="hljs-type">int</span> <span class="hljs-variable">MAX_MISSED</span> <span class="hljs-operator">=</span> <span class="hljs-number">3</span>;<br><br>    <span class="hljs-meta">@Override</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">userEventTriggered</span><span class="hljs-params">(ChannelHandlerContext ctx, Object evt)</span> <span class="hljs-keyword">throws</span> Exception &#123;<br>        <span class="hljs-keyword">if</span> (evt <span class="hljs-keyword">instanceof</span> IdleStateEvent idleEvent) &#123;<br>            <span class="hljs-keyword">switch</span> (idleEvent.state()) &#123;<br>                <span class="hljs-keyword">case</span> READER_IDLE -&gt; &#123;<br>                    missedHeartbeats++;<br>                    <span class="hljs-keyword">if</span> (missedHeartbeats &gt;= MAX_MISSED) &#123;<br>                        log.warn(<span class="hljs-string">&quot;Missed &#123;&#125; heartbeats, closing connection: &#123;&#125;&quot;</span>,<br>                            missedHeartbeats, ctx.channel().remoteAddress());<br>                        ctx.close();<br>                    &#125; <span class="hljs-keyword">else</span> &#123;<br>                        log.debug(<span class="hljs-string">&quot;Reader idle (missed: &#123;&#125;), peer: &#123;&#125;&quot;</span>,<br>                            missedHeartbeats, ctx.channel().remoteAddress());<br>                    &#125;<br>                &#125;<br>                <span class="hljs-keyword">case</span> WRITER_IDLE -&gt; &#123;<br>                    log.debug(<span class="hljs-string">&quot;Sending heartbeat to: &#123;&#125;&quot;</span>,<br>                        ctx.channel().remoteAddress());<br>                    <span class="hljs-type">Message</span> <span class="hljs-variable">heartbeat</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">Message</span>();<br>                    heartbeat.setMsgType(CustomProtocol.MSG_HEARTBEAT);<br>                    heartbeat.setBody(<span class="hljs-keyword">new</span> <span class="hljs-title class_">byte</span>[<span class="hljs-number">0</span>]);<br>                    ctx.writeAndFlush(heartbeat);<br>                &#125;<br>                <span class="hljs-keyword">default</span> -&gt; &#123;&#125;<br>            &#125;<br>        &#125; <span class="hljs-keyword">else</span> &#123;<br>            <span class="hljs-built_in">super</span>.userEventTriggered(ctx, evt);<br>        &#125;<br>    &#125;<br><br>    <span class="hljs-meta">@Override</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">channelRead</span><span class="hljs-params">(ChannelHandlerContext ctx, Object msg)</span> <span class="hljs-keyword">throws</span> Exception &#123;<br>        <span class="hljs-comment">// 收到任何数据都重置心跳计数</span><br>        missedHeartbeats = <span class="hljs-number">0</span>;<br><br>        <span class="hljs-keyword">if</span> (msg <span class="hljs-keyword">instanceof</span> Message message<br>                &amp;&amp; message.getMsgType() == CustomProtocol.MSG_HEARTBEAT) &#123;<br>            <span class="hljs-comment">// 心跳消息不传递给后续Handler</span><br>            <span class="hljs-keyword">return</span>;<br>        &#125;<br><br>        <span class="hljs-comment">// 非心跳消息传递给下一个Handler</span><br>        ctx.fireChannelRead(msg);<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="性能优化要点">性能优化要点</h2>
+<h3 id="netty调优参数">Netty调优参数</h3>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><code class="hljs java">bootstrap.group(bossGroup, workerGroup)<br>    .channel(NioServerSocketChannel.class)<br><br>    <span class="hljs-comment">// 服务端 TCP 参数</span><br>    .option(ChannelOption.SO_BACKLOG, <span class="hljs-number">1024</span>)           <span class="hljs-comment">// SYN队列大小</span><br>    .option(ChannelOption.SO_REUSEADDR, <span class="hljs-literal">true</span>)         <span class="hljs-comment">// 端口复用</span><br><br>    <span class="hljs-comment">// 子连接参数</span><br>    .childOption(ChannelOption.TCP_NODELAY, <span class="hljs-literal">true</span>)      <span class="hljs-comment">// 禁用Nagle</span><br>    .childOption(ChannelOption.SO_KEEPALIVE, <span class="hljs-literal">true</span>)     <span class="hljs-comment">// TCP保活</span><br>    .childOption(ChannelOption.SO_SNDBUF, <span class="hljs-number">32</span> * <span class="hljs-number">1024</span>)   <span class="hljs-comment">// 发送缓冲区</span><br>    .childOption(ChannelOption.SO_RCVBUF, <span class="hljs-number">32</span> * <span class="hljs-number">1024</span>)   <span class="hljs-comment">// 接收缓冲区</span><br><br>    <span class="hljs-comment">// 使用池化内存分配器（Netty 4默认即为池化）</span><br>    .childOption(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT)<br><br>    <span class="hljs-comment">// 写缓冲区水位线：高水位时停止写入，低水位时恢复</span><br>    .childOption(ChannelOption.WRITE_BUFFER_WATER_MARK,<br>        <span class="hljs-keyword">new</span> <span class="hljs-title class_">WriteBufferWaterMark</span>(<span class="hljs-number">32</span> * <span class="hljs-number">1024</span>, <span class="hljs-number">64</span> * <span class="hljs-number">1024</span>));<br></code></pre></td></tr></table></figure>
+<h3 id="关键优化策略">关键优化策略</h3>
+<table>
+<thead>
+<tr class="header">
+<th>策略</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>使用池化ByteBuf</td>
+<td>减少GC压力，默认已启用</td>
+</tr>
+<tr class="even">
+<td>使用DirectBuffer</td>
+<td>减少堆内外内存拷贝</td>
+</tr>
+<tr class="odd">
+<td>CompositeByteBuf</td>
+<td>零拷贝组合多个Buffer</td>
+</tr>
+<tr class="even">
+<td>IO线程不做耗时操作</td>
+<td>耗时业务放到独立线程池</td>
+</tr>
+<tr class="odd">
+<td>合理设置水位线</td>
+<td>防止写缓冲区无限增长导致OOM</td>
+</tr>
+<tr class="even">
+<td>优雅关闭</td>
+<td>shutdownGracefully确保资源释放</td>
+</tr>
+</tbody>
+</table>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">/**</span><br><span class="hljs-comment"> * 耗时业务放到独立线程池</span><br><span class="hljs-comment"> */</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">BusinessThreadPoolHandler</span> <span class="hljs-keyword">extends</span> <span class="hljs-title class_">ChannelInboundHandlerAdapter</span> &#123;<br><br>    <span class="hljs-comment">// 业务线程池，不占用EventLoop</span><br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">final</span> <span class="hljs-type">EventExecutorGroup</span> <span class="hljs-variable">BUSINESS_GROUP</span> <span class="hljs-operator">=</span><br>        <span class="hljs-keyword">new</span> <span class="hljs-title class_">DefaultEventExecutorGroup</span>(<span class="hljs-number">16</span>);<br><br>    <span class="hljs-meta">@Override</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">channelRead</span><span class="hljs-params">(ChannelHandlerContext ctx, Object msg)</span> &#123;<br>        <span class="hljs-comment">// 将耗时操作提交到业务线程池</span><br>        BUSINESS_GROUP.submit(() -&gt; &#123;<br>            <span class="hljs-type">String</span> <span class="hljs-variable">result</span> <span class="hljs-operator">=</span> heavyBusinessLogic((Message) msg);<br>            ctx.writeAndFlush(result);<br>        &#125;);<br>    &#125;<br><br>    <span class="hljs-keyword">private</span> String <span class="hljs-title function_">heavyBusinessLogic</span><span class="hljs-params">(Message msg)</span> &#123;<br>        <span class="hljs-comment">// 数据库查询、复杂计算等耗时操作</span><br>        <span class="hljs-keyword">return</span> <span class="hljs-string">&quot;processed&quot;</span>;<br>    &#125;<br>&#125;<br><br><span class="hljs-comment">// 或在Pipeline中指定Handler的执行线程组</span><br>pipeline.addLast(businessGroup, <span class="hljs-string">&quot;businessHandler&quot;</span>, <span class="hljs-keyword">new</span> <span class="hljs-title class_">BusinessHandler</span>());<br></code></pre></td></tr></table></figure>
+<h2 id="总结">总结</h2>
+<p>Netty的高性能源于多个层面的精心设计：</p>
+<ol type="1">
+<li><strong>线程模型</strong>：基于主从Reactor的事件驱动模型，少量线程处理大量连接</li>
+<li><strong>零拷贝</strong>：CompositeByteBuf、slice、FileRegion等机制减少内存拷贝</li>
+<li><strong>内存池化</strong>：PooledByteBufAllocator通过内存池和线程本地缓存减少GC和分配开销</li>
+<li><strong>Pipeline机制</strong>：责任链模式实现灵活的事件处理流水线</li>
+<li><strong>无锁设计</strong>：EventLoop绑定单线程，同一Channel的所有操作在同一线程中执行，避免同步开销</li>
+</ol>
+<p>理解这些设计思想，不仅能帮助我们更好地使用Netty，也能启发我们在其他系统设计中应用类似的高性能策略。在实际使用中，注意ByteBuf的引用计数管理防止内存泄漏，避免在EventLoop线程中执行阻塞操作，合理配置心跳和水位线机制保障系统稳定性。</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2025-05-14</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">3.7k 字 · 9 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/dns-resolution-deep-dive/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">DNS解析全链路分析</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/vue3-composition-api/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Vue3 Composition API设计与实战</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#reactor-%E6%A8%A1%E5%BC%8F"><span class="toc-text">Reactor 模式</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#netty-%E6%A0%B8%E5%BF%83%E6%9E%B6%E6%9E%84"><span class="toc-text">Netty 核心架构</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E7%BB%84%E4%BB%B6%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90"><span class="toc-text">核心组件源码分析</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#eventloopgroup-%E4%B8%8E-eventloop"><span class="toc-text">1. EventLoopGroup 与 EventLoop</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#eventloop-%E6%A0%B8%E5%BF%83%E8%BF%90%E8%A1%8C%E5%BE%AA%E7%8E%AF"><span class="toc-text">EventLoop 核心运行循环</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#channel-pipeline"><span class="toc-text">2. Channel Pipeline</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#bytebuf%E9%AB%98%E6%80%A7%E8%83%BD%E7%BC%93%E5%86%B2%E5%8C%BA"><span class="toc-text">3. ByteBuf：高性能缓冲区</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%86%85%E5%AD%98%E6%B1%A0%E5%8C%96%E6%9C%BA%E5%88%B6"><span class="toc-text">4. 内存池化机制</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BC%96%E8%A7%A3%E7%A0%81%E6%A1%86%E6%9E%B6"><span class="toc-text">编解码框架</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%87%AA%E5%AE%9A%E4%B9%89%E5%8D%8F%E8%AE%AE%E7%BC%96%E8%A7%A3%E7%A0%81"><span class="toc-text">自定义协议编解码</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BF%83%E8%B7%B3%E6%9C%BA%E5%88%B6"><span class="toc-text">心跳机制</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96%E8%A6%81%E7%82%B9"><span class="toc-text">性能优化要点</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#netty%E8%B0%83%E4%BC%98%E5%8F%82%E6%95%B0"><span class="toc-text">Netty调优参数</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%B3%E9%94%AE%E4%BC%98%E5%8C%96%E7%AD%96%E7%95%A5"><span class="toc-text">关键优化策略</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

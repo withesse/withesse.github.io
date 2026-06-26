@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>数据库分库分表策略与实践 · zt&#39;s Blog</title>
+  <meta name="description" content="系统讲解数据库水平/垂直分库分表策略、分片键选择、路由算法、分布式查询、数据迁移方案，以及ShardingSphere和Vitess的实践。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/database-sharding-strategies/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="数据库分库分表策略与实践">
+  <meta property="og:description" content="系统讲解数据库水平/垂直分库分表策略、分片键选择、路由算法、分布式查询、数据迁移方案，以及ShardingSphere和Vitess的实践。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/database-sharding-strategies/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2025-02-25T16:00:00.000Z">
+  <meta property="article:modified_time" content="2025-02-25T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="数据库分库分表策略与实践">
+  <meta name="twitter:description" content="系统讲解数据库水平/垂直分库分表策略、分片键选择、路由算法、分布式查询、数据迁移方案，以及ShardingSphere和Vitess的实践。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"数据库分库分表策略与实践","description":"系统讲解数据库水平/垂直分库分表策略、分片键选择、路由算法、分布式查询、数据迁移方案，以及ShardingSphere和Vitess的实践。","datePublished":"2025-02-25T16:00:00.000Z","dateModified":"2025-02-25T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/database-sharding-strategies/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Database","item":"https://withesse.co/categories/Database/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:330">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Database/">Database</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/database/"><span class="hash">#</span>database</a><a class="tag" href="/tags/sharding/"><span class="hash">#</span>sharding</a><a class="tag" href="/tags/partitioning/"><span class="hash">#</span>partitioning</a>
+        
+      </div>
+
+      <h1>数据库分库分表策略与实践</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2025.02.26</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 9 min</span>
+        </span>
+        <span class="wc"><span class="num">3.7k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E9%9C%80%E8%A6%81%E5%88%86%E5%BA%93%E5%88%86%E8%A1%A8"><span class="toc-text">为什么需要分库分表</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BB%80%E4%B9%88%E6%97%B6%E5%80%99%E8%80%83%E8%99%91%E5%88%86%E5%BA%93%E5%88%86%E8%A1%A8"><span class="toc-text">什么时候考虑分库分表</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%88%86%E5%BA%93%E5%88%86%E8%A1%A8%E7%AD%96%E7%95%A5"><span class="toc-text">分库分表策略</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9E%82%E7%9B%B4%E6%8B%86%E5%88%86"><span class="toc-text">垂直拆分</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%B0%B4%E5%B9%B3%E6%8B%86%E5%88%86"><span class="toc-text">水平拆分</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%88%86%E7%89%87%E9%94%AEsharding-key%E9%80%89%E6%8B%A9"><span class="toc-text">分片键（Sharding Key）选择</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%80%89%E6%8B%A9%E5%8E%9F%E5%88%99"><span class="toc-text">选择原则</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%B8%B8%E8%A7%81%E5%88%86%E7%89%87%E9%94%AE%E6%96%B9%E6%A1%88"><span class="toc-text">常见分片键方案</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%B7%AF%E7%94%B1%E7%AE%97%E6%B3%95"><span class="toc-text">路由算法</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#hash-%E5%8F%96%E6%A8%A1"><span class="toc-text">Hash 取模</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%80%E8%87%B4%E6%80%A7-hash"><span class="toc-text">一致性 Hash</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%8C%83%E5%9B%B4%E8%B7%AF%E7%94%B1"><span class="toc-text">范围路由</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%B7%AF%E7%94%B1%E8%A1%A8"><span class="toc-text">路由表</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%88%86%E5%B8%83%E5%BC%8F%E6%9F%A5%E8%AF%A2%E9%97%AE%E9%A2%98"><span class="toc-text">分布式查询问题</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%B7%A8%E5%88%86%E7%89%87%E6%9F%A5%E8%AF%A2"><span class="toc-text">跨分片查询</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%B7%A8%E5%88%86%E7%89%87join"><span class="toc-text">跨分片JOIN</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%88%86%E5%B8%83%E5%BC%8F%E8%81%9A%E5%90%88"><span class="toc-text">分布式聚合</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%88%86%E5%B8%83%E5%BC%8F%E5%88%86%E9%A1%B5"><span class="toc-text">分布式分页</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%88%86%E5%B8%83%E5%BC%8Fid%E7%94%9F%E6%88%90"><span class="toc-text">分布式ID生成</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%9B%AA%E8%8A%B1%E7%AE%97%E6%B3%95snowflake"><span class="toc-text">雪花算法（Snowflake）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#shardingsphere-%E5%AE%9E%E6%88%98"><span class="toc-text">ShardingSphere 实战</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#shardingsphere-jdbc-%E9%85%8D%E7%BD%AE"><span class="toc-text">ShardingSphere-JDBC 配置</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BB%A3%E7%A0%81%E4%BD%BF%E7%94%A8%E5%AF%B9%E5%BA%94%E7%94%A8%E9%80%8F%E6%98%8E"><span class="toc-text">代码使用（对应用透明）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E8%BF%81%E7%A7%BB%E6%96%B9%E6%A1%88"><span class="toc-text">数据迁移方案</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8F%8C%E5%86%99%E8%BF%81%E7%A7%BB%E6%96%B9%E6%A1%88"><span class="toc-text">双写迁移方案</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%81%B0%E5%BA%A6%E8%BF%81%E7%A7%BB"><span class="toc-text">灰度迁移</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="引言">引言</h2>
+<p>当单表数据量达到千万甚至亿级别时，即使有合理的索引，查询性能也会明显下降；当单库的连接数、QPS达到瓶颈时，单纯的读写分离也难以满足需求。这时候，分库分表（Sharding）就成为必经之路。本文将系统讲解分库分表的策略选择、技术实现和常见问题的解决方案。</p>
+<h2 id="为什么需要分库分表">为什么需要分库分表</h2>
+<pre class="mermaid">graph TD
+    A[业务增长] --&gt; B{瓶颈类型}
+    B --&gt;|存储瓶颈&lt;br/&gt;单表数据过大| C[分表]
+    B --&gt;|连接/QPS瓶颈&lt;br/&gt;单库压力过大| D[分库]
+    B --&gt;|业务耦合&lt;br/&gt;不同业务共享库| E[垂直分库]
+
+    C --&gt; F[水平分表&lt;br/&gt;按行拆分]
+    D --&gt; G[水平分库&lt;br/&gt;数据分散到多个库]
+    E --&gt; H[按业务域拆分&lt;br/&gt;用户库/订单库/商品库]</pre>
+<h3 id="什么时候考虑分库分表">什么时候考虑分库分表</h3>
+<table>
+<thead>
+<tr class="header">
+<th>指标</th>
+<th>阈值（参考）</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>单表行数</td>
+<td>&gt; 5000万</td>
+<td>B+Tree层高增加，查询变慢</td>
+</tr>
+<tr class="even">
+<td>单表数据量</td>
+<td>&gt; 10GB</td>
+<td>全表扫描和DDL操作耗时过长</td>
+</tr>
+<tr class="odd">
+<td>单库QPS</td>
+<td>&gt; 5000</td>
+<td>连接数和CPU接近瓶颈</td>
+</tr>
+<tr class="even">
+<td>单库连接数</td>
+<td>&gt; 3000</td>
+<td>上下文切换开销增大</td>
+</tr>
+<tr class="odd">
+<td>单库磁盘</td>
+<td>&gt; 500GB</td>
+<td>备份恢复时间过长</td>
+</tr>
+</tbody>
+</table>
+<h2 id="分库分表策略">分库分表策略</h2>
+<h3 id="垂直拆分">垂直拆分</h3>
+<h4 id="垂直分库">垂直分库</h4>
+<p>按业务域将不同的表拆分到不同的数据库。</p>
+<pre class="mermaid">graph TD
+    subgraph 拆分前
+        DB[单一数据库] --&gt; T1[users表]
+        DB --&gt; T2[orders表]
+        DB --&gt; T3[products表]
+        DB --&gt; T4[payments表]
+        DB --&gt; T5[inventory表]
+    end
+
+    subgraph 拆分后
+        DB1[用户库] --&gt; T1a[users表]
+        DB1 --&gt; T1b[user_profiles表]
+        DB2[订单库] --&gt; T2a[orders表]
+        DB2 --&gt; T2b[order_items表]
+        DB3[商品库] --&gt; T3a[products表]
+        DB3 --&gt; T3b[categories表]
+        DB4[支付库] --&gt; T4a[payments表]
+        DB5[库存库] --&gt; T5a[inventory表]
+    end</pre>
+<h4 id="垂直分表">垂直分表</h4>
+<p>将一张宽表按列拆分为多张表，常用列和不常用列分开存储。</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 拆分前: 一张宽表</span><br><span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">TABLE</span> products (<br>    id <span class="hljs-type">BIGINT</span> <span class="hljs-keyword">PRIMARY</span> KEY,<br>    name <span class="hljs-type">VARCHAR</span>(<span class="hljs-number">200</span>),<br>    price <span class="hljs-type">DECIMAL</span>(<span class="hljs-number">10</span>,<span class="hljs-number">2</span>),<br>    status TINYINT,<br>    <span class="hljs-comment">-- 以上为频繁查询的字段</span><br>    description TEXT,<br>    detail_html MEDIUMTEXT,<br>    spec_json JSON,<br>    <span class="hljs-comment">-- 以上为不常查询的大字段</span><br>    created_at DATETIME,<br>    updated_at DATETIME<br>);<br><br><span class="hljs-comment">-- 拆分后: 主表 + 详情表</span><br><span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">TABLE</span> products (<br>    id <span class="hljs-type">BIGINT</span> <span class="hljs-keyword">PRIMARY</span> KEY,<br>    name <span class="hljs-type">VARCHAR</span>(<span class="hljs-number">200</span>),<br>    price <span class="hljs-type">DECIMAL</span>(<span class="hljs-number">10</span>,<span class="hljs-number">2</span>),<br>    status TINYINT,<br>    created_at DATETIME,<br>    updated_at DATETIME<br>);<br><br><span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">TABLE</span> product_details (<br>    product_id <span class="hljs-type">BIGINT</span> <span class="hljs-keyword">PRIMARY</span> KEY,<br>    description TEXT,<br>    detail_html MEDIUMTEXT,<br>    spec_json JSON<br>);<br></code></pre></td></tr></table></figure>
+<h3 id="水平拆分">水平拆分</h3>
+<h4 id="水平分表">水平分表</h4>
+<p>将同一张表的数据按行拆分到多张表中（同一数据库内）。</p>
+<pre class="mermaid">graph TD
+    subgraph "水平分表"
+        A[orders表&lt;br/&gt;1亿行] --&gt; B[orders_0&lt;br/&gt;0-2499万]
+        A --&gt; C[orders_1&lt;br/&gt;2500-4999万]
+        A --&gt; D[orders_2&lt;br/&gt;5000-7499万]
+        A --&gt; E[orders_3&lt;br/&gt;7500-9999万]
+    end</pre>
+<h4 id="水平分库分表">水平分库分表</h4>
+<p>将数据分散到多个数据库的多张表中。</p>
+<pre class="mermaid">graph TD
+    subgraph "水平分库分表"
+        A[Application] --&gt; R[路由层]
+        R --&gt; DB0[Database 0]
+        R --&gt; DB1[Database 1]
+        R --&gt; DB2[Database 2]
+        R --&gt; DB3[Database 3]
+
+        DB0 --&gt; T00[orders_0]
+        DB0 --&gt; T01[orders_1]
+        DB1 --&gt; T10[orders_2]
+        DB1 --&gt; T11[orders_3]
+        DB2 --&gt; T20[orders_4]
+        DB2 --&gt; T21[orders_5]
+        DB3 --&gt; T30[orders_6]
+        DB3 --&gt; T31[orders_7]
+    end</pre>
+<h2 id="分片键sharding-key选择">分片键（Sharding Key）选择</h2>
+<p>分片键是分库分表中最关键的设计决策，直接决定了数据分布的均匀性和查询效率。</p>
+<h3 id="选择原则">选择原则</h3>
+<pre class="mermaid">flowchart TD
+    A[选择分片键] --&gt; B{最频繁的查询条件?}
+    B --&gt; C[确定候选字段]
+    C --&gt; D{数据分布是否均匀?}
+    D --&gt;|否| E[排除此字段]
+    D --&gt;|是| F{是否支持范围查询需求?}
+    F --&gt;|需要| G[考虑范围分片]
+    F --&gt;|不需要| H[Hash分片]
+    G --&gt; I{是否有热点问题?}
+    I --&gt;|有| J[组合分片键]
+    I --&gt;|无| K[确定分片键]
+    H --&gt; K
+    J --&gt; K</pre>
+<h3 id="常见分片键方案">常见分片键方案</h3>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 方案1: 按用户ID分片（最常见）</span><br><span class="hljs-comment">-- 适用: 查询以用户维度为主（查询我的订单、我的消息等）</span><br><span class="hljs-comment">-- 分片规则: user_id % 库数量 -&gt; 确定库, user_id % 表数量 -&gt; 确定表</span><br><span class="hljs-comment">-- 优点: 同一用户的数据在同一分片，避免跨库查询</span><br><span class="hljs-comment">-- 缺点: 大用户（大V、大商家）可能导致数据倾斜</span><br><br><span class="hljs-comment">-- 方案2: 按订单ID分片</span><br><span class="hljs-comment">-- 适用: 查询以订单维度为主</span><br><span class="hljs-comment">-- 订单ID中嵌入分片信息:</span><br><span class="hljs-comment">-- 订单号格式: 时间戳(14位) + 用户ID后4位 + 序列号(4位) + 分片号(2位)</span><br><span class="hljs-comment">-- 20250315143020 + 0001 + 0001 + 03</span><br><br><span class="hljs-comment">-- 方案3: 按时间范围分片</span><br><span class="hljs-comment">-- 适用: 日志、消息等时序数据</span><br><span class="hljs-comment">-- 按月分表: orders_202501, orders_202502, ...</span><br><span class="hljs-comment">-- 优点: 范围查询友好，冷数据可归档</span><br><span class="hljs-comment">-- 缺点: 热点集中在最新分片，负载不均</span><br></code></pre></td></tr></table></figure>
+<h2 id="路由算法">路由算法</h2>
+<h3 id="hash-取模">Hash 取模</h3>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">// 简单Hash取模</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">HashRouter</span> &#123;<br>    <span class="hljs-keyword">private</span> <span class="hljs-type">int</span> dbCount;    <span class="hljs-comment">// 库数量</span><br>    <span class="hljs-keyword">private</span> <span class="hljs-type">int</span> tableCount; <span class="hljs-comment">// 每个库的表数量</span><br><br>    <span class="hljs-keyword">public</span> ShardResult <span class="hljs-title function_">route</span><span class="hljs-params">(<span class="hljs-type">long</span> shardingKey)</span> &#123;<br>        <span class="hljs-comment">// 确定库</span><br>        <span class="hljs-type">int</span> <span class="hljs-variable">dbIndex</span> <span class="hljs-operator">=</span> (<span class="hljs-type">int</span>) (shardingKey % dbCount);<br>        <span class="hljs-comment">// 确定表</span><br>        <span class="hljs-type">int</span> <span class="hljs-variable">tableIndex</span> <span class="hljs-operator">=</span> (<span class="hljs-type">int</span>) ((shardingKey / dbCount) % tableCount);<br>        <span class="hljs-keyword">return</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">ShardResult</span>(dbIndex, tableIndex);<br>    &#125;<br>&#125;<br><br><span class="hljs-comment">// 示例: 4个库，每个库8张表</span><br><span class="hljs-comment">// user_id = 12345</span><br><span class="hljs-comment">// dbIndex = 12345 % 4 = 1      -&gt; db_1</span><br><span class="hljs-comment">// tableIndex = (12345/4) % 8 = 3086 % 8 = 6  -&gt; orders_6</span><br><span class="hljs-comment">// 最终路由到: db_1.orders_6</span><br></code></pre></td></tr></table></figure>
+<h3 id="一致性-hash">一致性 Hash</h3>
+<pre class="mermaid">graph TD
+    subgraph "一致性Hash环"
+        direction TB
+        A["Node A&lt;br/&gt;hash: 0-90"]
+        B["Node B&lt;br/&gt;hash: 91-180"]
+        C["Node C&lt;br/&gt;hash: 181-270"]
+        D["Node D&lt;br/&gt;hash: 271-360"]
+    end
+
+    E["key1 hash=45"] --&gt; A
+    F["key2 hash=150"] --&gt; B
+    G["key3 hash=250"] --&gt; C
+    H["key4 hash=300"] --&gt; D</pre>
+<p>一致性Hash的优点是扩容时只需迁移部分数据，但实现较复杂。</p>
+<h3 id="范围路由">范围路由</h3>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">// 按时间范围路由</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">RangeRouter</span> &#123;<br>    <span class="hljs-keyword">public</span> String <span class="hljs-title function_">route</span><span class="hljs-params">(LocalDate orderDate)</span> &#123;<br>        <span class="hljs-comment">// 按月份路由到不同的表</span><br>        <span class="hljs-keyword">return</span> <span class="hljs-string">&quot;orders_&quot;</span> + orderDate.format(DateTimeFormatter.ofPattern(<span class="hljs-string">&quot;yyyyMM&quot;</span>));<br>    &#125;<br>&#125;<br><br><span class="hljs-comment">// 按ID范围路由</span><br><span class="hljs-keyword">public</span> String <span class="hljs-title function_">routeById</span><span class="hljs-params">(<span class="hljs-type">long</span> orderId)</span> &#123;<br>    <span class="hljs-keyword">if</span> (orderId &lt; <span class="hljs-number">10_000_000</span>) <span class="hljs-keyword">return</span> <span class="hljs-string">&quot;orders_0&quot;</span>;<br>    <span class="hljs-keyword">else</span> <span class="hljs-keyword">if</span> (orderId &lt; <span class="hljs-number">20_000_000</span>) <span class="hljs-keyword">return</span> <span class="hljs-string">&quot;orders_1&quot;</span>;<br>    <span class="hljs-keyword">else</span> <span class="hljs-keyword">if</span> (orderId &lt; <span class="hljs-number">30_000_000</span>) <span class="hljs-keyword">return</span> <span class="hljs-string">&quot;orders_2&quot;</span>;<br>    <span class="hljs-keyword">else</span> <span class="hljs-keyword">return</span> <span class="hljs-string">&quot;orders_3&quot;</span>;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="路由表">路由表</h3>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 使用路由表（配置表）记录分片映射关系</span><br><span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">TABLE</span> sharding_config (<br>    id <span class="hljs-type">BIGINT</span> <span class="hljs-keyword">PRIMARY</span> KEY,<br>    sharding_key_range_start <span class="hljs-type">BIGINT</span>,<br>    sharding_key_range_end <span class="hljs-type">BIGINT</span>,<br>    db_name <span class="hljs-type">VARCHAR</span>(<span class="hljs-number">50</span>),<br>    table_name <span class="hljs-type">VARCHAR</span>(<span class="hljs-number">50</span>),<br>    status TINYINT <span class="hljs-keyword">DEFAULT</span> <span class="hljs-number">1</span><br>);<br><br><span class="hljs-comment">-- 查询路由</span><br><span class="hljs-keyword">SELECT</span> db_name, table_name <span class="hljs-keyword">FROM</span> sharding_config<br><span class="hljs-keyword">WHERE</span> sharding_key_range_start <span class="hljs-operator">&lt;=</span> <span class="hljs-number">12345</span><br>  <span class="hljs-keyword">AND</span> sharding_key_range_end <span class="hljs-operator">&gt;</span> <span class="hljs-number">12345</span>;<br></code></pre></td></tr></table></figure>
+<h2 id="分布式查询问题">分布式查询问题</h2>
+<h3 id="跨分片查询">跨分片查询</h3>
+<pre class="mermaid">sequenceDiagram
+    participant App as Application
+    participant MW as Middleware
+    participant DB0 as DB Shard 0
+    participant DB1 as DB Shard 1
+    participant DB2 as DB Shard 2
+
+    App-&gt;&gt;MW: SELECT * FROM orders&lt;br/&gt;WHERE status='paid'&lt;br/&gt;ORDER BY created_at DESC&lt;br/&gt;LIMIT 10
+
+    Note over MW: 无法确定数据在哪个分片&lt;br/&gt;需要广播查询
+
+    MW-&gt;&gt;DB0: 相同查询
+    MW-&gt;&gt;DB1: 相同查询
+    MW-&gt;&gt;DB2: 相同查询
+
+    DB0-&gt;&gt;MW: 10条结果
+    DB1-&gt;&gt;MW: 10条结果
+    DB2-&gt;&gt;MW: 10条结果
+
+    Note over MW: 合并30条结果&lt;br/&gt;重新排序&lt;br/&gt;取Top 10
+
+    MW-&gt;&gt;App: 最终10条结果</pre>
+<h3 id="跨分片join">跨分片JOIN</h3>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 无法直接跨库JOIN，常见解决方案:</span><br><br><span class="hljs-comment">-- 方案1: 全局表（广播表）</span><br><span class="hljs-comment">-- 小表（如配置表、字典表）在每个分片都存一份</span><br><span class="hljs-comment">-- 可以在本地JOIN</span><br><br><span class="hljs-comment">-- 方案2: 绑定表（ER关系表）</span><br><span class="hljs-comment">-- 相关联的表使用相同的分片键，保证在同一分片</span><br><span class="hljs-comment">-- orders 和 order_items 都按 user_id 分片</span><br><span class="hljs-comment">-- 则同一用户的订单和订单项一定在同一分片</span><br><br><span class="hljs-comment">-- 方案3: 应用层JOIN</span><br><span class="hljs-comment">-- 先查询一个表，再根据结果查询另一个表</span><br><span class="hljs-comment">-- SELECT * FROM orders WHERE user_id = 1;</span><br><span class="hljs-comment">-- SELECT * FROM users WHERE id IN (1);</span><br><span class="hljs-comment">-- 在应用层组装结果</span><br><br><span class="hljs-comment">-- 方案4: 宽表冗余</span><br><span class="hljs-comment">-- 将JOIN需要的字段冗余到主表中</span><br><span class="hljs-comment">-- orders表中冗余 user_name, user_phone</span><br></code></pre></td></tr></table></figure>
+<h3 id="分布式聚合">分布式聚合</h3>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 跨分片的COUNT, SUM, AVG等聚合</span><br><span class="hljs-comment">-- 中间件需要对各分片结果进行二次计算</span><br><br><span class="hljs-comment">-- COUNT: 各分片COUNT结果相加</span><br><span class="hljs-comment">-- SUM: 各分片SUM结果相加</span><br><span class="hljs-comment">-- AVG: 需要 SUM(各分片SUM) / SUM(各分片COUNT)</span><br><span class="hljs-comment">-- MAX/MIN: 取各分片MAX/MIN的极值</span><br><span class="hljs-comment">-- DISTINCT: 各分片结果合并后去重（内存可能不够）</span><br><br><span class="hljs-comment">-- ORDER BY + LIMIT (分页问题)</span><br><span class="hljs-comment">-- 如果 LIMIT 100, 10 (跳过100条取10条)</span><br><span class="hljs-comment">-- 每个分片都需要查 LIMIT 110</span><br><span class="hljs-comment">-- 然后在中间件合并排序取10条</span><br><span class="hljs-comment">-- 深分页问题更加严重!</span><br></code></pre></td></tr></table></figure>
+<h3 id="分布式分页">分布式分页</h3>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 分页查询是分库分表后最棘手的问题之一</span><br><br><span class="hljs-comment">-- 方案1: 禁止跳页，只支持&quot;下一页&quot;</span><br><span class="hljs-comment">-- 使用游标分页，携带上一页最后一条记录的排序字段值</span><br><br><span class="hljs-comment">-- 方案2: 二次查询法</span><br><span class="hljs-comment">-- 第一次: 每个分片查 LIMIT offset/N, size (N为分片数)</span><br><span class="hljs-comment">-- 根据结果确定全局范围</span><br><span class="hljs-comment">-- 第二次: 在确定的范围内精确查询</span><br><br><span class="hljs-comment">-- 方案3: 中间件内存排序（适用于浅分页）</span><br><span class="hljs-comment">-- offset+size较小时，所有分片取出后内存排序</span><br><br><span class="hljs-comment">-- 方案4: ES/搜索引擎辅助</span><br><span class="hljs-comment">-- 将需要搜索和分页的数据同步到ES</span><br><span class="hljs-comment">-- 通过ES完成复杂的搜索和分页</span><br></code></pre></td></tr></table></figure>
+<h2 id="分布式id生成">分布式ID生成</h2>
+<p>分库分表后，数据库自增ID无法保证全局唯一，需要分布式ID生成方案。</p>
+<pre class="mermaid">graph TD
+    A[分布式ID方案] --&gt; B[UUID]
+    A --&gt; C[数据库号段]
+    A --&gt; D[雪花算法 Snowflake]
+    A --&gt; E[Redis自增]
+
+    B --&gt; B1["优点: 简单,无依赖&lt;br/&gt;缺点: 无序,不适合做索引"]
+    C --&gt; C1["优点: 简单,有序&lt;br/&gt;缺点: 依赖数据库"]
+    D --&gt; D1["优点: 有序,高性能,不依赖外部&lt;br/&gt;缺点: 时钟回拨问题"]
+    E --&gt; E1["优点: 简单,有序&lt;br/&gt;缺点: 依赖Redis"]</pre>
+<h3 id="雪花算法snowflake">雪花算法（Snowflake）</h3>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs plaintext">+-------------------------------------------------------------+<br>| 1 bit  |       41 bits       |  10 bits  |   12 bits         |<br>| 符号位  |   毫秒级时间戳       | 机器ID    |   序列号           |<br>+-------------------------------------------------------------+<br>| 0      | 时间(69年可用)       | 1024台机器 | 每毫秒4096个ID     |<br>+-------------------------------------------------------------+<br></code></pre></td></tr></table></figure>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">SnowflakeIdGenerator</span> &#123;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> <span class="hljs-type">long</span> <span class="hljs-variable">epoch</span> <span class="hljs-operator">=</span> <span class="hljs-number">1704067200000L</span>; <span class="hljs-comment">// 2024-01-01</span><br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> <span class="hljs-type">long</span> <span class="hljs-variable">workerIdBits</span> <span class="hljs-operator">=</span> <span class="hljs-number">10L</span>;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> <span class="hljs-type">long</span> <span class="hljs-variable">sequenceBits</span> <span class="hljs-operator">=</span> <span class="hljs-number">12L</span>;<br><br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> <span class="hljs-type">long</span> <span class="hljs-variable">maxWorkerId</span> <span class="hljs-operator">=</span> ~(-<span class="hljs-number">1L</span> &lt;&lt; workerIdBits); <span class="hljs-comment">// 1023</span><br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> <span class="hljs-type">long</span> <span class="hljs-variable">sequenceMask</span> <span class="hljs-operator">=</span> ~(-<span class="hljs-number">1L</span> &lt;&lt; sequenceBits); <span class="hljs-comment">// 4095</span><br><br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> <span class="hljs-type">long</span> <span class="hljs-variable">workerIdShift</span> <span class="hljs-operator">=</span> sequenceBits;           <span class="hljs-comment">// 12</span><br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> <span class="hljs-type">long</span> <span class="hljs-variable">timestampShift</span> <span class="hljs-operator">=</span> sequenceBits + workerIdBits; <span class="hljs-comment">// 22</span><br><br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> <span class="hljs-type">long</span> workerId;<br>    <span class="hljs-keyword">private</span> <span class="hljs-type">long</span> <span class="hljs-variable">sequence</span> <span class="hljs-operator">=</span> <span class="hljs-number">0L</span>;<br>    <span class="hljs-keyword">private</span> <span class="hljs-type">long</span> <span class="hljs-variable">lastTimestamp</span> <span class="hljs-operator">=</span> -<span class="hljs-number">1L</span>;<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-title function_">SnowflakeIdGenerator</span><span class="hljs-params">(<span class="hljs-type">long</span> workerId)</span> &#123;<br>        <span class="hljs-keyword">if</span> (workerId &gt; maxWorkerId || workerId &lt; <span class="hljs-number">0</span>) &#123;<br>            <span class="hljs-keyword">throw</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">IllegalArgumentException</span>(<span class="hljs-string">&quot;Worker ID out of range&quot;</span>);<br>        &#125;<br>        <span class="hljs-built_in">this</span>.workerId = workerId;<br>    &#125;<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">synchronized</span> <span class="hljs-type">long</span> <span class="hljs-title function_">nextId</span><span class="hljs-params">()</span> &#123;<br>        <span class="hljs-type">long</span> <span class="hljs-variable">timestamp</span> <span class="hljs-operator">=</span> System.currentTimeMillis();<br><br>        <span class="hljs-keyword">if</span> (timestamp &lt; lastTimestamp) &#123;<br>            <span class="hljs-keyword">throw</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">RuntimeException</span>(<span class="hljs-string">&quot;Clock moved backwards&quot;</span>);<br>        &#125;<br><br>        <span class="hljs-keyword">if</span> (timestamp == lastTimestamp) &#123;<br>            sequence = (sequence + <span class="hljs-number">1</span>) &amp; sequenceMask;<br>            <span class="hljs-keyword">if</span> (sequence == <span class="hljs-number">0</span>) &#123;<br>                timestamp = waitNextMillis(lastTimestamp);<br>            &#125;<br>        &#125; <span class="hljs-keyword">else</span> &#123;<br>            sequence = <span class="hljs-number">0L</span>;<br>        &#125;<br><br>        lastTimestamp = timestamp;<br><br>        <span class="hljs-keyword">return</span> ((timestamp - epoch) &lt;&lt; timestampShift)<br>                | (workerId &lt;&lt; workerIdShift)<br>                | sequence;<br>    &#125;<br><br>    <span class="hljs-keyword">private</span> <span class="hljs-type">long</span> <span class="hljs-title function_">waitNextMillis</span><span class="hljs-params">(<span class="hljs-type">long</span> lastTimestamp)</span> &#123;<br>        <span class="hljs-type">long</span> <span class="hljs-variable">timestamp</span> <span class="hljs-operator">=</span> System.currentTimeMillis();<br>        <span class="hljs-keyword">while</span> (timestamp &lt;= lastTimestamp) &#123;<br>            timestamp = System.currentTimeMillis();<br>        &#125;<br>        <span class="hljs-keyword">return</span> timestamp;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="shardingsphere-实战">ShardingSphere 实战</h2>
+<p>Apache ShardingSphere是目前最流行的分库分表中间件之一。</p>
+<h3 id="shardingsphere-jdbc-配置">ShardingSphere-JDBC 配置</h3>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># application.yml</span><br><span class="hljs-attr">spring:</span><br>  <span class="hljs-attr">shardingsphere:</span><br>    <span class="hljs-attr">datasource:</span><br>      <span class="hljs-attr">names:</span> <span class="hljs-string">ds0,ds1</span><br>      <span class="hljs-attr">ds0:</span><br>        <span class="hljs-attr">type:</span> <span class="hljs-string">com.zaxxer.hikari.HikariDataSource</span><br>        <span class="hljs-attr">driver-class-name:</span> <span class="hljs-string">com.mysql.cj.jdbc.Driver</span><br>        <span class="hljs-attr">jdbc-url:</span> <span class="hljs-string">jdbc:mysql://localhost:3306/db_0</span><br>        <span class="hljs-attr">username:</span> <span class="hljs-string">root</span><br>        <span class="hljs-attr">password:</span> <span class="hljs-string">root</span><br>      <span class="hljs-attr">ds1:</span><br>        <span class="hljs-attr">type:</span> <span class="hljs-string">com.zaxxer.hikari.HikariDataSource</span><br>        <span class="hljs-attr">driver-class-name:</span> <span class="hljs-string">com.mysql.cj.jdbc.Driver</span><br>        <span class="hljs-attr">jdbc-url:</span> <span class="hljs-string">jdbc:mysql://localhost:3306/db_1</span><br>        <span class="hljs-attr">username:</span> <span class="hljs-string">root</span><br>        <span class="hljs-attr">password:</span> <span class="hljs-string">root</span><br><br>    <span class="hljs-attr">rules:</span><br>      <span class="hljs-attr">sharding:</span><br>        <span class="hljs-attr">tables:</span><br>          <span class="hljs-attr">orders:</span><br>            <span class="hljs-attr">actual-data-nodes:</span> <span class="hljs-string">ds$-&gt;&#123;0..1&#125;.orders_$-&gt;&#123;0..3&#125;</span><br>            <span class="hljs-attr">database-strategy:</span><br>              <span class="hljs-attr">standard:</span><br>                <span class="hljs-attr">sharding-column:</span> <span class="hljs-string">user_id</span><br>                <span class="hljs-attr">sharding-algorithm-name:</span> <span class="hljs-string">db-hash-mod</span><br>            <span class="hljs-attr">table-strategy:</span><br>              <span class="hljs-attr">standard:</span><br>                <span class="hljs-attr">sharding-column:</span> <span class="hljs-string">user_id</span><br>                <span class="hljs-attr">sharding-algorithm-name:</span> <span class="hljs-string">table-hash-mod</span><br>            <span class="hljs-attr">key-generate-strategy:</span><br>              <span class="hljs-attr">column:</span> <span class="hljs-string">id</span><br>              <span class="hljs-attr">key-generator-name:</span> <span class="hljs-string">snowflake</span><br><br>          <span class="hljs-comment"># 绑定表: 订单项与订单使用相同分片策略</span><br>          <span class="hljs-attr">order_items:</span><br>            <span class="hljs-attr">actual-data-nodes:</span> <span class="hljs-string">ds$-&gt;&#123;0..1&#125;.order_items_$-&gt;&#123;0..3&#125;</span><br>            <span class="hljs-attr">database-strategy:</span><br>              <span class="hljs-attr">standard:</span><br>                <span class="hljs-attr">sharding-column:</span> <span class="hljs-string">user_id</span><br>                <span class="hljs-attr">sharding-algorithm-name:</span> <span class="hljs-string">db-hash-mod</span><br>            <span class="hljs-attr">table-strategy:</span><br>              <span class="hljs-attr">standard:</span><br>                <span class="hljs-attr">sharding-column:</span> <span class="hljs-string">user_id</span><br>                <span class="hljs-attr">sharding-algorithm-name:</span> <span class="hljs-string">table-hash-mod</span><br><br>        <span class="hljs-comment"># 绑定表声明</span><br>        <span class="hljs-attr">binding-tables:</span><br>          <span class="hljs-bullet">-</span> <span class="hljs-string">orders,order_items</span><br><br>        <span class="hljs-comment"># 广播表（全局表）</span><br>        <span class="hljs-attr">broadcast-tables:</span><br>          <span class="hljs-bullet">-</span> <span class="hljs-string">dict_status</span><br>          <span class="hljs-bullet">-</span> <span class="hljs-string">dict_category</span><br><br>        <span class="hljs-attr">sharding-algorithms:</span><br>          <span class="hljs-attr">db-hash-mod:</span><br>            <span class="hljs-attr">type:</span> <span class="hljs-string">HASH_MOD</span><br>            <span class="hljs-attr">props:</span><br>              <span class="hljs-attr">sharding-count:</span> <span class="hljs-number">2</span><br>          <span class="hljs-attr">table-hash-mod:</span><br>            <span class="hljs-attr">type:</span> <span class="hljs-string">HASH_MOD</span><br>            <span class="hljs-attr">props:</span><br>              <span class="hljs-attr">sharding-count:</span> <span class="hljs-number">4</span><br><br>        <span class="hljs-attr">key-generators:</span><br>          <span class="hljs-attr">snowflake:</span><br>            <span class="hljs-attr">type:</span> <span class="hljs-string">SNOWFLAKE</span><br>            <span class="hljs-attr">props:</span><br>              <span class="hljs-attr">worker-id:</span> <span class="hljs-number">1</span><br></code></pre></td></tr></table></figure>
+<h3 id="代码使用对应用透明">代码使用（对应用透明）</h3>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">// ShardingSphere-JDBC对应用层透明，代码无需修改</span><br><span class="hljs-meta">@Repository</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">OrderRepository</span> &#123;<br><br>    <span class="hljs-meta">@Autowired</span><br>    <span class="hljs-keyword">private</span> JdbcTemplate jdbcTemplate;<br><br>    <span class="hljs-comment">// 会自动路由到正确的库和表</span><br>    <span class="hljs-keyword">public</span> Order <span class="hljs-title function_">findByUserIdAndOrderId</span><span class="hljs-params">(<span class="hljs-type">long</span> userId, <span class="hljs-type">long</span> orderId)</span> &#123;<br>        <span class="hljs-keyword">return</span> jdbcTemplate.queryForObject(<br>            <span class="hljs-string">&quot;SELECT * FROM orders WHERE user_id = ? AND id = ?&quot;</span>,<br>            <span class="hljs-keyword">new</span> <span class="hljs-title class_">Object</span>[]&#123;userId, orderId&#125;,<br>            orderRowMapper<br>        );<br>    &#125;<br><br>    <span class="hljs-comment">// 跨分片查询会自动广播并合并结果</span><br>    <span class="hljs-keyword">public</span> List&lt;Order&gt; <span class="hljs-title function_">findByStatus</span><span class="hljs-params">(String status)</span> &#123;<br>        <span class="hljs-keyword">return</span> jdbcTemplate.query(<br>            <span class="hljs-string">&quot;SELECT * FROM orders WHERE status = ? ORDER BY created_at DESC LIMIT 20&quot;</span>,<br>            <span class="hljs-keyword">new</span> <span class="hljs-title class_">Object</span>[]&#123;status&#125;,<br>            orderRowMapper<br>        );<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="数据迁移方案">数据迁移方案</h2>
+<h3 id="双写迁移方案">双写迁移方案</h3>
+<pre class="mermaid">sequenceDiagram
+    participant App as Application
+    participant Old as 旧单库
+    participant New as 新分片库
+    participant Sync as 同步工具
+
+    Note over App, Sync: Phase 1: 双写（新旧库同时写入）
+    App-&gt;&gt;Old: 写入
+    App-&gt;&gt;New: 写入（异步）
+    Note over Sync: 校验数据一致性
+
+    Note over App, Sync: Phase 2: 历史数据迁移
+    Sync-&gt;&gt;Old: 读取历史数据
+    Sync-&gt;&gt;New: 写入分片库
+    Note over Sync: 增量同步 + 数据校验
+
+    Note over App, Sync: Phase 3: 切读
+    App-&gt;&gt;New: 读取（新库）
+    App-&gt;&gt;Old: 读取（旧库作为兜底）
+    Note over App: 对比验证读取结果
+
+    Note over App, Sync: Phase 4: 停旧写
+    App-&gt;&gt;New: 读写都走新库
+    Note over Old: 旧库保留观察期后下线</pre>
+<h3 id="灰度迁移">灰度迁移</h3>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">// 通过Feature Flag控制流量切换</span><br><span class="hljs-keyword">public</span> Order <span class="hljs-title function_">getOrder</span><span class="hljs-params">(<span class="hljs-type">long</span> userId, <span class="hljs-type">long</span> orderId)</span> &#123;<br>    <span class="hljs-keyword">if</span> (shardingGrayConfig.isNewShardingEnabled(userId)) &#123;<br>        <span class="hljs-comment">// 新分片库查询</span><br>        <span class="hljs-keyword">return</span> newShardingOrderDao.findByUserIdAndOrderId(userId, orderId);<br>    &#125; <span class="hljs-keyword">else</span> &#123;<br>        <span class="hljs-comment">// 旧库查询</span><br>        <span class="hljs-keyword">return</span> oldOrderDao.findByOrderId(orderId);<br>    &#125;<br>&#125;<br><br><span class="hljs-comment">// 灰度规则: 按用户ID尾号逐步切换</span><br><span class="hljs-comment">// 第1周: userId % 100 &lt; 1  (1%流量)</span><br><span class="hljs-comment">// 第2周: userId % 100 &lt; 10 (10%流量)</span><br><span class="hljs-comment">// 第3周: userId % 100 &lt; 50 (50%流量)</span><br><span class="hljs-comment">// 第4周: 全量切换</span><br></code></pre></td></tr></table></figure>
+<h2 id="总结">总结</h2>
+<p>分库分表是应对数据量和并发增长的有效手段，但也引入了显著的复杂性：</p>
+<ul>
+<li><strong>优先考虑垂直拆分</strong>：按业务域拆分的复杂度远低于水平拆分</li>
+<li><strong>分片键选择是核心决策</strong>：需要综合考虑查询模式、数据均匀度和扩展性</li>
+<li><strong>路由算法</strong>中Hash取模最简单常用，但扩容时需要数据迁移</li>
+<li><strong>跨分片查询是最大挑战</strong>：JOIN、聚合、分页都需要特殊处理</li>
+<li><strong>分布式ID</strong>推荐Snowflake算法，性能高且ID有序</li>
+<li><strong>ShardingSphere</strong>等中间件可以大幅降低应用改造成本</li>
+<li><strong>数据迁移</strong>建议采用双写+灰度的方式，确保平滑切换</li>
+<li>分库分表不是银弹，在决策前应先考虑：<strong>读写分离、缓存、归档历史数据、升级硬件</strong>等更简单的方案</li>
+</ul>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2025-02-26</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">3.7k 字 · 9 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/mybatis-source-analysis/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">MyBatis核心源码分析与插件开发</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/java-reflection-proxy/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Java反射与动态代理深入解析</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E9%9C%80%E8%A6%81%E5%88%86%E5%BA%93%E5%88%86%E8%A1%A8"><span class="toc-text">为什么需要分库分表</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BB%80%E4%B9%88%E6%97%B6%E5%80%99%E8%80%83%E8%99%91%E5%88%86%E5%BA%93%E5%88%86%E8%A1%A8"><span class="toc-text">什么时候考虑分库分表</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%88%86%E5%BA%93%E5%88%86%E8%A1%A8%E7%AD%96%E7%95%A5"><span class="toc-text">分库分表策略</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9E%82%E7%9B%B4%E6%8B%86%E5%88%86"><span class="toc-text">垂直拆分</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%B0%B4%E5%B9%B3%E6%8B%86%E5%88%86"><span class="toc-text">水平拆分</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%88%86%E7%89%87%E9%94%AEsharding-key%E9%80%89%E6%8B%A9"><span class="toc-text">分片键（Sharding Key）选择</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%80%89%E6%8B%A9%E5%8E%9F%E5%88%99"><span class="toc-text">选择原则</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%B8%B8%E8%A7%81%E5%88%86%E7%89%87%E9%94%AE%E6%96%B9%E6%A1%88"><span class="toc-text">常见分片键方案</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%B7%AF%E7%94%B1%E7%AE%97%E6%B3%95"><span class="toc-text">路由算法</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#hash-%E5%8F%96%E6%A8%A1"><span class="toc-text">Hash 取模</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%80%E8%87%B4%E6%80%A7-hash"><span class="toc-text">一致性 Hash</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%8C%83%E5%9B%B4%E8%B7%AF%E7%94%B1"><span class="toc-text">范围路由</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%B7%AF%E7%94%B1%E8%A1%A8"><span class="toc-text">路由表</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%88%86%E5%B8%83%E5%BC%8F%E6%9F%A5%E8%AF%A2%E9%97%AE%E9%A2%98"><span class="toc-text">分布式查询问题</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%B7%A8%E5%88%86%E7%89%87%E6%9F%A5%E8%AF%A2"><span class="toc-text">跨分片查询</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%B7%A8%E5%88%86%E7%89%87join"><span class="toc-text">跨分片JOIN</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%88%86%E5%B8%83%E5%BC%8F%E8%81%9A%E5%90%88"><span class="toc-text">分布式聚合</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%88%86%E5%B8%83%E5%BC%8F%E5%88%86%E9%A1%B5"><span class="toc-text">分布式分页</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%88%86%E5%B8%83%E5%BC%8Fid%E7%94%9F%E6%88%90"><span class="toc-text">分布式ID生成</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%9B%AA%E8%8A%B1%E7%AE%97%E6%B3%95snowflake"><span class="toc-text">雪花算法（Snowflake）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#shardingsphere-%E5%AE%9E%E6%88%98"><span class="toc-text">ShardingSphere 实战</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#shardingsphere-jdbc-%E9%85%8D%E7%BD%AE"><span class="toc-text">ShardingSphere-JDBC 配置</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BB%A3%E7%A0%81%E4%BD%BF%E7%94%A8%E5%AF%B9%E5%BA%94%E7%94%A8%E9%80%8F%E6%98%8E"><span class="toc-text">代码使用（对应用透明）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E8%BF%81%E7%A7%BB%E6%96%B9%E6%A1%88"><span class="toc-text">数据迁移方案</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8F%8C%E5%86%99%E8%BF%81%E7%A7%BB%E6%96%B9%E6%A1%88"><span class="toc-text">双写迁移方案</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%81%B0%E5%BA%A6%E8%BF%81%E7%A7%BB"><span class="toc-text">灰度迁移</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Embedding模型原理与应用实践 · zt&#39;s Blog</title>
+  <meta name="description" content="从Word2Vec到Sentence Transformers，深入理解Embedding模型的原理、对比学习、微调与实际应用">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/embedding-models/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Embedding模型原理与应用实践">
+  <meta property="og:description" content="从Word2Vec到Sentence Transformers，深入理解Embedding模型的原理、对比学习、微调与实际应用">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/embedding-models/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2024-10-01T16:00:00.000Z">
+  <meta property="article:modified_time" content="2024-10-01T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Embedding模型原理与应用实践">
+  <meta name="twitter:description" content="从Word2Vec到Sentence Transformers，深入理解Embedding模型的原理、对比学习、微调与实际应用">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Embedding模型原理与应用实践","description":"从Word2Vec到Sentence Transformers，深入理解Embedding模型的原理、对比学习、微调与实际应用","datePublished":"2024-10-01T16:00:00.000Z","dateModified":"2024-10-01T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/embedding-models/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"AI","item":"https://withesse.co/categories/AI/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:280">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/AI/">AI</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/embedding/"><span class="hash">#</span>embedding</a><a class="tag" href="/tags/nlp/"><span class="hash">#</span>nlp</a><a class="tag" href="/tags/similarity/"><span class="hash">#</span>similarity</a>
+        
+      </div>
+
+      <h1>Embedding模型原理与应用实践</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2024.10.02</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 7 min</span>
+        </span>
+        <span class="wc"><span class="num">2.6k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#embedding-%E6%8A%80%E6%9C%AF%E6%BC%94%E8%BF%9B"><span class="toc-text">Embedding 技术演进</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#word2vec%E8%AF%8D%E5%90%91%E9%87%8F%E7%9A%84%E8%B5%B7%E7%82%B9"><span class="toc-text">Word2Vec：词向量的起点</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BB%8E%E8%AF%8D%E5%90%91%E9%87%8F%E5%88%B0%E5%8F%A5%E5%90%91%E9%87%8F"><span class="toc-text">从词向量到句向量</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#sentence-transformers"><span class="toc-text">Sentence Transformers</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AF%B9%E6%AF%94%E5%AD%A6%E4%B9%A0contrastive-learning"><span class="toc-text">对比学习（Contrastive
+Learning）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#infonce-loss"><span class="toc-text">InfoNCE Loss</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#in-batch-negatives"><span class="toc-text">In-batch Negatives</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#hard-negative-mining"><span class="toc-text">Hard Negative Mining</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BE%AE%E8%B0%83-embedding-%E6%A8%A1%E5%9E%8B"><span class="toc-text">微调 Embedding 模型</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#matryoshka-representation-learning"><span class="toc-text">Matryoshka Representation
+Learning</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%AF%84%E4%BC%B0mteb-benchmark"><span class="toc-text">评估：MTEB Benchmark</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%BB%E6%B5%81%E6%A8%A1%E5%9E%8B-mteb-%E6%88%90%E7%BB%A9"><span class="toc-text">主流模型 MTEB 成绩</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E9%99%85%E5%BA%94%E7%94%A8"><span class="toc-text">实际应用</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%AF%AD%E4%B9%89%E6%90%9C%E7%B4%A2"><span class="toc-text">语义搜索</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%96%87%E6%9C%AC%E8%81%9A%E7%B1%BB"><span class="toc-text">文本聚类</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%BC%82%E5%B8%B8%E6%A3%80%E6%B5%8B"><span class="toc-text">异常检测</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%B7%A8%E8%AF%AD%E8%A8%80%E6%A3%80%E7%B4%A2"><span class="toc-text">跨语言检索</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%80%89%E5%9E%8B%E5%BB%BA%E8%AE%AE"><span class="toc-text">选型建议</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="引言">引言</h2>
+<p>Embedding（嵌入向量）是将离散数据（文本、图片、音频）映射到连续向量空间的技术，是现代
+AI 系统的基石。从搜索引擎到推荐系统，从 RAG 到异常检测，Embedding
+无处不在。本文将从 Word2Vec 的历史讲起，深入 Sentence Transformers
+和对比学习的原理，探讨如何微调 Embedding 模型，并通过 MTEB
+评估体系选择最适合的模型。</p>
+<h2 id="embedding-技术演进">Embedding 技术演进</h2>
+<pre class="mermaid">graph LR
+    A[One-Hot&lt;br/&gt;2000s] --&gt; B[Word2Vec&lt;br/&gt;2013]
+    B --&gt; C[GloVe&lt;br/&gt;2014]
+    C --&gt; D[ELMo&lt;br/&gt;2018]
+    D --&gt; E[BERT&lt;br/&gt;2018]
+    E --&gt; F[Sentence-BERT&lt;br/&gt;2019]
+    F --&gt; G[E5/BGE&lt;br/&gt;2023]
+    G --&gt; H[Multimodal&lt;br/&gt;CLIP/SigLIP]
+
+    style A fill:#95a5a6,color:#fff
+    style B fill:#e74c3c,color:#fff
+    style E fill:#3498db,color:#fff
+    style F fill:#2ecc71,color:#fff
+    style G fill:#f39c12,color:#000</pre>
+<h3 id="word2vec词向量的起点">Word2Vec：词向量的起点</h3>
+<p>Word2Vec 通过两种训练目标学习词向量：</p>
+<pre class="mermaid">graph TB
+    subgraph "CBOW (Continuous Bag of Words)"
+        A1["context: ['机器', '是', '的', '子集']"] --&gt; B1["predict: '学习'"]
+    end
+
+    subgraph "Skip-gram"
+        A2["input: '学习'"] --&gt; B2["predict: ['机器', '是', '的', '子集']"]
+    end
+
+    style B1 fill:#e74c3c,color:#fff
+    style A2 fill:#3498db,color:#fff</pre>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">from</span> gensim.models <span class="hljs-keyword">import</span> Word2Vec<br><br><span class="hljs-comment"># Train Word2Vec</span><br>sentences = [<br>    [<span class="hljs-string">&quot;机器&quot;</span>, <span class="hljs-string">&quot;学习&quot;</span>, <span class="hljs-string">&quot;是&quot;</span>, <span class="hljs-string">&quot;人工智能&quot;</span>, <span class="hljs-string">&quot;的&quot;</span>, <span class="hljs-string">&quot;子集&quot;</span>],<br>    [<span class="hljs-string">&quot;深度&quot;</span>, <span class="hljs-string">&quot;学习&quot;</span>, <span class="hljs-string">&quot;使用&quot;</span>, <span class="hljs-string">&quot;神经网络&quot;</span>],<br>    [<span class="hljs-string">&quot;自然&quot;</span>, <span class="hljs-string">&quot;语言&quot;</span>, <span class="hljs-string">&quot;处理&quot;</span>, <span class="hljs-string">&quot;分析&quot;</span>, <span class="hljs-string">&quot;文本&quot;</span>],<br>]<br><br>model = Word2Vec(<br>    sentences,<br>    vector_size=<span class="hljs-number">100</span>,  <span class="hljs-comment"># Embedding dimension</span><br>    window=<span class="hljs-number">5</span>,         <span class="hljs-comment"># Context window</span><br>    min_count=<span class="hljs-number">1</span>,<br>    sg=<span class="hljs-number">1</span>,             <span class="hljs-comment"># 1=Skip-gram, 0=CBOW</span><br>    workers=<span class="hljs-number">4</span>,<br>)<br><br><span class="hljs-comment"># Word similarity</span><br>similar = model.wv.most_similar(<span class="hljs-string">&quot;学习&quot;</span>, topn=<span class="hljs-number">3</span>)<br><span class="hljs-comment"># [(&#x27;机器&#x27;, 0.95), (&#x27;深度&#x27;, 0.88), ...]</span><br><br><span class="hljs-comment"># Vector arithmetic: king - man + woman ≈ queen</span><br>result = model.wv.most_similar(<br>    positive=[<span class="hljs-string">&quot;国王&quot;</span>, <span class="hljs-string">&quot;女人&quot;</span>],<br>    negative=[<span class="hljs-string">&quot;男人&quot;</span>],<br>    topn=<span class="hljs-number">1</span>,<br>)<br></code></pre></td></tr></table></figure>
+<p><strong>Word2Vec 局限：</strong> -
+静态向量——同一个词在不同语境下的向量相同 -
+“苹果”（水果）和”苹果”（公司）共享同一向量</p>
+<h3 id="从词向量到句向量">从词向量到句向量</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-comment"># Naive approach: average word vectors (poor quality)</span><br><span class="hljs-keyword">import</span> numpy <span class="hljs-keyword">as</span> np<br><br><span class="hljs-keyword">def</span> <span class="hljs-title function_">naive_sentence_embedding</span>(<span class="hljs-params">sentence, word_model</span>):<br>    words = sentence.split()<br>    vectors = [word_model.wv[w] <span class="hljs-keyword">for</span> w <span class="hljs-keyword">in</span> words <span class="hljs-keyword">if</span> w <span class="hljs-keyword">in</span> word_model.wv]<br>    <span class="hljs-keyword">if</span> <span class="hljs-keyword">not</span> vectors:<br>        <span class="hljs-keyword">return</span> np.zeros(word_model.vector_size)<br>    <span class="hljs-keyword">return</span> np.mean(vectors, axis=<span class="hljs-number">0</span>)<br><br><span class="hljs-comment"># Problems:</span><br><span class="hljs-comment"># 1. Ignores word order (&quot;dog bites man&quot; = &quot;man bites dog&quot;)</span><br><span class="hljs-comment"># 2. Common words dominate the average</span><br><span class="hljs-comment"># 3. No contextual understanding</span><br></code></pre></td></tr></table></figure>
+<h2 id="sentence-transformers">Sentence Transformers</h2>
+<p>Sentence-BERT（SBERT）通过在 BERT
+上添加池化层和对比学习训练目标，生成语义丰富的句向量：</p>
+<pre class="mermaid">graph TB
+    subgraph "Sentence-BERT Training (Siamese Network)"
+        A["Sentence A"] --&gt; B1["BERT Encoder"]
+        C["Sentence B"] --&gt; B2["BERT Encoder&lt;br/&gt;(Shared Weights)"]
+        B1 --&gt; D1["Mean Pooling"]
+        B2 --&gt; D2["Mean Pooling"]
+        D1 --&gt; E["u (768-dim)"]
+        D2 --&gt; F["v (768-dim)"]
+        E --&gt; G["Cosine Similarity"]
+        F --&gt; G
+        G --&gt; H["Contrastive Loss"]
+    end
+
+    style B1 fill:#3498db,color:#fff
+    style B2 fill:#3498db,color:#fff
+    style H fill:#e74c3c,color:#fff</pre>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">from</span> sentence_transformers <span class="hljs-keyword">import</span> SentenceTransformer<br><br><span class="hljs-comment"># Load pre-trained model</span><br>model = SentenceTransformer(<span class="hljs-string">&#x27;BAAI/bge-large-zh-v1.5&#x27;</span>)<br><br><span class="hljs-comment"># Encode sentences</span><br>sentences = [<br>    <span class="hljs-string">&quot;机器学习是人工智能的一个分支&quot;</span>,<br>    <span class="hljs-string">&quot;深度学习使用多层神经网络&quot;</span>,<br>    <span class="hljs-string">&quot;今天天气真好适合出去玩&quot;</span>,<br>]<br><br>embeddings = model.encode(sentences, normalize_embeddings=<span class="hljs-literal">True</span>)<br><span class="hljs-built_in">print</span>(<span class="hljs-string">f&quot;Embedding shape: <span class="hljs-subst">&#123;embeddings.shape&#125;</span>&quot;</span>)  <span class="hljs-comment"># (3, 1024)</span><br><br><span class="hljs-comment"># Compute similarity matrix</span><br><span class="hljs-keyword">from</span> sentence_transformers.util <span class="hljs-keyword">import</span> cos_sim<br><br>similarity_matrix = cos_sim(embeddings, embeddings)<br><span class="hljs-built_in">print</span>(similarity_matrix)<br><span class="hljs-comment"># [[1.00, 0.82, 0.15],</span><br><span class="hljs-comment">#  [0.82, 1.00, 0.12],</span><br><span class="hljs-comment">#  [0.15, 0.12, 1.00]]</span><br></code></pre></td></tr></table></figure>
+<h2 id="对比学习contrastive-learning">对比学习（Contrastive
+Learning）</h2>
+<p>对比学习是训练 Embedding
+模型的核心方法——让相似样本的向量接近，不相似样本的向量远离。</p>
+<h3 id="infonce-loss">InfoNCE Loss</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">import</span> torch<br><span class="hljs-keyword">import</span> torch.nn.functional <span class="hljs-keyword">as</span> F<br><br><span class="hljs-keyword">def</span> <span class="hljs-title function_">info_nce_loss</span>(<span class="hljs-params">query, positive, negatives, temperature=<span class="hljs-number">0.05</span></span>):<br>    <span class="hljs-string">&quot;&quot;&quot;</span><br><span class="hljs-string">    InfoNCE contrastive loss.</span><br><span class="hljs-string"></span><br><span class="hljs-string">    query: (batch_size, dim) - anchor embeddings</span><br><span class="hljs-string">    positive: (batch_size, dim) - positive pair embeddings</span><br><span class="hljs-string">    negatives: (batch_size, num_neg, dim) - negative samples</span><br><span class="hljs-string">    &quot;&quot;&quot;</span><br>    <span class="hljs-comment"># Positive similarity</span><br>    pos_sim = F.cosine_similarity(query, positive, dim=-<span class="hljs-number">1</span>) / temperature<br>    <span class="hljs-comment"># (batch_size,)</span><br><br>    <span class="hljs-comment"># Negative similarities</span><br>    neg_sim = F.cosine_similarity(<br>        query.unsqueeze(<span class="hljs-number">1</span>), negatives, dim=-<span class="hljs-number">1</span><br>    ) / temperature<br>    <span class="hljs-comment"># (batch_size, num_neg)</span><br><br>    <span class="hljs-comment"># Logits: positive + all negatives</span><br>    logits = torch.cat([pos_sim.unsqueeze(<span class="hljs-number">1</span>), neg_sim], dim=<span class="hljs-number">1</span>)<br>    <span class="hljs-comment"># (batch_size, 1 + num_neg)</span><br><br>    <span class="hljs-comment"># Labels: positive is always index 0</span><br>    labels = torch.zeros(query.size(<span class="hljs-number">0</span>), dtype=torch.long, device=query.device)<br><br>    loss = F.cross_entropy(logits, labels)<br>    <span class="hljs-keyword">return</span> loss<br></code></pre></td></tr></table></figure>
+<h3 id="in-batch-negatives">In-batch Negatives</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">def</span> <span class="hljs-title function_">in_batch_negatives_loss</span>(<span class="hljs-params">queries, passages, temperature=<span class="hljs-number">0.05</span></span>):<br>    <span class="hljs-string">&quot;&quot;&quot;</span><br><span class="hljs-string">    Use other samples in the batch as negatives.</span><br><span class="hljs-string"></span><br><span class="hljs-string">    queries: (batch_size, dim)</span><br><span class="hljs-string">    passages: (batch_size, dim)</span><br><span class="hljs-string">    &quot;&quot;&quot;</span><br>    <span class="hljs-comment"># All-pairs similarity matrix</span><br>    similarity = torch.mm(queries, passages.T) / temperature<br>    <span class="hljs-comment"># (batch_size, batch_size)</span><br><br>    <span class="hljs-comment"># Diagonal elements are positive pairs</span><br>    labels = torch.arange(similarity.size(<span class="hljs-number">0</span>), device=similarity.device)<br><br>    loss = F.cross_entropy(similarity, labels)<br>    <span class="hljs-keyword">return</span> loss<br><br><span class="hljs-comment"># With batch_size=32:</span><br><span class="hljs-comment"># Each query has 1 positive and 31 in-batch negatives</span><br><span class="hljs-comment"># Very efficient: O(B^2) comparisons from 2B embeddings</span><br></code></pre></td></tr></table></figure>
+<h3 id="hard-negative-mining">Hard Negative Mining</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">from</span> sentence_transformers <span class="hljs-keyword">import</span> InputExample, losses<br><span class="hljs-keyword">from</span> sentence_transformers.evaluation <span class="hljs-keyword">import</span> InformationRetrievalEvaluator<br><br><span class="hljs-comment"># Hard negatives: similar but incorrect passages</span><br>training_examples = [<br>    InputExample(<br>        texts=[<br>            <span class="hljs-string">&quot;Python如何读取CSV文件?&quot;</span>,          <span class="hljs-comment"># Query</span><br>            <span class="hljs-string">&quot;使用pandas的read_csv函数读取CSV&quot;</span>,  <span class="hljs-comment"># Positive</span><br>            <span class="hljs-string">&quot;Python的csv模块可以写入CSV文件&quot;</span>,   <span class="hljs-comment"># Hard negative (related but wrong)</span><br>        ]<br>    ),<br>    InputExample(<br>        texts=[<br>            <span class="hljs-string">&quot;什么是Docker容器?&quot;</span>,<br>            <span class="hljs-string">&quot;Docker容器是轻量级的虚拟化技术，打包应用及其依赖&quot;</span>,<br>            <span class="hljs-string">&quot;Docker镜像是容器的只读模板&quot;</span>,  <span class="hljs-comment"># Hard negative</span><br>        ]<br>    ),<br>]<br><br><span class="hljs-comment"># Train with triplet loss</span><br>train_loss = losses.TripletLoss(model=model)<br><span class="hljs-comment"># Or use MultipleNegativesRankingLoss for in-batch negatives</span><br>train_loss = losses.MultipleNegativesRankingLoss(model=model)<br></code></pre></td></tr></table></figure>
+<h2 id="微调-embedding-模型">微调 Embedding 模型</h2>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">from</span> sentence_transformers <span class="hljs-keyword">import</span> SentenceTransformer, InputExample, losses<br><span class="hljs-keyword">from</span> torch.utils.data <span class="hljs-keyword">import</span> DataLoader<br><br><span class="hljs-comment"># 1. Prepare training data</span><br>train_examples = [<br>    InputExample(texts=[<span class="hljs-string">&quot;query1&quot;</span>, <span class="hljs-string">&quot;relevant_doc1&quot;</span>]),<br>    InputExample(texts=[<span class="hljs-string">&quot;query2&quot;</span>, <span class="hljs-string">&quot;relevant_doc2&quot;</span>]),<br>    <span class="hljs-comment"># ... more pairs</span><br>]<br><br>train_dataloader = DataLoader(train_examples, shuffle=<span class="hljs-literal">True</span>, batch_size=<span class="hljs-number">32</span>)<br><br><span class="hljs-comment"># 2. Choose loss function</span><br>train_loss = losses.MultipleNegativesRankingLoss(model)<br><br><span class="hljs-comment"># 3. Configure training</span><br>model.fit(<br>    train_objectives=[(train_dataloader, train_loss)],<br>    epochs=<span class="hljs-number">3</span>,<br>    warmup_steps=<span class="hljs-number">100</span>,<br>    evaluation_steps=<span class="hljs-number">500</span>,<br>    output_path=<span class="hljs-string">&quot;./fine-tuned-embedding&quot;</span>,<br>    show_progress_bar=<span class="hljs-literal">True</span>,<br>)<br></code></pre></td></tr></table></figure>
+<h3 id="matryoshka-representation-learning">Matryoshka Representation
+Learning</h3>
+<p>MRL 允许一个模型产生多种维度的有效 Embedding：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">from</span> sentence_transformers <span class="hljs-keyword">import</span> SentenceTransformer<br><span class="hljs-keyword">from</span> sentence_transformers.losses <span class="hljs-keyword">import</span> MatryoshkaLoss, MultipleNegativesRankingLoss<br><br><span class="hljs-comment"># Train with Matryoshka loss</span><br>base_loss = MultipleNegativesRankingLoss(model)<br>matryoshka_loss = MatryoshkaLoss(<br>    model,<br>    base_loss,<br>    matryoshka_dims=[<span class="hljs-number">768</span>, <span class="hljs-number">512</span>, <span class="hljs-number">256</span>, <span class="hljs-number">128</span>, <span class="hljs-number">64</span>],<br>)<br><br><span class="hljs-comment"># After training, truncate embeddings for efficiency</span><br>full_embedding = model.encode(<span class="hljs-string">&quot;text&quot;</span>)  <span class="hljs-comment"># 768-dim</span><br>truncated = full_embedding[:<span class="hljs-number">256</span>]       <span class="hljs-comment"># Still effective at 256-dim!</span><br>truncated = truncated / np.linalg.norm(truncated)  <span class="hljs-comment"># Re-normalize</span><br></code></pre></td></tr></table></figure>
+<h2 id="评估mteb-benchmark">评估：MTEB Benchmark</h2>
+<pre class="mermaid">graph TB
+    A[MTEB 评估任务] --&gt; B[Classification&lt;br/&gt;文本分类]
+    A --&gt; C[Clustering&lt;br/&gt;文本聚类]
+    A --&gt; D[Pair Classification&lt;br/&gt;文本对分类]
+    A --&gt; E[Reranking&lt;br/&gt;重排序]
+    A --&gt; F[Retrieval&lt;br/&gt;检索]
+    A --&gt; G[STS&lt;br/&gt;语义相似度]
+    A --&gt; H[Summarization&lt;br/&gt;摘要]
+
+    style F fill:#e74c3c,color:#fff
+    style G fill:#3498db,color:#fff</pre>
+<h3 id="主流模型-mteb-成绩">主流模型 MTEB 成绩</h3>
+<table>
+<thead>
+<tr class="header">
+<th>模型</th>
+<th>维度</th>
+<th>参数量</th>
+<th>中文检索</th>
+<th>中文STS</th>
+<th>多语言</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>bge-large-zh-v1.5</td>
+<td>1024</td>
+<td>326M</td>
+<td>71.5</td>
+<td>63.4</td>
+<td>中文优秀</td>
+</tr>
+<tr class="even">
+<td>bge-m3</td>
+<td>1024</td>
+<td>568M</td>
+<td>69.8</td>
+<td>64.2</td>
+<td>多语言最佳</td>
+</tr>
+<tr class="odd">
+<td>text-embedding-3-large</td>
+<td>3072</td>
+<td>-</td>
+<td>68.5</td>
+<td>62.1</td>
+<td>多语言好</td>
+</tr>
+<tr class="even">
+<td>e5-mistral-7b</td>
+<td>4096</td>
+<td>7B</td>
+<td>70.2</td>
+<td>65.8</td>
+<td>多语言优秀</td>
+</tr>
+<tr class="odd">
+<td>jina-embeddings-v3</td>
+<td>1024</td>
+<td>570M</td>
+<td>70.1</td>
+<td>64.5</td>
+<td>多语言好</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>分数为示意值，实际应参考 MTEB 排行榜最新数据。</p>
+</blockquote>
+<h2 id="实际应用">实际应用</h2>
+<h3 id="语义搜索">语义搜索</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">from</span> sentence_transformers <span class="hljs-keyword">import</span> SentenceTransformer, util<br><span class="hljs-keyword">import</span> numpy <span class="hljs-keyword">as</span> np<br><br>model = SentenceTransformer(<span class="hljs-string">&#x27;BAAI/bge-large-zh-v1.5&#x27;</span>)<br><br><span class="hljs-comment"># Index documents</span><br>documents = [<br>    <span class="hljs-string">&quot;Python是一种解释型高级编程语言&quot;</span>,<br>    <span class="hljs-string">&quot;JavaScript主要用于Web前端开发&quot;</span>,<br>    <span class="hljs-string">&quot;Rust注重内存安全和并发性能&quot;</span>,<br>    <span class="hljs-string">&quot;Go语言由Google开发，适合后端服务&quot;</span>,<br>    <span class="hljs-string">&quot;TypeScript是JavaScript的超集，添加了静态类型&quot;</span>,<br>]<br><br>doc_embeddings = model.encode(documents, normalize_embeddings=<span class="hljs-literal">True</span>)<br><br><span class="hljs-comment"># Search</span><br>query = <span class="hljs-string">&quot;哪种编程语言适合写后端？&quot;</span><br>query_embedding = model.encode(query, normalize_embeddings=<span class="hljs-literal">True</span>)<br><br><span class="hljs-comment"># Compute similarities</span><br>scores = util.cos_sim(query_embedding, doc_embeddings)[<span class="hljs-number">0</span>]<br>top_results = torch.topk(scores, k=<span class="hljs-number">3</span>)<br><br><span class="hljs-keyword">for</span> score, idx <span class="hljs-keyword">in</span> <span class="hljs-built_in">zip</span>(top_results.values, top_results.indices):<br>    <span class="hljs-built_in">print</span>(<span class="hljs-string">f&quot;Score: <span class="hljs-subst">&#123;score:<span class="hljs-number">.4</span>f&#125;</span> | <span class="hljs-subst">&#123;documents[idx]&#125;</span>&quot;</span>)<br></code></pre></td></tr></table></figure>
+<h3 id="文本聚类">文本聚类</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">from</span> sklearn.cluster <span class="hljs-keyword">import</span> KMeans<br><span class="hljs-keyword">from</span> sklearn.metrics <span class="hljs-keyword">import</span> silhouette_score<br><br><span class="hljs-comment"># Generate embeddings for clustering</span><br>texts = load_texts()  <span class="hljs-comment"># List of documents</span><br>embeddings = model.encode(texts, normalize_embeddings=<span class="hljs-literal">True</span>, show_progress_bar=<span class="hljs-literal">True</span>)<br><br><span class="hljs-comment"># Find optimal k</span><br>silhouette_scores = []<br><span class="hljs-keyword">for</span> k <span class="hljs-keyword">in</span> <span class="hljs-built_in">range</span>(<span class="hljs-number">2</span>, <span class="hljs-number">11</span>):<br>    kmeans = KMeans(n_clusters=k, random_state=<span class="hljs-number">42</span>, n_init=<span class="hljs-number">10</span>)<br>    labels = kmeans.fit_predict(embeddings)<br>    score = silhouette_score(embeddings, labels)<br>    silhouette_scores.append((k, score))<br>    <span class="hljs-built_in">print</span>(<span class="hljs-string">f&quot;k=<span class="hljs-subst">&#123;k&#125;</span>, silhouette_score=<span class="hljs-subst">&#123;score:<span class="hljs-number">.4</span>f&#125;</span>&quot;</span>)<br><br><span class="hljs-comment"># Cluster with best k</span><br>best_k = <span class="hljs-built_in">max</span>(silhouette_scores, key=<span class="hljs-keyword">lambda</span> x: x[<span class="hljs-number">1</span>])[<span class="hljs-number">0</span>]<br>kmeans = KMeans(n_clusters=best_k, random_state=<span class="hljs-number">42</span>, n_init=<span class="hljs-number">10</span>)<br>labels = kmeans.fit_predict(embeddings)<br><br><span class="hljs-comment"># Analyze clusters</span><br><span class="hljs-keyword">for</span> cluster_id <span class="hljs-keyword">in</span> <span class="hljs-built_in">range</span>(best_k):<br>    cluster_texts = [texts[i] <span class="hljs-keyword">for</span> i <span class="hljs-keyword">in</span> <span class="hljs-built_in">range</span>(<span class="hljs-built_in">len</span>(texts)) <span class="hljs-keyword">if</span> labels[i] == cluster_id]<br>    <span class="hljs-built_in">print</span>(<span class="hljs-string">f&quot;\n--- Cluster <span class="hljs-subst">&#123;cluster_id&#125;</span> (<span class="hljs-subst">&#123;<span class="hljs-built_in">len</span>(cluster_texts)&#125;</span> docs) ---&quot;</span>)<br>    <span class="hljs-keyword">for</span> text <span class="hljs-keyword">in</span> cluster_texts[:<span class="hljs-number">3</span>]:<br>        <span class="hljs-built_in">print</span>(<span class="hljs-string">f&quot;  <span class="hljs-subst">&#123;text[:<span class="hljs-number">80</span>]&#125;</span>...&quot;</span>)<br></code></pre></td></tr></table></figure>
+<h3 id="异常检测">异常检测</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">from</span> scipy.spatial.distance <span class="hljs-keyword">import</span> cosine<br><br><span class="hljs-keyword">def</span> <span class="hljs-title function_">detect_anomalies</span>(<span class="hljs-params">texts, model, threshold=<span class="hljs-number">0.3</span></span>):<br>    <span class="hljs-string">&quot;&quot;&quot;Detect texts that are semantically different from the majority.&quot;&quot;&quot;</span><br>    embeddings = model.encode(texts, normalize_embeddings=<span class="hljs-literal">True</span>)<br><br>    <span class="hljs-comment"># Compute centroid</span><br>    centroid = np.mean(embeddings, axis=<span class="hljs-number">0</span>)<br>    centroid = centroid / np.linalg.norm(centroid)<br><br>    <span class="hljs-comment"># Distance from centroid</span><br>    distances = [cosine(emb, centroid) <span class="hljs-keyword">for</span> emb <span class="hljs-keyword">in</span> embeddings]<br><br>    anomalies = []<br>    <span class="hljs-keyword">for</span> i, (text, dist) <span class="hljs-keyword">in</span> <span class="hljs-built_in">enumerate</span>(<span class="hljs-built_in">zip</span>(texts, distances)):<br>        <span class="hljs-keyword">if</span> dist &gt; threshold:<br>            anomalies.append(&#123;<span class="hljs-string">&quot;text&quot;</span>: text, <span class="hljs-string">&quot;distance&quot;</span>: dist, <span class="hljs-string">&quot;index&quot;</span>: i&#125;)<br><br>    <span class="hljs-keyword">return</span> <span class="hljs-built_in">sorted</span>(anomalies, key=<span class="hljs-keyword">lambda</span> x: x[<span class="hljs-string">&quot;distance&quot;</span>], reverse=<span class="hljs-literal">True</span>)<br></code></pre></td></tr></table></figure>
+<h3 id="跨语言检索">跨语言检索</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-comment"># BGE-M3 supports 100+ languages</span><br>model = SentenceTransformer(<span class="hljs-string">&#x27;BAAI/bge-m3&#x27;</span>)<br><br><span class="hljs-comment"># Encode texts in different languages</span><br>texts = &#123;<br>    <span class="hljs-string">&quot;zh&quot;</span>: <span class="hljs-string">&quot;机器学习是人工智能的一个分支&quot;</span>,<br>    <span class="hljs-string">&quot;en&quot;</span>: <span class="hljs-string">&quot;Machine learning is a branch of artificial intelligence&quot;</span>,<br>    <span class="hljs-string">&quot;ja&quot;</span>: <span class="hljs-string">&quot;機械学習は人工知能の一分野です&quot;</span>,<br>    <span class="hljs-string">&quot;ko&quot;</span>: <span class="hljs-string">&quot;머신러닝은 인공지능의 한 분야입니다&quot;</span>,<br>&#125;<br><br>embeddings = &#123;lang: model.encode(text) <span class="hljs-keyword">for</span> lang, text <span class="hljs-keyword">in</span> texts.items()&#125;<br><br><span class="hljs-comment"># Cross-lingual similarity</span><br><span class="hljs-keyword">for</span> lang_a, emb_a <span class="hljs-keyword">in</span> embeddings.items():<br>    <span class="hljs-keyword">for</span> lang_b, emb_b <span class="hljs-keyword">in</span> embeddings.items():<br>        sim = <span class="hljs-built_in">float</span>(util.cos_sim(emb_a, emb_b))<br>        <span class="hljs-keyword">if</span> lang_a != lang_b:<br>            <span class="hljs-built_in">print</span>(<span class="hljs-string">f&quot;<span class="hljs-subst">&#123;lang_a&#125;</span>-<span class="hljs-subst">&#123;lang_b&#125;</span>: <span class="hljs-subst">&#123;sim:<span class="hljs-number">.4</span>f&#125;</span>&quot;</span>)<br><span class="hljs-comment"># All pairs show high similarity (&gt;0.85) despite different languages</span><br></code></pre></td></tr></table></figure>
+<h2 id="选型建议">选型建议</h2>
+<pre class="mermaid">flowchart TD
+    A[Embedding 模型选型] --&gt; B{语言需求?}
+    B --&gt;|仅中文| C[bge-large-zh-v1.5]
+    B --&gt;|多语言| D{性能 vs 成本?}
+    D --&gt;|高性能| E[bge-m3 / e5-mistral-7b]
+    D --&gt;|低成本 API| F[text-embedding-3-small]
+    B --&gt;|仅英文| G[bge-large-en-v1.5]
+
+    A --&gt; H{部署约束?}
+    H --&gt;|本地部署 GPU有限| I[bge-small-zh&lt;br/&gt;小模型 33M]
+    H --&gt;|GPU充足| J[bge-large 或 e5-mistral]
+    H --&gt;|云API| K[OpenAI / Cohere]
+
+    style C fill:#2ecc71,color:#fff
+    style E fill:#3498db,color:#fff
+    style F fill:#f39c12,color:#000</pre>
+<h2 id="总结">总结</h2>
+<p>Embedding 技术从 Word2Vec
+的词向量发展到如今的多语言多模态句向量，经历了巨大的飞跃。选择 Embedding
+模型时需要考虑：</p>
+<ol type="1">
+<li><strong>任务匹配</strong>：检索任务优先选用检索优化模型（如
+BGE/E5），分类任务可选通用模型</li>
+<li><strong>语言支持</strong>：中文场景优选 bge-zh 系列，多语言场景选
+bge-m3</li>
+<li><strong>维度权衡</strong>：高维度（1024+）检索精度更好，但存储和计算成本更高</li>
+<li><strong>微调价值</strong>：在特定领域数据上微调通常能带来 5-15%
+的性能提升</li>
+<li><strong>Matryoshka</strong>：支持 MRL
+的模型在存储受限场景下优势明显</li>
+</ol>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2024-10-02</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">2.6k 字 · 7 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/redis-distributed-lock/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Redis分布式锁的正确实现方式</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/transformer-architecture/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Transformer架构深度解析</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#embedding-%E6%8A%80%E6%9C%AF%E6%BC%94%E8%BF%9B"><span class="toc-text">Embedding 技术演进</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#word2vec%E8%AF%8D%E5%90%91%E9%87%8F%E7%9A%84%E8%B5%B7%E7%82%B9"><span class="toc-text">Word2Vec：词向量的起点</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BB%8E%E8%AF%8D%E5%90%91%E9%87%8F%E5%88%B0%E5%8F%A5%E5%90%91%E9%87%8F"><span class="toc-text">从词向量到句向量</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#sentence-transformers"><span class="toc-text">Sentence Transformers</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AF%B9%E6%AF%94%E5%AD%A6%E4%B9%A0contrastive-learning"><span class="toc-text">对比学习（Contrastive
+Learning）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#infonce-loss"><span class="toc-text">InfoNCE Loss</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#in-batch-negatives"><span class="toc-text">In-batch Negatives</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#hard-negative-mining"><span class="toc-text">Hard Negative Mining</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BE%AE%E8%B0%83-embedding-%E6%A8%A1%E5%9E%8B"><span class="toc-text">微调 Embedding 模型</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#matryoshka-representation-learning"><span class="toc-text">Matryoshka Representation
+Learning</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%AF%84%E4%BC%B0mteb-benchmark"><span class="toc-text">评估：MTEB Benchmark</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%BB%E6%B5%81%E6%A8%A1%E5%9E%8B-mteb-%E6%88%90%E7%BB%A9"><span class="toc-text">主流模型 MTEB 成绩</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E9%99%85%E5%BA%94%E7%94%A8"><span class="toc-text">实际应用</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%AF%AD%E4%B9%89%E6%90%9C%E7%B4%A2"><span class="toc-text">语义搜索</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%96%87%E6%9C%AC%E8%81%9A%E7%B1%BB"><span class="toc-text">文本聚类</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%BC%82%E5%B8%B8%E6%A3%80%E6%B5%8B"><span class="toc-text">异常检测</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%B7%A8%E8%AF%AD%E8%A8%80%E6%A3%80%E7%B4%A2"><span class="toc-text">跨语言检索</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%80%89%E5%9E%8B%E5%BB%BA%E8%AE%AE"><span class="toc-text">选型建议</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

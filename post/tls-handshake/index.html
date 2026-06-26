@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TLS 1.3握手过程与性能优化 · zt&#39;s Blog</title>
+  <meta name="description" content="全面解析TLS 1.3握手过程、密钥交换机制、证书链验证，以及OCSP Stapling和会话恢复等性能优化策略。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/tls-handshake/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="TLS 1.3握手过程与性能优化">
+  <meta property="og:description" content="全面解析TLS 1.3握手过程、密钥交换机制、证书链验证，以及OCSP Stapling和会话恢复等性能优化策略。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/tls-handshake/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2025-05-02T16:00:00.000Z">
+  <meta property="article:modified_time" content="2025-05-02T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="TLS 1.3握手过程与性能优化">
+  <meta name="twitter:description" content="全面解析TLS 1.3握手过程、密钥交换机制、证书链验证，以及OCSP Stapling和会话恢复等性能优化策略。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"TLS 1.3握手过程与性能优化","description":"全面解析TLS 1.3握手过程、密钥交换机制、证书链验证，以及OCSP Stapling和会话恢复等性能优化策略。","datePublished":"2025-05-02T16:00:00.000Z","dateModified":"2025-05-02T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/tls-handshake/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Network","item":"https://withesse.co/categories/Network/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:235">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Network/">Network</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/tls/"><span class="hash">#</span>tls</a><a class="tag" href="/tags/ssl/"><span class="hash">#</span>ssl</a><a class="tag" href="/tags/security/"><span class="hash">#</span>security</a><a class="tag" href="/tags/https/"><span class="hash">#</span>https</a>
+        
+      </div>
+
+      <h1>TLS 1.3握手过程与性能优化</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2025.05.03</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 6 min</span>
+        </span>
+        <span class="wc"><span class="num">2.6k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#tls%E7%89%88%E6%9C%AC%E6%BC%94%E8%BF%9B"><span class="toc-text">TLS版本演进</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#tls-1.3%E6%8F%A1%E6%89%8B%E8%BF%87%E7%A8%8B1-rtt"><span class="toc-text">TLS 1.3握手过程（1-RTT）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%8C%E6%95%B4%E6%8F%A1%E6%89%8B%E6%B5%81%E7%A8%8B"><span class="toc-text">完整握手流程</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%8Etls-1.2%E7%9A%84%E5%AF%B9%E6%AF%94"><span class="toc-text">与TLS 1.2的对比</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AF%86%E9%92%A5%E4%BA%A4%E6%8D%A2ecdhe"><span class="toc-text">密钥交换：ECDHE</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#ecdhe%E5%AF%86%E9%92%A5%E4%BA%A4%E6%8D%A2%E8%BF%87%E7%A8%8B"><span class="toc-text">ECDHE密钥交换过程</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AF%86%E9%92%A5%E6%B4%BE%E7%94%9Fhkdf"><span class="toc-text">密钥派生（HKDF）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AF%86%E7%A0%81%E5%A5%97%E4%BB%B6"><span class="toc-text">密码套件</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%AF%81%E4%B9%A6%E9%93%BE%E9%AA%8C%E8%AF%81"><span class="toc-text">证书链验证</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#certificateverify"><span class="toc-text">CertificateVerify</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#ocsp-stapling"><span class="toc-text">OCSP Stapling</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BC%9A%E8%AF%9D%E6%81%A2%E5%A4%8Dsession-resumption"><span class="toc-text">会话恢复（Session Resumption）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#tls-1.3-psk%E6%81%A2%E5%A4%8D"><span class="toc-text">TLS 1.3 PSK恢复</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#rtt%E5%AE%89%E5%85%A8%E8%80%83%E8%99%91"><span class="toc-text">0-RTT安全考虑</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5"><span class="toc-text">性能优化最佳实践</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%AF%81%E4%B9%A6%E4%BC%98%E5%8C%96"><span class="toc-text">证书优化</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%A8%E9%9D%A2%E9%85%8D%E7%BD%AE%E7%A4%BA%E4%BE%8B"><span class="toc-text">全面配置示例</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A3%80%E6%B5%8B%E5%92%8C%E8%AF%84%E4%BC%B0%E5%B7%A5%E5%85%B7"><span class="toc-text">检测和评估工具</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%B8%B8%E8%A7%81%E9%97%AE%E9%A2%98%E6%8E%92%E6%9F%A5"><span class="toc-text">常见问题排查</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="前言">前言</h2>
+<p>TLS（Transport Layer Security）是互联网安全通信的基石。TLS 1.3（RFC
+8446）相比TLS
+1.2做了大幅简化和改进，移除了不安全的密码套件，将握手从2-RTT减少到1-RTT，并支持0-RTT恢复。本文将深入分析TLS
+1.3的握手过程、密钥交换机制和各种性能优化手段。</p>
+<h2 id="tls版本演进">TLS版本演进</h2>
+<pre class="mermaid">timeline
+    title TLS协议演进
+    1995 : SSL 2.0 (已废弃)
+    1996 : SSL 3.0 (已废弃, POODLE攻击)
+    1999 : TLS 1.0 (已废弃)
+    2006 : TLS 1.1 (已废弃)
+    2008 : TLS 1.2 (广泛使用)
+    2018 : TLS 1.3 (RFC 8446, 推荐)</pre>
+<h2 id="tls-1.3握手过程1-rtt">TLS 1.3握手过程（1-RTT）</h2>
+<h3 id="完整握手流程">完整握手流程</h3>
+<pre class="mermaid">sequenceDiagram
+    participant C as Client
+    participant S as Server
+
+    Note over C,S: 1-RTT Full Handshake
+
+    C-&gt;&gt;S: ClientHello
+    Note right of C: supported_versions: TLS 1.3&lt;br&gt;key_share: ECDHE公钥(X25519)&lt;br&gt;signature_algorithms&lt;br&gt;supported_groups&lt;br&gt;psk_key_exchange_modes
+
+    S-&gt;&gt;C: ServerHello
+    Note left of S: selected version: TLS 1.3&lt;br&gt;key_share: ECDHE公钥(X25519)&lt;br&gt;选定的密码套件
+
+    Note over C,S: 此后所有数据加密传输
+
+    S-&gt;&gt;C: {EncryptedExtensions}
+    S-&gt;&gt;C: {CertificateRequest*} (可选)
+    S-&gt;&gt;C: {Certificate}
+    S-&gt;&gt;C: {CertificateVerify}
+    S-&gt;&gt;C: {Finished}
+
+    Note over C: 验证证书链&lt;br&gt;验证CertificateVerify&lt;br&gt;验证Finished
+
+    C-&gt;&gt;S: {Certificate*} (如果请求)
+    C-&gt;&gt;S: {CertificateVerify*}
+    C-&gt;&gt;S: {Finished}
+    C-&gt;&gt;S: [Application Data]
+
+    S-&gt;&gt;C: [Application Data]</pre>
+<h3 id="与tls-1.2的对比">与TLS 1.2的对比</h3>
+<pre class="mermaid">graph LR
+    subgraph "TLS 1.2 (2-RTT)"
+        A1[ClientHello] --&gt; A2[ServerHello&lt;br&gt;Certificate&lt;br&gt;ServerKeyExchange&lt;br&gt;ServerHelloDone]
+        A2 --&gt; A3[ClientKeyExchange&lt;br&gt;ChangeCipherSpec&lt;br&gt;Finished]
+        A3 --&gt; A4[ChangeCipherSpec&lt;br&gt;Finished]
+        A4 --&gt; A5[Application Data]
+    end
+
+    subgraph "TLS 1.3 (1-RTT)"
+        B1[ClientHello&lt;br&gt;+ key_share] --&gt; B2[ServerHello&lt;br&gt;+ key_share&lt;br&gt;加密: Certificate&lt;br&gt;Finished]
+        B2 --&gt; B3[Finished&lt;br&gt;Application Data]
+    end</pre>
+<p>TLS 1.3的关键改进： -
+客户端在ClientHello中就发送密钥共享参数，省去一个RTT -
+移除了ChangeCipherSpec消息 - ServerHello之后的所有消息都加密传输</p>
+<h2 id="密钥交换ecdhe">密钥交换：ECDHE</h2>
+<p>TLS 1.3只支持前向安全（Forward
+Secrecy）的密钥交换方式，强制使用ECDHE（或DHE）。</p>
+<h3 id="ecdhe密钥交换过程">ECDHE密钥交换过程</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-comment"># ECDHE密钥交换（概念示意，使用X25519曲线）</span><br><span class="hljs-keyword">from</span> cryptography.hazmat.primitives.asymmetric.x25519 <span class="hljs-keyword">import</span> X25519PrivateKey<br><br><span class="hljs-comment"># Client端</span><br>client_private = X25519PrivateKey.generate()<br>client_public = client_private.public_key()<br><br><span class="hljs-comment"># Server端</span><br>server_private = X25519PrivateKey.generate()<br>server_public = server_private.public_key()<br><br><span class="hljs-comment"># 双方交换公钥后，各自计算共享密钥</span><br>client_shared = client_private.exchange(server_public)<br>server_shared = server_private.exchange(client_public)<br><br><span class="hljs-keyword">assert</span> client_shared == server_shared  <span class="hljs-comment"># 共享密钥一致</span><br></code></pre></td></tr></table></figure>
+<h3 id="密钥派生hkdf">密钥派生（HKDF）</h3>
+<p>TLS 1.3使用HKDF（HMAC-based Key Derivation
+Function）从共享密钥派生出各种会话密钥：</p>
+<pre class="mermaid">graph TB
+    PSK[Pre-Shared Key&lt;br&gt;或 0] --&gt; ES[Early Secret&lt;br&gt;HKDF-Extract]
+    ES --&gt; BK[binder_key]
+    ES --&gt; ETS[client_early_traffic_secret]
+
+    ES --&gt; DS[Derived Secret]
+    ECDHE[ECDHE Shared Secret] --&gt; HS[Handshake Secret&lt;br&gt;HKDF-Extract]
+    DS --&gt; HS
+
+    HS --&gt; CHTS[client_handshake_traffic_secret]
+    HS --&gt; SHTS[server_handshake_traffic_secret]
+
+    HS --&gt; DS2[Derived Secret]
+    DS2 --&gt; MS[Master Secret&lt;br&gt;HKDF-Extract]
+
+    MS --&gt; CATS[client_application_traffic_secret]
+    MS --&gt; SATS[server_application_traffic_secret]
+    MS --&gt; RMS[resumption_master_secret]</pre>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-comment"># 密钥派生过程（简化）</span><br><span class="hljs-keyword">import</span> hmac<br><span class="hljs-keyword">import</span> hashlib<br><br><span class="hljs-keyword">def</span> <span class="hljs-title function_">hkdf_extract</span>(<span class="hljs-params">salt, ikm</span>):<br>    <span class="hljs-string">&quot;&quot;&quot;提取伪随机密钥&quot;&quot;&quot;</span><br>    <span class="hljs-keyword">return</span> hmac.new(salt, ikm, hashlib.sha256).digest()<br><br><span class="hljs-keyword">def</span> <span class="hljs-title function_">hkdf_expand_label</span>(<span class="hljs-params">secret, label, context, length</span>):<br>    <span class="hljs-string">&quot;&quot;&quot;扩展密钥&quot;&quot;&quot;</span><br>    hkdf_label = (<br>        length.to_bytes(<span class="hljs-number">2</span>, <span class="hljs-string">&#x27;big&#x27;</span>) +<br>        <span class="hljs-built_in">len</span>(<span class="hljs-string">b&quot;tls13 &quot;</span> + label).to_bytes(<span class="hljs-number">1</span>, <span class="hljs-string">&#x27;big&#x27;</span>) +<br>        <span class="hljs-string">b&quot;tls13 &quot;</span> + label +<br>        <span class="hljs-built_in">len</span>(context).to_bytes(<span class="hljs-number">1</span>, <span class="hljs-string">&#x27;big&#x27;</span>) +<br>        context<br>    )<br>    <span class="hljs-keyword">return</span> hkdf_expand(secret, hkdf_label, length)<br><br><span class="hljs-comment"># 密钥调度</span><br>early_secret = hkdf_extract(salt=<span class="hljs-string">b&#x27;\x00&#x27;</span>*<span class="hljs-number">32</span>, ikm=psk <span class="hljs-keyword">or</span> <span class="hljs-string">b&#x27;\x00&#x27;</span>*<span class="hljs-number">32</span>)<br>handshake_secret = hkdf_extract(<br>    salt=derive_secret(early_secret, <span class="hljs-string">b&quot;derived&quot;</span>, <span class="hljs-string">b&quot;&quot;</span>),<br>    ikm=ecdhe_shared_secret<br>)<br>master_secret = hkdf_extract(<br>    salt=derive_secret(handshake_secret, <span class="hljs-string">b&quot;derived&quot;</span>, <span class="hljs-string">b&quot;&quot;</span>),<br>    ikm=<span class="hljs-string">b&#x27;\x00&#x27;</span>*<span class="hljs-number">32</span><br>)<br></code></pre></td></tr></table></figure>
+<h2 id="密码套件">密码套件</h2>
+<p>TLS 1.3大幅精简了密码套件，只保留5个：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs plaintext">TLS_AES_128_GCM_SHA256         (0x1301) - 推荐<br>TLS_AES_256_GCM_SHA384         (0x1302) - 推荐<br>TLS_CHACHA20_POLY1305_SHA256   (0x1303) - 移动端推荐<br>TLS_AES_128_CCM_SHA256         (0x1304)<br>TLS_AES_128_CCM_8_SHA256       (0x1305)<br></code></pre></td></tr></table></figure>
+<p>移除了所有不安全的组件： - RC4、DES、3DES -
+静态RSA密钥交换（无前向安全） - CBC模式（BEAST/POODLE攻击） - MD5、SHA-1
+- 压缩（CRIME攻击）</p>
+<figure class="highlight nginx"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><code class="hljs nginx"><span class="hljs-comment"># Nginx TLS 1.3配置</span><br><span class="hljs-attribute">ssl_protocols</span> TLSv1.<span class="hljs-number">2</span> TLSv1.<span class="hljs-number">3</span>;<br><br><span class="hljs-comment"># TLS 1.3密码套件（Nginx 1.19.4+）</span><br><span class="hljs-attribute">ssl_conf_command</span> Ciphersuites TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256;<br><br><span class="hljs-comment"># TLS 1.2密码套件（兼容）</span><br><span class="hljs-attribute">ssl_ciphers</span> ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384;<br><br><span class="hljs-attribute">ssl_prefer_server_ciphers</span> <span class="hljs-literal">off</span>;<br></code></pre></td></tr></table></figure>
+<h2 id="证书链验证">证书链验证</h2>
+<pre class="mermaid">graph TB
+    ROOT[Root CA&lt;br&gt;内置于浏览器/OS] --&gt; |签发| ICA[Intermediate CA]
+    ICA --&gt; |签发| LEAF[Leaf Certificate&lt;br&gt;example.com]
+
+    LEAF --&gt; |包含| PUB[Public Key]
+    LEAF --&gt; |包含| SAN[Subject Alternative Names&lt;br&gt;example.com&lt;br&gt;*.example.com]
+    LEAF --&gt; |包含| VALID[Validity Period&lt;br&gt;Not Before / Not After]
+
+    style ROOT fill:#e53935,color:#fff
+    style ICA fill:#fb8c00,color:#fff
+    style LEAF fill:#43a047,color:#fff</pre>
+<p>验证流程：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-comment"># 证书链验证（概念）</span><br><span class="hljs-keyword">def</span> <span class="hljs-title function_">verify_certificate_chain</span>(<span class="hljs-params">cert_chain, trusted_roots</span>):<br>    <span class="hljs-string">&quot;&quot;&quot;</span><br><span class="hljs-string">    1. 验证签名链</span><br><span class="hljs-string">    2. 检查有效期</span><br><span class="hljs-string">    3. 检查域名匹配</span><br><span class="hljs-string">    4. 检查吊销状态</span><br><span class="hljs-string">    &quot;&quot;&quot;</span><br>    <span class="hljs-keyword">for</span> i, cert <span class="hljs-keyword">in</span> <span class="hljs-built_in">enumerate</span>(cert_chain):<br>        <span class="hljs-comment"># 检查有效期</span><br>        <span class="hljs-keyword">if</span> cert.not_valid_before &gt; now <span class="hljs-keyword">or</span> cert.not_valid_after &lt; now:<br>            <span class="hljs-keyword">raise</span> CertificateExpired(cert)<br><br>        <span class="hljs-comment"># 验证签名</span><br>        <span class="hljs-keyword">if</span> i &lt; <span class="hljs-built_in">len</span>(cert_chain) - <span class="hljs-number">1</span>:<br>            issuer = cert_chain[i + <span class="hljs-number">1</span>]<br>        <span class="hljs-keyword">else</span>:<br>            issuer = find_in_trust_store(cert.issuer, trusted_roots)<br>            <span class="hljs-keyword">if</span> <span class="hljs-keyword">not</span> issuer:<br>                <span class="hljs-keyword">raise</span> UntrustedRoot(cert)<br><br>        verify_signature(cert, issuer.public_key)<br><br>    <span class="hljs-comment"># 验证域名</span><br>    leaf = cert_chain[<span class="hljs-number">0</span>]<br>    <span class="hljs-keyword">if</span> <span class="hljs-keyword">not</span> matches_san(leaf, requested_hostname):<br>        <span class="hljs-keyword">raise</span> HostnameMismatch()<br><br>    <span class="hljs-keyword">return</span> <span class="hljs-literal">True</span><br></code></pre></td></tr></table></figure>
+<h3 id="certificateverify">CertificateVerify</h3>
+<p>TLS
+1.3中，服务端通过CertificateVerify消息证明自己拥有证书对应的私钥：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><code class="hljs plaintext">CertificateVerify:<br>  signature = Sign(<br>    private_key,<br>    &quot;                                &quot; * 2 +  // 64个空格<br>    &quot;TLS 1.3, server CertificateVerify&quot; +<br>    &quot;\x00&quot; +<br>    Hash(Handshake Context)  // 到此为止的所有握手消息的哈希<br>  )<br></code></pre></td></tr></table></figure>
+<h2 id="ocsp-stapling">OCSP Stapling</h2>
+<p>传统OCSP需要浏览器单独向CA查询证书吊销状态，增加延迟。OCSP
+Stapling让服务端代为查询并在TLS握手时带上结果。</p>
+<pre class="mermaid">sequenceDiagram
+    participant B as Browser
+    participant S as Web Server
+    participant CA as OCSP Responder (CA)
+
+    Note over S,CA: 服务端定期获取OCSP响应
+    S-&gt;&gt;CA: OCSP Request
+    CA-&gt;&gt;S: OCSP Response (Signed, valid 7 days)
+
+    Note over B,S: TLS握手时附带OCSP响应
+    B-&gt;&gt;S: ClientHello (+ status_request)
+    S-&gt;&gt;B: ServerHello
+    S-&gt;&gt;B: Certificate + OCSP Response (Stapled)
+    Note over B: 验证OCSP响应签名&lt;br&gt;无需额外网络请求</pre>
+<figure class="highlight nginx"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><code class="hljs nginx"><span class="hljs-comment"># Nginx OCSP Stapling配置</span><br><span class="hljs-attribute">ssl_stapling</span> <span class="hljs-literal">on</span>;<br><span class="hljs-attribute">ssl_stapling_verify</span> <span class="hljs-literal">on</span>;<br><br><span class="hljs-comment"># 用于验证OCSP响应的CA证书链</span><br><span class="hljs-attribute">ssl_trusted_certificate</span> /etc/ssl/certs/ca-chain.pem;<br><br><span class="hljs-comment"># DNS解析器（用于查询OCSP Responder）</span><br><span class="hljs-attribute">resolver</span> <span class="hljs-number">8.8.8.8</span> <span class="hljs-number">8.8.4.4</span> valid=<span class="hljs-number">300s</span>;<br><span class="hljs-attribute">resolver_timeout</span> <span class="hljs-number">5s</span>;<br></code></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 验证OCSP Stapling是否生效</span><br>openssl s_client -connect example.com:443 -status 2&gt;/dev/null | grep <span class="hljs-string">&quot;OCSP Response Status&quot;</span><br><span class="hljs-comment"># 期望输出: OCSP Response Status: successful (0x0)</span><br></code></pre></td></tr></table></figure>
+<h2 id="会话恢复session-resumption">会话恢复（Session Resumption）</h2>
+<h3 id="tls-1.3-psk恢复">TLS 1.3 PSK恢复</h3>
+<p>TLS 1.3使用PSK（Pre-Shared Key）机制实现会话恢复，取代了TLS
+1.2的Session ID和Session Ticket：</p>
+<pre class="mermaid">sequenceDiagram
+    participant C as Client
+    participant S as Server
+
+    Note over C,S: 首次完整握手
+    C-&gt;&gt;S: ClientHello
+    S-&gt;&gt;C: ServerHello ... Finished
+    C-&gt;&gt;S: Finished
+    S-&gt;&gt;C: NewSessionTicket (包含PSK)
+    Note over C: 保存PSK
+
+    Note over C,S: 后续恢复握手 (1-RTT with PSK)
+    C-&gt;&gt;S: ClientHello + pre_shared_key + key_share
+    Note over S: 验证PSK
+    S-&gt;&gt;C: ServerHello (选择PSK) + Finished
+    C-&gt;&gt;S: Finished + Application Data
+
+    Note over C,S: 0-RTT恢复 (0-RTT with PSK)
+    C-&gt;&gt;S: ClientHello + pre_shared_key + early_data + [Early Data]
+    S-&gt;&gt;C: ServerHello + Finished
+    C-&gt;&gt;S: Finished</pre>
+<h3 id="rtt安全考虑">0-RTT安全考虑</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-comment"># 0-RTT数据的安全限制</span><br><span class="hljs-keyword">class</span> <span class="hljs-title class_">ZeroRTTPolicy</span>:<br>    <span class="hljs-string">&quot;&quot;&quot;0-RTT只适用于幂等请求&quot;&quot;&quot;</span><br><br>    SAFE_METHODS = &#123;<span class="hljs-string">&#x27;GET&#x27;</span>, <span class="hljs-string">&#x27;HEAD&#x27;</span>, <span class="hljs-string">&#x27;OPTIONS&#x27;</span>&#125;<br><br><span class="hljs-meta">    @staticmethod</span><br>    <span class="hljs-keyword">def</span> <span class="hljs-title function_">is_safe_for_0rtt</span>(<span class="hljs-params">request</span>):<br>        <span class="hljs-comment"># 1. 只允许幂等方法</span><br>        <span class="hljs-keyword">if</span> request.method <span class="hljs-keyword">not</span> <span class="hljs-keyword">in</span> ZeroRTTPolicy.SAFE_METHODS:<br>            <span class="hljs-keyword">return</span> <span class="hljs-literal">False</span><br><br>        <span class="hljs-comment"># 2. 不应包含敏感操作</span><br>        <span class="hljs-keyword">if</span> request.has_side_effects:<br>            <span class="hljs-keyword">return</span> <span class="hljs-literal">False</span><br><br>        <span class="hljs-comment"># 3. 服务端应实现重放防护</span><br>        <span class="hljs-keyword">return</span> <span class="hljs-literal">True</span><br><br><span class="hljs-meta">    @staticmethod</span><br>    <span class="hljs-keyword">def</span> <span class="hljs-title function_">server_replay_protection</span>(<span class="hljs-params">ticket_nonce, max_age=<span class="hljs-number">10</span></span>):<br>        <span class="hljs-string">&quot;&quot;&quot;服务端重放防护&quot;&quot;&quot;</span><br>        <span class="hljs-comment"># 使用一次性token或时间窗口</span><br>        <span class="hljs-keyword">if</span> ticket_nonce <span class="hljs-keyword">in</span> used_nonces:<br>            <span class="hljs-keyword">return</span> <span class="hljs-literal">False</span>  <span class="hljs-comment"># 拒绝重放</span><br>        used_nonces.add(ticket_nonce)<br>        <span class="hljs-keyword">return</span> <span class="hljs-literal">True</span><br></code></pre></td></tr></table></figure>
+<h2 id="性能优化最佳实践">性能优化最佳实践</h2>
+<h3 id="证书优化">证书优化</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 1. 使用ECDSA证书（比RSA更小更快）</span><br><span class="hljs-comment"># RSA 2048位证书: ~1KB</span><br><span class="hljs-comment"># ECDSA P-256证书: ~0.5KB</span><br><br><span class="hljs-comment"># 生成ECDSA密钥和CSR</span><br>openssl ecparam -genkey -name prime256v1 -out server.key<br>openssl req -new -key server.key -out server.csr<br><br><span class="hljs-comment"># 2. 使用完整但精简的证书链</span><br><span class="hljs-comment"># 包含中间CA，不包含根CA（浏览器已内置）</span><br><span class="hljs-built_in">cat</span> server.crt intermediate.crt &gt; fullchain.pem<br></code></pre></td></tr></table></figure>
+<h3 id="全面配置示例">全面配置示例</h3>
+<figure class="highlight nginx"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><code class="hljs nginx"><span class="hljs-section">server</span> &#123;<br>    <span class="hljs-attribute">listen</span> <span class="hljs-number">443</span> ssl;<br>    <span class="hljs-attribute">http2</span> <span class="hljs-literal">on</span>;<br><br>    <span class="hljs-comment"># 证书</span><br>    <span class="hljs-attribute">ssl_certificate</span> /etc/ssl/fullchain.pem;<br>    <span class="hljs-attribute">ssl_certificate_key</span> /etc/ssl/server.key;<br><br>    <span class="hljs-comment"># 协议版本</span><br>    <span class="hljs-attribute">ssl_protocols</span> TLSv1.<span class="hljs-number">2</span> TLSv1.<span class="hljs-number">3</span>;<br><br>    <span class="hljs-comment"># 密码套件</span><br>    <span class="hljs-attribute">ssl_conf_command</span> Ciphersuites TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256;<br>    <span class="hljs-attribute">ssl_ciphers</span> ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256;<br><br>    <span class="hljs-comment"># ECDHE曲线</span><br>    <span class="hljs-attribute">ssl_ecdh_curve</span> X25519:prime256v1;<br><br>    <span class="hljs-comment"># Session缓存</span><br>    <span class="hljs-attribute">ssl_session_cache</span> shared:TLS:<span class="hljs-number">10m</span>;<br>    <span class="hljs-attribute">ssl_session_timeout</span> <span class="hljs-number">1d</span>;<br>    <span class="hljs-attribute">ssl_session_tickets</span> <span class="hljs-literal">on</span>;<br><br>    <span class="hljs-comment"># OCSP Stapling</span><br>    <span class="hljs-attribute">ssl_stapling</span> <span class="hljs-literal">on</span>;<br>    <span class="hljs-attribute">ssl_stapling_verify</span> <span class="hljs-literal">on</span>;<br>    <span class="hljs-attribute">ssl_trusted_certificate</span> /etc/ssl/ca-chain.pem;<br>    <span class="hljs-attribute">resolver</span> <span class="hljs-number">8.8.8.8</span>;<br><br>    <span class="hljs-comment"># 0-RTT (TLS 1.3 Early Data)</span><br>    <span class="hljs-attribute">ssl_early_data</span> <span class="hljs-literal">on</span>;<br>    <span class="hljs-attribute">proxy_set_header</span> Early-Data <span class="hljs-variable">$ssl_early_data</span>;<br><br>    <span class="hljs-comment"># 安全头</span><br>    <span class="hljs-attribute">add_header</span> Strict-Transport-Security <span class="hljs-string">&quot;max-age=63072000; includeSubDomains; preload&quot;</span> always;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="检测和评估工具">检测和评估工具</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 使用testssl.sh进行全面检测</span><br>./testssl.sh https://example.com<br><br><span class="hljs-comment"># 使用ssllabs进行评分</span><br><span class="hljs-comment"># https://www.ssllabs.com/ssltest/</span><br><br><span class="hljs-comment"># 使用openssl调试</span><br>openssl s_client -connect example.com:443 -tls1_3 -msg<br><br><span class="hljs-comment"># 检查支持的协议和密码套件</span><br>nmap --script ssl-enum-ciphers -p 443 example.com<br><br><span class="hljs-comment"># 测量TLS握手时间</span><br>curl -w <span class="hljs-string">&quot;TCP: %&#123;time_connect&#125;s\nTLS: %&#123;time_appconnect&#125;s\nTotal: %&#123;time_total&#125;s\n&quot;</span> \<br>     -o /dev/null -s https://example.com<br></code></pre></td></tr></table></figure>
+<h2 id="常见问题排查">常见问题排查</h2>
+<table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 37%" />
+<col style="width: 37%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>问题</th>
+<th>可能原因</th>
+<th>解决方案</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>ERR_SSL_VERSION_OR_CIPHER_MISMATCH</td>
+<td>密码套件不匹配</td>
+<td>检查客户端支持的套件</td>
+</tr>
+<tr class="even">
+<td>Certificate expired</td>
+<td>证书过期</td>
+<td>更新证书，配置自动续期</td>
+</tr>
+<tr class="odd">
+<td>Certificate chain incomplete</td>
+<td>缺少中间CA</td>
+<td>配置完整证书链</td>
+</tr>
+<tr class="even">
+<td>OCSP stapling failed</td>
+<td>OCSP Responder不可达</td>
+<td>检查DNS和网络连通性</td>
+</tr>
+<tr class="odd">
+<td>0-RTT not working</td>
+<td>缺少PSK或配置未开启</td>
+<td>检查ssl_early_data配置</td>
+</tr>
+</tbody>
+</table>
+<h2 id="总结">总结</h2>
+<p>TLS 1.3在安全性和性能方面都比TLS 1.2有显著提升：</p>
+<ol type="1">
+<li><strong>1-RTT握手</strong>：客户端在ClientHello中发送密钥共享参数，省去一个RTT</li>
+<li><strong>强制前向安全</strong>：只支持ECDHE密钥交换，即使长期密钥泄露也无法解密历史会话</li>
+<li><strong>精简密码套件</strong>：移除所有已知不安全的算法</li>
+<li><strong>0-RTT恢复</strong>：对重复访问的服务器可以零延迟发送数据</li>
+<li><strong>OCSP Stapling</strong>：消除证书吊销检查的额外延迟</li>
+</ol>
+<p>在2025年，TLS 1.3应该是所有新部署的默认选择，同时保留TLS
+1.2兼容性直到可以安全移除。</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2025-05-03</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">2.6k 字 · 6 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/vue3-composition-api/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Vue3 Composition API设计与实战</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/java-performance-optimization/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Java应用性能优化全攻略</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#tls%E7%89%88%E6%9C%AC%E6%BC%94%E8%BF%9B"><span class="toc-text">TLS版本演进</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#tls-1.3%E6%8F%A1%E6%89%8B%E8%BF%87%E7%A8%8B1-rtt"><span class="toc-text">TLS 1.3握手过程（1-RTT）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%8C%E6%95%B4%E6%8F%A1%E6%89%8B%E6%B5%81%E7%A8%8B"><span class="toc-text">完整握手流程</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%8Etls-1.2%E7%9A%84%E5%AF%B9%E6%AF%94"><span class="toc-text">与TLS 1.2的对比</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AF%86%E9%92%A5%E4%BA%A4%E6%8D%A2ecdhe"><span class="toc-text">密钥交换：ECDHE</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#ecdhe%E5%AF%86%E9%92%A5%E4%BA%A4%E6%8D%A2%E8%BF%87%E7%A8%8B"><span class="toc-text">ECDHE密钥交换过程</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AF%86%E9%92%A5%E6%B4%BE%E7%94%9Fhkdf"><span class="toc-text">密钥派生（HKDF）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AF%86%E7%A0%81%E5%A5%97%E4%BB%B6"><span class="toc-text">密码套件</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%AF%81%E4%B9%A6%E9%93%BE%E9%AA%8C%E8%AF%81"><span class="toc-text">证书链验证</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#certificateverify"><span class="toc-text">CertificateVerify</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#ocsp-stapling"><span class="toc-text">OCSP Stapling</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BC%9A%E8%AF%9D%E6%81%A2%E5%A4%8Dsession-resumption"><span class="toc-text">会话恢复（Session Resumption）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#tls-1.3-psk%E6%81%A2%E5%A4%8D"><span class="toc-text">TLS 1.3 PSK恢复</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#rtt%E5%AE%89%E5%85%A8%E8%80%83%E8%99%91"><span class="toc-text">0-RTT安全考虑</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5"><span class="toc-text">性能优化最佳实践</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%AF%81%E4%B9%A6%E4%BC%98%E5%8C%96"><span class="toc-text">证书优化</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%A8%E9%9D%A2%E9%85%8D%E7%BD%AE%E7%A4%BA%E4%BE%8B"><span class="toc-text">全面配置示例</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A3%80%E6%B5%8B%E5%92%8C%E8%AF%84%E4%BC%B0%E5%B7%A5%E5%85%B7"><span class="toc-text">检测和评估工具</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%B8%B8%E8%A7%81%E9%97%AE%E9%A2%98%E6%8E%92%E6%9F%A5"><span class="toc-text">常见问题排查</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>向量数据库对比：Milvus vs Pinecone vs Weaviate · zt&#39;s Blog</title>
+  <meta name="description" content="深入对比Milvus、Pinecone、Weaviate三大向量数据库的ANN算法、架构设计、索引策略与性能表现">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/vector-database-comparison/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="向量数据库对比：Milvus vs Pinecone vs Weaviate">
+  <meta property="og:description" content="深入对比Milvus、Pinecone、Weaviate三大向量数据库的ANN算法、架构设计、索引策略与性能表现">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/vector-database-comparison/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2025-09-16T16:00:00.000Z">
+  <meta property="article:modified_time" content="2025-09-16T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="向量数据库对比：Milvus vs Pinecone vs Weaviate">
+  <meta name="twitter:description" content="深入对比Milvus、Pinecone、Weaviate三大向量数据库的ANN算法、架构设计、索引策略与性能表现">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"向量数据库对比：Milvus vs Pinecone vs Weaviate","description":"深入对比Milvus、Pinecone、Weaviate三大向量数据库的ANN算法、架构设计、索引策略与性能表现","datePublished":"2025-09-16T16:00:00.000Z","dateModified":"2025-09-16T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/vector-database-comparison/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"AI","item":"https://withesse.co/categories/AI/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:280">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/AI/">AI</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/embedding/"><span class="hash">#</span>embedding</a><a class="tag" href="/tags/vector-database/"><span class="hash">#</span>vector-database</a><a class="tag" href="/tags/milvus/"><span class="hash">#</span>milvus</a>
+        
+      </div>
+
+      <h1>向量数据库对比：Milvus vs Pinecone vs Weaviate</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2025.09.17</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 6 min</span>
+        </span>
+        <span class="wc"><span class="num">2.5k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#ann-%E7%AE%97%E6%B3%95%E5%9F%BA%E7%A1%80"><span class="toc-text">ANN 算法基础</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#hnsw-hierarchical-navigable-small-world"><span class="toc-text">HNSW (Hierarchical
+Navigable Small World)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#ivf-inverted-file-index"><span class="toc-text">IVF (Inverted File Index)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#pq-product-quantization"><span class="toc-text">PQ (Product Quantization)</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9E%B6%E6%9E%84%E5%AF%B9%E6%AF%94"><span class="toc-text">架构对比</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#milvus-%E6%9E%B6%E6%9E%84"><span class="toc-text">Milvus 架构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#pinecone-%E6%9E%B6%E6%9E%84"><span class="toc-text">Pinecone 架构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#weaviate-%E6%9E%B6%E6%9E%84"><span class="toc-text">Weaviate 架构</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BD%BF%E7%94%A8%E7%A4%BA%E4%BE%8B%E5%AF%B9%E6%AF%94"><span class="toc-text">使用示例对比</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#milvus"><span class="toc-text">Milvus</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#pinecone"><span class="toc-text">Pinecone</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#weaviate"><span class="toc-text">Weaviate</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%A7%E8%83%BD%E5%AF%B9%E6%AF%94"><span class="toc-text">性能对比</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%80%89%E5%9E%8B%E5%86%B3%E7%AD%96%E7%9F%A9%E9%98%B5"><span class="toc-text">选型决策矩阵</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%B4%A2%E5%BC%95%E7%AD%96%E7%95%A5%E5%BB%BA%E8%AE%AE"><span class="toc-text">索引策略建议</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%94%9F%E4%BA%A7%E9%83%A8%E7%BD%B2%E5%BB%BA%E8%AE%AE"><span class="toc-text">生产部署建议</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#milvus-%E9%83%A8%E7%BD%B2"><span class="toc-text">Milvus 部署</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%9B%91%E6%8E%A7%E6%8C%87%E6%A0%87"><span class="toc-text">监控指标</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="引言">引言</h2>
+<p>向量数据库是 AI 应用基础设施的核心组件，支撑着语义搜索、推荐系统、RAG
+等关键场景。随着 LLM
+的爆发，向量数据库市场迅速增长，Milvus、Pinecone、Weaviate
+成为最受关注的三个选手。本文将从 ANN
+算法原理、架构设计、索引策略、性能基准、使用场景等维度进行全方位对比，帮助你做出技术选型。</p>
+<h2 id="ann-算法基础">ANN 算法基础</h2>
+<p>向量数据库的核心是近似最近邻（Approximate Nearest Neighbor,
+ANN）搜索算法。精确搜索在高维度下复杂度为
+O(n)，无法满足大规模实时需求。ANN
+算法以牺牲少量准确度换取数量级的速度提升。</p>
+<pre class="mermaid">graph TB
+    A[ANN 算法族] --&gt; B[基于图&lt;br/&gt;Graph-Based]
+    A --&gt; C[基于量化&lt;br/&gt;Quantization]
+    A --&gt; D[基于哈希&lt;br/&gt;Hash-Based]
+    A --&gt; E[基于树&lt;br/&gt;Tree-Based]
+
+    B --&gt; B1[HNSW&lt;br/&gt;Hierarchical Navigable&lt;br/&gt;Small World]
+    C --&gt; C1[IVF&lt;br/&gt;Inverted File Index]
+    C --&gt; C2[PQ&lt;br/&gt;Product Quantization]
+    C --&gt; C3[ScaNN]
+    D --&gt; D1[LSH&lt;br/&gt;Locality Sensitive Hashing]
+    E --&gt; E1[Annoy&lt;br/&gt;Approximate Nearest&lt;br/&gt;Neighbors Oh Yeah]
+
+    style B1 fill:#2ecc71,color:#fff
+    style C1 fill:#3498db,color:#fff
+    style C2 fill:#e74c3c,color:#fff</pre>
+<h3 id="hnsw-hierarchical-navigable-small-world">HNSW (Hierarchical
+Navigable Small World)</h3>
+<p>HNSW 是目前最流行的 ANN 算法，通过构建多层图结构实现高效搜索：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-comment"># HNSW key parameters</span><br>hnsw_params = &#123;<br>    <span class="hljs-string">&quot;M&quot;</span>: <span class="hljs-number">16</span>,           <span class="hljs-comment"># Max connections per node (affects graph connectivity)</span><br>    <span class="hljs-string">&quot;ef_construction&quot;</span>: <span class="hljs-number">200</span>,  <span class="hljs-comment"># Construction-time search width (affects build quality)</span><br>    <span class="hljs-string">&quot;ef_search&quot;</span>: <span class="hljs-number">100</span>,  <span class="hljs-comment"># Query-time search width (affects recall vs speed)</span><br>&#125;<br><br><span class="hljs-comment"># Higher M: better recall, more memory, slower build</span><br><span class="hljs-comment"># Higher ef_construction: better graph quality, slower build</span><br><span class="hljs-comment"># Higher ef_search: better recall, slower search</span><br></code></pre></td></tr></table></figure>
+<pre class="mermaid">graph TB
+    subgraph "HNSW Multi-Layer Structure"
+        subgraph "Layer 2 (Sparse)"
+            L2A((A)) --- L2B((B))
+        end
+
+        subgraph "Layer 1 (Medium)"
+            L1A((A)) --- L1B((B))
+            L1B --- L1C((C))
+            L1A --- L1D((D))
+        end
+
+        subgraph "Layer 0 (Dense)"
+            L0A((A)) --- L0B((B))
+            L0B --- L0C((C))
+            L0C --- L0D((D))
+            L0D --- L0E((E))
+            L0A --- L0D
+            L0B --- L0E
+            L0C --- L0F((F))
+        end
+    end
+
+    L2A -.-&gt; L1A
+    L2B -.-&gt; L1B
+    L1A -.-&gt; L0A
+    L1B -.-&gt; L0B
+    L1C -.-&gt; L0C
+    L1D -.-&gt; L0D</pre>
+<h3 id="ivf-inverted-file-index">IVF (Inverted File Index)</h3>
+<p>IVF 将向量空间划分为多个 Voronoi
+区域（聚类），检索时只搜索最近的几个区域：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-comment"># IVF parameters</span><br>ivf_params = &#123;<br>    <span class="hljs-string">&quot;nlist&quot;</span>: <span class="hljs-number">1024</span>,     <span class="hljs-comment"># Number of clusters (partitions)</span><br>    <span class="hljs-string">&quot;nprobe&quot;</span>: <span class="hljs-number">16</span>,      <span class="hljs-comment"># Number of clusters to search at query time</span><br>&#125;<br><br><span class="hljs-comment"># nlist: more clusters = finer partitions, slower build</span><br><span class="hljs-comment"># nprobe: more probes = better recall, slower search</span><br><span class="hljs-comment"># Rule of thumb: nprobe = sqrt(nlist)</span><br></code></pre></td></tr></table></figure>
+<h3 id="pq-product-quantization">PQ (Product Quantization)</h3>
+<p>PQ 将高维向量分解为子向量，并用聚类中心编码，大幅减少内存占用：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-comment"># PQ compresses 768-dim float32 vector:</span><br><span class="hljs-comment"># Original: 768 * 4 bytes = 3072 bytes</span><br><span class="hljs-comment"># With PQ (m=96, nbits=8): 96 * 1 byte = 96 bytes</span><br><span class="hljs-comment"># Compression ratio: 32x</span><br><br>pq_params = &#123;<br>    <span class="hljs-string">&quot;m&quot;</span>: <span class="hljs-number">96</span>,       <span class="hljs-comment"># Number of sub-quantizers (must divide dimension)</span><br>    <span class="hljs-string">&quot;nbits&quot;</span>: <span class="hljs-number">8</span>,    <span class="hljs-comment"># Bits per sub-quantizer (256 centroids)</span><br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="架构对比">架构对比</h2>
+<h3 id="milvus-架构">Milvus 架构</h3>
+<pre class="mermaid">graph TB
+    subgraph "Milvus 分布式架构"
+        A[SDK Client] --&gt; B[Proxy / Load Balancer]
+        B --&gt; C[Coord Services]
+        C --&gt; C1[Root Coord]
+        C --&gt; C2[Query Coord]
+        C --&gt; C3[Data Coord]
+        C --&gt; C4[Index Coord]
+
+        D[Worker Nodes]
+        D --&gt; D1[Query Node&lt;br/&gt;执行搜索]
+        D --&gt; D2[Data Node&lt;br/&gt;数据写入]
+        D --&gt; D3[Index Node&lt;br/&gt;构建索引]
+
+        E[Storage Layer]
+        E --&gt; E1[etcd&lt;br/&gt;元数据]
+        E --&gt; E2[MinIO/S3&lt;br/&gt;数据存储]
+        E --&gt; E3[Pulsar/Kafka&lt;br/&gt;日志流]
+    end
+
+    C2 --&gt; D1
+    C3 --&gt; D2
+    C4 --&gt; D3
+    D1 --&gt; E2
+    D2 --&gt; E2
+    D2 --&gt; E3
+
+    style B fill:#00a1ea,color:#fff
+    style D1 fill:#2ecc71,color:#fff
+    style E2 fill:#e74c3c,color:#fff</pre>
+<p><strong>Milvus 特点：</strong> - 存算分离，独立扩展计算和存储 -
+支持多种索引类型（HNSW, IVF_FLAT, IVF_PQ, DiskANN） - 原生支持标量过滤 +
+向量搜索 - 开源，可私有化部署</p>
+<h3 id="pinecone-架构">Pinecone 架构</h3>
+<pre class="mermaid">graph TB
+    subgraph "Pinecone 全托管架构"
+        A[API Client] --&gt; B[API Gateway]
+        B --&gt; C[Index Service]
+        C --&gt; D1[Pod 1&lt;br/&gt;Shard]
+        C --&gt; D2[Pod 2&lt;br/&gt;Shard]
+        C --&gt; D3[Pod 3&lt;br/&gt;Shard]
+
+        D1 --&gt; E[Replicas&lt;br/&gt;副本]
+        D2 --&gt; E
+        D3 --&gt; E
+    end
+
+    style B fill:#000,color:#fff
+    style C fill:#6366f1,color:#fff</pre>
+<p><strong>Pinecone 特点：</strong> - 全托管 SaaS，无需运维 - Serverless
+模式，按用量付费 - 自研索引算法（基于 PQ + Graph） -
+仅云端部署，不开源</p>
+<h3 id="weaviate-架构">Weaviate 架构</h3>
+<pre class="mermaid">graph TB
+    subgraph "Weaviate 架构"
+        A[REST/GraphQL API] --&gt; B[Weaviate Core]
+        B --&gt; C[Schema Manager]
+        B --&gt; D[Vector Index&lt;br/&gt;HNSW]
+        B --&gt; E[Object Store&lt;br/&gt;LSM Tree]
+        B --&gt; F[Module System]
+
+        F --&gt; F1[text2vec-openai]
+        F --&gt; F2[text2vec-transformers]
+        F --&gt; F3[generative-openai]
+        F --&gt; F4[reranker-cohere]
+    end
+
+    style B fill:#3cbe8e,color:#fff
+    style F fill:#f39c12,color:#000</pre>
+<p><strong>Weaviate 特点：</strong> - 原生支持多模态（文本、图片、音频）
+- 模块化 vectorizer（内置 Embedding 生成） - GraphQL API -
+开源，支持自托管和云端</p>
+<h2 id="使用示例对比">使用示例对比</h2>
+<h3 id="milvus">Milvus</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">from</span> pymilvus <span class="hljs-keyword">import</span> MilvusClient<br><br><span class="hljs-comment"># Connect</span><br>client = MilvusClient(uri=<span class="hljs-string">&quot;http://localhost:19530&quot;</span>)<br><br><span class="hljs-comment"># Create collection</span><br>client.create_collection(<br>    collection_name=<span class="hljs-string">&quot;articles&quot;</span>,<br>    dimension=<span class="hljs-number">768</span>,<br>    metric_type=<span class="hljs-string">&quot;COSINE&quot;</span>,<br>    auto_id=<span class="hljs-literal">True</span>,<br>)<br><br><span class="hljs-comment"># Insert vectors</span><br>data = [<br>    &#123;<span class="hljs-string">&quot;vector&quot;</span>: embedding1, <span class="hljs-string">&quot;title&quot;</span>: <span class="hljs-string">&quot;RAG架构设计&quot;</span>, <span class="hljs-string">&quot;category&quot;</span>: <span class="hljs-string">&quot;AI&quot;</span>&#125;,<br>    &#123;<span class="hljs-string">&quot;vector&quot;</span>: embedding2, <span class="hljs-string">&quot;title&quot;</span>: <span class="hljs-string">&quot;微服务最佳实践&quot;</span>, <span class="hljs-string">&quot;category&quot;</span>: <span class="hljs-string">&quot;Architecture&quot;</span>&#125;,<br>]<br>client.insert(collection_name=<span class="hljs-string">&quot;articles&quot;</span>, data=data)<br><br><span class="hljs-comment"># Search with metadata filter</span><br>results = client.search(<br>    collection_name=<span class="hljs-string">&quot;articles&quot;</span>,<br>    data=[query_embedding],<br>    limit=<span class="hljs-number">5</span>,<br>    output_fields=[<span class="hljs-string">&quot;title&quot;</span>, <span class="hljs-string">&quot;category&quot;</span>],<br>    <span class="hljs-built_in">filter</span>=<span class="hljs-string">&#x27;category == &quot;AI&quot;&#x27;</span>,<br>)<br><br><span class="hljs-keyword">for</span> hits <span class="hljs-keyword">in</span> results:<br>    <span class="hljs-keyword">for</span> hit <span class="hljs-keyword">in</span> hits:<br>        <span class="hljs-built_in">print</span>(<span class="hljs-string">f&quot;Score: <span class="hljs-subst">&#123;hit[<span class="hljs-string">&#x27;distance&#x27;</span>]:<span class="hljs-number">.4</span>f&#125;</span>, Title: <span class="hljs-subst">&#123;hit[<span class="hljs-string">&#x27;entity&#x27;</span>][<span class="hljs-string">&#x27;title&#x27;</span>]&#125;</span>&quot;</span>)<br></code></pre></td></tr></table></figure>
+<h3 id="pinecone">Pinecone</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">from</span> pinecone <span class="hljs-keyword">import</span> Pinecone<br><br><span class="hljs-comment"># Initialize</span><br>pc = Pinecone(api_key=<span class="hljs-string">&quot;your-api-key&quot;</span>)<br><br><span class="hljs-comment"># Create index</span><br>pc.create_index(<br>    name=<span class="hljs-string">&quot;articles&quot;</span>,<br>    dimension=<span class="hljs-number">768</span>,<br>    metric=<span class="hljs-string">&quot;cosine&quot;</span>,<br>    spec=ServerlessSpec(cloud=<span class="hljs-string">&quot;aws&quot;</span>, region=<span class="hljs-string">&quot;us-east-1&quot;</span>),<br>)<br><br>index = pc.Index(<span class="hljs-string">&quot;articles&quot;</span>)<br><br><span class="hljs-comment"># Upsert vectors</span><br>index.upsert(vectors=[<br>    &#123;<br>        <span class="hljs-string">&quot;id&quot;</span>: <span class="hljs-string">&quot;article-1&quot;</span>,<br>        <span class="hljs-string">&quot;values&quot;</span>: embedding1,<br>        <span class="hljs-string">&quot;metadata&quot;</span>: &#123;<span class="hljs-string">&quot;title&quot;</span>: <span class="hljs-string">&quot;RAG架构设计&quot;</span>, <span class="hljs-string">&quot;category&quot;</span>: <span class="hljs-string">&quot;AI&quot;</span>&#125;,<br>    &#125;,<br>    &#123;<br>        <span class="hljs-string">&quot;id&quot;</span>: <span class="hljs-string">&quot;article-2&quot;</span>,<br>        <span class="hljs-string">&quot;values&quot;</span>: embedding2,<br>        <span class="hljs-string">&quot;metadata&quot;</span>: &#123;<span class="hljs-string">&quot;title&quot;</span>: <span class="hljs-string">&quot;微服务最佳实践&quot;</span>, <span class="hljs-string">&quot;category&quot;</span>: <span class="hljs-string">&quot;Architecture&quot;</span>&#125;,<br>    &#125;,<br>])<br><br><span class="hljs-comment"># Query with metadata filter</span><br>results = index.query(<br>    vector=query_embedding,<br>    top_k=<span class="hljs-number">5</span>,<br>    include_metadata=<span class="hljs-literal">True</span>,<br>    <span class="hljs-built_in">filter</span>=&#123;<span class="hljs-string">&quot;category&quot;</span>: &#123;<span class="hljs-string">&quot;$eq&quot;</span>: <span class="hljs-string">&quot;AI&quot;</span>&#125;&#125;,<br>)<br><br><span class="hljs-keyword">for</span> <span class="hljs-keyword">match</span> <span class="hljs-keyword">in</span> results[<span class="hljs-string">&quot;matches&quot;</span>]:<br>    <span class="hljs-built_in">print</span>(<span class="hljs-string">f&quot;Score: <span class="hljs-subst">&#123;<span class="hljs-keyword">match</span>[<span class="hljs-string">&#x27;score&#x27;</span>]:<span class="hljs-number">.4</span>f&#125;</span>, Title: <span class="hljs-subst">&#123;<span class="hljs-keyword">match</span>[<span class="hljs-string">&#x27;metadata&#x27;</span>][<span class="hljs-string">&#x27;title&#x27;</span>]&#125;</span>&quot;</span>)<br></code></pre></td></tr></table></figure>
+<h3 id="weaviate">Weaviate</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">import</span> weaviate<br><span class="hljs-keyword">from</span> weaviate.classes.config <span class="hljs-keyword">import</span> Property, DataType, Configure<br><br><span class="hljs-comment"># Connect</span><br>client = weaviate.connect_to_local()<br><br><span class="hljs-comment"># Create collection with built-in vectorizer</span><br>collection = client.collections.create(<br>    name=<span class="hljs-string">&quot;Article&quot;</span>,<br>    vectorizer_config=Configure.Vectorizer.text2vec_openai(),<br>    properties=[<br>        Property(name=<span class="hljs-string">&quot;title&quot;</span>, data_type=DataType.TEXT),<br>        Property(name=<span class="hljs-string">&quot;content&quot;</span>, data_type=DataType.TEXT),<br>        Property(name=<span class="hljs-string">&quot;category&quot;</span>, data_type=DataType.TEXT),<br>    ],<br>)<br><br><span class="hljs-comment"># Insert (auto-vectorization!)</span><br>articles = client.collections.get(<span class="hljs-string">&quot;Article&quot;</span>)<br>articles.data.insert(&#123;<br>    <span class="hljs-string">&quot;title&quot;</span>: <span class="hljs-string">&quot;RAG架构设计&quot;</span>,<br>    <span class="hljs-string">&quot;content&quot;</span>: <span class="hljs-string">&quot;RAG是检索增强生成的缩写...&quot;</span>,<br>    <span class="hljs-string">&quot;category&quot;</span>: <span class="hljs-string">&quot;AI&quot;</span>,<br>&#125;)<br><br><span class="hljs-comment"># Hybrid search (vector + keyword)</span><br>results = articles.query.hybrid(<br>    query=<span class="hljs-string">&quot;向量数据库的选型&quot;</span>,<br>    limit=<span class="hljs-number">5</span>,<br>    alpha=<span class="hljs-number">0.7</span>,  <span class="hljs-comment"># 0=pure keyword, 1=pure vector</span><br>    filters=weaviate.classes.query.Filter.by_property(<span class="hljs-string">&quot;category&quot;</span>).equal(<span class="hljs-string">&quot;AI&quot;</span>),<br>)<br><br><span class="hljs-keyword">for</span> obj <span class="hljs-keyword">in</span> results.objects:<br>    <span class="hljs-built_in">print</span>(<span class="hljs-string">f&quot;Title: <span class="hljs-subst">&#123;obj.properties[<span class="hljs-string">&#x27;title&#x27;</span>]&#125;</span>&quot;</span>)<br></code></pre></td></tr></table></figure>
+<h2 id="性能对比">性能对比</h2>
+<table>
+<thead>
+<tr class="header">
+<th>指标</th>
+<th>Milvus</th>
+<th>Pinecone</th>
+<th>Weaviate</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>1M 向量搜索延迟 (p99)</td>
+<td>~5ms</td>
+<td>~10ms</td>
+<td>~8ms</td>
+</tr>
+<tr class="even">
+<td>10M 向量搜索延迟 (p99)</td>
+<td>~15ms</td>
+<td>~20ms</td>
+<td>~20ms</td>
+</tr>
+<tr class="odd">
+<td>100M 向量支持</td>
+<td>分布式扩展</td>
+<td>Serverless 自动扩展</td>
+<td>需要分片</td>
+</tr>
+<tr class="even">
+<td>写入吞吐量</td>
+<td>高</td>
+<td>中</td>
+<td>中</td>
+</tr>
+<tr class="odd">
+<td>内存效率</td>
+<td>高 (支持 DiskANN)</td>
+<td>高</td>
+<td>中</td>
+</tr>
+<tr class="even">
+<td>索引构建速度</td>
+<td>快 (GPU 加速)</td>
+<td>N/A (自动)</td>
+<td>中</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>注：以上数据为典型场景下的参考值，实际性能受硬件、数据分布、参数配置影响。</p>
+</blockquote>
+<h2 id="选型决策矩阵">选型决策矩阵</h2>
+<pre class="mermaid">flowchart TD
+    A[向量数据库选型] --&gt; B{部署方式?}
+    B --&gt;|全托管 SaaS| C{预算?}
+    C --&gt;|充足| D[Pinecone&lt;br/&gt;最省心]
+    C --&gt;|有限| E[Weaviate Cloud&lt;br/&gt;免费层]
+
+    B --&gt;|私有化部署| F{数据规模?}
+    F --&gt;|&lt; 10M 向量| G[Weaviate&lt;br/&gt;单节点]
+    F --&gt;|&gt; 10M 向量| H{技术栈?}
+    H --&gt;|需要高性能 + GPU| I[Milvus&lt;br/&gt;分布式]
+    H --&gt;|需要内置向量化| J[Weaviate&lt;br/&gt;模块化]
+
+    style D fill:#6366f1,color:#fff
+    style I fill:#00a1ea,color:#fff
+    style J fill:#3cbe8e,color:#fff</pre>
+<h2 id="索引策略建议">索引策略建议</h2>
+<table>
+<thead>
+<tr class="header">
+<th>场景</th>
+<th>推荐索引</th>
+<th>理由</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>数据量 &lt; 100K</td>
+<td>FLAT / Brute Force</td>
+<td>小数据量下精确搜索足够快</td>
+</tr>
+<tr class="even">
+<td>100K-10M, 高召回需求</td>
+<td>HNSW</td>
+<td>查询速度和召回率最佳平衡</td>
+</tr>
+<tr class="odd">
+<td>10M-100M, 内存受限</td>
+<td>IVF_PQ</td>
+<td>压缩存储，适中的召回率</td>
+</tr>
+<tr class="even">
+<td>&gt; 100M, SSD 存储</td>
+<td>DiskANN (Milvus)</td>
+<td>基于磁盘的索引，内存需求小</td>
+</tr>
+<tr class="odd">
+<td>实时更新频繁</td>
+<td>HNSW</td>
+<td>支持动态插入，无需重建索引</td>
+</tr>
+</tbody>
+</table>
+<h2 id="生产部署建议">生产部署建议</h2>
+<h3 id="milvus-部署">Milvus 部署</h3>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># docker-compose.yml for Milvus standalone</span><br><span class="hljs-attr">version:</span> <span class="hljs-string">&#x27;3.5&#x27;</span><br><span class="hljs-attr">services:</span><br>  <span class="hljs-attr">etcd:</span><br>    <span class="hljs-attr">image:</span> <span class="hljs-string">quay.io/coreos/etcd:v3.5.5</span><br>    <span class="hljs-attr">environment:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">ETCD_AUTO_COMPACTION_MODE=revision</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">ETCD_AUTO_COMPACTION_RETENTION=1000</span><br>    <span class="hljs-attr">volumes:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">etcd_data:/etcd</span><br><br>  <span class="hljs-attr">minio:</span><br>    <span class="hljs-attr">image:</span> <span class="hljs-string">minio/minio:latest</span><br>    <span class="hljs-attr">environment:</span><br>      <span class="hljs-attr">MINIO_ACCESS_KEY:</span> <span class="hljs-string">minioadmin</span><br>      <span class="hljs-attr">MINIO_SECRET_KEY:</span> <span class="hljs-string">minioadmin</span><br>    <span class="hljs-attr">volumes:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">minio_data:/minio_data</span><br>    <span class="hljs-attr">command:</span> <span class="hljs-string">minio</span> <span class="hljs-string">server</span> <span class="hljs-string">/minio_data</span><br><br>  <span class="hljs-attr">milvus:</span><br>    <span class="hljs-attr">image:</span> <span class="hljs-string">milvusdb/milvus:v2.4-latest</span><br>    <span class="hljs-attr">depends_on:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">etcd</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">minio</span><br>    <span class="hljs-attr">ports:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">&quot;19530:19530&quot;</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">&quot;9091:9091&quot;</span><br>    <span class="hljs-attr">volumes:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">milvus_data:/var/lib/milvus</span><br><br><span class="hljs-attr">volumes:</span><br>  <span class="hljs-attr">etcd_data:</span><br>  <span class="hljs-attr">minio_data:</span><br>  <span class="hljs-attr">milvus_data:</span><br></code></pre></td></tr></table></figure>
+<h3 id="监控指标">监控指标</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-comment"># Key metrics to monitor</span><br>monitoring_metrics = &#123;<br>    <span class="hljs-string">&quot;search_latency_p99&quot;</span>: <span class="hljs-string">&quot;搜索延迟 P99，阈值 &lt; 50ms&quot;</span>,<br>    <span class="hljs-string">&quot;insert_rate&quot;</span>: <span class="hljs-string">&quot;写入速率 (vectors/sec)&quot;</span>,<br>    <span class="hljs-string">&quot;memory_usage&quot;</span>: <span class="hljs-string">&quot;内存使用率，预警阈值 80%&quot;</span>,<br>    <span class="hljs-string">&quot;index_build_time&quot;</span>: <span class="hljs-string">&quot;索引构建耗时&quot;</span>,<br>    <span class="hljs-string">&quot;recall_rate&quot;</span>: <span class="hljs-string">&quot;召回率，目标 &gt; 95%&quot;</span>,<br>    <span class="hljs-string">&quot;query_qps&quot;</span>: <span class="hljs-string">&quot;查询 QPS&quot;</span>,<br>    <span class="hljs-string">&quot;collection_row_count&quot;</span>: <span class="hljs-string">&quot;集合行数增长趋势&quot;</span>,<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="总结">总结</h2>
+<p>三大向量数据库各有定位：</p>
+<ul>
+<li><strong>Milvus</strong>：最适合大规模、高性能需求的私有化部署场景，索引类型丰富，支持
+GPU 加速</li>
+<li><strong>Pinecone</strong>：最适合快速原型开发和中小规模生产应用，零运维的全托管体验</li>
+<li><strong>Weaviate</strong>：最适合需要内置向量化和多模态支持的场景，开发者体验优秀</li>
+</ul>
+<p>选择时优先考虑：数据规模、部署要求（云/私有化）、是否需要混合搜索、团队运维能力。对于大多数初创项目，Pinecone
+的 serverless 模式或 Weaviate Cloud
+是最快上手的选择；当数据规模增长到千万级以上，Milvus
+的分布式架构将展现出更大优势。</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2025-09-17</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">2.5k 字 · 6 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/fine-tuning-llm/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">LLM微调实战：LoRA与QLoRA</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/prompt-engineering-advanced/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">高级Prompt Engineering技巧与模式</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#ann-%E7%AE%97%E6%B3%95%E5%9F%BA%E7%A1%80"><span class="toc-text">ANN 算法基础</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#hnsw-hierarchical-navigable-small-world"><span class="toc-text">HNSW (Hierarchical
+Navigable Small World)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#ivf-inverted-file-index"><span class="toc-text">IVF (Inverted File Index)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#pq-product-quantization"><span class="toc-text">PQ (Product Quantization)</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9E%B6%E6%9E%84%E5%AF%B9%E6%AF%94"><span class="toc-text">架构对比</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#milvus-%E6%9E%B6%E6%9E%84"><span class="toc-text">Milvus 架构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#pinecone-%E6%9E%B6%E6%9E%84"><span class="toc-text">Pinecone 架构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#weaviate-%E6%9E%B6%E6%9E%84"><span class="toc-text">Weaviate 架构</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BD%BF%E7%94%A8%E7%A4%BA%E4%BE%8B%E5%AF%B9%E6%AF%94"><span class="toc-text">使用示例对比</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#milvus"><span class="toc-text">Milvus</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#pinecone"><span class="toc-text">Pinecone</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#weaviate"><span class="toc-text">Weaviate</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%A7%E8%83%BD%E5%AF%B9%E6%AF%94"><span class="toc-text">性能对比</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%80%89%E5%9E%8B%E5%86%B3%E7%AD%96%E7%9F%A9%E9%98%B5"><span class="toc-text">选型决策矩阵</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%B4%A2%E5%BC%95%E7%AD%96%E7%95%A5%E5%BB%BA%E8%AE%AE"><span class="toc-text">索引策略建议</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%94%9F%E4%BA%A7%E9%83%A8%E7%BD%B2%E5%BB%BA%E8%AE%AE"><span class="toc-text">生产部署建议</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#milvus-%E9%83%A8%E7%BD%B2"><span class="toc-text">Milvus 部署</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%9B%91%E6%8E%A7%E6%8C%87%E6%A0%87"><span class="toc-text">监控指标</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

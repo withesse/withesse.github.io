@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MySQL事务隔离级别与MVCC实现原理 · zt&#39;s Blog</title>
+  <meta name="description" content="深入剖析MySQL InnoDB的MVCC多版本并发控制机制，包括undo log版本链、ReadView、间隙锁解决幻读等核心原理。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/mysql-transaction-isolation/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="MySQL事务隔离级别与MVCC实现原理">
+  <meta property="og:description" content="深入剖析MySQL InnoDB的MVCC多版本并发控制机制，包括undo log版本链、ReadView、间隙锁解决幻读等核心原理。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/mysql-transaction-isolation/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2024-11-12T16:00:00.000Z">
+  <meta property="article:modified_time" content="2024-11-12T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="MySQL事务隔离级别与MVCC实现原理">
+  <meta name="twitter:description" content="深入剖析MySQL InnoDB的MVCC多版本并发控制机制，包括undo log版本链、ReadView、间隙锁解决幻读等核心原理。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"MySQL事务隔离级别与MVCC实现原理","description":"深入剖析MySQL InnoDB的MVCC多版本并发控制机制，包括undo log版本链、ReadView、间隙锁解决幻读等核心原理。","datePublished":"2024-11-12T16:00:00.000Z","dateModified":"2024-11-12T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/mysql-transaction-isolation/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Database","item":"https://withesse.co/categories/Database/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:330">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Database/">Database</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/mysql/"><span class="hash">#</span>mysql</a><a class="tag" href="/tags/transaction/"><span class="hash">#</span>transaction</a><a class="tag" href="/tags/mvcc/"><span class="hash">#</span>mvcc</a><a class="tag" href="/tags/isolation/"><span class="hash">#</span>isolation</a>
+        
+      </div>
+
+      <h1>MySQL事务隔离级别与MVCC实现原理</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2024.11.13</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 7 min</span>
+        </span>
+        <span class="wc"><span class="num">3.0k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#acid-%E7%89%B9%E6%80%A7"><span class="toc-text">ACID 特性</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%8B%E5%8A%A1%E9%9A%94%E7%A6%BB%E7%BA%A7%E5%88%AB"><span class="toc-text">事务隔离级别</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9B%9B%E7%A7%8D%E9%9A%94%E7%A6%BB%E7%BA%A7%E5%88%AB%E4%B8%8E%E5%B9%B6%E5%8F%91%E9%97%AE%E9%A2%98"><span class="toc-text">四种隔离级别与并发问题</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%B9%B6%E5%8F%91%E9%97%AE%E9%A2%98%E6%BC%94%E7%A4%BA"><span class="toc-text">并发问题演示</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#mvcc-%E5%AE%9E%E7%8E%B0%E5%8E%9F%E7%90%86"><span class="toc-text">MVCC 实现原理</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%9A%90%E8%97%8F%E5%88%97"><span class="toc-text">隐藏列</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#undo-log-%E7%89%88%E6%9C%AC%E9%93%BE"><span class="toc-text">Undo Log 版本链</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#readview-%E6%9C%BA%E5%88%B6"><span class="toc-text">ReadView 机制</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8F%AF%E8%A7%81%E6%80%A7%E5%88%A4%E6%96%AD%E7%AE%97%E6%B3%95"><span class="toc-text">可见性判断算法</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#rc-%E4%B8%8E-rr-%E7%9A%84-readview-%E5%B7%AE%E5%BC%82"><span class="toc-text">RC 与 RR 的 ReadView 差异</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%97%B4%E9%9A%99%E9%94%81gap-lock%E4%B8%8E%E5%B9%BB%E8%AF%BB%E8%A7%A3%E5%86%B3"><span class="toc-text">间隙锁（Gap Lock）与幻读解决</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%94%81%E7%9A%84%E7%B1%BB%E5%9E%8B"><span class="toc-text">锁的类型</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#next-key-lock-%E7%A4%BA%E4%BE%8B"><span class="toc-text">Next-Key Lock 示例</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%AD%89%E5%80%BC%E6%9F%A5%E8%AF%A2%E7%9A%84%E5%8A%A0%E9%94%81%E8%A7%84%E5%88%99"><span class="toc-text">等值查询的加锁规则</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BF%AB%E7%85%A7%E8%AF%BB%E4%B8%8E%E5%BD%93%E5%89%8D%E8%AF%BB"><span class="toc-text">快照读与当前读</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%8B%E5%8A%A1%E7%9B%B8%E5%85%B3%E7%9A%84%E5%AE%9E%E8%B7%B5%E5%BB%BA%E8%AE%AE"><span class="toc-text">事务相关的实践建议</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%AD%BB%E9%94%81%E6%A3%80%E6%B5%8B%E4%B8%8E%E5%A4%84%E7%90%86"><span class="toc-text">死锁检测与处理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%87%8F%E5%B0%91%E9%94%81%E5%86%B2%E7%AA%81%E7%9A%84%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5"><span class="toc-text">减少锁冲突的最佳实践</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%95%BF%E4%BA%8B%E5%8A%A1%E7%9A%84%E5%8D%B1%E5%AE%B3"><span class="toc-text">长事务的危害</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="引言">引言</h2>
+<p>事务是数据库区别于文件系统的核心特性之一。在高并发场景下，如何在保证数据一致性的同时提供良好的并发性能，是数据库设计的核心挑战。MySQL
+InnoDB引擎通过MVCC（多版本并发控制）机制，在不加锁的情况下实现了事务的隔离，极大地提升了并发性能。</p>
+<h2 id="acid-特性">ACID 特性</h2>
+<p>事务的四个基本特性（ACID）是理解事务隔离的基础：</p>
+<pre class="mermaid">graph LR
+    A[ACID] --&gt; B[Atomicity&lt;br/&gt;原子性]
+    A --&gt; C[Consistency&lt;br/&gt;一致性]
+    A --&gt; D[Isolation&lt;br/&gt;隔离性]
+    A --&gt; E[Durability&lt;br/&gt;持久性]
+    B --&gt; B1[undo log]
+    C --&gt; C1[其他三者共同保证]
+    D --&gt; D1[MVCC + 锁机制]
+    E --&gt; E1[redo log]</pre>
+<table style="width:100%;">
+<colgroup>
+<col style="width: 28%" />
+<col style="width: 42%" />
+<col style="width: 28%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>特性</th>
+<th>实现机制</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>原子性（Atomicity）</td>
+<td>undo log</td>
+<td>事务中的操作要么全部成功，要么全部回滚</td>
+</tr>
+<tr class="even">
+<td>一致性（Consistency）</td>
+<td>约束 + AID</td>
+<td>事务前后数据库的完整性约束不被破坏</td>
+</tr>
+<tr class="odd">
+<td>隔离性（Isolation）</td>
+<td>MVCC + 锁</td>
+<td>并发事务之间互不干扰</td>
+</tr>
+<tr class="even">
+<td>持久性（Durability）</td>
+<td>redo log</td>
+<td>事务提交后数据不会丢失</td>
+</tr>
+</tbody>
+</table>
+<h2 id="事务隔离级别">事务隔离级别</h2>
+<p>SQL标准定义了四种隔离级别，它们在<strong>并发性能</strong>和<strong>数据一致性</strong>之间做出不同的权衡：</p>
+<h3 id="四种隔离级别与并发问题">四种隔离级别与并发问题</h3>
+<pre class="mermaid">graph TD
+    subgraph 隔离级别从低到高
+        RU[READ UNCOMMITTED&lt;br/&gt;读未提交]
+        RC[READ COMMITTED&lt;br/&gt;读已提交]
+        RR[REPEATABLE READ&lt;br/&gt;可重复读]
+        SE[SERIALIZABLE&lt;br/&gt;串行化]
+    end
+
+    subgraph 并发问题
+        D1[脏读]
+        D2[不可重复读]
+        D3[幻读]
+    end
+
+    RU -.-&gt;|存在| D1
+    RU -.-&gt;|存在| D2
+    RU -.-&gt;|存在| D3
+    RC -.-&gt;|存在| D2
+    RC -.-&gt;|存在| D3
+    RR -.-&gt;|部分存在| D3</pre>
+<table>
+<thead>
+<tr class="header">
+<th>隔离级别</th>
+<th>脏读</th>
+<th>不可重复读</th>
+<th>幻读</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>READ UNCOMMITTED</td>
+<td>可能</td>
+<td>可能</td>
+<td>可能</td>
+</tr>
+<tr class="even">
+<td>READ COMMITTED</td>
+<td>不可能</td>
+<td>可能</td>
+<td>可能</td>
+</tr>
+<tr class="odd">
+<td>REPEATABLE READ（InnoDB默认）</td>
+<td>不可能</td>
+<td>不可能</td>
+<td>部分解决</td>
+</tr>
+<tr class="even">
+<td>SERIALIZABLE</td>
+<td>不可能</td>
+<td>不可能</td>
+<td>不可能</td>
+</tr>
+</tbody>
+</table>
+<h3 id="并发问题演示">并发问题演示</h3>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 查看当前隔离级别</span><br><span class="hljs-keyword">SELECT</span> @<span class="hljs-variable">@transaction_isolation</span>;<br><br><span class="hljs-comment">-- 设置隔离级别</span><br><span class="hljs-keyword">SET</span> SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;<br></code></pre></td></tr></table></figure>
+<p><strong>脏读示例：</strong></p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 事务A（READ UNCOMMITTED）</span><br><span class="hljs-keyword">BEGIN</span>;<br><span class="hljs-keyword">SELECT</span> balance <span class="hljs-keyword">FROM</span> accounts <span class="hljs-keyword">WHERE</span> id <span class="hljs-operator">=</span> <span class="hljs-number">1</span>;  <span class="hljs-comment">-- 结果: 1000</span><br><br><span class="hljs-comment">-- 事务B</span><br><span class="hljs-keyword">BEGIN</span>;<br><span class="hljs-keyword">UPDATE</span> accounts <span class="hljs-keyword">SET</span> balance <span class="hljs-operator">=</span> <span class="hljs-number">500</span> <span class="hljs-keyword">WHERE</span> id <span class="hljs-operator">=</span> <span class="hljs-number">1</span>;<br><span class="hljs-comment">-- 注意：事务B还没有提交</span><br><br><span class="hljs-comment">-- 事务A</span><br><span class="hljs-keyword">SELECT</span> balance <span class="hljs-keyword">FROM</span> accounts <span class="hljs-keyword">WHERE</span> id <span class="hljs-operator">=</span> <span class="hljs-number">1</span>;  <span class="hljs-comment">-- 结果: 500（脏读！读到了未提交的数据）</span><br><br><span class="hljs-comment">-- 事务B</span><br><span class="hljs-keyword">ROLLBACK</span>;  <span class="hljs-comment">-- 事务B回滚了</span><br><span class="hljs-comment">-- 但事务A已经读到了不存在的数据</span><br></code></pre></td></tr></table></figure>
+<p><strong>不可重复读示例：</strong></p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 事务A（READ COMMITTED）</span><br><span class="hljs-keyword">BEGIN</span>;<br><span class="hljs-keyword">SELECT</span> balance <span class="hljs-keyword">FROM</span> accounts <span class="hljs-keyword">WHERE</span> id <span class="hljs-operator">=</span> <span class="hljs-number">1</span>;  <span class="hljs-comment">-- 结果: 1000</span><br><br><span class="hljs-comment">-- 事务B</span><br><span class="hljs-keyword">BEGIN</span>;<br><span class="hljs-keyword">UPDATE</span> accounts <span class="hljs-keyword">SET</span> balance <span class="hljs-operator">=</span> <span class="hljs-number">500</span> <span class="hljs-keyword">WHERE</span> id <span class="hljs-operator">=</span> <span class="hljs-number">1</span>;<br><span class="hljs-keyword">COMMIT</span>;  <span class="hljs-comment">-- 事务B提交了</span><br><br><span class="hljs-comment">-- 事务A</span><br><span class="hljs-keyword">SELECT</span> balance <span class="hljs-keyword">FROM</span> accounts <span class="hljs-keyword">WHERE</span> id <span class="hljs-operator">=</span> <span class="hljs-number">1</span>;  <span class="hljs-comment">-- 结果: 500（不可重复读！同一事务内两次读取结果不同）</span><br><span class="hljs-keyword">COMMIT</span>;<br></code></pre></td></tr></table></figure>
+<p><strong>幻读示例：</strong></p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 事务A（REPEATABLE READ）</span><br><span class="hljs-keyword">BEGIN</span>;<br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> accounts <span class="hljs-keyword">WHERE</span> balance <span class="hljs-operator">&gt;</span> <span class="hljs-number">800</span>;  <span class="hljs-comment">-- 结果: 2行</span><br><br><span class="hljs-comment">-- 事务B</span><br><span class="hljs-keyword">BEGIN</span>;<br><span class="hljs-keyword">INSERT</span> <span class="hljs-keyword">INTO</span> accounts (id, balance) <span class="hljs-keyword">VALUES</span> (<span class="hljs-number">10</span>, <span class="hljs-number">900</span>);<br><span class="hljs-keyword">COMMIT</span>;<br><br><span class="hljs-comment">-- 事务A</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> accounts <span class="hljs-keyword">WHERE</span> balance <span class="hljs-operator">&gt;</span> <span class="hljs-number">800</span>;  <span class="hljs-comment">-- MVCC快照读: 仍然2行</span><br><span class="hljs-keyword">UPDATE</span> accounts <span class="hljs-keyword">SET</span> balance <span class="hljs-operator">=</span> balance <span class="hljs-operator">+</span> <span class="hljs-number">1</span> <span class="hljs-keyword">WHERE</span> balance <span class="hljs-operator">&gt;</span> <span class="hljs-number">800</span>;  <span class="hljs-comment">-- 当前读: 影响了3行（幻读！）</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> accounts <span class="hljs-keyword">WHERE</span> balance <span class="hljs-operator">&gt;</span> <span class="hljs-number">800</span>;  <span class="hljs-comment">-- 结果: 3行</span><br><span class="hljs-keyword">COMMIT</span>;<br></code></pre></td></tr></table></figure>
+<h2 id="mvcc-实现原理">MVCC 实现原理</h2>
+<p>MVCC（Multi-Version Concurrency
+Control）的核心思想是：为每行数据维护多个版本，读操作读取的是某个时间点的快照，而不是当前最新数据，从而实现读写不冲突。</p>
+<h3 id="隐藏列">隐藏列</h3>
+<p>InnoDB为每行数据自动添加三个隐藏列：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><code class="hljs plaintext">+--------+--------------+---------------+-------+------+-----+<br>| 列名    | 大小          | 说明           | id    | name | age |<br>+--------+--------------+---------------+-------+------+-----+<br>| DB_TRX_ID  | 6 bytes  | 最后修改该行的事务ID | ...   | ...  | ... |<br>| DB_ROLL_PTR| 7 bytes  | 指向undo log的指针  | ...   | ...  | ... |<br>| DB_ROW_ID  | 6 bytes  | 隐藏主键（无主键时）  | ...   | ...  | ... |<br>+--------+--------------+---------------+-------+------+-----+<br></code></pre></td></tr></table></figure>
+<h3 id="undo-log-版本链">Undo Log 版本链</h3>
+<p>每次对数据行的修改都会生成一条undo log记录，多条undo
+log通过<code>DB_ROLL_PTR</code>串联形成版本链。</p>
+<pre class="mermaid">graph LR
+    subgraph 当前数据
+        A["id=1, name='Dave', age=28&lt;br/&gt;DB_TRX_ID=300&lt;br/&gt;DB_ROLL_PTR → "]
+    end
+    subgraph Undo Log
+        B["id=1, name='Carol', age=25&lt;br/&gt;DB_TRX_ID=200&lt;br/&gt;DB_ROLL_PTR → "]
+        C["id=1, name='Bob', age=22&lt;br/&gt;DB_TRX_ID=100&lt;br/&gt;DB_ROLL_PTR → "]
+        D["id=1, name='Alice', age=20&lt;br/&gt;DB_TRX_ID=50&lt;br/&gt;DB_ROLL_PTR = NULL"]
+    end
+    A --&gt; B
+    B --&gt; C
+    C --&gt; D</pre>
+<p><strong>版本链的形成过程：</strong></p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 事务50: 插入数据</span><br><span class="hljs-keyword">INSERT</span> <span class="hljs-keyword">INTO</span> users (id, name, age) <span class="hljs-keyword">VALUES</span> (<span class="hljs-number">1</span>, <span class="hljs-string">&#x27;Alice&#x27;</span>, <span class="hljs-number">20</span>);<br><span class="hljs-comment">-- 当前行: DB_TRX_ID=50</span><br><br><span class="hljs-comment">-- 事务100: 更新数据</span><br><span class="hljs-keyword">UPDATE</span> users <span class="hljs-keyword">SET</span> name <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;Bob&#x27;</span>, age <span class="hljs-operator">=</span> <span class="hljs-number">22</span> <span class="hljs-keyword">WHERE</span> id <span class="hljs-operator">=</span> <span class="hljs-number">1</span>;<br><span class="hljs-comment">-- 1. 将旧版本写入undo log</span><br><span class="hljs-comment">-- 2. 更新当前行，DB_TRX_ID=100，DB_ROLL_PTR 指向旧版本</span><br><br><span class="hljs-comment">-- 事务200: 再次更新</span><br><span class="hljs-keyword">UPDATE</span> users <span class="hljs-keyword">SET</span> name <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;Carol&#x27;</span>, age <span class="hljs-operator">=</span> <span class="hljs-number">25</span> <span class="hljs-keyword">WHERE</span> id <span class="hljs-operator">=</span> <span class="hljs-number">1</span>;<br><span class="hljs-comment">-- DB_TRX_ID=200，形成版本链</span><br><br><span class="hljs-comment">-- 事务300: 再次更新</span><br><span class="hljs-keyword">UPDATE</span> users <span class="hljs-keyword">SET</span> name <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;Dave&#x27;</span>, age <span class="hljs-operator">=</span> <span class="hljs-number">28</span> <span class="hljs-keyword">WHERE</span> id <span class="hljs-operator">=</span> <span class="hljs-number">1</span>;<br><span class="hljs-comment">-- DB_TRX_ID=300，版本链继续增长</span><br></code></pre></td></tr></table></figure>
+<h3 id="readview-机制">ReadView 机制</h3>
+<p>ReadView是MVCC实现快照读的关键。当事务执行快照读（普通SELECT）时，会生成一个ReadView，用来判断数据版本的可见性。</p>
+<p>ReadView包含以下关键字段：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs plaintext">ReadView &#123;<br>    m_ids:        当前系统中所有活跃（未提交）事务的ID列表<br>    min_trx_id:   m_ids中的最小值<br>    max_trx_id:   系统应该分配给下一个事务的ID值（当前最大事务ID + 1）<br>    creator_trx_id: 创建该ReadView的事务ID<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="可见性判断算法">可见性判断算法</h3>
+<pre class="mermaid">flowchart TD
+    A[获取数据行的 DB_TRX_ID] --&gt; B{trx_id == creator_trx_id?}
+    B --&gt;|是| C[可见 - 自己修改的数据]
+    B --&gt;|否| D{trx_id &lt; min_trx_id?}
+    D --&gt;|是| E[可见 - 在ReadView创建前已提交]
+    D --&gt;|否| F{trx_id &gt;= max_trx_id?}
+    F --&gt;|是| G[不可见 - 在ReadView创建后开始的事务]
+    F --&gt;|否| H{trx_id 在 m_ids 中?}
+    H --&gt;|是| I[不可见 - 该事务还未提交]
+    H --&gt;|否| J[可见 - 该事务已经提交]
+    I --&gt; K[沿版本链找上一个版本&lt;br/&gt;重复判断]
+    G --&gt; K</pre>
+<h3 id="rc-与-rr-的-readview-差异">RC 与 RR 的 ReadView 差异</h3>
+<p>两种隔离级别的核心区别在于<strong>生成ReadView的时机</strong>：</p>
+<ul>
+<li><strong>READ
+COMMITTED</strong>：每次执行SELECT都会重新生成一个ReadView</li>
+<li><strong>REPEATABLE
+READ</strong>：只在事务中第一次执行SELECT时生成ReadView，后续复用</li>
+</ul>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 假设当前存在数据: id=1, name=&#x27;Alice&#x27;, DB_TRX_ID=50</span><br><br><span class="hljs-comment">-- 事务A (trx_id=100, RR级别)</span><br><span class="hljs-keyword">BEGIN</span>;<br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> users <span class="hljs-keyword">WHERE</span> id <span class="hljs-operator">=</span> <span class="hljs-number">1</span>;<br><span class="hljs-comment">-- 生成 ReadView: m_ids=[100,200], min_trx_id=100, max_trx_id=201</span><br><span class="hljs-comment">-- 读取 DB_TRX_ID=50 &lt; min_trx_id=100, 可见</span><br><span class="hljs-comment">-- 结果: name=&#x27;Alice&#x27;</span><br><br>    <span class="hljs-comment">-- 事务B (trx_id=200) 此时执行并提交</span><br>    <span class="hljs-comment">-- BEGIN;</span><br>    <span class="hljs-comment">-- UPDATE users SET name = &#x27;Bob&#x27; WHERE id = 1;</span><br>    <span class="hljs-comment">-- COMMIT;</span><br>    <span class="hljs-comment">-- 数据行 DB_TRX_ID 变为 200</span><br><br><span class="hljs-comment">-- 事务A 再次查询</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> users <span class="hljs-keyword">WHERE</span> id <span class="hljs-operator">=</span> <span class="hljs-number">1</span>;<br><span class="hljs-comment">-- RR级别：复用之前的 ReadView</span><br><span class="hljs-comment">-- DB_TRX_ID=200, 在 m_ids=[100,200] 中，不可见</span><br><span class="hljs-comment">-- 沿版本链找到 DB_TRX_ID=50 的版本，可见</span><br><span class="hljs-comment">-- 结果: name=&#x27;Alice&#x27;（实现了可重复读）</span><br><br><span class="hljs-comment">-- 如果是RC级别：</span><br><span class="hljs-comment">-- 重新生成 ReadView: m_ids=[100], min_trx_id=100, max_trx_id=201</span><br><span class="hljs-comment">-- DB_TRX_ID=200, 不在 m_ids 中且 &lt; max_trx_id, 可见</span><br><span class="hljs-comment">-- 结果: name=&#x27;Bob&#x27;（读到了最新提交的数据）</span><br></code></pre></td></tr></table></figure>
+<h2 id="间隙锁gap-lock与幻读解决">间隙锁（Gap Lock）与幻读解决</h2>
+<p>在RR隔离级别下，InnoDB通过间隙锁和临键锁（Next-Key
+Lock）在<strong>当前读</strong>场景下解决幻读问题。</p>
+<h3 id="锁的类型">锁的类型</h3>
+<pre class="mermaid">graph TD
+    A[InnoDB行级锁] --&gt; B[Record Lock&lt;br/&gt;记录锁]
+    A --&gt; C[Gap Lock&lt;br/&gt;间隙锁]
+    A --&gt; D[Next-Key Lock&lt;br/&gt;临键锁]
+    B --&gt; B1[锁定索引记录本身]
+    C --&gt; C1[锁定索引记录之间的间隙]
+    D --&gt; D1[Record Lock + Gap Lock&lt;br/&gt;锁定记录及其前面的间隙]</pre>
+<h3 id="next-key-lock-示例">Next-Key Lock 示例</h3>
+<p>假设表中有记录 id: 1, 5, 10, 15, 20，索引间隙为：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs plaintext">(-∞, 1] (1, 5] (5, 10] (10, 15] (15, 20] (20, +∞)<br></code></pre></td></tr></table></figure>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 事务A</span><br><span class="hljs-keyword">BEGIN</span>;<br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> users <span class="hljs-keyword">WHERE</span> id <span class="hljs-keyword">BETWEEN</span> <span class="hljs-number">5</span> <span class="hljs-keyword">AND</span> <span class="hljs-number">15</span> <span class="hljs-keyword">FOR</span> <span class="hljs-keyword">UPDATE</span>;<br><span class="hljs-comment">-- 加锁范围: (1, 5] (5, 10] (10, 15] (15, 20]</span><br><span class="hljs-comment">-- 即锁定了 id 在 (1, 20] 范围内的所有记录和间隙</span><br><br><span class="hljs-comment">-- 事务B</span><br><span class="hljs-keyword">BEGIN</span>;<br><span class="hljs-keyword">INSERT</span> <span class="hljs-keyword">INTO</span> users (id, name) <span class="hljs-keyword">VALUES</span> (<span class="hljs-number">8</span>, <span class="hljs-string">&#x27;Test&#x27;</span>);  <span class="hljs-comment">-- 阻塞！8在间隙(5,10]中</span><br><span class="hljs-keyword">INSERT</span> <span class="hljs-keyword">INTO</span> users (id, name) <span class="hljs-keyword">VALUES</span> (<span class="hljs-number">12</span>, <span class="hljs-string">&#x27;Test&#x27;</span>); <span class="hljs-comment">-- 阻塞！12在间隙(10,15]中</span><br><span class="hljs-keyword">INSERT</span> <span class="hljs-keyword">INTO</span> users (id, name) <span class="hljs-keyword">VALUES</span> (<span class="hljs-number">25</span>, <span class="hljs-string">&#x27;Test&#x27;</span>); <span class="hljs-comment">-- 成功！25不在锁定范围内</span><br></code></pre></td></tr></table></figure>
+<h3 id="等值查询的加锁规则">等值查询的加锁规则</h3>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 唯一索引等值查询，记录存在</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> users <span class="hljs-keyword">WHERE</span> id <span class="hljs-operator">=</span> <span class="hljs-number">10</span> <span class="hljs-keyword">FOR</span> <span class="hljs-keyword">UPDATE</span>;<br><span class="hljs-comment">-- 只加 Record Lock，不加 Gap Lock（因为唯一索引保证不会有重复）</span><br><br><span class="hljs-comment">-- 唯一索引等值查询，记录不存在</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> users <span class="hljs-keyword">WHERE</span> id <span class="hljs-operator">=</span> <span class="hljs-number">8</span> <span class="hljs-keyword">FOR</span> <span class="hljs-keyword">UPDATE</span>;<br><span class="hljs-comment">-- 加 Gap Lock: (5, 10)</span><br><br><span class="hljs-comment">-- 非唯一索引等值查询</span><br><span class="hljs-comment">-- 假设 idx_age 上有值: 20, 25, 25, 30</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> users <span class="hljs-keyword">WHERE</span> age <span class="hljs-operator">=</span> <span class="hljs-number">25</span> <span class="hljs-keyword">FOR</span> <span class="hljs-keyword">UPDATE</span>;<br><span class="hljs-comment">-- 加 Next-Key Lock: (20, 25] 和 Gap Lock: (25, 30)</span><br></code></pre></td></tr></table></figure>
+<h2 id="快照读与当前读">快照读与当前读</h2>
+<p>理解MVCC，必须区分两种读取方式：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 快照读（Snapshot Read）: 读取的是数据的快照版本，通过MVCC实现</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> users <span class="hljs-keyword">WHERE</span> id <span class="hljs-operator">=</span> <span class="hljs-number">1</span>;<br><br><span class="hljs-comment">-- 当前读（Current Read）: 读取的是数据的最新版本，会加锁</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> users <span class="hljs-keyword">WHERE</span> id <span class="hljs-operator">=</span> <span class="hljs-number">1</span> <span class="hljs-keyword">FOR</span> <span class="hljs-keyword">UPDATE</span>;       <span class="hljs-comment">-- 排他锁</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> users <span class="hljs-keyword">WHERE</span> id <span class="hljs-operator">=</span> <span class="hljs-number">1</span> <span class="hljs-keyword">FOR</span> SHARE;        <span class="hljs-comment">-- 共享锁（MySQL 8.0+）</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> users <span class="hljs-keyword">WHERE</span> id <span class="hljs-operator">=</span> <span class="hljs-number">1</span> LOCK <span class="hljs-keyword">IN</span> SHARE MODE; <span class="hljs-comment">-- 共享锁（旧语法）</span><br><span class="hljs-keyword">INSERT</span> <span class="hljs-keyword">INTO</span> users ...;   <span class="hljs-comment">-- 隐式当前读</span><br><span class="hljs-keyword">UPDATE</span> users <span class="hljs-keyword">SET</span> ...;    <span class="hljs-comment">-- 隐式当前读</span><br><span class="hljs-keyword">DELETE</span> <span class="hljs-keyword">FROM</span> users ...;   <span class="hljs-comment">-- 隐式当前读</span><br></code></pre></td></tr></table></figure>
+<pre class="mermaid">graph TD
+    A[SELECT语句] --&gt; B{是否加锁?}
+    B --&gt;|否| C[快照读&lt;br/&gt;MVCC ReadView]
+    B --&gt;|是| D[当前读&lt;br/&gt;加锁读取最新版本]
+    D --&gt; E{FOR UPDATE?}
+    E --&gt;|是| F[排他锁 X Lock]
+    E --&gt;|否| G{FOR SHARE?}
+    G --&gt;|是| H[共享锁 S Lock]
+    I[INSERT/UPDATE/DELETE] --&gt; D</pre>
+<h2 id="事务相关的实践建议">事务相关的实践建议</h2>
+<h3 id="死锁检测与处理">死锁检测与处理</h3>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 查看当前正在运行的事务</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> information_schema.INNODB_TRX;<br><br><span class="hljs-comment">-- 查看锁等待情况</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> performance_schema.data_lock_waits;<br><br><span class="hljs-comment">-- 查看当前持有的锁</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> performance_schema.data_locks;<br><br><span class="hljs-comment">-- 死锁日志</span><br><span class="hljs-keyword">SHOW</span> ENGINE INNODB STATUS;<br></code></pre></td></tr></table></figure>
+<h3 id="减少锁冲突的最佳实践">减少锁冲突的最佳实践</h3>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 1. 事务尽量短小，减少持锁时间</span><br><span class="hljs-keyword">BEGIN</span>;<br><span class="hljs-comment">-- 避免在事务中执行耗时操作（如RPC调用、文件IO）</span><br><span class="hljs-keyword">UPDATE</span> accounts <span class="hljs-keyword">SET</span> balance <span class="hljs-operator">=</span> balance <span class="hljs-operator">-</span> <span class="hljs-number">100</span> <span class="hljs-keyword">WHERE</span> id <span class="hljs-operator">=</span> <span class="hljs-number">1</span>;<br><span class="hljs-keyword">UPDATE</span> accounts <span class="hljs-keyword">SET</span> balance <span class="hljs-operator">=</span> balance <span class="hljs-operator">+</span> <span class="hljs-number">100</span> <span class="hljs-keyword">WHERE</span> id <span class="hljs-operator">=</span> <span class="hljs-number">2</span>;<br><span class="hljs-keyword">COMMIT</span>;<br><br><span class="hljs-comment">-- 2. 按固定顺序访问资源，避免死锁</span><br><span class="hljs-comment">-- 转账场景: 总是先锁ID小的账户</span><br><span class="hljs-comment">-- Good: 先锁 id=1, 再锁 id=2</span><br><span class="hljs-comment">-- Bad: 事务A先锁 id=1, 事务B先锁 id=2（可能死锁）</span><br><br><span class="hljs-comment">-- 3. 使用合理的索引，减少锁的范围</span><br><span class="hljs-comment">-- 没有索引时，UPDATE会锁全表</span><br><span class="hljs-keyword">UPDATE</span> orders <span class="hljs-keyword">SET</span> status <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;shipped&#x27;</span> <span class="hljs-keyword">WHERE</span> user_id <span class="hljs-operator">=</span> <span class="hljs-number">100</span>;<br><span class="hljs-comment">-- 如果 user_id 没有索引 -&gt; 全表扫描 -&gt; 锁所有行</span><br><span class="hljs-comment">-- 如果 user_id 有索引 -&gt; 只锁符合条件的行</span><br><br><span class="hljs-comment">-- 4. 设置合理的锁等待超时</span><br><span class="hljs-keyword">SET</span> innodb_lock_wait_timeout <span class="hljs-operator">=</span> <span class="hljs-number">10</span>;  <span class="hljs-comment">-- 默认50秒</span><br></code></pre></td></tr></table></figure>
+<h3 id="长事务的危害">长事务的危害</h3>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 查找运行时间超过60秒的事务</span><br><span class="hljs-keyword">SELECT</span><br>    trx_id,<br>    trx_state,<br>    trx_started,<br>    TIMESTAMPDIFF(<span class="hljs-keyword">SECOND</span>, trx_started, NOW()) <span class="hljs-keyword">AS</span> duration_seconds,<br>    trx_query<br><span class="hljs-keyword">FROM</span> information_schema.INNODB_TRX<br><span class="hljs-keyword">WHERE</span> TIMESTAMPDIFF(<span class="hljs-keyword">SECOND</span>, trx_started, NOW()) <span class="hljs-operator">&gt;</span> <span class="hljs-number">60</span>;<br></code></pre></td></tr></table></figure>
+<p>长事务的危害： 1. <strong>Undo log膨胀</strong>：长事务会阻止undo
+log的回收，导致存储空间持续增长 2.
+<strong>锁占用时间长</strong>：增加锁冲突和死锁的概率 3.
+<strong>MVCC版本链过长</strong>：影响查询性能，需要遍历更多版本</p>
+<h2 id="总结">总结</h2>
+<p>MySQL InnoDB的事务隔离机制是一个精巧的工程设计：</p>
+<ul>
+<li><strong>MVCC</strong>通过undo
+log版本链和ReadView机制，实现了快照读的无锁并发，极大提升了读写并发性能</li>
+<li><strong>RC和RR的核心区别</strong>在于ReadView的生成时机——RC每次SELECT生成，RR只在第一次SELECT生成</li>
+<li><strong>间隙锁和临键锁</strong>在当前读场景下解决幻读问题，但也增加了死锁的风险</li>
+<li>实际使用中，需要<strong>合理设计事务</strong>，避免长事务，按固定顺序访问资源以减少死锁</li>
+<li>InnoDB默认的<strong>RR隔离级别</strong>在大多数场景下提供了良好的一致性与并发性平衡，但在某些高并发场景下，RC级别可能更合适（减少间隙锁冲突）</li>
+</ul>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2024-11-13</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">3.0k 字 · 7 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/java-gc-tuning/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">JVM垃圾回收器选择与调优实战</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/sqlite-architecture-explanation-and-code-analysis/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">SQLite 架构介绍与源码解析</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#acid-%E7%89%B9%E6%80%A7"><span class="toc-text">ACID 特性</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%8B%E5%8A%A1%E9%9A%94%E7%A6%BB%E7%BA%A7%E5%88%AB"><span class="toc-text">事务隔离级别</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9B%9B%E7%A7%8D%E9%9A%94%E7%A6%BB%E7%BA%A7%E5%88%AB%E4%B8%8E%E5%B9%B6%E5%8F%91%E9%97%AE%E9%A2%98"><span class="toc-text">四种隔离级别与并发问题</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%B9%B6%E5%8F%91%E9%97%AE%E9%A2%98%E6%BC%94%E7%A4%BA"><span class="toc-text">并发问题演示</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#mvcc-%E5%AE%9E%E7%8E%B0%E5%8E%9F%E7%90%86"><span class="toc-text">MVCC 实现原理</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%9A%90%E8%97%8F%E5%88%97"><span class="toc-text">隐藏列</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#undo-log-%E7%89%88%E6%9C%AC%E9%93%BE"><span class="toc-text">Undo Log 版本链</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#readview-%E6%9C%BA%E5%88%B6"><span class="toc-text">ReadView 机制</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8F%AF%E8%A7%81%E6%80%A7%E5%88%A4%E6%96%AD%E7%AE%97%E6%B3%95"><span class="toc-text">可见性判断算法</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#rc-%E4%B8%8E-rr-%E7%9A%84-readview-%E5%B7%AE%E5%BC%82"><span class="toc-text">RC 与 RR 的 ReadView 差异</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%97%B4%E9%9A%99%E9%94%81gap-lock%E4%B8%8E%E5%B9%BB%E8%AF%BB%E8%A7%A3%E5%86%B3"><span class="toc-text">间隙锁（Gap Lock）与幻读解决</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%94%81%E7%9A%84%E7%B1%BB%E5%9E%8B"><span class="toc-text">锁的类型</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#next-key-lock-%E7%A4%BA%E4%BE%8B"><span class="toc-text">Next-Key Lock 示例</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%AD%89%E5%80%BC%E6%9F%A5%E8%AF%A2%E7%9A%84%E5%8A%A0%E9%94%81%E8%A7%84%E5%88%99"><span class="toc-text">等值查询的加锁规则</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BF%AB%E7%85%A7%E8%AF%BB%E4%B8%8E%E5%BD%93%E5%89%8D%E8%AF%BB"><span class="toc-text">快照读与当前读</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%8B%E5%8A%A1%E7%9B%B8%E5%85%B3%E7%9A%84%E5%AE%9E%E8%B7%B5%E5%BB%BA%E8%AE%AE"><span class="toc-text">事务相关的实践建议</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%AD%BB%E9%94%81%E6%A3%80%E6%B5%8B%E4%B8%8E%E5%A4%84%E7%90%86"><span class="toc-text">死锁检测与处理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%87%8F%E5%B0%91%E9%94%81%E5%86%B2%E7%AA%81%E7%9A%84%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5"><span class="toc-text">减少锁冲突的最佳实践</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%95%BF%E4%BA%8B%E5%8A%A1%E7%9A%84%E5%8D%B1%E5%AE%B3"><span class="toc-text">长事务的危害</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ArgoCD GitOps持续交付实践 · zt&#39;s Blog</title>
+  <meta name="description" content="全面讲解ArgoCD GitOps持续交付实践，涵盖GitOps原则、ArgoCD架构、同步策略、多集群管理与ApplicationSet。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/argocd-gitops/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="ArgoCD GitOps持续交付实践">
+  <meta property="og:description" content="全面讲解ArgoCD GitOps持续交付实践，涵盖GitOps原则、ArgoCD架构、同步策略、多集群管理与ApplicationSet。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/argocd-gitops/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2024-07-23T16:00:00.000Z">
+  <meta property="article:modified_time" content="2024-07-23T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ArgoCD GitOps持续交付实践">
+  <meta name="twitter:description" content="全面讲解ArgoCD GitOps持续交付实践，涵盖GitOps原则、ArgoCD架构、同步策略、多集群管理与ApplicationSet。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"ArgoCD GitOps持续交付实践","description":"全面讲解ArgoCD GitOps持续交付实践，涵盖GitOps原则、ArgoCD架构、同步策略、多集群管理与ApplicationSet。","datePublished":"2024-07-23T16:00:00.000Z","dateModified":"2024-07-23T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/argocd-gitops/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"DevOps","item":"https://withesse.co/categories/DevOps/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:45">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/DevOps/">DevOps</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/argocd/"><span class="hash">#</span>argocd</a><a class="tag" href="/tags/gitops/"><span class="hash">#</span>gitops</a><a class="tag" href="/tags/continuous-delivery/"><span class="hash">#</span>continuous-delivery</a>
+        
+      </div>
+
+      <h1>ArgoCD GitOps持续交付实践</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2024.07.24</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 7 min</span>
+        </span>
+        <span class="wc"><span class="num">2.8k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#gitops%E5%8E%9F%E5%88%99"><span class="toc-text">GitOps原则</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#push-vs-pull%E6%A8%A1%E5%9E%8B"><span class="toc-text">Push vs Pull模型</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#argocd%E6%9E%B6%E6%9E%84"><span class="toc-text">ArgoCD架构</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E7%BB%84%E4%BB%B6"><span class="toc-text">核心组件</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#application-crd"><span class="toc-text">Application CRD</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#helm-chart%E5%BA%94%E7%94%A8"><span class="toc-text">Helm Chart应用</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#kustomize%E5%BA%94%E7%94%A8"><span class="toc-text">Kustomize应用</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%90%8C%E6%AD%A5%E7%AD%96%E7%95%A5"><span class="toc-text">同步策略</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%90%8C%E6%AD%A5%E6%B5%81%E7%A8%8B"><span class="toc-text">同步流程</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%90%8C%E6%AD%A5%E6%B3%A2%E6%AC%A1sync-waves"><span class="toc-text">同步波次（Sync Waves）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%81%A5%E5%BA%B7%E6%A3%80%E6%9F%A5%E4%B8%8Ehook"><span class="toc-text">健康检查与Hook</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%9E%E6%BB%9A"><span class="toc-text">回滚</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%A4%9A%E9%9B%86%E7%BE%A4%E7%AE%A1%E7%90%86"><span class="toc-text">多集群管理</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#appproject%E9%A1%B9%E7%9B%AE%E9%9A%94%E7%A6%BB"><span class="toc-text">AppProject（项目隔离）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#applicationset"><span class="toc-text">ApplicationSet</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#git-generator"><span class="toc-text">Git Generator</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#cluster-generator"><span class="toc-text">Cluster Generator</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#matrix-generator"><span class="toc-text">Matrix Generator</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#secrets%E7%AE%A1%E7%90%86"><span class="toc-text">Secrets管理</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%80%9A%E7%9F%A5%E9%85%8D%E7%BD%AE"><span class="toc-text">通知配置</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="前言">前言</h2>
+<p>GitOps是一种以Git为唯一真相来源的基础设施和应用交付方法论。ArgoCD是Kubernetes生态中最流行的GitOps工具，被CNCF列为孵化项目。本文将深入讲解GitOps原则、ArgoCD架构和实际使用方法。</p>
+<h2 id="gitops原则">GitOps原则</h2>
+<pre class="mermaid">graph TB
+    subgraph Principles["GitOps四大原则"]
+        P1["声明式&lt;br&gt;Declarative&lt;br&gt;系统状态用声明式描述"]
+        P2["版本化&lt;br&gt;Versioned&lt;br&gt;期望状态存储在Git中"]
+        P3["自动拉取&lt;br&gt;Pulled Automatically&lt;br&gt;自动将变更应用到系统"]
+        P4["持续调谐&lt;br&gt;Continuously Reconciled&lt;br&gt;确保实际状态与期望状态一致"]
+    end</pre>
+<h3 id="push-vs-pull模型">Push vs Pull模型</h3>
+<pre class="mermaid">graph LR
+    subgraph Push["Push模型 (传统CI/CD)"]
+        CI1["CI Pipeline"] --&gt; |"kubectl apply"| Cluster1["K8s Cluster"]
+    end
+
+    subgraph Pull["Pull模型 (GitOps)"]
+        Dev["Developer"] --&gt; |"git push"| Git["Git Repository"]
+        ArgoCD["ArgoCD"] --&gt; |"watch"| Git
+        ArgoCD --&gt; |"sync"| Cluster2["K8s Cluster"]
+    end
+
+    style Push fill:#FFE0B2
+    style Pull fill:#C8E6C9</pre>
+<p>Pull模型的优势： - CI Pipeline不需要集群访问权限 -
+Git提供完整的审计日志 - 自动检测和修复配置漂移 -
+回滚等于<code>git revert</code></p>
+<h2 id="argocd架构">ArgoCD架构</h2>
+<pre class="mermaid">graph TB
+    subgraph ArgoCD["ArgoCD Components"]
+        API["API Server&lt;br&gt;(gRPC/REST)"]
+        Repo["Repo Server&lt;br&gt;(Git Clone &amp; Render)"]
+        Controller["Application Controller&lt;br&gt;(Reconcile Loop)"]
+        Redis["Redis&lt;br&gt;(Cache)"]
+        Dex["Dex&lt;br&gt;(SSO)"]
+        Notif["Notifications Controller"]
+    end
+
+    subgraph External["外部系统"]
+        Git["Git Repository"]
+        K8s["Kubernetes API"]
+        SSO["OIDC/LDAP"]
+        Slack["Slack/Teams"]
+    end
+
+    UI["Web UI"] --&gt; API
+    CLI["argocd CLI"] --&gt; API
+    API --&gt; Redis
+    API --&gt; Repo
+    API --&gt; Dex
+    Controller --&gt; Repo
+    Controller --&gt; K8s
+    Repo --&gt; Git
+    Dex --&gt; SSO
+    Notif --&gt; Slack</pre>
+<h3 id="核心组件">核心组件</h3>
+<table>
+<thead>
+<tr class="header">
+<th>组件</th>
+<th>职责</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>API Server</td>
+<td>提供Web UI、CLI和CI/CD集成的API</td>
+</tr>
+<tr class="even">
+<td>Repo Server</td>
+<td>从Git仓库拉取配置，渲染Helm/Kustomize</td>
+</tr>
+<tr class="odd">
+<td>Application Controller</td>
+<td>监控应用状态，执行同步操作</td>
+</tr>
+<tr class="even">
+<td>Redis</td>
+<td>缓存Git仓库数据和应用状态</td>
+</tr>
+<tr class="odd">
+<td>Dex</td>
+<td>SSO认证代理</td>
+</tr>
+<tr class="even">
+<td>Notifications</td>
+<td>发送同步状态通知</td>
+</tr>
+</tbody>
+</table>
+<h2 id="application-crd">Application CRD</h2>
+<p>Application是ArgoCD最核心的CRD，定义了一个应用的部署配置：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">argoproj.io/v1alpha1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">Application</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">myapp-production</span><br>  <span class="hljs-attr">namespace:</span> <span class="hljs-string">argocd</span><br>  <span class="hljs-attr">finalizers:</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-string">resources-finalizer.argocd.argoproj.io</span><br><span class="hljs-attr">spec:</span><br>  <span class="hljs-attr">project:</span> <span class="hljs-string">production</span><br><br>  <span class="hljs-attr">source:</span><br>    <span class="hljs-attr">repoURL:</span> <span class="hljs-string">https://github.com/myorg/k8s-manifests.git</span><br>    <span class="hljs-attr">targetRevision:</span> <span class="hljs-string">main</span><br>    <span class="hljs-attr">path:</span> <span class="hljs-string">apps/myapp/overlays/production</span><br><br>  <span class="hljs-attr">destination:</span><br>    <span class="hljs-attr">server:</span> <span class="hljs-string">https://kubernetes.default.svc</span><br>    <span class="hljs-attr">namespace:</span> <span class="hljs-string">production</span><br><br>  <span class="hljs-attr">syncPolicy:</span><br>    <span class="hljs-attr">automated:</span><br>      <span class="hljs-attr">prune:</span> <span class="hljs-literal">true</span>           <span class="hljs-comment"># 删除Git中已移除的资源</span><br>      <span class="hljs-attr">selfHeal:</span> <span class="hljs-literal">true</span>         <span class="hljs-comment"># 自动修复配置漂移</span><br>      <span class="hljs-attr">allowEmpty:</span> <span class="hljs-literal">false</span>      <span class="hljs-comment"># 禁止同步空资源</span><br>    <span class="hljs-attr">syncOptions:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">CreateNamespace=true</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">PrunePropagationPolicy=foreground</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">PruneLast=true</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">ApplyOutOfSyncOnly=true</span><br>    <span class="hljs-attr">retry:</span><br>      <span class="hljs-attr">limit:</span> <span class="hljs-number">5</span><br>      <span class="hljs-attr">backoff:</span><br>        <span class="hljs-attr">duration:</span> <span class="hljs-string">5s</span><br>        <span class="hljs-attr">factor:</span> <span class="hljs-number">2</span><br>        <span class="hljs-attr">maxDuration:</span> <span class="hljs-string">3m</span><br><br>  <span class="hljs-attr">ignoreDifferences:</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-attr">group:</span> <span class="hljs-string">apps</span><br>      <span class="hljs-attr">kind:</span> <span class="hljs-string">Deployment</span><br>      <span class="hljs-attr">jsonPointers:</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-string">/spec/replicas</span>   <span class="hljs-comment"># 忽略HPA管理的副本数</span><br><br>  <span class="hljs-attr">info:</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">url</span><br>      <span class="hljs-attr">value:</span> <span class="hljs-string">https://myapp.example.com</span><br></code></pre></td></tr></table></figure>
+<h3 id="helm-chart应用">Helm Chart应用</h3>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">argoproj.io/v1alpha1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">Application</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">myapp-helm</span><br>  <span class="hljs-attr">namespace:</span> <span class="hljs-string">argocd</span><br><span class="hljs-attr">spec:</span><br>  <span class="hljs-attr">project:</span> <span class="hljs-string">default</span><br><br>  <span class="hljs-attr">source:</span><br>    <span class="hljs-attr">repoURL:</span> <span class="hljs-string">https://charts.example.com</span><br>    <span class="hljs-attr">chart:</span> <span class="hljs-string">myapp</span><br>    <span class="hljs-attr">targetRevision:</span> <span class="hljs-number">1.5</span><span class="hljs-number">.0</span><br>    <span class="hljs-attr">helm:</span><br>      <span class="hljs-attr">releaseName:</span> <span class="hljs-string">myapp</span><br>      <span class="hljs-attr">valueFiles:</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-string">values-production.yaml</span><br>      <span class="hljs-attr">values:</span> <span class="hljs-string">|</span><br><span class="hljs-string">        replicaCount: 3</span><br><span class="hljs-string">        image:</span><br><span class="hljs-string">          tag: v2.1.0</span><br><span class="hljs-string">        resources:</span><br><span class="hljs-string">          requests:</span><br><span class="hljs-string">            cpu: 200m</span><br><span class="hljs-string">            memory: 256Mi</span><br><span class="hljs-string"></span>      <span class="hljs-attr">parameters:</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">ingress.enabled</span><br>          <span class="hljs-attr">value:</span> <span class="hljs-string">&quot;true&quot;</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">ingress.host</span><br>          <span class="hljs-attr">value:</span> <span class="hljs-string">myapp.example.com</span><br><br>  <span class="hljs-attr">destination:</span><br>    <span class="hljs-attr">server:</span> <span class="hljs-string">https://kubernetes.default.svc</span><br>    <span class="hljs-attr">namespace:</span> <span class="hljs-string">production</span><br></code></pre></td></tr></table></figure>
+<h3 id="kustomize应用">Kustomize应用</h3>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">argoproj.io/v1alpha1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">Application</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">myapp-kustomize</span><br>  <span class="hljs-attr">namespace:</span> <span class="hljs-string">argocd</span><br><span class="hljs-attr">spec:</span><br>  <span class="hljs-attr">project:</span> <span class="hljs-string">default</span><br><br>  <span class="hljs-attr">source:</span><br>    <span class="hljs-attr">repoURL:</span> <span class="hljs-string">https://github.com/myorg/k8s-manifests.git</span><br>    <span class="hljs-attr">targetRevision:</span> <span class="hljs-string">main</span><br>    <span class="hljs-attr">path:</span> <span class="hljs-string">apps/myapp/overlays/production</span><br>    <span class="hljs-attr">kustomize:</span><br>      <span class="hljs-attr">images:</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-string">myregistry.io/myapp:v2.1.0</span><br>      <span class="hljs-attr">namePrefix:</span> <span class="hljs-string">prod-</span><br>      <span class="hljs-attr">commonLabels:</span><br>        <span class="hljs-attr">env:</span> <span class="hljs-string">production</span><br>      <span class="hljs-attr">commonAnnotations:</span><br>        <span class="hljs-attr">team:</span> <span class="hljs-string">backend</span><br><br>  <span class="hljs-attr">destination:</span><br>    <span class="hljs-attr">server:</span> <span class="hljs-string">https://kubernetes.default.svc</span><br>    <span class="hljs-attr">namespace:</span> <span class="hljs-string">production</span><br></code></pre></td></tr></table></figure>
+<h2 id="同步策略">同步策略</h2>
+<h3 id="同步流程">同步流程</h3>
+<pre class="mermaid">sequenceDiagram
+    participant Git as Git Repository
+    participant Repo as Repo Server
+    participant Ctrl as App Controller
+    participant K8s as Kubernetes
+
+    loop 每3分钟
+        Ctrl-&gt;&gt;Repo: 获取最新配置
+        Repo-&gt;&gt;Git: git pull
+        Git--&gt;&gt;Repo: 最新manifests
+        Repo--&gt;&gt;Ctrl: 渲染后的资源
+        Ctrl-&gt;&gt;K8s: 获取实际状态
+        K8s--&gt;&gt;Ctrl: 当前资源
+        Ctrl-&gt;&gt;Ctrl: 对比期望 vs 实际
+        alt 有差异
+            Ctrl-&gt;&gt;K8s: 自动同步 (如已开启)
+        else 无差异
+            Ctrl-&gt;&gt;Ctrl: 状态: Synced
+        end
+    end</pre>
+<h3 id="同步波次sync-waves">同步波次（Sync Waves）</h3>
+<p>通过sync-wave注解控制资源的部署顺序：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># Wave -1: 先创建命名空间</span><br><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">v1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">Namespace</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">production</span><br>  <span class="hljs-attr">annotations:</span><br>    <span class="hljs-attr">argocd.argoproj.io/sync-wave:</span> <span class="hljs-string">&quot;-1&quot;</span><br><br><span class="hljs-meta">---</span><br><span class="hljs-comment"># Wave 0: 创建ConfigMap和Secret</span><br><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">v1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">ConfigMap</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">app-config</span><br>  <span class="hljs-attr">namespace:</span> <span class="hljs-string">production</span><br>  <span class="hljs-attr">annotations:</span><br>    <span class="hljs-attr">argocd.argoproj.io/sync-wave:</span> <span class="hljs-string">&quot;0&quot;</span><br><span class="hljs-attr">data:</span><br>  <span class="hljs-attr">config.yaml:</span> <span class="hljs-string">|</span><br><span class="hljs-string">    server:</span><br><span class="hljs-string">      port: 8080</span><br><span class="hljs-string"></span><br><span class="hljs-meta">---</span><br><span class="hljs-comment"># Wave 1: 部署应用</span><br><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">apps/v1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">Deployment</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">myapp</span><br>  <span class="hljs-attr">namespace:</span> <span class="hljs-string">production</span><br>  <span class="hljs-attr">annotations:</span><br>    <span class="hljs-attr">argocd.argoproj.io/sync-wave:</span> <span class="hljs-string">&quot;1&quot;</span><br><span class="hljs-attr">spec:</span><br>  <span class="hljs-attr">replicas:</span> <span class="hljs-number">3</span><br>  <span class="hljs-attr">selector:</span><br>    <span class="hljs-attr">matchLabels:</span><br>      <span class="hljs-attr">app:</span> <span class="hljs-string">myapp</span><br>  <span class="hljs-attr">template:</span><br>    <span class="hljs-attr">metadata:</span><br>      <span class="hljs-attr">labels:</span><br>        <span class="hljs-attr">app:</span> <span class="hljs-string">myapp</span><br>    <span class="hljs-attr">spec:</span><br>      <span class="hljs-attr">containers:</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">app</span><br>          <span class="hljs-attr">image:</span> <span class="hljs-string">myapp:v2.1.0</span><br><br><span class="hljs-meta">---</span><br><span class="hljs-comment"># Wave 2: 创建Service</span><br><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">v1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">Service</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">myapp</span><br>  <span class="hljs-attr">namespace:</span> <span class="hljs-string">production</span><br>  <span class="hljs-attr">annotations:</span><br>    <span class="hljs-attr">argocd.argoproj.io/sync-wave:</span> <span class="hljs-string">&quot;2&quot;</span><br><span class="hljs-attr">spec:</span><br>  <span class="hljs-attr">selector:</span><br>    <span class="hljs-attr">app:</span> <span class="hljs-string">myapp</span><br>  <span class="hljs-attr">ports:</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-attr">port:</span> <span class="hljs-number">80</span><br>      <span class="hljs-attr">targetPort:</span> <span class="hljs-number">8080</span><br><br><span class="hljs-meta">---</span><br><span class="hljs-comment"># Wave 3: 创建Ingress</span><br><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">networking.k8s.io/v1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">Ingress</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">myapp</span><br>  <span class="hljs-attr">namespace:</span> <span class="hljs-string">production</span><br>  <span class="hljs-attr">annotations:</span><br>    <span class="hljs-attr">argocd.argoproj.io/sync-wave:</span> <span class="hljs-string">&quot;3&quot;</span><br><span class="hljs-attr">spec:</span><br>  <span class="hljs-attr">ingressClassName:</span> <span class="hljs-string">nginx</span><br>  <span class="hljs-attr">rules:</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-attr">host:</span> <span class="hljs-string">myapp.example.com</span><br>      <span class="hljs-attr">http:</span><br>        <span class="hljs-attr">paths:</span><br>          <span class="hljs-bullet">-</span> <span class="hljs-attr">path:</span> <span class="hljs-string">/</span><br>            <span class="hljs-attr">pathType:</span> <span class="hljs-string">Prefix</span><br>            <span class="hljs-attr">backend:</span><br>              <span class="hljs-attr">service:</span><br>                <span class="hljs-attr">name:</span> <span class="hljs-string">myapp</span><br>                <span class="hljs-attr">port:</span><br>                  <span class="hljs-attr">number:</span> <span class="hljs-number">80</span><br></code></pre></td></tr></table></figure>
+<pre class="mermaid">graph LR
+    W_1["Wave -1&lt;br&gt;Namespace"] --&gt; W0["Wave 0&lt;br&gt;ConfigMap/Secret"]
+    W0 --&gt; W1["Wave 1&lt;br&gt;Deployment"]
+    W1 --&gt; W2["Wave 2&lt;br&gt;Service"]
+    W2 --&gt; W3["Wave 3&lt;br&gt;Ingress"]</pre>
+<h3 id="健康检查与hook">健康检查与Hook</h3>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">batch/v1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">Job</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">db-migrate</span><br>  <span class="hljs-attr">annotations:</span><br>    <span class="hljs-attr">argocd.argoproj.io/hook:</span> <span class="hljs-string">PreSync</span>       <span class="hljs-comment"># 同步前执行</span><br>    <span class="hljs-attr">argocd.argoproj.io/hook-delete-policy:</span> <span class="hljs-string">HookSucceeded</span><br>    <span class="hljs-attr">argocd.argoproj.io/sync-wave:</span> <span class="hljs-string">&quot;-1&quot;</span><br><span class="hljs-attr">spec:</span><br>  <span class="hljs-attr">template:</span><br>    <span class="hljs-attr">spec:</span><br>      <span class="hljs-attr">containers:</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">migrate</span><br>          <span class="hljs-attr">image:</span> <span class="hljs-string">myapp:v2.1.0</span><br>          <span class="hljs-attr">command:</span> [<span class="hljs-string">&quot;./migrate&quot;</span>, <span class="hljs-string">&quot;up&quot;</span>]<br>      <span class="hljs-attr">restartPolicy:</span> <span class="hljs-string">Never</span><br><br><span class="hljs-meta">---</span><br><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">batch/v1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">Job</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">smoke-test</span><br>  <span class="hljs-attr">annotations:</span><br>    <span class="hljs-attr">argocd.argoproj.io/hook:</span> <span class="hljs-string">PostSync</span>      <span class="hljs-comment"># 同步后执行</span><br>    <span class="hljs-attr">argocd.argoproj.io/hook-delete-policy:</span> <span class="hljs-string">HookSucceeded</span><br><span class="hljs-attr">spec:</span><br>  <span class="hljs-attr">template:</span><br>    <span class="hljs-attr">spec:</span><br>      <span class="hljs-attr">containers:</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">test</span><br>          <span class="hljs-attr">image:</span> <span class="hljs-string">curlimages/curl:latest</span><br>          <span class="hljs-attr">command:</span> [<span class="hljs-string">&quot;curl&quot;</span>, <span class="hljs-string">&quot;-f&quot;</span>, <span class="hljs-string">&quot;http://myapp.production/healthz&quot;</span>]<br>      <span class="hljs-attr">restartPolicy:</span> <span class="hljs-string">Never</span><br></code></pre></td></tr></table></figure>
+<h2 id="回滚">回滚</h2>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 查看应用历史</span><br>argocd app <span class="hljs-built_in">history</span> myapp-production<br><br><span class="hljs-comment"># 回滚到指定版本</span><br>argocd app rollback myapp-production 3<br><br><span class="hljs-comment"># 通过Git回滚（推荐方式）</span><br>git revert HEAD<br>git push origin main<br><span class="hljs-comment"># ArgoCD会自动检测并同步</span><br></code></pre></td></tr></table></figure>
+<pre class="mermaid">graph TB
+    subgraph Rollback["回滚方式"]
+        Git["Git Revert&lt;br&gt;(推荐)"]
+        ArgoCD["ArgoCD Rollback"]
+    end
+
+    Git --&gt; |"git revert + push"| Repo["Git Repository"]
+    Repo --&gt; |"自动同步"| Cluster["Kubernetes"]
+
+    ArgoCD --&gt; |"直接回滚"| Cluster
+    ArgoCD -.-&gt; |"会产生漂移"| Warning["注意: 下次同步会覆盖"]</pre>
+<h2 id="多集群管理">多集群管理</h2>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># 注册外部集群</span><br><span class="hljs-comment"># argocd cluster add &lt;context-name&gt;</span><br><br><span class="hljs-comment"># 多集群Application</span><br><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">argoproj.io/v1alpha1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">Application</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">myapp-us-east</span><br>  <span class="hljs-attr">namespace:</span> <span class="hljs-string">argocd</span><br><span class="hljs-attr">spec:</span><br>  <span class="hljs-attr">project:</span> <span class="hljs-string">multi-cluster</span><br>  <span class="hljs-attr">source:</span><br>    <span class="hljs-attr">repoURL:</span> <span class="hljs-string">https://github.com/myorg/k8s-manifests.git</span><br>    <span class="hljs-attr">targetRevision:</span> <span class="hljs-string">main</span><br>    <span class="hljs-attr">path:</span> <span class="hljs-string">apps/myapp/overlays/us-east</span><br>  <span class="hljs-attr">destination:</span><br>    <span class="hljs-attr">server:</span> <span class="hljs-string">https://us-east.k8s.example.com</span>  <span class="hljs-comment"># 远程集群</span><br>    <span class="hljs-attr">namespace:</span> <span class="hljs-string">production</span><br></code></pre></td></tr></table></figure>
+<h3 id="appproject项目隔离">AppProject（项目隔离）</h3>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">argoproj.io/v1alpha1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">AppProject</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">production</span><br>  <span class="hljs-attr">namespace:</span> <span class="hljs-string">argocd</span><br><span class="hljs-attr">spec:</span><br>  <span class="hljs-attr">description:</span> <span class="hljs-string">&quot;Production environment project&quot;</span><br><br>  <span class="hljs-comment"># 允许的Git源</span><br>  <span class="hljs-attr">sourceRepos:</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-string">&#x27;https://github.com/myorg/*&#x27;</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-string">&#x27;https://charts.example.com&#x27;</span><br><br>  <span class="hljs-comment"># 允许的目标集群和命名空间</span><br>  <span class="hljs-attr">destinations:</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-attr">server:</span> <span class="hljs-string">https://kubernetes.default.svc</span><br>      <span class="hljs-attr">namespace:</span> <span class="hljs-string">production</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-attr">server:</span> <span class="hljs-string">https://us-east.k8s.example.com</span><br>      <span class="hljs-attr">namespace:</span> <span class="hljs-string">production</span><br><br>  <span class="hljs-comment"># 允许的资源类型</span><br>  <span class="hljs-attr">clusterResourceWhitelist:</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-attr">group:</span> <span class="hljs-string">&#x27;&#x27;</span><br>      <span class="hljs-attr">kind:</span> <span class="hljs-string">Namespace</span><br>  <span class="hljs-attr">namespaceResourceWhitelist:</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-attr">group:</span> <span class="hljs-string">&#x27;apps&#x27;</span><br>      <span class="hljs-attr">kind:</span> <span class="hljs-string">Deployment</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-attr">group:</span> <span class="hljs-string">&#x27;&#x27;</span><br>      <span class="hljs-attr">kind:</span> <span class="hljs-string">Service</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-attr">group:</span> <span class="hljs-string">&#x27;networking.k8s.io&#x27;</span><br>      <span class="hljs-attr">kind:</span> <span class="hljs-string">Ingress</span><br><br>  <span class="hljs-comment"># 角色和权限</span><br>  <span class="hljs-attr">roles:</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">developer</span><br>      <span class="hljs-attr">description:</span> <span class="hljs-string">&quot;Developer access&quot;</span><br>      <span class="hljs-attr">policies:</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-string">p,</span> <span class="hljs-string">proj:production:developer,</span> <span class="hljs-string">applications,</span> <span class="hljs-string">get,</span> <span class="hljs-string">production/*,</span> <span class="hljs-string">allow</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-string">p,</span> <span class="hljs-string">proj:production:developer,</span> <span class="hljs-string">applications,</span> <span class="hljs-string">sync,</span> <span class="hljs-string">production/*,</span> <span class="hljs-string">allow</span><br>      <span class="hljs-attr">groups:</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-string">dev-team</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">admin</span><br>      <span class="hljs-attr">description:</span> <span class="hljs-string">&quot;Admin access&quot;</span><br>      <span class="hljs-attr">policies:</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-string">p,</span> <span class="hljs-string">proj:production:admin,</span> <span class="hljs-string">applications,</span> <span class="hljs-string">*,</span> <span class="hljs-string">production/*,</span> <span class="hljs-string">allow</span><br>      <span class="hljs-attr">groups:</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-string">platform-team</span><br></code></pre></td></tr></table></figure>
+<h2 id="applicationset">ApplicationSet</h2>
+<p>ApplicationSet可以从模板自动生成多个Application，适用于多集群、多租户场景：</p>
+<h3 id="git-generator">Git Generator</h3>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">argoproj.io/v1alpha1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">ApplicationSet</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">microservices</span><br>  <span class="hljs-attr">namespace:</span> <span class="hljs-string">argocd</span><br><span class="hljs-attr">spec:</span><br>  <span class="hljs-attr">generators:</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-attr">git:</span><br>        <span class="hljs-attr">repoURL:</span> <span class="hljs-string">https://github.com/myorg/k8s-manifests.git</span><br>        <span class="hljs-attr">revision:</span> <span class="hljs-string">main</span><br>        <span class="hljs-attr">directories:</span><br>          <span class="hljs-bullet">-</span> <span class="hljs-attr">path:</span> <span class="hljs-string">apps/*</span><br>            <span class="hljs-attr">exclude:</span> <span class="hljs-literal">false</span><br>          <span class="hljs-bullet">-</span> <span class="hljs-attr">path:</span> <span class="hljs-string">apps/deprecated-*</span><br>            <span class="hljs-attr">exclude:</span> <span class="hljs-literal">true</span><br>  <span class="hljs-attr">template:</span><br>    <span class="hljs-attr">metadata:</span><br>      <span class="hljs-attr">name:</span> <span class="hljs-string">&#x27;<span class="hljs-template-variable">&#123;&#123;path.basename&#125;&#125;</span>&#x27;</span><br>    <span class="hljs-attr">spec:</span><br>      <span class="hljs-attr">project:</span> <span class="hljs-string">default</span><br>      <span class="hljs-attr">source:</span><br>        <span class="hljs-attr">repoURL:</span> <span class="hljs-string">https://github.com/myorg/k8s-manifests.git</span><br>        <span class="hljs-attr">targetRevision:</span> <span class="hljs-string">main</span><br>        <span class="hljs-attr">path:</span> <span class="hljs-string">&#x27;<span class="hljs-template-variable">&#123;&#123;path&#125;&#125;</span>/overlays/production&#x27;</span><br>      <span class="hljs-attr">destination:</span><br>        <span class="hljs-attr">server:</span> <span class="hljs-string">https://kubernetes.default.svc</span><br>        <span class="hljs-attr">namespace:</span> <span class="hljs-string">&#x27;<span class="hljs-template-variable">&#123;&#123;path.basename&#125;&#125;</span>&#x27;</span><br>      <span class="hljs-attr">syncPolicy:</span><br>        <span class="hljs-attr">automated:</span><br>          <span class="hljs-attr">prune:</span> <span class="hljs-literal">true</span><br>          <span class="hljs-attr">selfHeal:</span> <span class="hljs-literal">true</span><br></code></pre></td></tr></table></figure>
+<h3 id="cluster-generator">Cluster Generator</h3>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">argoproj.io/v1alpha1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">ApplicationSet</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">monitoring-stack</span><br>  <span class="hljs-attr">namespace:</span> <span class="hljs-string">argocd</span><br><span class="hljs-attr">spec:</span><br>  <span class="hljs-attr">generators:</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-attr">clusters:</span><br>        <span class="hljs-attr">selector:</span><br>          <span class="hljs-attr">matchLabels:</span><br>            <span class="hljs-attr">env:</span> <span class="hljs-string">production</span><br>  <span class="hljs-attr">template:</span><br>    <span class="hljs-attr">metadata:</span><br>      <span class="hljs-attr">name:</span> <span class="hljs-string">&#x27;monitoring-<span class="hljs-template-variable">&#123;&#123;name&#125;&#125;</span>&#x27;</span><br>    <span class="hljs-attr">spec:</span><br>      <span class="hljs-attr">project:</span> <span class="hljs-string">infrastructure</span><br>      <span class="hljs-attr">source:</span><br>        <span class="hljs-attr">repoURL:</span> <span class="hljs-string">https://github.com/myorg/k8s-manifests.git</span><br>        <span class="hljs-attr">targetRevision:</span> <span class="hljs-string">main</span><br>        <span class="hljs-attr">path:</span> <span class="hljs-string">infrastructure/monitoring</span><br>        <span class="hljs-attr">helm:</span><br>          <span class="hljs-attr">values:</span> <span class="hljs-string">|</span><br><span class="hljs-string">            cluster: &#123;&#123;name&#125;&#125;</span><br><span class="hljs-string">            region: &#123;&#123;metadata.labels.region&#125;&#125;</span><br><span class="hljs-string"></span>      <span class="hljs-attr">destination:</span><br>        <span class="hljs-attr">server:</span> <span class="hljs-string">&#x27;<span class="hljs-template-variable">&#123;&#123;server&#125;&#125;</span>&#x27;</span><br>        <span class="hljs-attr">namespace:</span> <span class="hljs-string">monitoring</span><br></code></pre></td></tr></table></figure>
+<h3 id="matrix-generator">Matrix Generator</h3>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">argoproj.io/v1alpha1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">ApplicationSet</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">multi-cluster-apps</span><br>  <span class="hljs-attr">namespace:</span> <span class="hljs-string">argocd</span><br><span class="hljs-attr">spec:</span><br>  <span class="hljs-attr">generators:</span><br>    <span class="hljs-comment"># 矩阵组合: clusters x apps</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-attr">matrix:</span><br>        <span class="hljs-attr">generators:</span><br>          <span class="hljs-bullet">-</span> <span class="hljs-attr">clusters:</span><br>              <span class="hljs-attr">selector:</span><br>                <span class="hljs-attr">matchLabels:</span><br>                  <span class="hljs-attr">env:</span> <span class="hljs-string">production</span><br>          <span class="hljs-bullet">-</span> <span class="hljs-attr">git:</span><br>              <span class="hljs-attr">repoURL:</span> <span class="hljs-string">https://github.com/myorg/k8s-manifests.git</span><br>              <span class="hljs-attr">revision:</span> <span class="hljs-string">main</span><br>              <span class="hljs-attr">directories:</span><br>                <span class="hljs-bullet">-</span> <span class="hljs-attr">path:</span> <span class="hljs-string">apps/*</span><br>  <span class="hljs-attr">template:</span><br>    <span class="hljs-attr">metadata:</span><br>      <span class="hljs-attr">name:</span> <span class="hljs-string">&#x27;<span class="hljs-template-variable">&#123;&#123;path.basename&#125;&#125;</span>-<span class="hljs-template-variable">&#123;&#123;name&#125;&#125;</span>&#x27;</span><br>    <span class="hljs-attr">spec:</span><br>      <span class="hljs-attr">project:</span> <span class="hljs-string">default</span><br>      <span class="hljs-attr">source:</span><br>        <span class="hljs-attr">repoURL:</span> <span class="hljs-string">https://github.com/myorg/k8s-manifests.git</span><br>        <span class="hljs-attr">targetRevision:</span> <span class="hljs-string">main</span><br>        <span class="hljs-attr">path:</span> <span class="hljs-string">&#x27;<span class="hljs-template-variable">&#123;&#123;path&#125;&#125;</span>&#x27;</span><br>      <span class="hljs-attr">destination:</span><br>        <span class="hljs-attr">server:</span> <span class="hljs-string">&#x27;<span class="hljs-template-variable">&#123;&#123;server&#125;&#125;</span>&#x27;</span><br>        <span class="hljs-attr">namespace:</span> <span class="hljs-string">&#x27;<span class="hljs-template-variable">&#123;&#123;path.basename&#125;&#125;</span>&#x27;</span><br></code></pre></td></tr></table></figure>
+<pre class="mermaid">graph TB
+    subgraph AppSet["ApplicationSet"]
+        Generator["Generator&lt;br&gt;(生成参数)"]
+        Template["Template&lt;br&gt;(应用模板)"]
+    end
+
+    Generator --&gt; |"cluster-1 + app-a"| App1["Application&lt;br&gt;app-a-cluster-1"]
+    Generator --&gt; |"cluster-1 + app-b"| App2["Application&lt;br&gt;app-b-cluster-1"]
+    Generator --&gt; |"cluster-2 + app-a"| App3["Application&lt;br&gt;app-a-cluster-2"]
+    Generator --&gt; |"cluster-2 + app-b"| App4["Application&lt;br&gt;app-b-cluster-2"]</pre>
+<h2 id="secrets管理">Secrets管理</h2>
+<p>ArgoCD本身不处理密钥，需要借助外部工具：</p>
+<pre class="mermaid">graph LR
+    subgraph Solutions["密钥管理方案"]
+        SOPS["Mozilla SOPS&lt;br&gt;+ age/KMS"]
+        ESO["External Secrets&lt;br&gt;Operator"]
+        Sealed["Sealed Secrets"]
+        Vault["Vault Agent&lt;br&gt;Sidecar"]
+    end
+
+    SOPS --&gt; |"加密存储在Git"| Git["Git Repository"]
+    ESO --&gt; |"运行时获取"| AWS["AWS SM / Vault"]
+    Sealed --&gt; |"加密存储在Git"| Git
+    Vault --&gt; |"运行时注入"| Pod["Application Pod"]</pre>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># 使用External Secrets Operator</span><br><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">external-secrets.io/v1beta1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">ExternalSecret</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">app-secrets</span><br>  <span class="hljs-attr">namespace:</span> <span class="hljs-string">production</span><br><span class="hljs-attr">spec:</span><br>  <span class="hljs-attr">refreshInterval:</span> <span class="hljs-string">1h</span><br>  <span class="hljs-attr">secretStoreRef:</span><br>    <span class="hljs-attr">name:</span> <span class="hljs-string">aws-secrets-manager</span><br>    <span class="hljs-attr">kind:</span> <span class="hljs-string">ClusterSecretStore</span><br>  <span class="hljs-attr">target:</span><br>    <span class="hljs-attr">name:</span> <span class="hljs-string">app-secrets</span><br>    <span class="hljs-attr">creationPolicy:</span> <span class="hljs-string">Owner</span><br>  <span class="hljs-attr">data:</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-attr">secretKey:</span> <span class="hljs-string">db-password</span><br>      <span class="hljs-attr">remoteRef:</span><br>        <span class="hljs-attr">key:</span> <span class="hljs-string">production/myapp</span><br>        <span class="hljs-attr">property:</span> <span class="hljs-string">db_password</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-attr">secretKey:</span> <span class="hljs-string">api-key</span><br>      <span class="hljs-attr">remoteRef:</span><br>        <span class="hljs-attr">key:</span> <span class="hljs-string">production/myapp</span><br>        <span class="hljs-attr">property:</span> <span class="hljs-string">api_key</span><br></code></pre></td></tr></table></figure>
+<h2 id="通知配置">通知配置</h2>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">v1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">ConfigMap</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">argocd-notifications-cm</span><br>  <span class="hljs-attr">namespace:</span> <span class="hljs-string">argocd</span><br><span class="hljs-attr">data:</span><br>  <span class="hljs-attr">service.slack:</span> <span class="hljs-string">|</span><br><span class="hljs-string">    token: $slack-token</span><br><span class="hljs-string"></span>  <span class="hljs-attr">template.app-sync-succeeded:</span> <span class="hljs-string">|</span><br><span class="hljs-string">    slack:</span><br><span class="hljs-string">      attachments: |</span><br><span class="hljs-string">        [&#123;</span><br><span class="hljs-string">          &quot;color&quot;: &quot;#18be52&quot;,</span><br><span class="hljs-string">          &quot;title&quot;: &quot;&#123;&#123;.app.metadata.name&#125;&#125; synced successfully&quot;,</span><br><span class="hljs-string">          &quot;fields&quot;: [</span><br><span class="hljs-string">            &#123;&quot;title&quot;: &quot;Repository&quot;, &quot;value&quot;: &quot;&#123;&#123;.app.spec.source.repoURL&#125;&#125;&quot;, &quot;short&quot;: true&#125;,</span><br><span class="hljs-string">            &#123;&quot;title&quot;: &quot;Revision&quot;, &quot;value&quot;: &quot;&#123;&#123;.app.status.sync.revision&#125;&#125;&quot;, &quot;short&quot;: true&#125;</span><br><span class="hljs-string">          ]</span><br><span class="hljs-string">        &#125;]</span><br><span class="hljs-string"></span>  <span class="hljs-attr">trigger.on-sync-succeeded:</span> <span class="hljs-string">|</span><br><span class="hljs-string">    - when: app.status.sync.status == &#x27;Synced&#x27;</span><br><span class="hljs-string">      send: [app-sync-succeeded]</span><br><span class="hljs-string"></span>  <span class="hljs-attr">subscriptions:</span> <span class="hljs-string">|</span><br><span class="hljs-string">    - recipients: [slack:deployments]</span><br><span class="hljs-string">      triggers: [on-sync-succeeded, on-sync-failed, on-health-degraded]</span><br></code></pre></td></tr></table></figure>
+<h2 id="总结">总结</h2>
+<p>ArgoCD GitOps实践的核心要点：</p>
+<ol type="1">
+<li><strong>Git作为唯一真相来源</strong>：所有集群状态变更通过Git提交</li>
+<li><strong>自动同步+自愈</strong>：开启automated sync和selfHeal</li>
+<li><strong>渐进式发布</strong>：利用sync-wave控制部署顺序</li>
+<li><strong>多集群管理</strong>：ApplicationSet简化大规模集群管理</li>
+<li><strong>项目隔离</strong>：AppProject控制权限和资源范围</li>
+<li><strong>安全密钥管理</strong>：使用External Secrets Operator或Sealed
+Secrets</li>
+<li><strong>可观测性</strong>：配置通知和监控，及时发现同步异常</li>
+</ol>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2024-07-24</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">2.8k 字 · 7 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/linux-performance-tuning/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Linux性能调优：从内核参数到应用优化</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/docker-multi-stage-build/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Docker多阶段构建与镜像优化</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#gitops%E5%8E%9F%E5%88%99"><span class="toc-text">GitOps原则</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#push-vs-pull%E6%A8%A1%E5%9E%8B"><span class="toc-text">Push vs Pull模型</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#argocd%E6%9E%B6%E6%9E%84"><span class="toc-text">ArgoCD架构</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E7%BB%84%E4%BB%B6"><span class="toc-text">核心组件</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#application-crd"><span class="toc-text">Application CRD</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#helm-chart%E5%BA%94%E7%94%A8"><span class="toc-text">Helm Chart应用</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#kustomize%E5%BA%94%E7%94%A8"><span class="toc-text">Kustomize应用</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%90%8C%E6%AD%A5%E7%AD%96%E7%95%A5"><span class="toc-text">同步策略</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%90%8C%E6%AD%A5%E6%B5%81%E7%A8%8B"><span class="toc-text">同步流程</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%90%8C%E6%AD%A5%E6%B3%A2%E6%AC%A1sync-waves"><span class="toc-text">同步波次（Sync Waves）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%81%A5%E5%BA%B7%E6%A3%80%E6%9F%A5%E4%B8%8Ehook"><span class="toc-text">健康检查与Hook</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%9E%E6%BB%9A"><span class="toc-text">回滚</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%A4%9A%E9%9B%86%E7%BE%A4%E7%AE%A1%E7%90%86"><span class="toc-text">多集群管理</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#appproject%E9%A1%B9%E7%9B%AE%E9%9A%94%E7%A6%BB"><span class="toc-text">AppProject（项目隔离）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#applicationset"><span class="toc-text">ApplicationSet</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#git-generator"><span class="toc-text">Git Generator</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#cluster-generator"><span class="toc-text">Cluster Generator</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#matrix-generator"><span class="toc-text">Matrix Generator</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#secrets%E7%AE%A1%E7%90%86"><span class="toc-text">Secrets管理</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%80%9A%E7%9F%A5%E9%85%8D%E7%BD%AE"><span class="toc-text">通知配置</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

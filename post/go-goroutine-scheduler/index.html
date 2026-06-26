@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Go协程调度器GMP模型深入解析 · zt&#39;s Blog</title>
+  <meta name="description" content="深入剖析Go运行时调度器的GMP模型，理解G、M、P三者的关系与调度流程">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/go-goroutine-scheduler/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Go协程调度器GMP模型深入解析">
+  <meta property="og:description" content="深入剖析Go运行时调度器的GMP模型，理解G、M、P三者的关系与调度流程">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/go-goroutine-scheduler/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2023-06-14T16:00:00.000Z">
+  <meta property="article:modified_time" content="2023-06-14T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Go协程调度器GMP模型深入解析">
+  <meta name="twitter:description" content="深入剖析Go运行时调度器的GMP模型，理解G、M、P三者的关系与调度流程">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Go协程调度器GMP模型深入解析","description":"深入剖析Go运行时调度器的GMP模型，理解G、M、P三者的关系与调度流程","datePublished":"2023-06-14T16:00:00.000Z","dateModified":"2023-06-14T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/go-goroutine-scheduler/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Go","item":"https://withesse.co/categories/Go/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:190">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Go/">Go</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/go/"><span class="hash">#</span>go</a><a class="tag" href="/tags/goroutine/"><span class="hash">#</span>goroutine</a><a class="tag" href="/tags/scheduler/"><span class="hash">#</span>scheduler</a><a class="tag" href="/tags/gmp/"><span class="hash">#</span>gmp</a>
+        
+      </div>
+
+      <h1>Go协程调度器GMP模型深入解析</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2023.06.15</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          <span class="row gap8" style="align-items:center"><span class="lang-dot" style="background:#00ADD8"></span>Go</span>
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 10 min</span>
+        </span>
+        <span class="wc"><span class="num">3.9k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#gmp%E6%A8%A1%E5%9E%8B%E6%A6%82%E8%A7%88"><span class="toc-text">GMP模型概览</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%B0%83%E5%BA%A6%E5%99%A8%E7%9A%84%E6%BC%94%E8%BF%9B"><span class="toc-text">调度器的演进</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#ggoroutine%E8%AF%A6%E8%A7%A3"><span class="toc-text">G（Goroutine）详解</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#goroutine%E7%9A%84%E7%8A%B6%E6%80%81%E6%9C%BA"><span class="toc-text">Goroutine的状态机</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#mmachine%E8%AF%A6%E8%A7%A3"><span class="toc-text">M（Machine）详解</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#pprocessor%E8%AF%A6%E8%A7%A3"><span class="toc-text">P（Processor）详解</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#gomaxprocs"><span class="toc-text">GOMAXPROCS</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%B0%83%E5%BA%A6%E6%B5%81%E7%A8%8B"><span class="toc-text">调度流程</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E8%B0%83%E5%BA%A6%E5%BE%AA%E7%8E%AF"><span class="toc-text">核心调度循环</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%9F%A5%E6%89%BE%E5%8F%AF%E8%BF%90%E8%A1%8Cg%E7%9A%84%E9%A1%BA%E5%BA%8F"><span class="toc-text">查找可运行G的顺序</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%B7%A5%E4%BD%9C%E7%AA%83%E5%8F%96work-stealing"><span class="toc-text">工作窃取（Work Stealing）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%8A%A2%E5%8D%A0%E5%BC%8F%E8%B0%83%E5%BA%A6"><span class="toc-text">抢占式调度</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8D%8F%E4%BD%9C%E5%BC%8F%E6%8A%A2%E5%8D%A0go-1.13%E5%8F%8A%E4%B9%8B%E5%89%8D"><span class="toc-text">协作式抢占（Go 1.13及之前）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9F%BA%E4%BA%8E%E4%BF%A1%E5%8F%B7%E7%9A%84%E6%8A%A2%E5%8D%A0go-1.14"><span class="toc-text">基于信号的抢占（Go 1.14+）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#sysmon%E7%B3%BB%E7%BB%9F%E7%9B%91%E6%8E%A7%E7%BA%BF%E7%A8%8B"><span class="toc-text">Sysmon：系统监控线程</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%B3%BB%E7%BB%9F%E8%B0%83%E7%94%A8%E5%A4%84%E7%90%86"><span class="toc-text">系统调用处理</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#trace%E5%88%86%E6%9E%90%E5%AE%9E%E6%88%98"><span class="toc-text">Trace分析实战</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96%E5%BB%BA%E8%AE%AE"><span class="toc-text">性能优化建议</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%90%88%E7%90%86%E8%AE%BE%E7%BD%AEgomaxprocs"><span class="toc-text">1. 合理设置GOMAXPROCS</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%81%BF%E5%85%8D%E5%88%9B%E5%BB%BA%E8%BF%87%E5%A4%9Agoroutine"><span class="toc-text">2. 避免创建过多goroutine</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%87%8F%E5%B0%91goroutine%E5%88%87%E6%8D%A2%E5%BC%80%E9%94%80"><span class="toc-text">3. 减少goroutine切换开销</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%9B%91%E6%8E%A7%E8%B0%83%E5%BA%A6%E5%BB%B6%E8%BF%9F"><span class="toc-text">4. 监控调度延迟</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%B8%A9%E5%9D%91%E8%AE%B0%E5%BD%95"><span class="toc-text">踩坑记录</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E6%B5%8B%E7%BB%93%E6%9E%9C"><span class="toc-text">实测结果</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%88%91%E7%9A%84%E7%9C%8B%E6%B3%95"><span class="toc-text">我的看法</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="引言">引言</h2>
+<p>Go语言最引以为傲的特性之一就是其轻量级的并发模型——goroutine。一个Go程序可以轻松创建数十万甚至上百万个goroutine，而背后支撑这一切的就是Go运行时的调度器。理解GMP模型不仅有助于编写高效的并发程序，更能帮助我们在遇到性能瓶颈时做出正确的判断。</p>
+<p>本文将从调度器的演进历史出发，深入分析GMP模型的每一个组件，揭示调度流程中的关键细节，包括工作窃取（work
+stealing）、抢占式调度、以及如何通过工具进行调度分析。</p>
+<h2 id="gmp模型概览">GMP模型概览</h2>
+<p>GMP模型是Go调度器的核心，由三个关键组件构成：</p>
+<ul>
+<li><strong>G（Goroutine）</strong>：代表一个goroutine，包含栈信息、状态、以及待执行的函数</li>
+<li><strong>M（Machine）</strong>：代表一个操作系统线程，是真正执行计算的实体</li>
+<li><strong>P（Processor）</strong>：代表逻辑处理器，是G和M之间的桥梁，管理本地运行队列</li>
+</ul>
+<pre class="mermaid">graph TB
+    subgraph "GMP 模型架构"
+        GRQ["全局运行队列 (Global Run Queue)"]
+
+        subgraph "P0"
+            LRQ0["本地运行队列"]
+            G1["G1"] --&gt; LRQ0
+            G2["G2"] --&gt; LRQ0
+            G3["G3"] --&gt; LRQ0
+        end
+
+        subgraph "P1"
+            LRQ1["本地运行队列"]
+            G4["G4"] --&gt; LRQ1
+            G5["G5"] --&gt; LRQ1
+        end
+
+        M0["M0 (OS Thread)"] --&gt; P0
+        M1["M1 (OS Thread)"] --&gt; P1
+        M2["M2 (OS Thread, spinning)"]
+
+        P0 --&gt; GRQ
+        P1 --&gt; GRQ
+    end
+
+    style GRQ fill:#f9f,stroke:#333
+    style M0 fill:#bbf,stroke:#333
+    style M1 fill:#bbf,stroke:#333
+    style M2 fill:#fbb,stroke:#333</pre>
+<h3 id="调度器的演进">调度器的演进</h3>
+<p>Go调度器经历了几个重要版本的演进：</p>
+<table>
+<thead>
+<tr class="header">
+<th>版本</th>
+<th>模型</th>
+<th>特点</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Go 0.x</td>
+<td>GM模型</td>
+<td>全局锁，性能差</td>
+</tr>
+<tr class="even">
+<td>Go 1.1</td>
+<td>GMP模型</td>
+<td>引入P，本地队列，大幅提升性能</td>
+</tr>
+<tr class="odd">
+<td>Go 1.14</td>
+<td>基于信号的抢占</td>
+<td>解决了长时间运行goroutine的调度问题</td>
+</tr>
+</tbody>
+</table>
+<h2 id="ggoroutine详解">G（Goroutine）详解</h2>
+<p>每个goroutine在运行时内部由一个<code>runtime.g</code>结构体表示。其核心字段包括：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-comment">// runtime/runtime2.go (simplified)</span><br><span class="hljs-keyword">type</span> g <span class="hljs-keyword">struct</span> &#123;<br>    stack       stack   <span class="hljs-comment">// goroutine的栈空间</span><br>    stackguard0 <span class="hljs-type">uintptr</span> <span class="hljs-comment">// 用于栈增长检查</span><br>    m           *m      <span class="hljs-comment">// 当前绑定的M</span><br>    sched       gobuf   <span class="hljs-comment">// 保存调度上下文（SP、PC等）</span><br>    atomicstatus <span class="hljs-type">uint32</span> <span class="hljs-comment">// goroutine的状态</span><br>    goid         <span class="hljs-type">int64</span>  <span class="hljs-comment">// goroutine ID</span><br>    preempt      <span class="hljs-type">bool</span>   <span class="hljs-comment">// 抢占标记</span><br>&#125;<br><br><span class="hljs-keyword">type</span> gobuf <span class="hljs-keyword">struct</span> &#123;<br>    sp   <span class="hljs-type">uintptr</span> <span class="hljs-comment">// 栈指针</span><br>    pc   <span class="hljs-type">uintptr</span> <span class="hljs-comment">// 程序计数器</span><br>    g    guintptr<br>    ret  <span class="hljs-type">uintptr</span><br>    ctxt unsafe.Pointer<br>    bp   <span class="hljs-type">uintptr</span> <span class="hljs-comment">// 帧指针（用于profiling）</span><br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="goroutine的状态机">Goroutine的状态机</h3>
+<pre class="mermaid">stateDiagram-v2
+    [*] --&gt; _Gidle: 新分配
+    _Gidle --&gt; _Gdead: 初始化
+    _Gdead --&gt; _Grunnable: go func()
+    _Grunnable --&gt; _Grunning: 被调度执行
+    _Grunning --&gt; _Grunnable: 被抢占
+    _Grunning --&gt; _Gwaiting: 阻塞(channel/mutex/syscall)
+    _Gwaiting --&gt; _Grunnable: 唤醒
+    _Grunning --&gt; _Gdead: 执行完毕
+    _Gdead --&gt; _Grunnable: 复用
+    _Grunning --&gt; _Gsyscall: 系统调用
+    _Gsyscall --&gt; _Grunnable: 系统调用返回</pre>
+<p>goroutine初始栈大小仅为<strong>2KB</strong>（Go
+1.4+），远小于OS线程的默认栈大小（通常为1MB-8MB）。Go使用连续栈（contiguous
+stack），当栈空间不足时会分配一个更大的栈并拷贝原栈内容。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-keyword">package</span> main<br><br><span class="hljs-keyword">import</span> (<br>    <span class="hljs-string">&quot;fmt&quot;</span><br>    <span class="hljs-string">&quot;runtime&quot;</span><br>    <span class="hljs-string">&quot;sync&quot;</span><br>)<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">main</span><span class="hljs-params">()</span></span> &#123;<br>    <span class="hljs-keyword">var</span> wg sync.WaitGroup<br>    <span class="hljs-comment">// 创建大量goroutine来观察调度行为</span><br>    <span class="hljs-keyword">for</span> i := <span class="hljs-number">0</span>; i &lt; <span class="hljs-number">100000</span>; i++ &#123;<br>        wg.Add(<span class="hljs-number">1</span>)<br>        <span class="hljs-keyword">go</span> <span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">(id <span class="hljs-type">int</span>)</span></span> &#123;<br>            <span class="hljs-keyword">defer</span> wg.Done()<br>            <span class="hljs-comment">// 每个goroutine做一些简单的工作</span><br>            sum := <span class="hljs-number">0</span><br>            <span class="hljs-keyword">for</span> j := <span class="hljs-number">0</span>; j &lt; <span class="hljs-number">1000</span>; j++ &#123;<br>                sum += j<br>            &#125;<br>            <span class="hljs-keyword">if</span> id == <span class="hljs-number">0</span> &#123;<br>                fmt.Printf(<span class="hljs-string">&quot;Goroutine count: %d\n&quot;</span>, runtime.NumGoroutine())<br>            &#125;<br>        &#125;(i)<br>    &#125;<br>    wg.Wait()<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="mmachine详解">M（Machine）详解</h2>
+<p>M代表操作系统线程，由<code>runtime.m</code>结构体表示：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-keyword">type</span> m <span class="hljs-keyword">struct</span> &#123;<br>    g0      *g     <span class="hljs-comment">// 调度栈上的goroutine</span><br>    curg    *g     <span class="hljs-comment">// 当前运行的goroutine</span><br>    p       puintptr <span class="hljs-comment">// 绑定的P</span><br>    nextp   puintptr <span class="hljs-comment">// 唤醒时优先绑定的P</span><br>    spinning <span class="hljs-type">bool</span>   <span class="hljs-comment">// 是否处于自旋状态</span><br>    park    note    <span class="hljs-comment">// 用于休眠/唤醒</span><br>&#125;<br></code></pre></td></tr></table></figure>
+<p>关键概念： -
+<strong>g0</strong>：每个M都有一个特殊的g0，用于执行调度代码。g0拥有较大的栈空间（通常8KB），调度循环运行在g0的栈上
+- <strong>自旋线程（spinning
+thread）</strong>：没有找到可运行G的M会进入自旋状态，而不是立即休眠。这是一个用CPU换延迟的策略
+-
+M的数量默认上限为10000（可通过<code>runtime/debug.SetMaxThreads</code>调整）</p>
+<h2 id="pprocessor详解">P（Processor）详解</h2>
+<p>P是调度器中最关键的创新，它的引入解决了GM模型中全局锁的性能问题：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-keyword">type</span> p <span class="hljs-keyword">struct</span> &#123;<br>    id          <span class="hljs-type">int32</span><br>    status      <span class="hljs-type">uint32</span><br>    m           muintptr   <span class="hljs-comment">// 绑定的M</span><br>    runqhead    <span class="hljs-type">uint32</span>     <span class="hljs-comment">// 本地队列头</span><br>    runqtail    <span class="hljs-type">uint32</span>     <span class="hljs-comment">// 本地队列尾</span><br>    runq        [<span class="hljs-number">256</span>]guintptr <span class="hljs-comment">// 本地运行队列（固定大小256）</span><br>    runnext     guintptr   <span class="hljs-comment">// 下一个优先运行的G</span><br>    gFree       <span class="hljs-keyword">struct</span> &#123;   <span class="hljs-comment">// 空闲G的缓存</span><br>        gList<br>        n <span class="hljs-type">int32</span><br>    &#125;<br>    <span class="hljs-comment">// mcache, timer等资源</span><br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="gomaxprocs">GOMAXPROCS</h3>
+<p><code>GOMAXPROCS</code>决定了P的数量，也就是同时执行Go代码的最大线程数：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-keyword">package</span> main<br><br><span class="hljs-keyword">import</span> (<br>    <span class="hljs-string">&quot;fmt&quot;</span><br>    <span class="hljs-string">&quot;runtime&quot;</span><br>)<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">main</span><span class="hljs-params">()</span></span> &#123;<br>    <span class="hljs-comment">// 获取当前GOMAXPROCS</span><br>    fmt.Println(<span class="hljs-string">&quot;GOMAXPROCS:&quot;</span>, runtime.GOMAXPROCS(<span class="hljs-number">0</span>))<br>    <span class="hljs-comment">// 默认等于CPU核心数</span><br>    fmt.Println(<span class="hljs-string">&quot;NumCPU:&quot;</span>, runtime.NumCPU())<br><br>    <span class="hljs-comment">// 动态调整（通常不需要手动设置）</span><br>    prev := runtime.GOMAXPROCS(<span class="hljs-number">4</span>)<br>    fmt.Println(<span class="hljs-string">&quot;Previous GOMAXPROCS:&quot;</span>, prev)<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="调度流程">调度流程</h2>
+<h3 id="核心调度循环">核心调度循环</h3>
+<p>调度器的核心是<code>schedule()</code>函数，运行在M的g0栈上：</p>
+<pre class="mermaid">flowchart TD
+    A[schedule] --&gt; B{检查 runnext}
+    B --&gt;|有| H[执行 G]
+    B --&gt;|无| C{检查本地队列}
+    C --&gt;|有| H
+    C --&gt;|无| D{检查全局队列}
+    D --&gt;|有| H
+    D --&gt;|无| E{从 netpoller 获取}
+    E --&gt;|有| H
+    E --&gt;|无| F{从其他 P 窃取}
+    F --&gt;|有| H
+    F --&gt;|无| G[M 休眠]
+    H --&gt; I[execute]
+    I --&gt; J[gogo - 切换到 G 的栈]
+    J --&gt; K[G 运行用户代码]
+    K --&gt; L{G 让出/阻塞}
+    L --&gt; M[mcall - 切换回 g0 栈]
+    M --&gt; A</pre>
+<h3 id="查找可运行g的顺序">查找可运行G的顺序</h3>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-comment">// runtime/proc.go (simplified)</span><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">findRunnable</span><span class="hljs-params">()</span></span> (gp *g, inheritTime <span class="hljs-type">bool</span>) &#123;<br>    <span class="hljs-comment">// 1. 检查本地队列</span><br>    <span class="hljs-keyword">if</span> gp, inheritTime := runqget(_p_); gp != <span class="hljs-literal">nil</span> &#123;<br>        <span class="hljs-keyword">return</span> gp, inheritTime<br>    &#125;<br><br>    <span class="hljs-comment">// 2. 检查全局队列（每61次调度检查一次，避免饥饿）</span><br>    <span class="hljs-keyword">if</span> _g_.m.p.ptr().schedtick%<span class="hljs-number">61</span> == <span class="hljs-number">0</span> &#123;<br>        <span class="hljs-keyword">if</span> gp := globrunqget(_p_, <span class="hljs-number">1</span>); gp != <span class="hljs-literal">nil</span> &#123;<br>            <span class="hljs-keyword">return</span> gp, <span class="hljs-literal">false</span><br>        &#125;<br>    &#125;<br><br>    <span class="hljs-comment">// 3. 检查 netpoller</span><br>    <span class="hljs-keyword">if</span> netpollinited() &amp;&amp; atomic.Load(&amp;netpollWaiters) &gt; <span class="hljs-number">0</span> &#123;<br>        <span class="hljs-keyword">if</span> list := netpoll(<span class="hljs-number">0</span>); !list.empty() &#123;<br>            gp := list.pop()<br>            <span class="hljs-comment">// 将剩余的放入全局队列</span><br>            injectglist(&amp;list)<br>            <span class="hljs-keyword">return</span> gp, <span class="hljs-literal">false</span><br>        &#125;<br>    &#125;<br><br>    <span class="hljs-comment">// 4. 从其他P窃取（work stealing）</span><br>    <span class="hljs-keyword">for</span> i := <span class="hljs-number">0</span>; i &lt; <span class="hljs-number">4</span>; i++ &#123;<br>        <span class="hljs-comment">// 随机选择一个P，尝试偷取其一半的G</span><br>        <span class="hljs-keyword">if</span> gp := runqsteal(_p_, allp[random], stealRunNextG); gp != <span class="hljs-literal">nil</span> &#123;<br>            <span class="hljs-keyword">return</span> gp, <span class="hljs-literal">false</span><br>        &#125;<br>    &#125;<br><br>    <span class="hljs-keyword">return</span> <span class="hljs-literal">nil</span>, <span class="hljs-literal">false</span><br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="工作窃取work-stealing">工作窃取（Work Stealing）</h2>
+<p>工作窃取是GMP模型中保持负载均衡的关键机制。当一个P的本地队列为空时，它会尝试从其他P的队列中”偷”走一半的goroutine。</p>
+<pre class="mermaid">sequenceDiagram
+    participant P0 as P0 (空闲)
+    participant P1 as P1 (繁忙)
+    participant GRQ as 全局队列
+
+    P0-&gt;&gt;P0: 本地队列为空
+    P0-&gt;&gt;GRQ: 1. 检查全局队列
+    GRQ--&gt;&gt;P0: 无可用G
+    P0-&gt;&gt;P1: 2. 随机选择P1，窃取一半G
+    P1--&gt;&gt;P0: 转移 G4, G5, G6
+    Note over P0: 继续执行 G4
+    Note over P1: 队列减少，负载更均衡</pre>
+<p>窃取策略的关键细节： -
+窃取时会随机选择目标P，避免所有空闲P同时窃取同一个P -
+窃取数量为目标P本地队列长度的一半 -
+如果目标P设置了<code>runnext</code>，也可能被窃取</p>
+<h2 id="抢占式调度">抢占式调度</h2>
+<h3 id="协作式抢占go-1.13及之前">协作式抢占（Go 1.13及之前）</h3>
+<p>早期Go使用协作式抢占——在函数调用时插入栈增长检查点，如果goroutine运行超过10ms，调度器会设置抢占标记：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-comment">// 编译器在函数入口插入的检查（伪代码）</span><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">someFunction</span><span class="hljs-params">()</span></span> &#123;<br>    <span class="hljs-keyword">if</span> stackguard0 == stackPreempt &#123;<br>        <span class="hljs-comment">// 触发调度</span><br>        runtime.morestack()<br>    &#125;<br>    <span class="hljs-comment">// 函数正常逻辑</span><br>&#125;<br></code></pre></td></tr></table></figure>
+<p><strong>问题</strong>：如果goroutine执行密集计算循环且没有函数调用，就永远不会被抢占。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-comment">// 在Go 1.13之前，这个goroutine可能永远不会被调度出去</span><br><span class="hljs-keyword">go</span> <span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">()</span></span> &#123;<br>    <span class="hljs-keyword">for</span> &#123;<br>        <span class="hljs-comment">// 纯计算，没有函数调用</span><br>        <span class="hljs-comment">// 不会触发抢占检查</span><br>    &#125;<br>&#125;()<br></code></pre></td></tr></table></figure>
+<h3 id="基于信号的抢占go-1.14">基于信号的抢占（Go 1.14+）</h3>
+<p>Go 1.14引入了基于信号的异步抢占，解决了上述问题：</p>
+<pre class="mermaid">sequenceDiagram
+    participant Sysmon as sysmon线程
+    participant M as M (OS线程)
+    participant G as G (运行中)
+
+    Sysmon-&gt;&gt;Sysmon: 检测到G运行超过10ms
+    Sysmon-&gt;&gt;M: 发送SIGURG信号
+    M-&gt;&gt;M: 信号处理函数执行
+    M-&gt;&gt;G: 在安全点暂停G
+    Note over G: 保存寄存器状态
+    M-&gt;&gt;M: 将G放回运行队列
+    M-&gt;&gt;M: 重新调度</pre>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-keyword">package</span> main<br><br><span class="hljs-keyword">import</span> (<br>    <span class="hljs-string">&quot;fmt&quot;</span><br>    <span class="hljs-string">&quot;runtime&quot;</span><br>    <span class="hljs-string">&quot;time&quot;</span><br>)<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">main</span><span class="hljs-params">()</span></span> &#123;<br>    <span class="hljs-comment">// 设置只用一个P，便于观察抢占行为</span><br>    runtime.GOMAXPROCS(<span class="hljs-number">1</span>)<br><br>    <span class="hljs-comment">// 在Go 1.14+中，这个死循环也能被正确抢占</span><br>    <span class="hljs-keyword">go</span> <span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">()</span></span> &#123;<br>        <span class="hljs-keyword">for</span> &#123;<br>            <span class="hljs-comment">// 纯计算密集循环</span><br>        &#125;<br>    &#125;()<br><br>    <span class="hljs-comment">// 这个goroutine依然可以得到执行</span><br>    time.Sleep(<span class="hljs-number">100</span> * time.Millisecond)<br>    fmt.Println(<span class="hljs-string">&quot;Main goroutine is still running! Preemption works.&quot;</span>)<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="sysmon系统监控线程">Sysmon：系统监控线程</h2>
+<p>sysmon是一个特殊的M，它不绑定P，独立运行，负责：</p>
+<ol type="1">
+<li><strong>抢占长时间运行的G</strong>：检查是否有G运行超过10ms</li>
+<li><strong>回收syscall阻塞的P</strong>：如果M因系统调用阻塞，sysmon会将P分配给其他M</li>
+<li><strong>网络轮询</strong>：定期执行netpoll获取就绪的网络事件</li>
+<li><strong>强制GC</strong>：如果超过2分钟没有GC，强制触发</li>
+</ol>
+<pre class="mermaid">flowchart LR
+    subgraph "sysmon 职责"
+        A[抢占检测] --&gt; B[回收P]
+        B --&gt; C[网络轮询]
+        C --&gt; D[强制GC]
+        D --&gt; A
+    end
+    E[sysmon线程&lt;br/&gt;独立运行] --&gt; A</pre>
+<h2 id="系统调用处理">系统调用处理</h2>
+<p>当goroutine执行系统调用时，M会被阻塞。调度器通过”hand
+off”机制确保P不会被浪费：</p>
+<pre class="mermaid">sequenceDiagram
+    participant G1 as G1
+    participant M1 as M1
+    participant P as P0
+    participant M2 as M2 (新/空闲)
+
+    G1-&gt;&gt;M1: 执行系统调用(如read)
+    M1-&gt;&gt;M1: 进入syscall，解绑P
+    M1--&gt;&gt;P: P0被释放
+    P-&gt;&gt;M2: P0绑定新的M
+    M2-&gt;&gt;M2: 继续运行其他G
+    Note over M1: M1在syscall中阻塞
+    M1-&gt;&gt;M1: syscall返回
+    M1-&gt;&gt;M1: 尝试获取空闲P
+    alt 有空闲P
+        M1-&gt;&gt;M1: 绑定P，继续运行G1
+    else 无空闲P
+        M1-&gt;&gt;M1: 将G1放入全局队列
+        M1-&gt;&gt;M1: M1进入休眠
+    end</pre>
+<h2 id="trace分析实战">Trace分析实战</h2>
+<p>Go提供了强大的trace工具来分析调度行为：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-keyword">package</span> main<br><br><span class="hljs-keyword">import</span> (<br>    <span class="hljs-string">&quot;fmt&quot;</span><br>    <span class="hljs-string">&quot;os&quot;</span><br>    <span class="hljs-string">&quot;runtime/trace&quot;</span><br>    <span class="hljs-string">&quot;sync&quot;</span><br>)<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">main</span><span class="hljs-params">()</span></span> &#123;<br>    <span class="hljs-comment">// 创建trace文件</span><br>    f, err := os.Create(<span class="hljs-string">&quot;scheduler.trace&quot;</span>)<br>    <span class="hljs-keyword">if</span> err != <span class="hljs-literal">nil</span> &#123;<br>        <span class="hljs-built_in">panic</span>(err)<br>    &#125;<br>    <span class="hljs-keyword">defer</span> f.Close()<br><br>    <span class="hljs-comment">// 开始trace</span><br>    <span class="hljs-keyword">if</span> err := trace.Start(f); err != <span class="hljs-literal">nil</span> &#123;<br>        <span class="hljs-built_in">panic</span>(err)<br>    &#125;<br>    <span class="hljs-keyword">defer</span> trace.Stop()<br><br>    <span class="hljs-comment">// 模拟并发工作负载</span><br>    <span class="hljs-keyword">var</span> wg sync.WaitGroup<br>    <span class="hljs-keyword">for</span> i := <span class="hljs-number">0</span>; i &lt; <span class="hljs-number">10</span>; i++ &#123;<br>        wg.Add(<span class="hljs-number">1</span>)<br>        <span class="hljs-keyword">go</span> <span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">(id <span class="hljs-type">int</span>)</span></span> &#123;<br>            <span class="hljs-keyword">defer</span> wg.Done()<br>            sum := <span class="hljs-number">0</span><br>            <span class="hljs-keyword">for</span> j := <span class="hljs-number">0</span>; j &lt; <span class="hljs-number">1000000</span>; j++ &#123;<br>                sum += j<br>            &#125;<br>            fmt.Printf(<span class="hljs-string">&quot;Worker %d done, sum=%d\n&quot;</span>, id, sum)<br>        &#125;(i)<br>    &#125;<br>    wg.Wait()<br>&#125;<br></code></pre></td></tr></table></figure>
+<p>使用trace工具分析：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 运行程序生成trace文件</span><br>go run main.go<br><br><span class="hljs-comment"># 使用go tool trace分析</span><br>go tool trace scheduler.trace<br></code></pre></td></tr></table></figure>
+<p>trace工具会在浏览器中打开一个可视化界面，可以看到： -
+每个P上goroutine的调度时间线 - goroutine的创建、运行、阻塞、唤醒事件 -
+系统调用的耗时 - 网络I/O事件</p>
+<h2 id="性能优化建议">性能优化建议</h2>
+<h3 id="合理设置gomaxprocs">1. 合理设置GOMAXPROCS</h3>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-comment">// CPU密集型任务：GOMAXPROCS = CPU核心数（默认值）</span><br><span class="hljs-comment">// I/O密集型任务：可以适当增大</span><br><span class="hljs-comment">// 容器环境：使用 uber-go/automaxprocs 自动适配</span><br><span class="hljs-keyword">import</span> _ <span class="hljs-string">&quot;go.uber.org/automaxprocs&quot;</span><br></code></pre></td></tr></table></figure>
+<h3 id="避免创建过多goroutine">2. 避免创建过多goroutine</h3>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-comment">// 不好的做法：为每个请求创建大量goroutine</span><br><span class="hljs-comment">// 好的做法：使用worker pool模式</span><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">workerPool</span><span class="hljs-params">(tasks &lt;-<span class="hljs-keyword">chan</span> Task, results <span class="hljs-keyword">chan</span>&lt;- Result, numWorkers <span class="hljs-type">int</span>)</span></span> &#123;<br>    <span class="hljs-keyword">var</span> wg sync.WaitGroup<br>    <span class="hljs-keyword">for</span> i := <span class="hljs-number">0</span>; i &lt; numWorkers; i++ &#123;<br>        wg.Add(<span class="hljs-number">1</span>)<br>        <span class="hljs-keyword">go</span> <span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">()</span></span> &#123;<br>            <span class="hljs-keyword">defer</span> wg.Done()<br>            <span class="hljs-keyword">for</span> task := <span class="hljs-keyword">range</span> tasks &#123;<br>                results &lt;- process(task)<br>            &#125;<br>        &#125;()<br>    &#125;<br>    wg.Wait()<br>    <span class="hljs-built_in">close</span>(results)<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="减少goroutine切换开销">3. 减少goroutine切换开销</h3>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-comment">// 使用runtime.LockOSThread()将goroutine绑定到OS线程</span><br><span class="hljs-comment">// 适用于调用C库、OpenGL等需要线程亲和性的场景</span><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">bindToThread</span><span class="hljs-params">()</span></span> &#123;<br>    runtime.LockOSThread()<br>    <span class="hljs-keyword">defer</span> runtime.UnlockOSThread()<br>    <span class="hljs-comment">// 在固定的OS线程上执行</span><br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="监控调度延迟">4. 监控调度延迟</h3>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-keyword">package</span> main<br><br><span class="hljs-keyword">import</span> (<br>    <span class="hljs-string">&quot;fmt&quot;</span><br>    <span class="hljs-string">&quot;runtime/metrics&quot;</span><br>)<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">printSchedulerMetrics</span><span class="hljs-params">()</span></span> &#123;<br>    <span class="hljs-comment">// Go 1.16+ 提供标准化的metrics</span><br>    descs := metrics.All()<br>    samples := <span class="hljs-built_in">make</span>([]metrics.Sample, <span class="hljs-built_in">len</span>(descs))<br>    <span class="hljs-keyword">for</span> i := <span class="hljs-keyword">range</span> descs &#123;<br>        samples[i].Name = descs[i].Name<br>    &#125;<br>    metrics.Read(samples)<br>    <span class="hljs-keyword">for</span> _, s := <span class="hljs-keyword">range</span> samples &#123;<br>        <span class="hljs-keyword">if</span> s.Name == <span class="hljs-string">&quot;/sched/latencies:seconds&quot;</span> &#123;<br>            hist := s.Value.Float64Histogram()<br>            fmt.Printf(<span class="hljs-string">&quot;Scheduler latency p50: %v\n&quot;</span>, hist.Counts)<br>        &#125;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="总结">总结</h2>
+<p>Go的GMP调度模型是一个精心设计的系统，它通过以下机制实现了高效的goroutine调度：</p>
+<ol type="1">
+<li><strong>P的引入</strong>消除了全局锁竞争，每个P拥有本地队列</li>
+<li><strong>工作窃取</strong>保证了负载均衡，避免某些P空闲而其他P过载</li>
+<li><strong>基于信号的抢占</strong>确保了公平调度，即使面对计算密集型goroutine</li>
+<li><strong>sysmon监控线程</strong>处理系统调用阻塞、网络轮询等异步任务</li>
+<li><strong>hand off机制</strong>确保系统调用不会浪费P资源</li>
+</ol>
+<p>理解GMP模型有助于我们： - 编写更高效的并发程序 - 合理设置GOMAXPROCS -
+使用trace工具诊断调度问题 - 理解goroutine泄漏和调度延迟的根因</p>
+<p>深入掌握调度器原理，是成为Go高级开发者的必经之路。</p>
+<hr />
+<h2 id="踩坑记录">踩坑记录</h2>
+<p>团队用 Go 重写核心推送服务，原 Java 服务维持 50 万长连接需要 20G
+内存，Go 版本上线初期只用 7G，效果很好。但某天凌晨监控发现 goroutine
+数量从正常的 50 万暴涨到 800 万，内存从 8G 飙到 60G，触发 OOM。</p>
+<p>排查过程：先用 <code>pprof</code> 抓 goroutine 快照，发现 80% 的
+goroutine 卡在一个第三方推送回调的 HTTP
+请求上。再看代码——<code>http.Client</code> 没有设置
+<code>Timeout</code>。网络分区时下游服务无响应，所有发出去的 HTTP
+请求都在无限等待，GMP 调度器不断创建新 M
+来处理积压的新连接请求，goroutine 越堆越多。</p>
+<p>修复：给所有 <code>http.Client</code> 加
+<code>Timeout: 3s</code>，同时用 <code>semaphore</code> 限制最大并发
+goroutine 数量为 100 万。之后再没出现过 goroutine 泄漏。</p>
+<h2 id="实测结果">实测结果</h2>
+<p>同等 50 万长连接，8 核 16G 服务器</p>
+<table>
+<thead>
+<tr class="header">
+<th>指标</th>
+<th>Java（Netty）</th>
+<th>Go（修复前）</th>
+<th>Go（修复后）</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>空闲内存占用</td>
+<td>22G</td>
+<td>6.8G</td>
+<td>7.1G</td>
+</tr>
+<tr class="even">
+<td>CPU（空闲时）</td>
+<td>15%</td>
+<td>8%</td>
+<td>9%</td>
+</tr>
+<tr class="odd">
+<td>goroutine 峰值</td>
+<td>不适用</td>
+<td>800 万（OOM）</td>
+<td>稳定 52 万</td>
+</tr>
+<tr class="even">
+<td>运行稳定性</td>
+<td>稳定</td>
+<td>OOM 宕机</td>
+<td>稳定运行 6+ 个月</td>
+</tr>
+</tbody>
+</table>
+<h2 id="我的看法">我的看法</h2>
+<p>Go 的 goroutine 比线程便宜，但不代表可以无限创建。GMP
+调度器解决的是「调度效率」问题，不是「资源无限」问题。每个 goroutine
+初始栈 2KB，800 万 goroutine 光栈就
+16G，再加上各自持有的连接、缓冲区，OOM 是必然的。</p>
+<p>做 Go 服务有两条铁律：一是<strong>所有 I/O 操作必须带
+timeout</strong>，<code>context</code> + <code>deadline</code>
+是最低限度；二是<strong>对 goroutine
+生命周期要有明确控制</strong>，goroutine
+泄漏比内存泄漏更难发现，<code>pprof</code> 的 goroutine
+端点应该纳入日常监控。</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2023-06-15</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">3.9k 字 · 10 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/go-channel-patterns/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Go Channel模式与并发编程实战</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/distributed-transaction/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">分布式事务解决方案全景分析</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#gmp%E6%A8%A1%E5%9E%8B%E6%A6%82%E8%A7%88"><span class="toc-text">GMP模型概览</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%B0%83%E5%BA%A6%E5%99%A8%E7%9A%84%E6%BC%94%E8%BF%9B"><span class="toc-text">调度器的演进</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#ggoroutine%E8%AF%A6%E8%A7%A3"><span class="toc-text">G（Goroutine）详解</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#goroutine%E7%9A%84%E7%8A%B6%E6%80%81%E6%9C%BA"><span class="toc-text">Goroutine的状态机</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#mmachine%E8%AF%A6%E8%A7%A3"><span class="toc-text">M（Machine）详解</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#pprocessor%E8%AF%A6%E8%A7%A3"><span class="toc-text">P（Processor）详解</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#gomaxprocs"><span class="toc-text">GOMAXPROCS</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%B0%83%E5%BA%A6%E6%B5%81%E7%A8%8B"><span class="toc-text">调度流程</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E8%B0%83%E5%BA%A6%E5%BE%AA%E7%8E%AF"><span class="toc-text">核心调度循环</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%9F%A5%E6%89%BE%E5%8F%AF%E8%BF%90%E8%A1%8Cg%E7%9A%84%E9%A1%BA%E5%BA%8F"><span class="toc-text">查找可运行G的顺序</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%B7%A5%E4%BD%9C%E7%AA%83%E5%8F%96work-stealing"><span class="toc-text">工作窃取（Work Stealing）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%8A%A2%E5%8D%A0%E5%BC%8F%E8%B0%83%E5%BA%A6"><span class="toc-text">抢占式调度</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8D%8F%E4%BD%9C%E5%BC%8F%E6%8A%A2%E5%8D%A0go-1.13%E5%8F%8A%E4%B9%8B%E5%89%8D"><span class="toc-text">协作式抢占（Go 1.13及之前）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9F%BA%E4%BA%8E%E4%BF%A1%E5%8F%B7%E7%9A%84%E6%8A%A2%E5%8D%A0go-1.14"><span class="toc-text">基于信号的抢占（Go 1.14+）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#sysmon%E7%B3%BB%E7%BB%9F%E7%9B%91%E6%8E%A7%E7%BA%BF%E7%A8%8B"><span class="toc-text">Sysmon：系统监控线程</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%B3%BB%E7%BB%9F%E8%B0%83%E7%94%A8%E5%A4%84%E7%90%86"><span class="toc-text">系统调用处理</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#trace%E5%88%86%E6%9E%90%E5%AE%9E%E6%88%98"><span class="toc-text">Trace分析实战</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96%E5%BB%BA%E8%AE%AE"><span class="toc-text">性能优化建议</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%90%88%E7%90%86%E8%AE%BE%E7%BD%AEgomaxprocs"><span class="toc-text">1. 合理设置GOMAXPROCS</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%81%BF%E5%85%8D%E5%88%9B%E5%BB%BA%E8%BF%87%E5%A4%9Agoroutine"><span class="toc-text">2. 避免创建过多goroutine</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%87%8F%E5%B0%91goroutine%E5%88%87%E6%8D%A2%E5%BC%80%E9%94%80"><span class="toc-text">3. 减少goroutine切换开销</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%9B%91%E6%8E%A7%E8%B0%83%E5%BA%A6%E5%BB%B6%E8%BF%9F"><span class="toc-text">4. 监控调度延迟</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%B8%A9%E5%9D%91%E8%AE%B0%E5%BD%95"><span class="toc-text">踩坑记录</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E6%B5%8B%E7%BB%93%E6%9E%9C"><span class="toc-text">实测结果</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%88%91%E7%9A%84%E7%9C%8B%E6%B3%95"><span class="toc-text">我的看法</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

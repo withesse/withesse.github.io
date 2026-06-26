@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kubernetes架构深度解析 · zt&#39;s Blog</title>
+  <meta name="description" content="深入解析Kubernetes架构，涵盖控制平面、节点组件、Pod生命周期、控制器模式与网络模型。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/kubernetes-architecture/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Kubernetes架构深度解析">
+  <meta property="og:description" content="深入解析Kubernetes架构，涵盖控制平面、节点组件、Pod生命周期、控制器模式与网络模型。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/kubernetes-architecture/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2022-04-17T16:00:00.000Z">
+  <meta property="article:modified_time" content="2022-04-17T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Kubernetes架构深度解析">
+  <meta name="twitter:description" content="深入解析Kubernetes架构，涵盖控制平面、节点组件、Pod生命周期、控制器模式与网络模型。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Kubernetes架构深度解析","description":"深入解析Kubernetes架构，涵盖控制平面、节点组件、Pod生命周期、控制器模式与网络模型。","datePublished":"2022-04-17T16:00:00.000Z","dateModified":"2022-04-17T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/kubernetes-architecture/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"DevOps","item":"https://withesse.co/categories/DevOps/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:45">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/DevOps/">DevOps</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/architecture/"><span class="hash">#</span>architecture</a><a class="tag" href="/tags/kubernetes/"><span class="hash">#</span>kubernetes</a><a class="tag" href="/tags/k8s/"><span class="hash">#</span>k8s</a>
+        
+      </div>
+
+      <h1>Kubernetes架构深度解析</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2022.04.18</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 9 min</span>
+        </span>
+        <span class="wc"><span class="num">3.4k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%95%B4%E4%BD%93%E6%9E%B6%E6%9E%84%E6%A6%82%E8%A7%88"><span class="toc-text">整体架构概览</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%8E%A7%E5%88%B6%E5%B9%B3%E9%9D%A2%E7%BB%84%E4%BB%B6"><span class="toc-text">控制平面组件</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#api-server"><span class="toc-text">API Server</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#etcd"><span class="toc-text">etcd</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#scheduler"><span class="toc-text">Scheduler</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#controller-manager"><span class="toc-text">Controller Manager</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%8A%82%E7%82%B9%E7%BB%84%E4%BB%B6"><span class="toc-text">节点组件</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#kubelet"><span class="toc-text">kubelet</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#kube-proxy"><span class="toc-text">kube-proxy</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#pod%E7%94%9F%E5%91%BD%E5%91%A8%E6%9C%9F"><span class="toc-text">Pod生命周期</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#init-container"><span class="toc-text">Init Container</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#pod-hook"><span class="toc-text">Pod Hook</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%8E%A7%E5%88%B6%E5%99%A8%E6%A8%A1%E5%BC%8F"><span class="toc-text">控制器模式</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#deployment%E6%BB%9A%E5%8A%A8%E6%9B%B4%E6%96%B0"><span class="toc-text">Deployment滚动更新</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#statefulset"><span class="toc-text">StatefulSet</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BD%91%E7%BB%9C%E6%A8%A1%E5%9E%8B"><span class="toc-text">网络模型</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E6%88%98%E4%BD%BF%E7%94%A8kubeadm%E6%90%AD%E5%BB%BA%E9%9B%86%E7%BE%A4"><span class="toc-text">实战：使用kubeadm搭建集群</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%B8%A9%E5%9D%91%E8%AE%B0%E5%BD%95"><span class="toc-text">踩坑记录</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E6%B5%8B%E7%BB%93%E6%9E%9C"><span class="toc-text">实测结果</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%88%91%E7%9A%84%E7%9C%8B%E6%B3%95"><span class="toc-text">我的看法</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="前言">前言</h2>
+<p>Kubernetes（简称K8s）已成为容器编排领域的事实标准。要真正掌握Kubernetes，必须深入理解其架构设计。本文将从控制平面、节点组件、Pod生命周期、控制器模式和网络模型五个维度进行全面解析。</p>
+<h2 id="整体架构概览">整体架构概览</h2>
+<p>Kubernetes采用Master-Worker架构，由控制平面（Control
+Plane）和工作节点（Worker Node）组成。</p>
+<pre class="mermaid">graph TB
+    subgraph ControlPlane["Control Plane (Master)"]
+        API["API Server"]
+        ETCD["etcd"]
+        SCHED["Scheduler"]
+        CM["Controller Manager"]
+        CCM["Cloud Controller Manager"]
+    end
+
+    subgraph WorkerNode1["Worker Node 1"]
+        KL1["kubelet"]
+        KP1["kube-proxy"]
+        CR1["Container Runtime"]
+        POD1["Pod A"]
+        POD2["Pod B"]
+    end
+
+    subgraph WorkerNode2["Worker Node 2"]
+        KL2["kubelet"]
+        KP2["kube-proxy"]
+        CR2["Container Runtime"]
+        POD3["Pod C"]
+        POD4["Pod D"]
+    end
+
+    API --&gt; ETCD
+    SCHED --&gt; API
+    CM --&gt; API
+    CCM --&gt; API
+    KL1 --&gt; API
+    KL2 --&gt; API
+    KP1 --&gt; API
+    KP2 --&gt; API
+    KL1 --&gt; CR1
+    KL2 --&gt; CR2
+    CR1 --&gt; POD1
+    CR1 --&gt; POD2
+    CR2 --&gt; POD3
+    CR2 --&gt; POD4</pre>
+<h2 id="控制平面组件">控制平面组件</h2>
+<h3 id="api-server">API Server</h3>
+<p>API
+Server是Kubernetes控制平面的前端，所有组件之间的通信都通过它进行。它提供RESTful
+API接口，是唯一与etcd直接交互的组件。</p>
+<p>API Server的核心职责：</p>
+<ol type="1">
+<li><strong>认证（Authentication）</strong>：验证请求者身份</li>
+<li><strong>授权（Authorization）</strong>：检查请求者权限（RBAC）</li>
+<li><strong>准入控制（Admission
+Control）</strong>：对请求进行校验和修改</li>
+<li><strong>数据持久化</strong>：将资源状态写入etcd</li>
+</ol>
+<pre class="mermaid">sequenceDiagram
+    participant Client as kubectl/客户端
+    participant API as API Server
+    participant Auth as 认证模块
+    participant Authz as 授权模块
+    participant Admit as 准入控制
+    participant ETCD as etcd
+
+    Client-&gt;&gt;API: HTTP Request
+    API-&gt;&gt;Auth: 身份验证
+    Auth--&gt;&gt;API: 验证通过
+    API-&gt;&gt;Authz: RBAC授权检查
+    Authz--&gt;&gt;API: 授权通过
+    API-&gt;&gt;Admit: Mutating Admission
+    Admit--&gt;&gt;API: 修改后的资源
+    API-&gt;&gt;Admit: Validating Admission
+    Admit--&gt;&gt;API: 校验通过
+    API-&gt;&gt;ETCD: 持久化存储
+    ETCD--&gt;&gt;API: 写入成功
+    API--&gt;&gt;Client: 返回响应</pre>
+<p>API Server请求处理的关键代码路径：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-comment">// API Server处理链示意</span><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">buildHandlerChain</span><span class="hljs-params">(apiHandler http.Handler, c *Config)</span></span> http.Handler &#123;<br>    handler := apiHandler<br><br>    <span class="hljs-comment">// 准入控制</span><br>    handler = genericapifilters.WithAdmission(handler, c.AdmissionControl)<br><br>    <span class="hljs-comment">// 授权</span><br>    handler = genericapifilters.WithAuthorization(handler, c.Authorization.Authorizer)<br><br>    <span class="hljs-comment">// 认证</span><br>    handler = genericapifilters.WithAuthentication(handler, c.Authentication.Authenticator)<br><br>    <span class="hljs-comment">// 审计</span><br>    handler = genericapifilters.WithAudit(handler, c.AuditBackend, c.AuditPolicyRuleEvaluator)<br><br>    <span class="hljs-comment">// 限流</span><br>    handler = genericfilters.WithMaxInFlightLimit(handler, c.MaxRequestsInFlight)<br><br>    <span class="hljs-keyword">return</span> handler<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="etcd">etcd</h3>
+<p>etcd是一个高可用的分布式键值存储，是Kubernetes集群的”唯一真相来源（Single
+Source of Truth）“。所有集群状态数据都存储在etcd中。</p>
+<p>etcd的关键特性： - 使用Raft一致性算法保证强一致性 -
+支持Watch机制，API Server通过Watch监听状态变化 -
+推荐使用奇数节点部署（3或5节点）</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 查看etcd中存储的Kubernetes数据</span><br>ETCDCTL_API=3 etcdctl get /registry --prefix --keys-only | <span class="hljs-built_in">head</span> -20<br><br><span class="hljs-comment"># 典型输出</span><br><span class="hljs-comment"># /registry/pods/default/nginx-deployment-xxx</span><br><span class="hljs-comment"># /registry/services/specs/default/kubernetes</span><br><span class="hljs-comment"># /registry/deployments/default/nginx-deployment</span><br><span class="hljs-comment"># /registry/configmaps/kube-system/coredns</span><br><br><span class="hljs-comment"># 查看etcd集群状态</span><br>ETCDCTL_API=3 etcdctl endpoint status --write-out=table \<br>  --endpoints=https://10.0.0.1:2379,https://10.0.0.2:2379,https://10.0.0.3:2379 \<br>  --cacert=/etc/kubernetes/pki/etcd/ca.crt \<br>  --cert=/etc/kubernetes/pki/etcd/server.crt \<br>  --key=/etc/kubernetes/pki/etcd/server.key<br></code></pre></td></tr></table></figure>
+<h3 id="scheduler">Scheduler</h3>
+<p>Scheduler负责将未调度的Pod分配到合适的节点。调度过程分为两个阶段：</p>
+<pre class="mermaid">flowchart LR
+    A["待调度Pod"] --&gt; B["预选 Filtering"]
+    B --&gt; C["优选 Scoring"]
+    C --&gt; D["绑定 Binding"]
+
+    subgraph Filtering["预选阶段"]
+        F1["NodeResourcesFit"]
+        F2["NodeAffinity"]
+        F3["PodTopologySpread"]
+        F4["TaintToleration"]
+    end
+
+    subgraph Scoring["优选阶段"]
+        S1["LeastRequestedPriority"]
+        S2["BalancedResourceAllocation"]
+        S3["ImageLocality"]
+        S4["InterPodAffinity"]
+    end
+
+    B -.-&gt; Filtering
+    C -.-&gt; Scoring</pre>
+<p><strong>预选（Filtering）</strong>：过滤掉不满足条件的节点（如资源不足、不匹配nodeSelector）。</p>
+<p><strong>优选（Scoring）</strong>：对剩余节点打分排序，选出最优节点。</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># 自定义调度器配置示例</span><br><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">kubescheduler.config.k8s.io/v1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">KubeSchedulerConfiguration</span><br><span class="hljs-attr">profiles:</span><br>  <span class="hljs-bullet">-</span> <span class="hljs-attr">schedulerName:</span> <span class="hljs-string">custom-scheduler</span><br>    <span class="hljs-attr">plugins:</span><br>      <span class="hljs-attr">score:</span><br>        <span class="hljs-attr">enabled:</span><br>          <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">NodeResourcesBalancedAllocation</span><br>            <span class="hljs-attr">weight:</span> <span class="hljs-number">1</span><br>          <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">ImageLocality</span><br>            <span class="hljs-attr">weight:</span> <span class="hljs-number">2</span><br>        <span class="hljs-attr">disabled:</span><br>          <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">NodeResourcesLeastAllocated</span><br>      <span class="hljs-attr">filter:</span><br>        <span class="hljs-attr">enabled:</span><br>          <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">NodeResourcesFit</span><br>          <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">NodeAffinity</span><br></code></pre></td></tr></table></figure>
+<h3 id="controller-manager">Controller Manager</h3>
+<p>Controller
+Manager运行着一组控制器，每个控制器负责管理特定类型的资源。核心控制器包括：</p>
+<table>
+<thead>
+<tr class="header">
+<th>控制器</th>
+<th>职责</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Deployment Controller</td>
+<td>管理Deployment和ReplicaSet</td>
+</tr>
+<tr class="even">
+<td>ReplicaSet Controller</td>
+<td>确保Pod副本数符合期望</td>
+</tr>
+<tr class="odd">
+<td>StatefulSet Controller</td>
+<td>管理有状态应用</td>
+</tr>
+<tr class="even">
+<td>DaemonSet Controller</td>
+<td>确保每个节点运行指定Pod</td>
+</tr>
+<tr class="odd">
+<td>Job Controller</td>
+<td>管理批处理任务</td>
+</tr>
+<tr class="even">
+<td>Node Controller</td>
+<td>监控节点健康状态</td>
+</tr>
+<tr class="odd">
+<td>Service Account Controller</td>
+<td>管理ServiceAccount</td>
+</tr>
+<tr class="even">
+<td>Endpoint Controller</td>
+<td>维护Service与Pod的映射</td>
+</tr>
+</tbody>
+</table>
+<p>控制器遵循声明式的调谐循环（Reconcile Loop）模式：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-comment">// 控制器核心调谐逻辑伪代码</span><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-params">(c *DeploymentController)</span></span> Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, <span class="hljs-type">error</span>) &#123;<br>    <span class="hljs-comment">// 1. 获取当前状态</span><br>    deployment := &amp;appsv1.Deployment&#123;&#125;<br>    <span class="hljs-keyword">if</span> err := c.Get(ctx, req.NamespacedName, deployment); err != <span class="hljs-literal">nil</span> &#123;<br>        <span class="hljs-keyword">return</span> ctrl.Result&#123;&#125;, client.IgnoreNotFound(err)<br>    &#125;<br><br>    <span class="hljs-comment">// 2. 获取关联的ReplicaSet</span><br>    replicaSets, err := c.getReplicaSetsForDeployment(ctx, deployment)<br>    <span class="hljs-keyword">if</span> err != <span class="hljs-literal">nil</span> &#123;<br>        <span class="hljs-keyword">return</span> ctrl.Result&#123;&#125;, err<br>    &#125;<br><br>    <span class="hljs-comment">// 3. 比较期望状态与当前状态</span><br>    <span class="hljs-keyword">if</span> needsUpdate(deployment, replicaSets) &#123;<br>        <span class="hljs-comment">// 4. 执行调谐操作</span><br>        <span class="hljs-keyword">if</span> err := c.scaleReplicaSet(ctx, deployment, replicaSets); err != <span class="hljs-literal">nil</span> &#123;<br>            <span class="hljs-keyword">return</span> ctrl.Result&#123;&#125;, err<br>        &#125;<br>    &#125;<br><br>    <span class="hljs-comment">// 5. 更新状态</span><br>    <span class="hljs-keyword">return</span> ctrl.Result&#123;&#125;, c.updateDeploymentStatus(ctx, deployment, replicaSets)<br>&#125;<br></code></pre></td></tr></table></figure>
+<pre class="mermaid">graph LR
+    A["Observe&lt;br&gt;观察当前状态"] --&gt; B["Diff&lt;br&gt;比较期望状态"]
+    B --&gt; C["Act&lt;br&gt;执行调谐动作"]
+    C --&gt; A
+    style A fill:#4CAF50,color:#fff
+    style B fill:#FF9800,color:#fff
+    style C fill:#2196F3,color:#fff</pre>
+<h2 id="节点组件">节点组件</h2>
+<h3 id="kubelet">kubelet</h3>
+<p>kubelet是每个节点上的核心代理，负责：</p>
+<ol type="1">
+<li>从API Server接收PodSpec</li>
+<li>通过CRI（Container Runtime Interface）管理容器</li>
+<li>执行健康检查（liveness/readiness/startup probe）</li>
+<li>上报节点和Pod状态</li>
+</ol>
+<pre class="mermaid">graph TB
+    API["API Server"] --&gt; KL["kubelet"]
+    KL --&gt; CRI["CRI (Container Runtime Interface)"]
+    KL --&gt; CNI["CNI (Container Network Interface)"]
+    KL --&gt; CSI["CSI (Container Storage Interface)"]
+
+    CRI --&gt; Containerd["containerd"]
+    CRI --&gt; CriO["CRI-O"]
+    Containerd --&gt; RunC["runc"]
+    CriO --&gt; RunC
+
+    CNI --&gt; Calico
+    CNI --&gt; Flannel
+    CNI --&gt; Cilium
+
+    CSI --&gt; LocalPV["Local PV"]
+    CSI --&gt; NFS
+    CSI --&gt; Ceph</pre>
+<p>kubelet健康检查配置示例：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">v1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">Pod</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">app-with-probes</span><br><span class="hljs-attr">spec:</span><br>  <span class="hljs-attr">containers:</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">app</span><br>      <span class="hljs-attr">image:</span> <span class="hljs-string">myapp:1.0</span><br>      <span class="hljs-attr">ports:</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-attr">containerPort:</span> <span class="hljs-number">8080</span><br>      <span class="hljs-comment"># 存活探针：失败则重启容器</span><br>      <span class="hljs-attr">livenessProbe:</span><br>        <span class="hljs-attr">httpGet:</span><br>          <span class="hljs-attr">path:</span> <span class="hljs-string">/healthz</span><br>          <span class="hljs-attr">port:</span> <span class="hljs-number">8080</span><br>        <span class="hljs-attr">initialDelaySeconds:</span> <span class="hljs-number">15</span><br>        <span class="hljs-attr">periodSeconds:</span> <span class="hljs-number">10</span><br>        <span class="hljs-attr">failureThreshold:</span> <span class="hljs-number">3</span><br>      <span class="hljs-comment"># 就绪探针：失败则从Service Endpoints中移除</span><br>      <span class="hljs-attr">readinessProbe:</span><br>        <span class="hljs-attr">httpGet:</span><br>          <span class="hljs-attr">path:</span> <span class="hljs-string">/ready</span><br>          <span class="hljs-attr">port:</span> <span class="hljs-number">8080</span><br>        <span class="hljs-attr">initialDelaySeconds:</span> <span class="hljs-number">5</span><br>        <span class="hljs-attr">periodSeconds:</span> <span class="hljs-number">5</span><br>      <span class="hljs-comment"># 启动探针：启动完成前不执行其他探针</span><br>      <span class="hljs-attr">startupProbe:</span><br>        <span class="hljs-attr">httpGet:</span><br>          <span class="hljs-attr">path:</span> <span class="hljs-string">/healthz</span><br>          <span class="hljs-attr">port:</span> <span class="hljs-number">8080</span><br>        <span class="hljs-attr">failureThreshold:</span> <span class="hljs-number">30</span><br>        <span class="hljs-attr">periodSeconds:</span> <span class="hljs-number">10</span><br></code></pre></td></tr></table></figure>
+<h3 id="kube-proxy">kube-proxy</h3>
+<p>kube-proxy负责实现Service的网络代理和负载均衡。它支持三种代理模式：</p>
+<pre class="mermaid">graph TB
+    subgraph IPTables["iptables模式"]
+        IT1["Service ClusterIP"] --&gt; IT2["iptables规则"]
+        IT2 --&gt; IT3["Pod Endpoint 1"]
+        IT2 --&gt; IT4["Pod Endpoint 2"]
+        IT2 --&gt; IT5["Pod Endpoint 3"]
+    end
+
+    subgraph IPVS["IPVS模式"]
+        IV1["Service ClusterIP"] --&gt; IV2["IPVS虚拟服务器"]
+        IV2 --&gt; IV3["Pod Endpoint 1"]
+        IV2 --&gt; IV4["Pod Endpoint 2"]
+        IV2 --&gt; IV5["Pod Endpoint 3"]
+    end</pre>
+<ul>
+<li><strong>iptables模式</strong>：默认模式，通过iptables规则转发，适合中小规模集群</li>
+<li><strong>IPVS模式</strong>：基于内核IPVS模块，性能更好，支持多种负载均衡算法（rr/lc/dh/sh/sed/nq）</li>
+<li><strong>nftables模式</strong>：Kubernetes
+1.29+引入，替代iptables</li>
+</ul>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 查看kube-proxy模式</span><br>kubectl get configmap kube-proxy -n kube-system -o yaml | grep mode<br><br><span class="hljs-comment"># 查看iptables规则</span><br>iptables -t nat -L KUBE-SERVICES -n | <span class="hljs-built_in">head</span> -20<br><br><span class="hljs-comment"># 查看IPVS规则</span><br>ipvsadm -Ln<br></code></pre></td></tr></table></figure>
+<h2 id="pod生命周期">Pod生命周期</h2>
+<p>Pod是Kubernetes最小的调度单元，其生命周期状态流转如下：</p>
+<pre class="mermaid">stateDiagram-v2
+    [*] --&gt; Pending: 创建Pod
+    Pending --&gt; Running: 调度成功，容器启动
+    Running --&gt; Succeeded: 所有容器正常退出(restartPolicy=Never)
+    Running --&gt; Failed: 容器异常退出
+    Running --&gt; Unknown: 节点通信失败
+    Failed --&gt; Running: 容器重启(restartPolicy=Always/OnFailure)
+    Unknown --&gt; Running: 通信恢复
+    Unknown --&gt; Failed: 超时判定失败
+    Succeeded --&gt; [*]
+    Failed --&gt; [*]: restartPolicy=Never</pre>
+<h3 id="init-container">Init Container</h3>
+<p>Init Container在应用容器启动前按顺序执行，常用于初始化工作：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">v1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">Pod</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">app-with-init</span><br><span class="hljs-attr">spec:</span><br>  <span class="hljs-attr">initContainers:</span><br>    <span class="hljs-comment"># 等待数据库就绪</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">wait-for-db</span><br>      <span class="hljs-attr">image:</span> <span class="hljs-string">busybox:1.36</span><br>      <span class="hljs-attr">command:</span> [<span class="hljs-string">&#x27;sh&#x27;</span>, <span class="hljs-string">&#x27;-c&#x27;</span>, <span class="hljs-string">&#x27;until nc -z mysql-service 3306; do echo waiting for db; sleep 2; done&#x27;</span>]<br>    <span class="hljs-comment"># 下载配置文件</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">download-config</span><br>      <span class="hljs-attr">image:</span> <span class="hljs-string">busybox:1.36</span><br>      <span class="hljs-attr">command:</span> [<span class="hljs-string">&#x27;wget&#x27;</span>, <span class="hljs-string">&#x27;-O&#x27;</span>, <span class="hljs-string">&#x27;/config/app.conf&#x27;</span>, <span class="hljs-string">&#x27;http://config-server/app.conf&#x27;</span>]<br>      <span class="hljs-attr">volumeMounts:</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">config-vol</span><br>          <span class="hljs-attr">mountPath:</span> <span class="hljs-string">/config</span><br>  <span class="hljs-attr">containers:</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">app</span><br>      <span class="hljs-attr">image:</span> <span class="hljs-string">myapp:1.0</span><br>      <span class="hljs-attr">volumeMounts:</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">config-vol</span><br>          <span class="hljs-attr">mountPath:</span> <span class="hljs-string">/etc/app</span><br>  <span class="hljs-attr">volumes:</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">config-vol</span><br>      <span class="hljs-attr">emptyDir:</span> &#123;&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="pod-hook">Pod Hook</h3>
+<p>Kubernetes提供<code>postStart</code>和<code>preStop</code>钩子来处理容器启停事件：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">v1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">Pod</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">lifecycle-demo</span><br><span class="hljs-attr">spec:</span><br>  <span class="hljs-attr">containers:</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">app</span><br>      <span class="hljs-attr">image:</span> <span class="hljs-string">nginx:1.25</span><br>      <span class="hljs-attr">lifecycle:</span><br>        <span class="hljs-attr">postStart:</span><br>          <span class="hljs-attr">exec:</span><br>            <span class="hljs-attr">command:</span> [<span class="hljs-string">&quot;/bin/sh&quot;</span>, <span class="hljs-string">&quot;-c&quot;</span>, <span class="hljs-string">&quot;echo &#x27;Container started&#x27; &gt; /tmp/started&quot;</span>]<br>        <span class="hljs-attr">preStop:</span><br>          <span class="hljs-attr">exec:</span><br>            <span class="hljs-comment"># 优雅停机：通知应用停止接收新请求</span><br>            <span class="hljs-attr">command:</span> [<span class="hljs-string">&quot;/bin/sh&quot;</span>, <span class="hljs-string">&quot;-c&quot;</span>, <span class="hljs-string">&quot;nginx -s quit; while killall -0 nginx; do sleep 1; done&quot;</span>]<br>      <span class="hljs-attr">terminationGracePeriodSeconds:</span> <span class="hljs-number">60</span><br></code></pre></td></tr></table></figure>
+<h2 id="控制器模式">控制器模式</h2>
+<h3 id="deployment滚动更新">Deployment滚动更新</h3>
+<pre class="mermaid">sequenceDiagram
+    participant User as 用户
+    participant DC as Deployment Controller
+    participant RS1 as ReplicaSet v1
+    participant RS2 as ReplicaSet v2
+
+    User-&gt;&gt;DC: 更新镜像版本
+    DC-&gt;&gt;RS2: 创建新ReplicaSet(replicas=0)
+    loop 滚动更新
+        DC-&gt;&gt;RS2: Scale Up (+1)
+        Note over RS2: 新Pod就绪
+        DC-&gt;&gt;RS1: Scale Down (-1)
+        Note over RS1: 旧Pod终止
+    end
+    Note over RS1: replicas=0
+    Note over RS2: replicas=N(期望值)</pre>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">apps/v1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">Deployment</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">nginx-deployment</span><br><span class="hljs-attr">spec:</span><br>  <span class="hljs-attr">replicas:</span> <span class="hljs-number">3</span><br>  <span class="hljs-attr">strategy:</span><br>    <span class="hljs-attr">type:</span> <span class="hljs-string">RollingUpdate</span><br>    <span class="hljs-attr">rollingUpdate:</span><br>      <span class="hljs-attr">maxSurge:</span> <span class="hljs-number">1</span>        <span class="hljs-comment"># 滚动更新时最多额外Pod数</span><br>      <span class="hljs-attr">maxUnavailable:</span> <span class="hljs-number">0</span>   <span class="hljs-comment"># 滚动更新时最多不可用Pod数</span><br>  <span class="hljs-attr">selector:</span><br>    <span class="hljs-attr">matchLabels:</span><br>      <span class="hljs-attr">app:</span> <span class="hljs-string">nginx</span><br>  <span class="hljs-attr">template:</span><br>    <span class="hljs-attr">metadata:</span><br>      <span class="hljs-attr">labels:</span><br>        <span class="hljs-attr">app:</span> <span class="hljs-string">nginx</span><br>    <span class="hljs-attr">spec:</span><br>      <span class="hljs-attr">containers:</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">nginx</span><br>          <span class="hljs-attr">image:</span> <span class="hljs-string">nginx:1.25</span><br>          <span class="hljs-attr">resources:</span><br>            <span class="hljs-attr">requests:</span><br>              <span class="hljs-attr">cpu:</span> <span class="hljs-string">100m</span><br>              <span class="hljs-attr">memory:</span> <span class="hljs-string">128Mi</span><br>            <span class="hljs-attr">limits:</span><br>              <span class="hljs-attr">cpu:</span> <span class="hljs-string">200m</span><br>              <span class="hljs-attr">memory:</span> <span class="hljs-string">256Mi</span><br></code></pre></td></tr></table></figure>
+<h3 id="statefulset">StatefulSet</h3>
+<p>StatefulSet为有状态应用提供稳定的网络标识和持久化存储：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">apps/v1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">StatefulSet</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">mysql</span><br><span class="hljs-attr">spec:</span><br>  <span class="hljs-attr">serviceName:</span> <span class="hljs-string">mysql</span><br>  <span class="hljs-attr">replicas:</span> <span class="hljs-number">3</span><br>  <span class="hljs-attr">selector:</span><br>    <span class="hljs-attr">matchLabels:</span><br>      <span class="hljs-attr">app:</span> <span class="hljs-string">mysql</span><br>  <span class="hljs-attr">template:</span><br>    <span class="hljs-attr">metadata:</span><br>      <span class="hljs-attr">labels:</span><br>        <span class="hljs-attr">app:</span> <span class="hljs-string">mysql</span><br>    <span class="hljs-attr">spec:</span><br>      <span class="hljs-attr">containers:</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">mysql</span><br>          <span class="hljs-attr">image:</span> <span class="hljs-string">mysql:8.0</span><br>          <span class="hljs-attr">ports:</span><br>            <span class="hljs-bullet">-</span> <span class="hljs-attr">containerPort:</span> <span class="hljs-number">3306</span><br>          <span class="hljs-attr">volumeMounts:</span><br>            <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">data</span><br>              <span class="hljs-attr">mountPath:</span> <span class="hljs-string">/var/lib/mysql</span><br>          <span class="hljs-attr">env:</span><br>            <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">MYSQL_ROOT_PASSWORD</span><br>              <span class="hljs-attr">valueFrom:</span><br>                <span class="hljs-attr">secretKeyRef:</span><br>                  <span class="hljs-attr">name:</span> <span class="hljs-string">mysql-secret</span><br>                  <span class="hljs-attr">key:</span> <span class="hljs-string">password</span><br>  <span class="hljs-attr">volumeClaimTemplates:</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-attr">metadata:</span><br>        <span class="hljs-attr">name:</span> <span class="hljs-string">data</span><br>      <span class="hljs-attr">spec:</span><br>        <span class="hljs-attr">accessModes:</span> [<span class="hljs-string">&quot;ReadWriteOnce&quot;</span>]<br>        <span class="hljs-attr">storageClassName:</span> <span class="hljs-string">standard</span><br>        <span class="hljs-attr">resources:</span><br>          <span class="hljs-attr">requests:</span><br>            <span class="hljs-attr">storage:</span> <span class="hljs-string">10Gi</span><br></code></pre></td></tr></table></figure>
+<h2 id="网络模型">网络模型</h2>
+<p>Kubernetes网络模型的核心要求：</p>
+<ol type="1">
+<li><strong>Pod内通信</strong>：同一Pod内的容器共享网络命名空间，通过localhost通信</li>
+<li><strong>Pod间通信</strong>：所有Pod可以直接通信，不需要NAT</li>
+<li><strong>Service通信</strong>：通过ClusterIP实现服务发现和负载均衡</li>
+<li><strong>外部通信</strong>：通过NodePort、LoadBalancer或Ingress暴露服务</li>
+</ol>
+<pre class="mermaid">graph TB
+    subgraph Node1["节点1 (10.0.1.1)"]
+        subgraph Pod1["Pod A (10.244.1.2)"]
+            C1["Container 1&lt;br&gt;:8080"]
+            C2["Container 2&lt;br&gt;:9090"]
+        end
+        subgraph Pod2["Pod B (10.244.1.3)"]
+            C3["Container 3&lt;br&gt;:8080"]
+        end
+        Bridge1["cbr0 (10.244.1.0/24)"]
+    end
+
+    subgraph Node2["节点2 (10.0.1.2)"]
+        subgraph Pod3["Pod C (10.244.2.2)"]
+            C4["Container 4&lt;br&gt;:8080"]
+        end
+        Bridge2["cbr0 (10.244.2.0/24)"]
+    end
+
+    C1 &lt;-.-&gt;|localhost| C2
+    Pod1 --&gt; Bridge1
+    Pod2 --&gt; Bridge1
+    Pod3 --&gt; Bridge2
+    Bridge1 &lt;--&gt;|"VXLAN/BGP&lt;br&gt;Overlay/Underlay"| Bridge2</pre>
+<h2 id="实战使用kubeadm搭建集群">实战：使用kubeadm搭建集群</h2>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># Master节点初始化</span><br>kubeadm init \<br>  --apiserver-advertise-address=10.0.0.1 \<br>  --pod-network-cidr=10.244.0.0/16 \<br>  --service-cidr=10.96.0.0/12 \<br>  --kubernetes-version=v1.30.0<br><br><span class="hljs-comment"># 配置kubectl</span><br><span class="hljs-built_in">mkdir</span> -p <span class="hljs-variable">$HOME</span>/.kube<br><span class="hljs-built_in">cp</span> -i /etc/kubernetes/admin.conf <span class="hljs-variable">$HOME</span>/.kube/config<br><span class="hljs-built_in">chown</span> $(<span class="hljs-built_in">id</span> -u):$(<span class="hljs-built_in">id</span> -g) <span class="hljs-variable">$HOME</span>/.kube/config<br><br><span class="hljs-comment"># 安装CNI插件（Calico）</span><br>kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.27.0/manifests/calico.yaml<br><br><span class="hljs-comment"># Worker节点加入集群</span><br>kubeadm <span class="hljs-built_in">join</span> 10.0.0.1:6443 --token &lt;token&gt; \<br>  --discovery-token-ca-cert-hash sha256:&lt;<span class="hljs-built_in">hash</span>&gt;<br><br><span class="hljs-comment"># 验证集群状态</span><br>kubectl get nodes -o wide<br>kubectl get pods -n kube-system<br>kubectl cluster-info<br></code></pre></td></tr></table></figure>
+<h2 id="总结">总结</h2>
+<p>Kubernetes的架构设计体现了以下核心理念：</p>
+<ul>
+<li><strong>声明式API</strong>：用户描述期望状态，系统负责实现</li>
+<li><strong>控制器模式</strong>：通过调谐循环不断收敛到期望状态</li>
+<li><strong>松耦合</strong>：各组件通过API Server通信，职责单一</li>
+<li><strong>可扩展</strong>：CRI/CNI/CSI等接口允许灵活替换底层实现</li>
+</ul>
+<p>理解这些核心架构概念，是高效使用和运维Kubernetes的基础。后续文章将深入探讨网络模型、资源管理和调度策略等进阶话题。</p>
+<hr />
+<h2 id="踩坑记录">踩坑记录</h2>
+<p>团队从 Docker Compose 迁移到 K8s 后第一次大促，Pod 开始出现
+<code>OOMKilled</code>。排查发现我们没有给 Java 应用设置
+<code>-XX:MaxRAMPercentage</code>，JVM
+堆大小默认按<strong>宿主机</strong>内存计算（128G），而 Pod
+<code>limit</code> 只有 2G，堆开到 96G 后直接被 cgroup 杀掉。</p>
+<p>修复很简单：在 JVM 参数里加
+<code>-XX:MaxRAMPercentage=75.0</code>，让 JVM
+感知容器内存限制。但这个坑需要亲自踩一次才能记住——Docker 容器下 JVM
+的内存感知问题在 JDK 8u191 之后才得到修复，很多老教程根本没提这个。</p>
+<p>第二个坑是 <code>requests</code> 和 <code>limits</code>
+设置。刚迁移时图省事，所有服务都不设 <code>requests</code>，结果
+Scheduler 把大量 Pod 调度到同一个节点，节点内存耗尽后 kubelet
+开始随机驱逐 Pod，触发了一次意外的服务中断。设置合理的
+<code>requests</code> 是 K8s 资源管理的基础，不能省。</p>
+<h2 id="实测结果">实测结果</h2>
+<p>迁移前：12 台 8 核 16G 的 ECS，平均 CPU 利用率 15%，内存
+40%（大量浪费）</p>
+<table>
+<thead>
+<tr class="header">
+<th>指标</th>
+<th>迁移前（ECS）</th>
+<th>迁移后（K8s）</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>机器利用率（CPU）</td>
+<td>15%</td>
+<td>62%</td>
+</tr>
+<tr class="even">
+<td>机器利用率（内存）</td>
+<td>40%</td>
+<td>78%</td>
+</tr>
+<tr class="odd">
+<td>滚动发布耗时</td>
+<td>平均 45 分钟</td>
+<td>平均 8 分钟</td>
+</tr>
+<tr class="even">
+<td>故障恢复（Pod 自愈）</td>
+<td>手动，平均 10 分钟</td>
+<td>自动，&lt; 30 秒</td>
+</tr>
+</tbody>
+</table>
+<h2 id="我的看法">我的看法</h2>
+<p>K8s
+最大的价值不是弹性伸缩，而是<strong>统一了运维标准</strong>。迁移之前，每个服务的部署方式都不一样，运维靠口口相传的经验。K8s
+强制你用声明式 YAML
+描述服务状态，这本身就逼着团队把运维知识沉淀到代码里，可以 review、可以
+diff、可以回滚。</p>
+<p>弹性伸缩是锦上添花，标准化才是核心价值。如果团队规模小、服务数量少，K8s
+的学习和运维成本未必值得，Docker Compose 反而更轻量实用。</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2022-04-18</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">3.4k 字 · 9 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/k8s-intro/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">在学习Kubernetes之前，您必须了解的关键概念</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/microservice-patterns/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">微服务架构模式：从单体到分布式</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%95%B4%E4%BD%93%E6%9E%B6%E6%9E%84%E6%A6%82%E8%A7%88"><span class="toc-text">整体架构概览</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%8E%A7%E5%88%B6%E5%B9%B3%E9%9D%A2%E7%BB%84%E4%BB%B6"><span class="toc-text">控制平面组件</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#api-server"><span class="toc-text">API Server</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#etcd"><span class="toc-text">etcd</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#scheduler"><span class="toc-text">Scheduler</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#controller-manager"><span class="toc-text">Controller Manager</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%8A%82%E7%82%B9%E7%BB%84%E4%BB%B6"><span class="toc-text">节点组件</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#kubelet"><span class="toc-text">kubelet</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#kube-proxy"><span class="toc-text">kube-proxy</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#pod%E7%94%9F%E5%91%BD%E5%91%A8%E6%9C%9F"><span class="toc-text">Pod生命周期</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#init-container"><span class="toc-text">Init Container</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#pod-hook"><span class="toc-text">Pod Hook</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%8E%A7%E5%88%B6%E5%99%A8%E6%A8%A1%E5%BC%8F"><span class="toc-text">控制器模式</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#deployment%E6%BB%9A%E5%8A%A8%E6%9B%B4%E6%96%B0"><span class="toc-text">Deployment滚动更新</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#statefulset"><span class="toc-text">StatefulSet</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BD%91%E7%BB%9C%E6%A8%A1%E5%9E%8B"><span class="toc-text">网络模型</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E6%88%98%E4%BD%BF%E7%94%A8kubeadm%E6%90%AD%E5%BB%BA%E9%9B%86%E7%BE%A4"><span class="toc-text">实战：使用kubeadm搭建集群</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%B8%A9%E5%9D%91%E8%AE%B0%E5%BD%95"><span class="toc-text">踩坑记录</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E6%B5%8B%E7%BB%93%E6%9E%9C"><span class="toc-text">实测结果</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%88%91%E7%9A%84%E7%9C%8B%E6%B3%95"><span class="toc-text">我的看法</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

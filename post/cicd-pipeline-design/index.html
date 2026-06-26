@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CI/CD流水线设计：从Jenkins到GitHub Actions · zt&#39;s Blog</title>
+  <meta name="description" content="系统讲解CI/CD流水线设计，对比Jenkins Pipeline与GitHub Actions，涵盖多阶段构建、测试策略和部署策略。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/cicd-pipeline-design/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="CI/CD流水线设计：从Jenkins到GitHub Actions">
+  <meta property="og:description" content="系统讲解CI/CD流水线设计，对比Jenkins Pipeline与GitHub Actions，涵盖多阶段构建、测试策略和部署策略。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/cicd-pipeline-design/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2024-06-11T16:00:00.000Z">
+  <meta property="article:modified_time" content="2024-06-11T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="CI/CD流水线设计：从Jenkins到GitHub Actions">
+  <meta name="twitter:description" content="系统讲解CI/CD流水线设计，对比Jenkins Pipeline与GitHub Actions，涵盖多阶段构建、测试策略和部署策略。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"CI/CD流水线设计：从Jenkins到GitHub Actions","description":"系统讲解CI/CD流水线设计，对比Jenkins Pipeline与GitHub Actions，涵盖多阶段构建、测试策略和部署策略。","datePublished":"2024-06-11T16:00:00.000Z","dateModified":"2024-06-11T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/cicd-pipeline-design/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"DevOps","item":"https://withesse.co/categories/DevOps/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:45">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/DevOps/">DevOps</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/cicd/"><span class="hash">#</span>cicd</a><a class="tag" href="/tags/jenkins/"><span class="hash">#</span>jenkins</a><a class="tag" href="/tags/github-actions/"><span class="hash">#</span>github-actions</a>
+        
+      </div>
+
+      <h1>CI/CD流水线设计：从Jenkins到GitHub Actions</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2024.06.12</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 8 min</span>
+        </span>
+        <span class="wc"><span class="num">3.0k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%B5%81%E6%B0%B4%E7%BA%BF%E8%AE%BE%E8%AE%A1%E5%8E%9F%E5%88%99"><span class="toc-text">流水线设计原则</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#jenkins-pipeline"><span class="toc-text">Jenkins Pipeline</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#declarative-pipeline"><span class="toc-text">Declarative Pipeline</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#jenkins-shared-library"><span class="toc-text">Jenkins Shared Library</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#github-actions"><span class="toc-text">GitHub Actions</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%8C%E6%95%B4%E5%B7%A5%E4%BD%9C%E6%B5%81"><span class="toc-text">完整工作流</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#github-actions%E5%B7%A5%E4%BD%9C%E6%B5%81%E5%8F%AF%E8%A7%86%E5%8C%96"><span class="toc-text">GitHub Actions工作流可视化</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%83%A8%E7%BD%B2%E7%AD%96%E7%95%A5%E8%AF%A6%E8%A7%A3"><span class="toc-text">部署策略详解</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%93%9D%E7%BB%BF%E9%83%A8%E7%BD%B2blue-green"><span class="toc-text">蓝绿部署（Blue-Green）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%87%91%E4%B8%9D%E9%9B%80%E9%83%A8%E7%BD%B2canary"><span class="toc-text">金丝雀部署（Canary）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#secrets%E7%AE%A1%E7%90%86"><span class="toc-text">Secrets管理</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#jenkins-vs-github-actions%E5%AF%B9%E6%AF%94"><span class="toc-text">Jenkins vs GitHub
+Actions对比</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5%E6%80%BB%E7%BB%93"><span class="toc-text">最佳实践总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="前言">前言</h2>
+<p>CI/CD（持续集成/持续交付）是现代软件开发的核心实践。一条设计良好的流水线能够显著提升交付速度和质量。本文将从流水线设计原则出发，深入对比Jenkins
+Pipeline和GitHub Actions，并探讨常见的部署策略。</p>
+<h2 id="流水线设计原则">流水线设计原则</h2>
+<pre class="mermaid">graph LR
+    subgraph CI["持续集成 (CI)"]
+        Code["代码提交"] --&gt; Build["构建"]
+        Build --&gt; UnitTest["单元测试"]
+        UnitTest --&gt; Lint["代码检查"]
+        Lint --&gt; SAST["安全扫描"]
+        SAST --&gt; Artifact["制品打包"]
+    end
+
+    subgraph CD["持续交付 (CD)"]
+        Artifact --&gt; DeployDev["部署Dev"]
+        DeployDev --&gt; IntTest["集成测试"]
+        IntTest --&gt; DeployStaging["部署Staging"]
+        DeployStaging --&gt; E2E["E2E测试"]
+        E2E --&gt; Approval["人工审批"]
+        Approval --&gt; DeployProd["部署Production"]
+    end</pre>
+<p>核心设计原则：</p>
+<ol type="1">
+<li><strong>快速反馈</strong>：构建和测试应在几分钟内完成</li>
+<li><strong>幂等性</strong>：同一提交多次构建结果一致</li>
+<li><strong>制品不可变</strong>：构建一次，部署到所有环境</li>
+<li><strong>最小权限</strong>：每个阶段只授予必要的权限</li>
+<li><strong>可观测</strong>：每个阶段都有日志、指标和通知</li>
+</ol>
+<h2 id="jenkins-pipeline">Jenkins Pipeline</h2>
+<h3 id="declarative-pipeline">Declarative Pipeline</h3>
+<figure class="highlight groovy"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br><span class="line">113</span><br><span class="line">114</span><br><span class="line">115</span><br><span class="line">116</span><br><span class="line">117</span><br><span class="line">118</span><br><span class="line">119</span><br><span class="line">120</span><br><span class="line">121</span><br><span class="line">122</span><br><span class="line">123</span><br><span class="line">124</span><br><span class="line">125</span><br><span class="line">126</span><br><span class="line">127</span><br><span class="line">128</span><br><span class="line">129</span><br><span class="line">130</span><br><span class="line">131</span><br><span class="line">132</span><br><span class="line">133</span><br><span class="line">134</span><br><span class="line">135</span><br><span class="line">136</span><br><span class="line">137</span><br><span class="line">138</span><br><span class="line">139</span><br><span class="line">140</span><br><span class="line">141</span><br><span class="line">142</span><br><span class="line">143</span><br><span class="line">144</span><br><span class="line">145</span><br><span class="line">146</span><br><span class="line">147</span><br><span class="line">148</span><br><span class="line">149</span><br><span class="line">150</span><br><span class="line">151</span><br><span class="line">152</span><br><span class="line">153</span><br><span class="line">154</span><br><span class="line">155</span><br><span class="line">156</span><br><span class="line">157</span><br><span class="line">158</span><br><span class="line">159</span><br><span class="line">160</span><br><span class="line">161</span><br><span class="line">162</span><br><span class="line">163</span><br><span class="line">164</span><br><span class="line">165</span><br><span class="line">166</span><br><span class="line">167</span><br><span class="line">168</span><br><span class="line">169</span><br><span class="line">170</span><br><span class="line">171</span><br><span class="line">172</span><br><span class="line">173</span><br><span class="line">174</span><br><span class="line">175</span><br><span class="line">176</span><br><span class="line">177</span><br><span class="line">178</span><br><span class="line">179</span><br><span class="line">180</span><br></pre></td><td class="code"><pre><code class="hljs groovy"><span class="hljs-comment">// Jenkinsfile (Declarative Pipeline)</span><br>pipeline &#123;<br>    agent &#123;<br>        kubernetes &#123;<br>            yaml <span class="hljs-string">&#x27;&#x27;&#x27;</span><br><span class="hljs-string">                apiVersion: v1</span><br><span class="hljs-string">                kind: Pod</span><br><span class="hljs-string">                spec:</span><br><span class="hljs-string">                  containers:</span><br><span class="hljs-string">                  - name: maven</span><br><span class="hljs-string">                    image: maven:3.9-eclipse-temurin-21</span><br><span class="hljs-string">                    command: [&#x27;sleep&#x27;]</span><br><span class="hljs-string">                    args: [&#x27;infinity&#x27;]</span><br><span class="hljs-string">                  - name: docker</span><br><span class="hljs-string">                    image: docker:24-dind</span><br><span class="hljs-string">                    securityContext:</span><br><span class="hljs-string">                      privileged: true</span><br><span class="hljs-string">                    env:</span><br><span class="hljs-string">                    - name: DOCKER_TLS_CERTDIR</span><br><span class="hljs-string">                      value: &quot;&quot;</span><br><span class="hljs-string">            &#x27;&#x27;&#x27;</span><br>        &#125;<br>    &#125;<br><br>    environment &#123;<br>        REGISTRY = <span class="hljs-string">&#x27;registry.example.com&#x27;</span><br>        IMAGE_NAME = <span class="hljs-string">&#x27;myapp&#x27;</span><br>        SONAR_TOKEN = credentials(<span class="hljs-string">&#x27;sonar-token&#x27;</span>)<br>        KUBECONFIG = credentials(<span class="hljs-string">&#x27;kubeconfig-prod&#x27;</span>)<br>    &#125;<br><br>    options &#123;<br>        timeout(<span class="hljs-attr">time:</span> <span class="hljs-number">30</span>, <span class="hljs-attr">unit:</span> <span class="hljs-string">&#x27;MINUTES&#x27;</span>)<br>        retry(<span class="hljs-number">1</span>)<br>        timestamps()<br>        disableConcurrentBuilds()<br>    &#125;<br><br>    stages &#123;<br>        stage(<span class="hljs-string">&#x27;Checkout&#x27;</span>) &#123;<br>            steps &#123;<br>                checkout scm<br>                script &#123;<br>                    env.GIT_COMMIT_SHORT = sh(<br>                        <span class="hljs-symbol">script:</span> <span class="hljs-string">&#x27;git rev-parse --short HEAD&#x27;</span>,<br>                        <span class="hljs-symbol">returnStdout:</span> <span class="hljs-literal">true</span><br>                    ).trim()<br>                    env.IMAGE_TAG = <span class="hljs-string">&quot;$&#123;env.BRANCH_NAME&#125;-$&#123;env.GIT_COMMIT_SHORT&#125;&quot;</span><br>                &#125;<br>            &#125;<br>        &#125;<br><br>        stage(<span class="hljs-string">&#x27;Build &amp; Test&#x27;</span>) &#123;<br>            parallel &#123;<br>                stage(<span class="hljs-string">&#x27;Unit Test&#x27;</span>) &#123;<br>                    steps &#123;<br>                        container(<span class="hljs-string">&#x27;maven&#x27;</span>) &#123;<br>                            sh <span class="hljs-string">&#x27;mvn test -Dmaven.test.failure.ignore=false&#x27;</span><br>                        &#125;<br>                    &#125;<br>                    post &#123;<br>                        always &#123;<br>                            junit <span class="hljs-string">&#x27;target/surefire-reports/*.xml&#x27;</span><br>                            jacoco(<span class="hljs-attr">execPattern:</span> <span class="hljs-string">&#x27;target/jacoco.exec&#x27;</span>)<br>                        &#125;<br>                    &#125;<br>                &#125;<br><br>                stage(<span class="hljs-string">&#x27;Code Analysis&#x27;</span>) &#123;<br>                    steps &#123;<br>                        container(<span class="hljs-string">&#x27;maven&#x27;</span>) &#123;<br>                            sh <span class="hljs-string">&quot;&quot;&quot;</span><br><span class="hljs-string">                                mvn sonar:sonar \</span><br><span class="hljs-string">                                    -Dsonar.host.url=https://sonar.example.com \</span><br><span class="hljs-string">                                    -Dsonar.token=$&#123;SONAR_TOKEN&#125;</span><br><span class="hljs-string">                            &quot;&quot;&quot;</span><br>                        &#125;<br>                    &#125;<br>                &#125;<br>            &#125;<br>        &#125;<br><br>        stage(<span class="hljs-string">&#x27;Build Image&#x27;</span>) &#123;<br>            steps &#123;<br>                container(<span class="hljs-string">&#x27;docker&#x27;</span>) &#123;<br>                    sh <span class="hljs-string">&quot;&quot;&quot;</span><br><span class="hljs-string">                        docker build \</span><br><span class="hljs-string">                            --build-arg VERSION=$&#123;IMAGE_TAG&#125; \</span><br><span class="hljs-string">                            -t $&#123;REGISTRY&#125;/$&#123;IMAGE_NAME&#125;:$&#123;IMAGE_TAG&#125; \</span><br><span class="hljs-string">                            -t $&#123;REGISTRY&#125;/$&#123;IMAGE_NAME&#125;:latest \</span><br><span class="hljs-string">                            .</span><br><span class="hljs-string">                        docker push $&#123;REGISTRY&#125;/$&#123;IMAGE_NAME&#125;:$&#123;IMAGE_TAG&#125;</span><br><span class="hljs-string">                        docker push $&#123;REGISTRY&#125;/$&#123;IMAGE_NAME&#125;:latest</span><br><span class="hljs-string">                    &quot;&quot;&quot;</span><br>                &#125;<br>            &#125;<br>        &#125;<br><br>        stage(<span class="hljs-string">&#x27;Security Scan&#x27;</span>) &#123;<br>            steps &#123;<br>                container(<span class="hljs-string">&#x27;docker&#x27;</span>) &#123;<br>                    sh <span class="hljs-string">&quot;&quot;&quot;</span><br><span class="hljs-string">                        trivy image --exit-code 1 \</span><br><span class="hljs-string">                            --severity HIGH,CRITICAL \</span><br><span class="hljs-string">                            $&#123;REGISTRY&#125;/$&#123;IMAGE_NAME&#125;:$&#123;IMAGE_TAG&#125;</span><br><span class="hljs-string">                    &quot;&quot;&quot;</span><br>                &#125;<br>            &#125;<br>        &#125;<br><br>        stage(<span class="hljs-string">&#x27;Deploy Staging&#x27;</span>) &#123;<br>            when &#123;<br>                branch <span class="hljs-string">&#x27;develop&#x27;</span><br>            &#125;<br>            steps &#123;<br>                sh <span class="hljs-string">&quot;&quot;&quot;</span><br><span class="hljs-string">                    helm upgrade --install myapp ./charts/myapp \</span><br><span class="hljs-string">                        --namespace staging \</span><br><span class="hljs-string">                        --set image.tag=$&#123;IMAGE_TAG&#125; \</span><br><span class="hljs-string">                        -f charts/myapp/values-staging.yaml \</span><br><span class="hljs-string">                        --wait --timeout 5m</span><br><span class="hljs-string">                &quot;&quot;&quot;</span><br>            &#125;<br>        &#125;<br><br>        stage(<span class="hljs-string">&#x27;Integration Test&#x27;</span>) &#123;<br>            when &#123;<br>                branch <span class="hljs-string">&#x27;develop&#x27;</span><br>            &#125;<br>            steps &#123;<br>                sh <span class="hljs-string">&quot;&quot;&quot;</span><br><span class="hljs-string">                    newman run tests/integration/postman_collection.json \</span><br><span class="hljs-string">                        --environment tests/integration/staging.env.json \</span><br><span class="hljs-string">                        --reporters cli,junit \</span><br><span class="hljs-string">                        --reporter-junit-export results/integration.xml</span><br><span class="hljs-string">                &quot;&quot;&quot;</span><br>            &#125;<br>        &#125;<br><br>        stage(<span class="hljs-string">&#x27;Deploy Production&#x27;</span>) &#123;<br>            when &#123;<br>                branch <span class="hljs-string">&#x27;main&#x27;</span><br>            &#125;<br>            input &#123;<br>                message <span class="hljs-string">&quot;部署到生产环境？&quot;</span><br>                ok <span class="hljs-string">&quot;确认部署&quot;</span><br>                submitter <span class="hljs-string">&quot;admin,deployer&quot;</span><br>            &#125;<br>            steps &#123;<br>                sh <span class="hljs-string">&quot;&quot;&quot;</span><br><span class="hljs-string">                    helm upgrade --install myapp ./charts/myapp \</span><br><span class="hljs-string">                        --namespace production \</span><br><span class="hljs-string">                        --set image.tag=$&#123;IMAGE_TAG&#125; \</span><br><span class="hljs-string">                        -f charts/myapp/values-production.yaml \</span><br><span class="hljs-string">                        --wait --timeout 10m</span><br><span class="hljs-string">                &quot;&quot;&quot;</span><br>            &#125;<br>        &#125;<br>    &#125;<br><br>    post &#123;<br>        success &#123;<br>            slackSend(<br>                <span class="hljs-symbol">channel:</span> <span class="hljs-string">&#x27;#deployments&#x27;</span>,<br>                <span class="hljs-symbol">color:</span> <span class="hljs-string">&#x27;good&#x27;</span>,<br>                <span class="hljs-symbol">message:</span> <span class="hljs-string">&quot;构建成功: $&#123;env.JOB_NAME&#125; #$&#123;env.BUILD_NUMBER&#125; ($&#123;IMAGE_TAG&#125;)&quot;</span><br>            )<br>        &#125;<br>        failure &#123;<br>            slackSend(<br>                <span class="hljs-symbol">channel:</span> <span class="hljs-string">&#x27;#deployments&#x27;</span>,<br>                <span class="hljs-symbol">color:</span> <span class="hljs-string">&#x27;danger&#x27;</span>,<br>                <span class="hljs-symbol">message:</span> <span class="hljs-string">&quot;构建失败: $&#123;env.JOB_NAME&#125; #$&#123;env.BUILD_NUMBER&#125;&quot;</span><br>            )<br>        &#125;<br>        always &#123;<br>            cleanWs()<br>        &#125;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="jenkins-shared-library">Jenkins Shared Library</h3>
+<figure class="highlight groovy"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br></pre></td><td class="code"><pre><code class="hljs groovy"><span class="hljs-comment">// vars/standardPipeline.groovy - 共享库</span><br><span class="hljs-keyword">def</span> call(Map config) &#123;<br>    pipeline &#123;<br>        agent any<br><br>        stages &#123;<br>            stage(<span class="hljs-string">&#x27;Build&#x27;</span>) &#123;<br>                steps &#123;<br>                    script &#123;<br>                        docker.build(<span class="hljs-string">&quot;$&#123;config.imageName&#125;:$&#123;env.BUILD_NUMBER&#125;&quot;</span>)<br>                    &#125;<br>                &#125;<br>            &#125;<br><br>            stage(<span class="hljs-string">&#x27;Test&#x27;</span>) &#123;<br>                steps &#123;<br>                    sh config.testCommand ?: <span class="hljs-string">&#x27;make test&#x27;</span><br>                &#125;<br>            &#125;<br><br>            stage(<span class="hljs-string">&#x27;Deploy&#x27;</span>) &#123;<br>                when &#123;<br>                    branch config.deployBranch ?: <span class="hljs-string">&#x27;main&#x27;</span><br>                &#125;<br>                steps &#123;<br>                    sh <span class="hljs-string">&quot;helm upgrade --install $&#123;config.releaseName&#125; $&#123;config.chartPath&#125;&quot;</span><br>                &#125;<br>            &#125;<br>        &#125;<br>    &#125;<br>&#125;<br><br><span class="hljs-comment">// 使用共享库</span><br><span class="hljs-comment">// Jenkinsfile</span><br><span class="hljs-meta">@Library</span>(<span class="hljs-string">&#x27;my-shared-lib&#x27;</span>) _<br>standardPipeline(<br>    <span class="hljs-symbol">imageName:</span> <span class="hljs-string">&#x27;myapp&#x27;</span>,<br>    <span class="hljs-symbol">releaseName:</span> <span class="hljs-string">&#x27;myapp&#x27;</span>,<br>    <span class="hljs-symbol">chartPath:</span> <span class="hljs-string">&#x27;./charts/myapp&#x27;</span>,<br>    <span class="hljs-symbol">testCommand:</span> <span class="hljs-string">&#x27;mvn test&#x27;</span><br>)<br></code></pre></td></tr></table></figure>
+<h2 id="github-actions">GitHub Actions</h2>
+<h3 id="完整工作流">完整工作流</h3>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br><span class="line">113</span><br><span class="line">114</span><br><span class="line">115</span><br><span class="line">116</span><br><span class="line">117</span><br><span class="line">118</span><br><span class="line">119</span><br><span class="line">120</span><br><span class="line">121</span><br><span class="line">122</span><br><span class="line">123</span><br><span class="line">124</span><br><span class="line">125</span><br><span class="line">126</span><br><span class="line">127</span><br><span class="line">128</span><br><span class="line">129</span><br><span class="line">130</span><br><span class="line">131</span><br><span class="line">132</span><br><span class="line">133</span><br><span class="line">134</span><br><span class="line">135</span><br><span class="line">136</span><br><span class="line">137</span><br><span class="line">138</span><br><span class="line">139</span><br><span class="line">140</span><br><span class="line">141</span><br><span class="line">142</span><br><span class="line">143</span><br><span class="line">144</span><br><span class="line">145</span><br><span class="line">146</span><br><span class="line">147</span><br><span class="line">148</span><br><span class="line">149</span><br><span class="line">150</span><br><span class="line">151</span><br><span class="line">152</span><br><span class="line">153</span><br><span class="line">154</span><br><span class="line">155</span><br><span class="line">156</span><br><span class="line">157</span><br><span class="line">158</span><br><span class="line">159</span><br><span class="line">160</span><br><span class="line">161</span><br><span class="line">162</span><br><span class="line">163</span><br><span class="line">164</span><br><span class="line">165</span><br><span class="line">166</span><br><span class="line">167</span><br><span class="line">168</span><br><span class="line">169</span><br><span class="line">170</span><br><span class="line">171</span><br><span class="line">172</span><br><span class="line">173</span><br><span class="line">174</span><br><span class="line">175</span><br><span class="line">176</span><br><span class="line">177</span><br><span class="line">178</span><br><span class="line">179</span><br><span class="line">180</span><br><span class="line">181</span><br><span class="line">182</span><br><span class="line">183</span><br><span class="line">184</span><br><span class="line">185</span><br><span class="line">186</span><br><span class="line">187</span><br><span class="line">188</span><br><span class="line">189</span><br><span class="line">190</span><br><span class="line">191</span><br><span class="line">192</span><br><span class="line">193</span><br><span class="line">194</span><br><span class="line">195</span><br><span class="line">196</span><br><span class="line">197</span><br><span class="line">198</span><br><span class="line">199</span><br><span class="line">200</span><br><span class="line">201</span><br><span class="line">202</span><br><span class="line">203</span><br><span class="line">204</span><br><span class="line">205</span><br><span class="line">206</span><br><span class="line">207</span><br><span class="line">208</span><br><span class="line">209</span><br><span class="line">210</span><br><span class="line">211</span><br><span class="line">212</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># .github/workflows/ci-cd.yaml</span><br><span class="hljs-attr">name:</span> <span class="hljs-string">CI/CD</span> <span class="hljs-string">Pipeline</span><br><br><span class="hljs-attr">on:</span><br>  <span class="hljs-attr">push:</span><br>    <span class="hljs-attr">branches:</span> [<span class="hljs-string">main</span>, <span class="hljs-string">develop</span>]<br>  <span class="hljs-attr">pull_request:</span><br>    <span class="hljs-attr">branches:</span> [<span class="hljs-string">main</span>]<br><br><span class="hljs-attr">permissions:</span><br>  <span class="hljs-attr">contents:</span> <span class="hljs-string">read</span><br>  <span class="hljs-attr">packages:</span> <span class="hljs-string">write</span><br>  <span class="hljs-attr">security-events:</span> <span class="hljs-string">write</span><br><br><span class="hljs-attr">env:</span><br>  <span class="hljs-attr">REGISTRY:</span> <span class="hljs-string">ghcr.io</span><br>  <span class="hljs-attr">IMAGE_NAME:</span> <span class="hljs-string">$&#123;&#123;</span> <span class="hljs-string">github.repository</span> <span class="hljs-string">&#125;&#125;</span><br><br><span class="hljs-attr">jobs:</span><br>  <span class="hljs-comment"># ============ CI阶段 ============</span><br>  <span class="hljs-attr">test:</span><br>    <span class="hljs-attr">name:</span> <span class="hljs-string">Test</span><br>    <span class="hljs-attr">runs-on:</span> <span class="hljs-string">ubuntu-latest</span><br>    <span class="hljs-attr">strategy:</span><br>      <span class="hljs-attr">matrix:</span><br>        <span class="hljs-attr">java-version:</span> [<span class="hljs-number">17</span>, <span class="hljs-number">21</span>]<br>    <span class="hljs-attr">steps:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">uses:</span> <span class="hljs-string">actions/checkout@v4</span><br><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Setup</span> <span class="hljs-string">Java</span><br>        <span class="hljs-attr">uses:</span> <span class="hljs-string">actions/setup-java@v4</span><br>        <span class="hljs-attr">with:</span><br>          <span class="hljs-attr">java-version:</span> <span class="hljs-string">$&#123;&#123;</span> <span class="hljs-string">matrix.java-version</span> <span class="hljs-string">&#125;&#125;</span><br>          <span class="hljs-attr">distribution:</span> <span class="hljs-string">temurin</span><br>          <span class="hljs-attr">cache:</span> <span class="hljs-string">maven</span><br><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Run</span> <span class="hljs-string">Tests</span><br>        <span class="hljs-attr">run:</span> <span class="hljs-string">mvn</span> <span class="hljs-string">verify</span> <span class="hljs-string">-B</span><br><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Upload</span> <span class="hljs-string">Coverage</span><br>        <span class="hljs-attr">if:</span> <span class="hljs-string">matrix.java-version</span> <span class="hljs-string">==</span> <span class="hljs-number">21</span><br>        <span class="hljs-attr">uses:</span> <span class="hljs-string">codecov/codecov-action@v4</span><br>        <span class="hljs-attr">with:</span><br>          <span class="hljs-attr">file:</span> <span class="hljs-string">target/site/jacoco/jacoco.xml</span><br><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Upload</span> <span class="hljs-string">Test</span> <span class="hljs-string">Results</span><br>        <span class="hljs-attr">if:</span> <span class="hljs-string">always()</span><br>        <span class="hljs-attr">uses:</span> <span class="hljs-string">actions/upload-artifact@v4</span><br>        <span class="hljs-attr">with:</span><br>          <span class="hljs-attr">name:</span> <span class="hljs-string">test-results-java-$&#123;&#123;</span> <span class="hljs-string">matrix.java-version</span> <span class="hljs-string">&#125;&#125;</span><br>          <span class="hljs-attr">path:</span> <span class="hljs-string">target/surefire-reports/</span><br><br>  <span class="hljs-attr">lint:</span><br>    <span class="hljs-attr">name:</span> <span class="hljs-string">Code</span> <span class="hljs-string">Quality</span><br>    <span class="hljs-attr">runs-on:</span> <span class="hljs-string">ubuntu-latest</span><br>    <span class="hljs-attr">steps:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">uses:</span> <span class="hljs-string">actions/checkout@v4</span><br>        <span class="hljs-attr">with:</span><br>          <span class="hljs-attr">fetch-depth:</span> <span class="hljs-number">0</span>  <span class="hljs-comment"># SonarCloud需要完整历史</span><br><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">SonarCloud</span> <span class="hljs-string">Scan</span><br>        <span class="hljs-attr">uses:</span> <span class="hljs-string">SonarSource/sonarcloud-github-action@master</span><br>        <span class="hljs-attr">env:</span><br>          <span class="hljs-attr">GITHUB_TOKEN:</span> <span class="hljs-string">$&#123;&#123;</span> <span class="hljs-string">secrets.GITHUB_TOKEN</span> <span class="hljs-string">&#125;&#125;</span><br>          <span class="hljs-attr">SONAR_TOKEN:</span> <span class="hljs-string">$&#123;&#123;</span> <span class="hljs-string">secrets.SONAR_TOKEN</span> <span class="hljs-string">&#125;&#125;</span><br><br>  <span class="hljs-attr">security:</span><br>    <span class="hljs-attr">name:</span> <span class="hljs-string">Security</span> <span class="hljs-string">Scan</span><br>    <span class="hljs-attr">runs-on:</span> <span class="hljs-string">ubuntu-latest</span><br>    <span class="hljs-attr">steps:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">uses:</span> <span class="hljs-string">actions/checkout@v4</span><br><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Run</span> <span class="hljs-string">Snyk</span><br>        <span class="hljs-attr">uses:</span> <span class="hljs-string">snyk/actions/maven@master</span><br>        <span class="hljs-attr">continue-on-error:</span> <span class="hljs-literal">true</span><br>        <span class="hljs-attr">env:</span><br>          <span class="hljs-attr">SNYK_TOKEN:</span> <span class="hljs-string">$&#123;&#123;</span> <span class="hljs-string">secrets.SNYK_TOKEN</span> <span class="hljs-string">&#125;&#125;</span><br>        <span class="hljs-attr">with:</span><br>          <span class="hljs-attr">args:</span> <span class="hljs-string">--severity-threshold=high</span><br><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Upload</span> <span class="hljs-string">SARIF</span><br>        <span class="hljs-attr">uses:</span> <span class="hljs-string">github/codeql-action/upload-sarif@v3</span><br>        <span class="hljs-attr">with:</span><br>          <span class="hljs-attr">sarif_file:</span> <span class="hljs-string">snyk.sarif</span><br><br>  <span class="hljs-comment"># ============ Build阶段 ============</span><br>  <span class="hljs-attr">build:</span><br>    <span class="hljs-attr">name:</span> <span class="hljs-string">Build</span> <span class="hljs-string">&amp;</span> <span class="hljs-string">Push</span> <span class="hljs-string">Image</span><br>    <span class="hljs-attr">needs:</span> [<span class="hljs-string">test</span>, <span class="hljs-string">lint</span>, <span class="hljs-string">security</span>]<br>    <span class="hljs-attr">runs-on:</span> <span class="hljs-string">ubuntu-latest</span><br>    <span class="hljs-attr">outputs:</span><br>      <span class="hljs-attr">image-tag:</span> <span class="hljs-string">$&#123;&#123;</span> <span class="hljs-string">steps.meta.outputs.version</span> <span class="hljs-string">&#125;&#125;</span><br>    <span class="hljs-attr">steps:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">uses:</span> <span class="hljs-string">actions/checkout@v4</span><br><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Setup</span> <span class="hljs-string">Docker</span> <span class="hljs-string">Buildx</span><br>        <span class="hljs-attr">uses:</span> <span class="hljs-string">docker/setup-buildx-action@v3</span><br><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Login</span> <span class="hljs-string">to</span> <span class="hljs-string">Registry</span><br>        <span class="hljs-attr">uses:</span> <span class="hljs-string">docker/login-action@v3</span><br>        <span class="hljs-attr">with:</span><br>          <span class="hljs-attr">registry:</span> <span class="hljs-string">$&#123;&#123;</span> <span class="hljs-string">env.REGISTRY</span> <span class="hljs-string">&#125;&#125;</span><br>          <span class="hljs-attr">username:</span> <span class="hljs-string">$&#123;&#123;</span> <span class="hljs-string">github.actor</span> <span class="hljs-string">&#125;&#125;</span><br>          <span class="hljs-attr">password:</span> <span class="hljs-string">$&#123;&#123;</span> <span class="hljs-string">secrets.GITHUB_TOKEN</span> <span class="hljs-string">&#125;&#125;</span><br><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Extract</span> <span class="hljs-string">metadata</span><br>        <span class="hljs-attr">id:</span> <span class="hljs-string">meta</span><br>        <span class="hljs-attr">uses:</span> <span class="hljs-string">docker/metadata-action@v5</span><br>        <span class="hljs-attr">with:</span><br>          <span class="hljs-attr">images:</span> <span class="hljs-string">$&#123;&#123;</span> <span class="hljs-string">env.REGISTRY</span> <span class="hljs-string">&#125;&#125;/$&#123;&#123;</span> <span class="hljs-string">env.IMAGE_NAME</span> <span class="hljs-string">&#125;&#125;</span><br>          <span class="hljs-attr">tags:</span> <span class="hljs-string">|</span><br><span class="hljs-string">            type=sha,prefix=</span><br><span class="hljs-string">            type=ref,event=branch</span><br><span class="hljs-string">            type=semver,pattern=&#123;&#123;version&#125;&#125;</span><br><span class="hljs-string"></span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Build</span> <span class="hljs-string">and</span> <span class="hljs-string">Push</span><br>        <span class="hljs-attr">uses:</span> <span class="hljs-string">docker/build-push-action@v5</span><br>        <span class="hljs-attr">with:</span><br>          <span class="hljs-attr">context:</span> <span class="hljs-string">.</span><br>          <span class="hljs-attr">push:</span> <span class="hljs-literal">true</span><br>          <span class="hljs-attr">tags:</span> <span class="hljs-string">$&#123;&#123;</span> <span class="hljs-string">steps.meta.outputs.tags</span> <span class="hljs-string">&#125;&#125;</span><br>          <span class="hljs-attr">labels:</span> <span class="hljs-string">$&#123;&#123;</span> <span class="hljs-string">steps.meta.outputs.labels</span> <span class="hljs-string">&#125;&#125;</span><br>          <span class="hljs-attr">cache-from:</span> <span class="hljs-string">type=gha</span><br>          <span class="hljs-attr">cache-to:</span> <span class="hljs-string">type=gha,mode=max</span><br>          <span class="hljs-attr">platforms:</span> <span class="hljs-string">linux/amd64,linux/arm64</span><br><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Scan</span> <span class="hljs-string">Image</span><br>        <span class="hljs-attr">uses:</span> <span class="hljs-string">aquasecurity/trivy-action@master</span><br>        <span class="hljs-attr">with:</span><br>          <span class="hljs-attr">image-ref:</span> <span class="hljs-string">$&#123;&#123;</span> <span class="hljs-string">env.REGISTRY</span> <span class="hljs-string">&#125;&#125;/$&#123;&#123;</span> <span class="hljs-string">env.IMAGE_NAME</span> <span class="hljs-string">&#125;&#125;:$&#123;&#123;</span> <span class="hljs-string">steps.meta.outputs.version</span> <span class="hljs-string">&#125;&#125;</span><br>          <span class="hljs-attr">format:</span> <span class="hljs-string">sarif</span><br>          <span class="hljs-attr">output:</span> <span class="hljs-string">trivy-results.sarif</span><br>          <span class="hljs-attr">severity:</span> <span class="hljs-string">CRITICAL,HIGH</span><br><br>  <span class="hljs-comment"># ============ CD阶段 ============</span><br>  <span class="hljs-attr">deploy-staging:</span><br>    <span class="hljs-attr">name:</span> <span class="hljs-string">Deploy</span> <span class="hljs-string">to</span> <span class="hljs-string">Staging</span><br>    <span class="hljs-attr">needs:</span> <span class="hljs-string">build</span><br>    <span class="hljs-attr">if:</span> <span class="hljs-string">github.ref</span> <span class="hljs-string">==</span> <span class="hljs-string">&#x27;refs/heads/develop&#x27;</span><br>    <span class="hljs-attr">runs-on:</span> <span class="hljs-string">ubuntu-latest</span><br>    <span class="hljs-attr">environment:</span> <span class="hljs-string">staging</span><br>    <span class="hljs-attr">steps:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">uses:</span> <span class="hljs-string">actions/checkout@v4</span><br><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Setup</span> <span class="hljs-string">Helm</span><br>        <span class="hljs-attr">uses:</span> <span class="hljs-string">azure/setup-helm@v4</span><br><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Setup</span> <span class="hljs-string">kubectl</span><br>        <span class="hljs-attr">uses:</span> <span class="hljs-string">azure/setup-kubectl@v4</span><br><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Configure</span> <span class="hljs-string">kubeconfig</span><br>        <span class="hljs-attr">run:</span> <span class="hljs-string">|</span><br><span class="hljs-string">          mkdir -p $HOME/.kube</span><br><span class="hljs-string">          echo &quot;$&#123;&#123; secrets.KUBE_CONFIG_STAGING &#125;&#125;&quot; | base64 -d &gt; $HOME/.kube/config</span><br><span class="hljs-string"></span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Deploy</span><br>        <span class="hljs-attr">run:</span> <span class="hljs-string">|</span><br><span class="hljs-string">          helm upgrade --install myapp ./charts/myapp \</span><br><span class="hljs-string">            --namespace staging \</span><br><span class="hljs-string">            --set image.tag=$&#123;&#123; needs.build.outputs.image-tag &#125;&#125; \</span><br><span class="hljs-string">            -f charts/myapp/values-staging.yaml \</span><br><span class="hljs-string">            --wait --timeout 5m</span><br><span class="hljs-string"></span><br>  <span class="hljs-attr">deploy-production:</span><br>    <span class="hljs-attr">name:</span> <span class="hljs-string">Deploy</span> <span class="hljs-string">to</span> <span class="hljs-string">Production</span><br>    <span class="hljs-attr">needs:</span> [<span class="hljs-string">build</span>, <span class="hljs-string">deploy-staging</span>]<br>    <span class="hljs-attr">if:</span> <span class="hljs-string">github.ref</span> <span class="hljs-string">==</span> <span class="hljs-string">&#x27;refs/heads/main&#x27;</span><br>    <span class="hljs-attr">runs-on:</span> <span class="hljs-string">ubuntu-latest</span><br>    <span class="hljs-attr">environment:</span><br>      <span class="hljs-attr">name:</span> <span class="hljs-string">production</span><br>      <span class="hljs-attr">url:</span> <span class="hljs-string">https://myapp.example.com</span><br>    <span class="hljs-attr">steps:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">uses:</span> <span class="hljs-string">actions/checkout@v4</span><br><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Setup</span> <span class="hljs-string">Helm</span><br>        <span class="hljs-attr">uses:</span> <span class="hljs-string">azure/setup-helm@v4</span><br><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Configure</span> <span class="hljs-string">kubeconfig</span><br>        <span class="hljs-attr">run:</span> <span class="hljs-string">|</span><br><span class="hljs-string">          mkdir -p $HOME/.kube</span><br><span class="hljs-string">          echo &quot;$&#123;&#123; secrets.KUBE_CONFIG_PROD &#125;&#125;&quot; | base64 -d &gt; $HOME/.kube/config</span><br><span class="hljs-string"></span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Deploy</span> <span class="hljs-string">with</span> <span class="hljs-string">Canary</span><br>        <span class="hljs-attr">run:</span> <span class="hljs-string">|</span><br><span class="hljs-string">          # 金丝雀发布：先部署10%流量</span><br><span class="hljs-string">          helm upgrade --install myapp ./charts/myapp \</span><br><span class="hljs-string">            --namespace production \</span><br><span class="hljs-string">            --set image.tag=$&#123;&#123; needs.build.outputs.image-tag &#125;&#125; \</span><br><span class="hljs-string">            --set canary.enabled=true \</span><br><span class="hljs-string">            --set canary.weight=10 \</span><br><span class="hljs-string">            -f charts/myapp/values-production.yaml \</span><br><span class="hljs-string">            --wait --timeout 10m</span><br><span class="hljs-string"></span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Verify</span> <span class="hljs-string">Canary</span><br>        <span class="hljs-attr">run:</span> <span class="hljs-string">|</span><br><span class="hljs-string">          # 等待并检查错误率</span><br><span class="hljs-string">          sleep 120</span><br><span class="hljs-string">          ERROR_RATE=$(curl -s &quot;https://prometheus.example.com/api/v1/query?query=rate(http_requests_total&#123;status=~&#x27;5..&#x27;&#125;[5m])/rate(http_requests_total[5m])*100&quot; | jq &#x27;.data.result[0].value[1]&#x27; -r)</span><br><span class="hljs-string">          if (( $(echo &quot;$ERROR_RATE &gt; 1&quot; | bc -l) )); then</span><br><span class="hljs-string">            echo &quot;Error rate too high: $&#123;ERROR_RATE&#125;%&quot;</span><br><span class="hljs-string">            helm rollback myapp</span><br><span class="hljs-string">            exit 1</span><br><span class="hljs-string">          fi</span><br><span class="hljs-string"></span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Promote</span> <span class="hljs-string">to</span> <span class="hljs-string">Full</span> <span class="hljs-string">Rollout</span><br>        <span class="hljs-attr">run:</span> <span class="hljs-string">|</span><br><span class="hljs-string">          helm upgrade --install myapp ./charts/myapp \</span><br><span class="hljs-string">            --namespace production \</span><br><span class="hljs-string">            --set image.tag=$&#123;&#123; needs.build.outputs.image-tag &#125;&#125; \</span><br><span class="hljs-string">            --set canary.enabled=false \</span><br><span class="hljs-string">            -f charts/myapp/values-production.yaml \</span><br><span class="hljs-string">            --wait --timeout 10m</span><br></code></pre></td></tr></table></figure>
+<h3 id="github-actions工作流可视化">GitHub Actions工作流可视化</h3>
+<pre class="mermaid">graph TB
+    Push["Push Event"] --&gt; Test["test&lt;br&gt;(matrix: Java 17,21)"]
+    Push --&gt; Lint["lint&lt;br&gt;(SonarCloud)"]
+    Push --&gt; Security["security&lt;br&gt;(Snyk)"]
+
+    Test --&gt; Build["build&lt;br&gt;(Docker Build &amp; Push)"]
+    Lint --&gt; Build
+    Security --&gt; Build
+
+    Build --&gt; |"develop分支"| Staging["deploy-staging"]
+    Build --&gt; |"main分支"| Production["deploy-production"]
+    Staging --&gt; Production
+
+    Staging -.-&gt; |"environment: staging"| SApproval["自动部署"]
+    Production -.-&gt; |"environment: production"| PApproval["需要审批"]</pre>
+<h2 id="部署策略详解">部署策略详解</h2>
+<h3 id="蓝绿部署blue-green">蓝绿部署（Blue-Green）</h3>
+<pre class="mermaid">graph TB
+    subgraph Before["部署前"]
+        LB1["Load Balancer"] --&gt; Blue1["Blue (v1)&lt;br&gt;Active"]
+        Green1["Green (v2)&lt;br&gt;Idle"]
+    end
+
+    subgraph After["部署后"]
+        LB2["Load Balancer"] --&gt; Green2["Green (v2)&lt;br&gt;Active"]
+        Blue2["Blue (v1)&lt;br&gt;Idle/Rollback"]
+    end
+
+    Before --&gt; |"切换流量"| After</pre>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># 蓝绿部署Kubernetes实现</span><br><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">v1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">Service</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">myapp</span><br><span class="hljs-attr">spec:</span><br>  <span class="hljs-attr">selector:</span><br>    <span class="hljs-attr">app:</span> <span class="hljs-string">myapp</span><br>    <span class="hljs-attr">version:</span> <span class="hljs-string">green</span>  <span class="hljs-comment"># 切换时修改为blue或green</span><br>  <span class="hljs-attr">ports:</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-attr">port:</span> <span class="hljs-number">80</span><br>      <span class="hljs-attr">targetPort:</span> <span class="hljs-number">8080</span><br><br><span class="hljs-meta">---</span><br><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">apps/v1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">Deployment</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">myapp-blue</span><br><span class="hljs-attr">spec:</span><br>  <span class="hljs-attr">replicas:</span> <span class="hljs-number">3</span><br>  <span class="hljs-attr">selector:</span><br>    <span class="hljs-attr">matchLabels:</span><br>      <span class="hljs-attr">app:</span> <span class="hljs-string">myapp</span><br>      <span class="hljs-attr">version:</span> <span class="hljs-string">blue</span><br>  <span class="hljs-attr">template:</span><br>    <span class="hljs-attr">metadata:</span><br>      <span class="hljs-attr">labels:</span><br>        <span class="hljs-attr">app:</span> <span class="hljs-string">myapp</span><br>        <span class="hljs-attr">version:</span> <span class="hljs-string">blue</span><br>    <span class="hljs-attr">spec:</span><br>      <span class="hljs-attr">containers:</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">app</span><br>          <span class="hljs-attr">image:</span> <span class="hljs-string">myapp:v1</span><br><br><span class="hljs-meta">---</span><br><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">apps/v1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">Deployment</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">myapp-green</span><br><span class="hljs-attr">spec:</span><br>  <span class="hljs-attr">replicas:</span> <span class="hljs-number">3</span><br>  <span class="hljs-attr">selector:</span><br>    <span class="hljs-attr">matchLabels:</span><br>      <span class="hljs-attr">app:</span> <span class="hljs-string">myapp</span><br>      <span class="hljs-attr">version:</span> <span class="hljs-string">green</span><br>  <span class="hljs-attr">template:</span><br>    <span class="hljs-attr">metadata:</span><br>      <span class="hljs-attr">labels:</span><br>        <span class="hljs-attr">app:</span> <span class="hljs-string">myapp</span><br>        <span class="hljs-attr">version:</span> <span class="hljs-string">green</span><br>    <span class="hljs-attr">spec:</span><br>      <span class="hljs-attr">containers:</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">app</span><br>          <span class="hljs-attr">image:</span> <span class="hljs-string">myapp:v2</span><br></code></pre></td></tr></table></figure>
+<h3 id="金丝雀部署canary">金丝雀部署（Canary）</h3>
+<pre class="mermaid">graph TB
+    subgraph Step1["阶段1: 10%流量"]
+        LB1["Load Balancer"]
+        LB1 --&gt; |"90%"| Stable1["Stable v1 (3副本)"]
+        LB1 --&gt; |"10%"| Canary1["Canary v2 (1副本)"]
+    end
+
+    subgraph Step2["阶段2: 50%流量"]
+        LB2["Load Balancer"]
+        LB2 --&gt; |"50%"| Stable2["Stable v1 (3副本)"]
+        LB2 --&gt; |"50%"| Canary2["Canary v2 (3副本)"]
+    end
+
+    subgraph Step3["阶段3: 全量发布"]
+        LB3["Load Balancer"]
+        LB3 --&gt; |"100%"| New["New v2 (3副本)"]
+    end
+
+    Step1 --&gt; |"指标正常"| Step2
+    Step2 --&gt; |"指标正常"| Step3</pre>
+<h3 id="secrets管理">Secrets管理</h3>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># GitHub Actions - 使用环境级别的Secrets</span><br><span class="hljs-attr">jobs:</span><br>  <span class="hljs-attr">deploy:</span><br>    <span class="hljs-attr">environment:</span> <span class="hljs-string">production</span><br>    <span class="hljs-attr">steps:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Deploy</span><br>        <span class="hljs-attr">env:</span><br>          <span class="hljs-comment"># 从GitHub Secrets注入</span><br>          <span class="hljs-attr">DB_PASSWORD:</span> <span class="hljs-string">$&#123;&#123;</span> <span class="hljs-string">secrets.DB_PASSWORD</span> <span class="hljs-string">&#125;&#125;</span><br>          <span class="hljs-attr">API_KEY:</span> <span class="hljs-string">$&#123;&#123;</span> <span class="hljs-string">secrets.API_KEY</span> <span class="hljs-string">&#125;&#125;</span><br>        <span class="hljs-attr">run:</span> <span class="hljs-string">|</span><br><span class="hljs-string">          # 通过Kubernetes Secret注入</span><br><span class="hljs-string">          kubectl create secret generic app-secrets \</span><br><span class="hljs-string">            --from-literal=db-password=&quot;$DB_PASSWORD&quot; \</span><br><span class="hljs-string">            --from-literal=api-key=&quot;$API_KEY&quot; \</span><br><span class="hljs-string">            --dry-run=client -o yaml | kubectl apply -f -</span><br></code></pre></td></tr></table></figure>
+<pre class="mermaid">graph LR
+    subgraph SecretSources["Secret来源"]
+        GHS["GitHub Secrets"]
+        Vault["HashiCorp Vault"]
+        AWS["AWS Secrets Manager"]
+        SOPS["Mozilla SOPS"]
+    end
+
+    subgraph Pipeline["CI/CD Pipeline"]
+        Inject["注入环境变量"]
+        K8sSecret["创建K8s Secret"]
+    end
+
+    GHS --&gt; Inject
+    Vault --&gt; Inject
+    AWS --&gt; Inject
+    SOPS --&gt; Inject
+    Inject --&gt; K8sSecret
+    K8sSecret --&gt; Pod["Application Pod"]</pre>
+<h2 id="jenkins-vs-github-actions对比">Jenkins vs GitHub
+Actions对比</h2>
+<table>
+<thead>
+<tr class="header">
+<th>特性</th>
+<th>Jenkins</th>
+<th>GitHub Actions</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>部署方式</td>
+<td>自托管</td>
+<td>SaaS（也支持self-hosted runner）</td>
+</tr>
+<tr class="even">
+<td>配置方式</td>
+<td>Jenkinsfile (Groovy)</td>
+<td>YAML</td>
+</tr>
+<tr class="odd">
+<td>插件生态</td>
+<td>1800+ 插件</td>
+<td>Marketplace（数万Actions）</td>
+</tr>
+<tr class="even">
+<td>并行执行</td>
+<td>支持 (parallel)</td>
+<td>支持 (matrix/并行job)</td>
+</tr>
+<tr class="odd">
+<td>缓存</td>
+<td>手动配置</td>
+<td>内置actions/cache</td>
+</tr>
+<tr class="even">
+<td>Secrets</td>
+<td>Credentials Plugin</td>
+<td>内置Secrets管理</td>
+</tr>
+<tr class="odd">
+<td>审批</td>
+<td>input步骤</td>
+<td>Environments Protection Rules</td>
+</tr>
+<tr class="even">
+<td>成本</td>
+<td>服务器成本</td>
+<td>按分钟计费（公共仓库免费）</td>
+</tr>
+<tr class="odd">
+<td>适用场景</td>
+<td>复杂企业级流水线</td>
+<td>开源项目、中小团队</td>
+</tr>
+</tbody>
+</table>
+<h2 id="最佳实践总结">最佳实践总结</h2>
+<ol type="1">
+<li><strong>流水线即代码</strong>：将CI/CD配置纳入版本控制</li>
+<li><strong>并行化</strong>：独立的阶段并行执行，缩短反馈时间</li>
+<li><strong>缓存优化</strong>：缓存依赖下载、Docker层，加速构建</li>
+<li><strong>制品不可变</strong>：构建一次，推送到制品仓库，部署时拉取</li>
+<li><strong>渐进式发布</strong>：从canary到全量，出问题及时回滚</li>
+<li><strong>安全左移</strong>：在CI阶段集成SAST、依赖扫描、镜像扫描</li>
+<li><strong>环境一致性</strong>：使用容器化构建环境，避免”在我机器上能跑”</li>
+<li><strong>监控告警</strong>：部署后自动验证关键指标，异常自动回滚</li>
+</ol>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2024-06-12</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">3.0k 字 · 8 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/terraform-infrastructure-as-code/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Terraform基础设施即代码实战</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/helm-chart-development/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Helm Chart开发与最佳实践</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%B5%81%E6%B0%B4%E7%BA%BF%E8%AE%BE%E8%AE%A1%E5%8E%9F%E5%88%99"><span class="toc-text">流水线设计原则</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#jenkins-pipeline"><span class="toc-text">Jenkins Pipeline</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#declarative-pipeline"><span class="toc-text">Declarative Pipeline</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#jenkins-shared-library"><span class="toc-text">Jenkins Shared Library</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#github-actions"><span class="toc-text">GitHub Actions</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%8C%E6%95%B4%E5%B7%A5%E4%BD%9C%E6%B5%81"><span class="toc-text">完整工作流</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#github-actions%E5%B7%A5%E4%BD%9C%E6%B5%81%E5%8F%AF%E8%A7%86%E5%8C%96"><span class="toc-text">GitHub Actions工作流可视化</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%83%A8%E7%BD%B2%E7%AD%96%E7%95%A5%E8%AF%A6%E8%A7%A3"><span class="toc-text">部署策略详解</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%93%9D%E7%BB%BF%E9%83%A8%E7%BD%B2blue-green"><span class="toc-text">蓝绿部署（Blue-Green）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%87%91%E4%B8%9D%E9%9B%80%E9%83%A8%E7%BD%B2canary"><span class="toc-text">金丝雀部署（Canary）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#secrets%E7%AE%A1%E7%90%86"><span class="toc-text">Secrets管理</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#jenkins-vs-github-actions%E5%AF%B9%E6%AF%94"><span class="toc-text">Jenkins vs GitHub
+Actions对比</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5%E6%80%BB%E7%BB%93"><span class="toc-text">最佳实践总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

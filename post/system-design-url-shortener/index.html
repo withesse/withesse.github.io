@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>系统设计实战：短链接服务架构 · zt&#39;s Blog</title>
+  <meta name="description" content="从零设计一个高可用短链接服务，涵盖需求分析、Base62编码、数据库设计、缓存层、重定向流程、访问分析与水平扩展方案。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/system-design-url-shortener/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="系统设计实战：短链接服务架构">
+  <meta property="og:description" content="从零设计一个高可用短链接服务，涵盖需求分析、Base62编码、数据库设计、缓存层、重定向流程、访问分析与水平扩展方案。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/system-design-url-shortener/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2024-04-02T16:00:00.000Z">
+  <meta property="article:modified_time" content="2024-04-02T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="系统设计实战：短链接服务架构">
+  <meta name="twitter:description" content="从零设计一个高可用短链接服务，涵盖需求分析、Base62编码、数据库设计、缓存层、重定向流程、访问分析与水平扩展方案。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"系统设计实战：短链接服务架构","description":"从零设计一个高可用短链接服务，涵盖需求分析、Base62编码、数据库设计、缓存层、重定向流程、访问分析与水平扩展方案。","datePublished":"2024-04-02T16:00:00.000Z","dateModified":"2024-04-02T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/system-design-url-shortener/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Architecture","item":"https://withesse.co/categories/Architecture/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:152">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Architecture/">Architecture</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/system-design/"><span class="hash">#</span>system-design</a><a class="tag" href="/tags/url-shortener/"><span class="hash">#</span>url-shortener</a>
+        
+      </div>
+
+      <h1>系统设计实战：短链接服务架构</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2024.04.03</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 7 min</span>
+        </span>
+        <span class="wc"><span class="num">2.9k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%9C%80%E6%B1%82%E5%88%86%E6%9E%90"><span class="toc-text">需求分析</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8A%9F%E8%83%BD%E9%9C%80%E6%B1%82"><span class="toc-text">功能需求</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%9D%9E%E5%8A%9F%E8%83%BD%E9%9C%80%E6%B1%82"><span class="toc-text">非功能需求</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%B9%E9%87%8F%E4%BC%B0%E7%AE%97"><span class="toc-text">容量估算</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%B3%BB%E7%BB%9F%E6%9E%B6%E6%9E%84%E6%80%BB%E8%A7%88"><span class="toc-text">系统架构总览</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#url-%E7%BC%96%E7%A0%81%E6%96%B9%E6%A1%88"><span class="toc-text">URL 编码方案</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%96%B9%E6%A1%88%E9%80%89%E6%8B%A9"><span class="toc-text">方案选择</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#base62-%E7%BC%96%E7%A0%81"><span class="toc-text">Base62 编码</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%88%86%E5%B8%83%E5%BC%8F-id-%E7%94%9F%E6%88%90"><span class="toc-text">分布式 ID 生成</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E5%BA%93%E8%AE%BE%E8%AE%A1"><span class="toc-text">数据库设计</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83-api-%E5%AE%9E%E7%8E%B0"><span class="toc-text">核心 API 实现</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%88%9B%E5%BB%BA%E7%9F%AD%E9%93%BE%E6%8E%A5"><span class="toc-text">创建短链接</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%87%8D%E5%AE%9A%E5%90%91%E5%A4%84%E7%90%86"><span class="toc-text">重定向处理</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%AE%BF%E9%97%AE%E5%88%86%E6%9E%90"><span class="toc-text">访问分析</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%AB%98%E5%8F%AF%E7%94%A8%E4%B8%8E%E6%89%A9%E5%B1%95"><span class="toc-text">高可用与扩展</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%BC%93%E5%AD%98%E7%AD%96%E7%95%A5"><span class="toc-text">缓存策略</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E5%BA%93%E5%88%86%E7%89%87"><span class="toc-text">数据库分片</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%8C%E6%95%B4%E6%9E%B6%E6%9E%84%E5%9B%BE"><span class="toc-text">完整架构图</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%89%E5%85%A8%E8%80%83%E8%99%91"><span class="toc-text">安全考虑</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="前言">前言</h2>
+<p>短链接服务（URL
+Shortener）是系统设计面试中的经典题目，也是实际工程中常见的需求。虽然看似简单——将长
+URL 映射为短
+URL，但要设计一个支持高并发、高可用、可水平扩展的短链接服务，涉及到的技术点非常丰富。本文将从需求分析开始，逐步设计一个生产级的短链接服务。</p>
+<h2 id="需求分析">需求分析</h2>
+<h3 id="功能需求">功能需求</h3>
+<ol type="1">
+<li>给定一个长 URL，生成一个短 URL</li>
+<li>用户访问短 URL 时，重定向到原始长 URL</li>
+<li>短链接可以设置过期时间</li>
+<li>自定义短链接别名（可选）</li>
+<li>访问统计分析</li>
+</ol>
+<h3 id="非功能需求">非功能需求</h3>
+<ul>
+<li><strong>高可用</strong>：服务可用性 99.99%</li>
+<li><strong>低延迟</strong>：重定向响应时间 &lt; 50ms</li>
+<li><strong>高并发</strong>：支持每秒 10 万次读取</li>
+<li><strong>高扩展</strong>：可水平扩展</li>
+</ul>
+<h3 id="容量估算">容量估算</h3>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><code class="hljs plaintext">假设:<br>- 每月新增短链接: 1亿条<br>- 读写比: 100:1<br>- 每条短链接平均存储: 500 bytes<br>- 保留期限: 5年<br><br>写入 QPS: 1亿 / 30天 / 24小时 / 3600秒 ≈ 40 QPS<br>读取 QPS: 40 × 100 = 4,000 QPS (峰值 × 10 = 40,000 QPS)<br><br>存储: 1亿/月 × 12月 × 5年 × 500B = 3TB<br>缓存: 热点数据 20% ≈ 600GB (可分片)<br></code></pre></td></tr></table></figure>
+<h2 id="系统架构总览">系统架构总览</h2>
+<pre class="mermaid">graph TB
+    Client[客户端] --&gt; CDN[CDN]
+    CDN --&gt; LB[负载均衡]
+
+    LB --&gt; API1[API Server 1]
+    LB --&gt; API2[API Server 2]
+    LB --&gt; APIN[API Server N]
+
+    API1 --&gt; Cache[Redis Cluster&lt;br/&gt;缓存层]
+    API2 --&gt; Cache
+    APIN --&gt; Cache
+
+    Cache --&gt; DB[(MySQL Cluster&lt;br/&gt;主从)]
+
+    API1 --&gt; IDGen[ID生成服务]
+    API2 --&gt; IDGen
+    APIN --&gt; IDGen
+
+    API1 --&gt; Analytics[分析服务]
+    Analytics --&gt; Kafka[Kafka]
+    Kafka --&gt; Flink[Flink 流处理]
+    Flink --&gt; ClickHouse[(ClickHouse&lt;br/&gt;分析数据库)]</pre>
+<h2 id="url-编码方案">URL 编码方案</h2>
+<h3 id="方案选择">方案选择</h3>
+<p>短链接的核心是将长 URL 映射为一个短字符串。常见方案：</p>
+<table>
+<thead>
+<tr class="header">
+<th>方案</th>
+<th>优点</th>
+<th>缺点</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>哈希（MD5/SHA）</td>
+<td>实现简单</td>
+<td>碰撞处理复杂</td>
+</tr>
+<tr class="even">
+<td>自增ID + Base62</td>
+<td>无碰撞</td>
+<td>需要分布式ID</td>
+</tr>
+<tr class="odd">
+<td>随机字符串</td>
+<td>简单</td>
+<td>碰撞检测开销</td>
+</tr>
+<tr class="even">
+<td>预生成</td>
+<td>无实时计算</td>
+<td>维护Key池</td>
+</tr>
+</tbody>
+</table>
+<p>推荐使用 <strong>自增 ID + Base62
+编码</strong>，既保证唯一性又简洁。</p>
+<h3 id="base62-编码">Base62 编码</h3>
+<p>Base62 使用 <code>[0-9a-zA-Z]</code> 共 62 个字符。7 位 Base62
+可以表示 62^7 ≈ 3.5 万亿个不同的值，足以满足需求。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">Base62Encoder</span> &#123;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">final</span> <span class="hljs-type">String</span> <span class="hljs-variable">ALPHABET</span> <span class="hljs-operator">=</span><br>        <span class="hljs-string">&quot;0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ&quot;</span>;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">final</span> <span class="hljs-type">int</span> <span class="hljs-variable">BASE</span> <span class="hljs-operator">=</span> ALPHABET.length();<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> String <span class="hljs-title function_">encode</span><span class="hljs-params">(<span class="hljs-type">long</span> num)</span> &#123;<br>        <span class="hljs-keyword">if</span> (num == <span class="hljs-number">0</span>) <span class="hljs-keyword">return</span> String.valueOf(ALPHABET.charAt(<span class="hljs-number">0</span>));<br><br>        <span class="hljs-type">StringBuilder</span> <span class="hljs-variable">sb</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">StringBuilder</span>();<br>        <span class="hljs-keyword">while</span> (num &gt; <span class="hljs-number">0</span>) &#123;<br>            sb.append(ALPHABET.charAt((<span class="hljs-type">int</span>) (num % BASE)));<br>            num /= BASE;<br>        &#125;<br>        <span class="hljs-keyword">return</span> sb.reverse().toString();<br>    &#125;<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> <span class="hljs-type">long</span> <span class="hljs-title function_">decode</span><span class="hljs-params">(String str)</span> &#123;<br>        <span class="hljs-type">long</span> <span class="hljs-variable">num</span> <span class="hljs-operator">=</span> <span class="hljs-number">0</span>;<br>        <span class="hljs-keyword">for</span> (<span class="hljs-type">char</span> c : str.toCharArray()) &#123;<br>            num = num * BASE + ALPHABET.indexOf(c);<br>        &#125;<br>        <span class="hljs-keyword">return</span> num;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><code class="hljs plaintext">示例:<br>ID = 12345678 → Base62 = &quot;dGnd&quot;<br>ID = 1000000000 → Base62 = &quot;15FTGf&quot;<br>ID = 3521614606208 → Base62 = &quot;zzzzzzzz&quot;<br></code></pre></td></tr></table></figure>
+<h3 id="分布式-id-生成">分布式 ID 生成</h3>
+<pre class="mermaid">graph LR
+    subgraph 方案1: Snowflake
+        S[Snowflake ID&lt;br/&gt;64位] --&gt; T[时间戳 41位]
+        S --&gt; M[机器ID 10位]
+        S --&gt; SEQ[序列号 12位]
+    end
+
+    subgraph 方案2: 号段模式
+        DB[(数据库)] --&gt;|每次取1000个ID| Service1[服务1&lt;br/&gt;1-1000]
+        DB --&gt;|每次取1000个ID| Service2[服务2&lt;br/&gt;1001-2000]
+    end</pre>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">// 号段模式 ID 生成器</span><br><span class="hljs-meta">@Service</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">SegmentIdGenerator</span> &#123;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> <span class="hljs-type">AtomicLong</span> <span class="hljs-variable">currentId</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">AtomicLong</span>(<span class="hljs-number">0</span>);<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">volatile</span> <span class="hljs-type">long</span> <span class="hljs-variable">maxId</span> <span class="hljs-operator">=</span> <span class="hljs-number">0</span>;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> <span class="hljs-type">int</span> <span class="hljs-variable">segmentSize</span> <span class="hljs-operator">=</span> <span class="hljs-number">1000</span>;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> <span class="hljs-type">Object</span> <span class="hljs-variable">lock</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">Object</span>();<br><br>    <span class="hljs-meta">@Autowired</span><br>    <span class="hljs-keyword">private</span> JdbcTemplate jdbc;<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-type">long</span> <span class="hljs-title function_">nextId</span><span class="hljs-params">()</span> &#123;<br>        <span class="hljs-type">long</span> <span class="hljs-variable">id</span> <span class="hljs-operator">=</span> currentId.incrementAndGet();<br>        <span class="hljs-keyword">if</span> (id &gt; maxId) &#123;<br>            <span class="hljs-keyword">synchronized</span> (lock) &#123;<br>                <span class="hljs-keyword">if</span> (currentId.get() &gt; maxId) &#123;<br>                    loadNextSegment();<br>                &#125;<br>                id = currentId.incrementAndGet();<br>            &#125;<br>        &#125;<br>        <span class="hljs-keyword">return</span> id;<br>    &#125;<br><br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">loadNextSegment</span><span class="hljs-params">()</span> &#123;<br>        <span class="hljs-comment">// 原子性地获取一个号段</span><br>        jdbc.update(<br>            <span class="hljs-string">&quot;UPDATE id_generator SET max_id = max_id + ? WHERE biz_type = &#x27;short_url&#x27;&quot;</span>,<br>            segmentSize);<br><br>        <span class="hljs-type">Long</span> <span class="hljs-variable">newMaxId</span> <span class="hljs-operator">=</span> jdbc.queryForObject(<br>            <span class="hljs-string">&quot;SELECT max_id FROM id_generator WHERE biz_type = &#x27;short_url&#x27;&quot;</span>,<br>            Long.class);<br><br>        maxId = newMaxId;<br>        currentId.set(newMaxId - segmentSize);<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="数据库设计">数据库设计</h2>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 短链接主表</span><br><span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">TABLE</span> short_url (<br>    id          <span class="hljs-type">BIGINT</span> <span class="hljs-keyword">PRIMARY</span> KEY AUTO_INCREMENT,<br>    short_code  <span class="hljs-type">VARCHAR</span>(<span class="hljs-number">10</span>) <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span>,<br>    long_url    <span class="hljs-type">VARCHAR</span>(<span class="hljs-number">2048</span>) <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span>,<br>    user_id     <span class="hljs-type">BIGINT</span>,<br>    created_at  <span class="hljs-type">TIMESTAMP</span> <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span> <span class="hljs-keyword">DEFAULT</span> <span class="hljs-built_in">CURRENT_TIMESTAMP</span>,<br>    expires_at  <span class="hljs-type">TIMESTAMP</span> <span class="hljs-keyword">NULL</span>,<br>    click_count <span class="hljs-type">BIGINT</span> <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span> <span class="hljs-keyword">DEFAULT</span> <span class="hljs-number">0</span>,<br><br>    <span class="hljs-keyword">UNIQUE</span> KEY uk_short_code (short_code),<br>    INDEX idx_user_id (user_id),<br>    INDEX idx_expires_at (expires_at)<br>) ENGINE<span class="hljs-operator">=</span>InnoDB <span class="hljs-keyword">DEFAULT</span> CHARSET<span class="hljs-operator">=</span>utf8mb4;<br><br><span class="hljs-comment">-- 去重表 (用于相同长URL返回同一短链接)</span><br><span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">TABLE</span> url_mapping (<br>    url_hash    <span class="hljs-type">CHAR</span>(<span class="hljs-number">64</span>) <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span>, <span class="hljs-comment">-- SHA-256 of long_url</span><br>    short_code  <span class="hljs-type">VARCHAR</span>(<span class="hljs-number">10</span>) <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span>,<br>    long_url    <span class="hljs-type">VARCHAR</span>(<span class="hljs-number">2048</span>) <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span>,<br><br>    <span class="hljs-keyword">PRIMARY</span> KEY (url_hash),<br>    INDEX idx_short_code (short_code)<br>) ENGINE<span class="hljs-operator">=</span>InnoDB <span class="hljs-keyword">DEFAULT</span> CHARSET<span class="hljs-operator">=</span>utf8mb4;<br><br><span class="hljs-comment">-- 访问日志表 (按天分区)</span><br><span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">TABLE</span> click_log (<br>    id          <span class="hljs-type">BIGINT</span> AUTO_INCREMENT,<br>    short_code  <span class="hljs-type">VARCHAR</span>(<span class="hljs-number">10</span>) <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span>,<br>    client_ip   <span class="hljs-type">VARCHAR</span>(<span class="hljs-number">45</span>),<br>    user_agent  <span class="hljs-type">VARCHAR</span>(<span class="hljs-number">512</span>),<br>    referer     <span class="hljs-type">VARCHAR</span>(<span class="hljs-number">2048</span>),<br>    country     <span class="hljs-type">VARCHAR</span>(<span class="hljs-number">2</span>),<br>    created_at  <span class="hljs-type">TIMESTAMP</span> <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span> <span class="hljs-keyword">DEFAULT</span> <span class="hljs-built_in">CURRENT_TIMESTAMP</span>,<br><br>    <span class="hljs-keyword">PRIMARY</span> KEY (id, created_at),<br>    INDEX idx_short_code (short_code)<br>) <span class="hljs-keyword">PARTITION</span> <span class="hljs-keyword">BY</span> <span class="hljs-keyword">RANGE</span> (UNIX_TIMESTAMP(created_at)) (<br>    <span class="hljs-keyword">PARTITION</span> p202501 <span class="hljs-keyword">VALUES</span> LESS THAN (UNIX_TIMESTAMP(<span class="hljs-string">&#x27;2025-02-01&#x27;</span>)),<br>    <span class="hljs-keyword">PARTITION</span> p202502 <span class="hljs-keyword">VALUES</span> LESS THAN (UNIX_TIMESTAMP(<span class="hljs-string">&#x27;2025-03-01&#x27;</span>))<br>);<br></code></pre></td></tr></table></figure>
+<h2 id="核心-api-实现">核心 API 实现</h2>
+<h3 id="创建短链接">创建短链接</h3>
+<pre class="mermaid">sequenceDiagram
+    participant Client
+    participant API as API Server
+    participant IDGen as ID Generator
+    participant Cache as Redis
+    participant DB as MySQL
+
+    Client-&gt;&gt;API: POST /api/v1/shorten&lt;br/&gt;{long_url, expires_at}
+
+    API-&gt;&gt;API: 校验URL格式
+    API-&gt;&gt;DB: 查询url_mapping&lt;br/&gt;(SHA256去重)
+
+    alt URL已存在
+        DB--&gt;&gt;API: 返回已有short_code
+    else URL不存在
+        API-&gt;&gt;IDGen: 获取唯一ID
+        IDGen--&gt;&gt;API: id=12345678
+        API-&gt;&gt;API: Base62编码&lt;br/&gt;id→"dGnd"
+        API-&gt;&gt;DB: INSERT short_url + url_mapping
+        API-&gt;&gt;Cache: SET short:dGnd → long_url
+    end
+
+    API--&gt;&gt;Client: {short_url: "https://s.io/dGnd"}</pre>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-meta">@RestController</span><br><span class="hljs-meta">@RequestMapping(&quot;/api/v1&quot;)</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">ShortUrlController</span> &#123;<br>    <span class="hljs-meta">@Autowired</span><br>    <span class="hljs-keyword">private</span> ShortUrlService shortUrlService;<br><br>    <span class="hljs-meta">@PostMapping(&quot;/shorten&quot;)</span><br>    <span class="hljs-keyword">public</span> ResponseEntity&lt;ShortenResponse&gt; <span class="hljs-title function_">shorten</span><span class="hljs-params">(<span class="hljs-meta">@Valid</span> <span class="hljs-meta">@RequestBody</span> ShortenRequest request)</span> &#123;<br>        <span class="hljs-type">String</span> <span class="hljs-variable">shortCode</span> <span class="hljs-operator">=</span> shortUrlService.createShortUrl(<br>            request.getLongUrl(),<br>            request.getExpiresAt(),<br>            request.getCustomAlias()<br>        );<br><br>        <span class="hljs-keyword">return</span> ResponseEntity.ok(<span class="hljs-keyword">new</span> <span class="hljs-title class_">ShortenResponse</span>(<br>            <span class="hljs-string">&quot;https://s.io/&quot;</span> + shortCode,<br>            shortCode<br>        ));<br>    &#125;<br>&#125;<br><br><span class="hljs-meta">@Service</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">ShortUrlService</span> &#123;<br>    <span class="hljs-meta">@Autowired</span><br>    <span class="hljs-keyword">private</span> SegmentIdGenerator idGenerator;<br>    <span class="hljs-meta">@Autowired</span><br>    <span class="hljs-keyword">private</span> ShortUrlMapper urlMapper;<br>    <span class="hljs-meta">@Autowired</span><br>    <span class="hljs-keyword">private</span> RedisTemplate&lt;String, String&gt; redis;<br><br>    <span class="hljs-meta">@Transactional</span><br>    <span class="hljs-keyword">public</span> String <span class="hljs-title function_">createShortUrl</span><span class="hljs-params">(String longUrl, LocalDateTime expiresAt, String customAlias)</span> &#123;<br>        <span class="hljs-comment">// 1. URL 格式校验</span><br>        validateUrl(longUrl);<br><br>        <span class="hljs-comment">// 2. 自定义别名</span><br>        <span class="hljs-keyword">if</span> (customAlias != <span class="hljs-literal">null</span> &amp;&amp; !customAlias.isEmpty()) &#123;<br>            <span class="hljs-keyword">if</span> (urlMapper.existsByShortCode(customAlias)) &#123;<br>                <span class="hljs-keyword">throw</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">AliasAlreadyExistsException</span>(customAlias);<br>            &#125;<br>            saveShortUrl(customAlias, longUrl, expiresAt);<br>            <span class="hljs-keyword">return</span> customAlias;<br>        &#125;<br><br>        <span class="hljs-comment">// 3. 检查是否已有映射（去重）</span><br>        <span class="hljs-type">String</span> <span class="hljs-variable">urlHash</span> <span class="hljs-operator">=</span> DigestUtils.sha256Hex(longUrl);<br>        <span class="hljs-type">String</span> <span class="hljs-variable">existingCode</span> <span class="hljs-operator">=</span> urlMapper.findShortCodeByUrlHash(urlHash);<br>        <span class="hljs-keyword">if</span> (existingCode != <span class="hljs-literal">null</span>) &#123;<br>            <span class="hljs-keyword">return</span> existingCode;<br>        &#125;<br><br>        <span class="hljs-comment">// 4. 生成短码</span><br>        <span class="hljs-type">long</span> <span class="hljs-variable">id</span> <span class="hljs-operator">=</span> idGenerator.nextId();<br>        <span class="hljs-type">String</span> <span class="hljs-variable">shortCode</span> <span class="hljs-operator">=</span> Base62Encoder.encode(id);<br><br>        <span class="hljs-comment">// 5. 持久化</span><br>        saveShortUrl(shortCode, longUrl, expiresAt);<br>        urlMapper.insertUrlMapping(urlHash, shortCode, longUrl);<br><br>        <span class="hljs-comment">// 6. 写入缓存</span><br>        redis.opsForValue().set(<span class="hljs-string">&quot;short:&quot;</span> + shortCode, longUrl,<br>            Duration.ofHours(<span class="hljs-number">24</span>));<br><br>        <span class="hljs-keyword">return</span> shortCode;<br>    &#125;<br><br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">saveShortUrl</span><span class="hljs-params">(String shortCode, String longUrl, LocalDateTime expiresAt)</span> &#123;<br>        <span class="hljs-type">ShortUrl</span> <span class="hljs-variable">entity</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">ShortUrl</span>();<br>        entity.setShortCode(shortCode);<br>        entity.setLongUrl(longUrl);<br>        entity.setExpiresAt(expiresAt);<br>        urlMapper.insert(entity);<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="重定向处理">重定向处理</h3>
+<pre class="mermaid">sequenceDiagram
+    participant Client
+    participant API as API Server
+    participant Cache as Redis
+    participant DB as MySQL
+    participant Kafka as Kafka
+
+    Client-&gt;&gt;API: GET /dGnd
+    API-&gt;&gt;Cache: GET short:dGnd
+
+    alt 缓存命中
+        Cache--&gt;&gt;API: long_url
+    else 缓存未命中
+        API-&gt;&gt;DB: SELECT long_url WHERE short_code='dGnd'
+        DB--&gt;&gt;API: long_url
+        API-&gt;&gt;Cache: SET short:dGnd → long_url
+    end
+
+    API-&gt;&gt;API: 检查是否过期
+    API--&gt;&gt;Client: 301/302 Redirect → long_url
+    API-&gt;&gt;Kafka: 异步发送点击事件</pre>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-meta">@RestController</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">RedirectController</span> &#123;<br><br>    <span class="hljs-meta">@GetMapping(&quot;/&#123;shortCode:[a-zA-Z0-9]&#123;4,10&#125;&#125;&quot;)</span><br>    <span class="hljs-keyword">public</span> ResponseEntity&lt;Void&gt; <span class="hljs-title function_">redirect</span><span class="hljs-params">(</span><br><span class="hljs-params">            <span class="hljs-meta">@PathVariable</span> String shortCode,</span><br><span class="hljs-params">            HttpServletRequest request)</span> &#123;<br><br>        <span class="hljs-comment">// 1. 查缓存</span><br>        <span class="hljs-type">String</span> <span class="hljs-variable">longUrl</span> <span class="hljs-operator">=</span> redis.opsForValue().get(<span class="hljs-string">&quot;short:&quot;</span> + shortCode);<br><br>        <span class="hljs-keyword">if</span> (longUrl == <span class="hljs-literal">null</span>) &#123;<br>            <span class="hljs-comment">// 2. 查数据库</span><br>            <span class="hljs-type">ShortUrl</span> <span class="hljs-variable">shortUrl</span> <span class="hljs-operator">=</span> urlMapper.findByShortCode(shortCode);<br>            <span class="hljs-keyword">if</span> (shortUrl == <span class="hljs-literal">null</span>) &#123;<br>                <span class="hljs-keyword">throw</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">ShortUrlNotFoundException</span>(shortCode);<br>            &#125;<br><br>            <span class="hljs-comment">// 3. 检查过期</span><br>            <span class="hljs-keyword">if</span> (shortUrl.getExpiresAt() != <span class="hljs-literal">null</span> &amp;&amp;<br>                shortUrl.getExpiresAt().isBefore(LocalDateTime.now())) &#123;<br>                <span class="hljs-keyword">throw</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">ShortUrlExpiredException</span>(shortCode);<br>            &#125;<br><br>            longUrl = shortUrl.getLongUrl();<br><br>            <span class="hljs-comment">// 4. 回填缓存</span><br>            redis.opsForValue().set(<span class="hljs-string">&quot;short:&quot;</span> + shortCode, longUrl,<br>                Duration.ofHours(<span class="hljs-number">24</span>));<br>        &#125;<br><br>        <span class="hljs-comment">// 5. 异步记录点击事件</span><br>        publishClickEvent(shortCode, request);<br><br>        <span class="hljs-comment">// 6. 302 重定向</span><br>        <span class="hljs-keyword">return</span> ResponseEntity.status(HttpStatus.FOUND)<br>            .location(URI.create(longUrl))<br>            .build();<br>    &#125;<br><br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">publishClickEvent</span><span class="hljs-params">(String shortCode, HttpServletRequest request)</span> &#123;<br>        <span class="hljs-type">ClickEvent</span> <span class="hljs-variable">event</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">ClickEvent</span>();<br>        event.setShortCode(shortCode);<br>        event.setClientIp(getClientIp(request));<br>        event.setUserAgent(request.getHeader(<span class="hljs-string">&quot;User-Agent&quot;</span>));<br>        event.setReferer(request.getHeader(<span class="hljs-string">&quot;Referer&quot;</span>));<br>        event.setTimestamp(Instant.now());<br><br>        kafkaTemplate.send(<span class="hljs-string">&quot;click-events&quot;</span>, shortCode, event);<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<p><strong>301 vs 302</strong>：301
+是永久重定向，浏览器会缓存，后续不再请求服务器；302
+是临时重定向，每次都经过服务器。如果需要统计点击量，应使用 302。</p>
+<h2 id="访问分析">访问分析</h2>
+<pre class="mermaid">graph LR
+    API[API Server] --&gt;|点击事件| Kafka[Kafka]
+    Kafka --&gt; Flink[Flink]
+
+    Flink --&gt;|实时聚合| Redis[Redis&lt;br/&gt;实时计数]
+    Flink --&gt;|批量写入| CH[(ClickHouse&lt;br/&gt;分析查询)]
+
+    Dashboard[分析面板] --&gt; Redis
+    Dashboard --&gt; CH</pre>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">// Flink 实时统计处理</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">ClickAnalyticsJob</span> &#123;<br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">main</span><span class="hljs-params">(String[] args)</span> <span class="hljs-keyword">throws</span> Exception &#123;<br>        <span class="hljs-type">StreamExecutionEnvironment</span> <span class="hljs-variable">env</span> <span class="hljs-operator">=</span> StreamExecutionEnvironment.getExecutionEnvironment();<br><br>        DataStream&lt;ClickEvent&gt; clicks = env<br>            .addSource(<span class="hljs-keyword">new</span> <span class="hljs-title class_">FlinkKafkaConsumer</span>&lt;&gt;(<span class="hljs-string">&quot;click-events&quot;</span>,<br>                <span class="hljs-keyword">new</span> <span class="hljs-title class_">ClickEventSchema</span>(), kafkaProps));<br><br>        <span class="hljs-comment">// 每分钟统计各短链接的点击量</span><br>        clicks<br>            .keyBy(ClickEvent::getShortCode)<br>            .window(TumblingProcessingTimeWindows.of(Time.minutes(<span class="hljs-number">1</span>)))<br>            .aggregate(<span class="hljs-keyword">new</span> <span class="hljs-title class_">ClickCountAggregator</span>())<br>            .addSink(<span class="hljs-keyword">new</span> <span class="hljs-title class_">ClickHouseSink</span>());<br><br>        <span class="hljs-comment">// 实时更新 Redis 计数器</span><br>        clicks<br>            .keyBy(ClickEvent::getShortCode)<br>            .process(<span class="hljs-keyword">new</span> <span class="hljs-title class_">ProcessFunction</span>&lt;ClickEvent, Void&gt;() &#123;<br>                <span class="hljs-meta">@Override</span><br>                <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">processElement</span><span class="hljs-params">(ClickEvent event, Context ctx, Collector&lt;Void&gt; out)</span> &#123;<br>                    redisClient.incr(<span class="hljs-string">&quot;clicks:&quot;</span> + event.getShortCode());<br>                    redisClient.pfAdd(<span class="hljs-string">&quot;uv:&quot;</span> + event.getShortCode(), event.getClientIp());<br>                &#125;<br>            &#125;);<br><br>        env.execute(<span class="hljs-string">&quot;Click Analytics&quot;</span>);<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="高可用与扩展">高可用与扩展</h2>
+<h3 id="缓存策略">缓存策略</h3>
+<pre class="mermaid">graph TB
+    subgraph 缓存层设计
+        Hot[热点短链接&lt;br/&gt;本地缓存 Caffeine] --&gt; Warm[活跃短链接&lt;br/&gt;Redis Cluster]
+        Warm --&gt; Cold[冷数据&lt;br/&gt;MySQL]
+    end</pre>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">// 多级缓存</span><br><span class="hljs-meta">@Component</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">ShortUrlCache</span> &#123;<br>    <span class="hljs-comment">// L1: 本地缓存 (热点数据)</span><br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> Cache&lt;String, String&gt; localCache = Caffeine.newBuilder()<br>        .maximumSize(<span class="hljs-number">100_000</span>)<br>        .expireAfterAccess(<span class="hljs-number">10</span>, TimeUnit.MINUTES)<br>        .build();<br><br>    <span class="hljs-meta">@Autowired</span><br>    <span class="hljs-keyword">private</span> RedisTemplate&lt;String, String&gt; redis;<br><br>    <span class="hljs-keyword">public</span> String <span class="hljs-title function_">getLongUrl</span><span class="hljs-params">(String shortCode)</span> &#123;<br>        <span class="hljs-comment">// L1</span><br>        <span class="hljs-type">String</span> <span class="hljs-variable">url</span> <span class="hljs-operator">=</span> localCache.getIfPresent(shortCode);<br>        <span class="hljs-keyword">if</span> (url != <span class="hljs-literal">null</span>) <span class="hljs-keyword">return</span> url;<br><br>        <span class="hljs-comment">// L2</span><br>        url = redis.opsForValue().get(<span class="hljs-string">&quot;short:&quot;</span> + shortCode);<br>        <span class="hljs-keyword">if</span> (url != <span class="hljs-literal">null</span>) &#123;<br>            localCache.put(shortCode, url);<br>            <span class="hljs-keyword">return</span> url;<br>        &#125;<br><br>        <span class="hljs-keyword">return</span> <span class="hljs-literal">null</span>; <span class="hljs-comment">// 需要查数据库</span><br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="数据库分片">数据库分片</h3>
+<pre class="mermaid">graph TB
+    Router[分片路由] --&gt; S0[Shard 0&lt;br/&gt;short_code hash % 4 = 0]
+    Router --&gt; S1[Shard 1&lt;br/&gt;short_code hash % 4 = 1]
+    Router --&gt; S2[Shard 2&lt;br/&gt;short_code hash % 4 = 2]
+    Router --&gt; S3[Shard 3&lt;br/&gt;short_code hash % 4 = 3]
+
+    S0 --&gt; S0M[Master]
+    S0 --&gt; S0S[Slave]
+    S1 --&gt; S1M[Master]
+    S1 --&gt; S1S[Slave]</pre>
+<h3 id="完整架构图">完整架构图</h3>
+<pre class="mermaid">graph TB
+    DNS[DNS] --&gt; CDN[CDN / 边缘节点]
+    CDN --&gt; LB[负载均衡 L7]
+
+    subgraph API Layer
+        LB --&gt; API1[API Server]
+        LB --&gt; API2[API Server]
+        LB --&gt; APIN[API Server]
+    end
+
+    subgraph Cache Layer
+        API1 --&gt; LocalCache1[Caffeine L1]
+        LocalCache1 --&gt; RedisCluster[Redis Cluster L2]
+    end
+
+    subgraph Storage Layer
+        RedisCluster --&gt; Shard1[MySQL Shard 1&lt;br/&gt;Master + Slave]
+        RedisCluster --&gt; Shard2[MySQL Shard 2&lt;br/&gt;Master + Slave]
+    end
+
+    subgraph ID Generation
+        API1 --&gt; Leaf[Leaf ID Generator&lt;br/&gt;号段模式]
+    end
+
+    subgraph Analytics Pipeline
+        API1 --&gt;|异步| Kafka[Kafka]
+        Kafka --&gt; Flink[Flink]
+        Flink --&gt; ClickHouse[(ClickHouse)]
+        Flink --&gt; RedisCounter[Redis 计数器]
+    end</pre>
+<h2 id="安全考虑">安全考虑</h2>
+<ol type="1">
+<li><strong>防恶意 URL</strong>：创建短链接时检查长 URL
+是否在黑名单中（恶意网站、钓鱼网站）</li>
+<li><strong>限流</strong>：对创建接口进行用户级别的限流</li>
+<li><strong>防滥用</strong>：限制单个用户的创建频率和数量</li>
+<li><strong>隐私</strong>：访问日志中的 IP 地址需要脱敏处理</li>
+</ol>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">// URL 安全检查</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">UrlSafetyChecker</span> &#123;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> Set&lt;String&gt; blacklistedDomains;<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-type">boolean</span> <span class="hljs-title function_">isSafe</span><span class="hljs-params">(String url)</span> &#123;<br>        <span class="hljs-type">URI</span> <span class="hljs-variable">uri</span> <span class="hljs-operator">=</span> URI.create(url);<br>        <span class="hljs-type">String</span> <span class="hljs-variable">host</span> <span class="hljs-operator">=</span> uri.getHost().toLowerCase();<br><br>        <span class="hljs-comment">// 黑名单检查</span><br>        <span class="hljs-keyword">if</span> (blacklistedDomains.contains(host)) &#123;<br>            <span class="hljs-keyword">return</span> <span class="hljs-literal">false</span>;<br>        &#125;<br><br>        <span class="hljs-comment">// 防止内网地址</span><br>        <span class="hljs-type">InetAddress</span> <span class="hljs-variable">addr</span> <span class="hljs-operator">=</span> InetAddress.getByName(host);<br>        <span class="hljs-keyword">if</span> (addr.isLoopbackAddress() || addr.isSiteLocalAddress()) &#123;<br>            <span class="hljs-keyword">return</span> <span class="hljs-literal">false</span>;<br>        &#125;<br><br>        <span class="hljs-keyword">return</span> <span class="hljs-literal">true</span>;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="总结">总结</h2>
+<p>短链接服务虽然功能看似简单，但涉及到的技术点覆盖了系统设计的方方面面：分布式
+ID 生成保证唯一性，Base62
+编码保证短码简洁，多级缓存保证低延迟，数据库分片保证存储扩展，消息队列实现异步统计。关键设计决策包括：使用
+302 而非 301 来保证统计准确性，使用号段模式生成分布式 ID，采用 Caffeine
++ Redis 多级缓存将热点 Key 的响应时间压到微秒级。</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2024-04-03</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">2.9k 字 · 7 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/system-design-chat-system/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">系统设计实战：即时通讯系统架构</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/chatgpt-prompts-for-academic-writing/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">转译-15个适用于学术写作的ChatGPT Prompts（15 ChatGPT Prompts for Academic Writing）</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%9C%80%E6%B1%82%E5%88%86%E6%9E%90"><span class="toc-text">需求分析</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8A%9F%E8%83%BD%E9%9C%80%E6%B1%82"><span class="toc-text">功能需求</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%9D%9E%E5%8A%9F%E8%83%BD%E9%9C%80%E6%B1%82"><span class="toc-text">非功能需求</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%B9%E9%87%8F%E4%BC%B0%E7%AE%97"><span class="toc-text">容量估算</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%B3%BB%E7%BB%9F%E6%9E%B6%E6%9E%84%E6%80%BB%E8%A7%88"><span class="toc-text">系统架构总览</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#url-%E7%BC%96%E7%A0%81%E6%96%B9%E6%A1%88"><span class="toc-text">URL 编码方案</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%96%B9%E6%A1%88%E9%80%89%E6%8B%A9"><span class="toc-text">方案选择</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#base62-%E7%BC%96%E7%A0%81"><span class="toc-text">Base62 编码</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%88%86%E5%B8%83%E5%BC%8F-id-%E7%94%9F%E6%88%90"><span class="toc-text">分布式 ID 生成</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E5%BA%93%E8%AE%BE%E8%AE%A1"><span class="toc-text">数据库设计</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83-api-%E5%AE%9E%E7%8E%B0"><span class="toc-text">核心 API 实现</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%88%9B%E5%BB%BA%E7%9F%AD%E9%93%BE%E6%8E%A5"><span class="toc-text">创建短链接</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%87%8D%E5%AE%9A%E5%90%91%E5%A4%84%E7%90%86"><span class="toc-text">重定向处理</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%AE%BF%E9%97%AE%E5%88%86%E6%9E%90"><span class="toc-text">访问分析</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%AB%98%E5%8F%AF%E7%94%A8%E4%B8%8E%E6%89%A9%E5%B1%95"><span class="toc-text">高可用与扩展</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%BC%93%E5%AD%98%E7%AD%96%E7%95%A5"><span class="toc-text">缓存策略</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E5%BA%93%E5%88%86%E7%89%87"><span class="toc-text">数据库分片</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%8C%E6%95%B4%E6%9E%B6%E6%9E%84%E5%9B%BE"><span class="toc-text">完整架构图</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%89%E5%85%A8%E8%80%83%E8%99%91"><span class="toc-text">安全考虑</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MongoDB Schema设计最佳实践 · zt&#39;s Blog</title>
+  <meta name="description" content="系统讲解MongoDB文档模型的Schema设计模式，包括嵌入与引用的选择、一对多关系处理、多态模式、桶模式及聚合管道优化。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/mongodb-schema-design/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="MongoDB Schema设计最佳实践">
+  <meta property="og:description" content="系统讲解MongoDB文档模型的Schema设计模式，包括嵌入与引用的选择、一对多关系处理、多态模式、桶模式及聚合管道优化。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/mongodb-schema-design/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2025-02-11T16:00:00.000Z">
+  <meta property="article:modified_time" content="2025-02-11T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="MongoDB Schema设计最佳实践">
+  <meta name="twitter:description" content="系统讲解MongoDB文档模型的Schema设计模式，包括嵌入与引用的选择、一对多关系处理、多态模式、桶模式及聚合管道优化。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"MongoDB Schema设计最佳实践","description":"系统讲解MongoDB文档模型的Schema设计模式，包括嵌入与引用的选择、一对多关系处理、多态模式、桶模式及聚合管道优化。","datePublished":"2025-02-11T16:00:00.000Z","dateModified":"2025-02-11T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/mongodb-schema-design/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Database","item":"https://withesse.co/categories/Database/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:330">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Database/">Database</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/mongodb/"><span class="hash">#</span>mongodb</a><a class="tag" href="/tags/nosql/"><span class="hash">#</span>nosql</a><a class="tag" href="/tags/schema-design/"><span class="hash">#</span>schema-design</a>
+        
+      </div>
+
+      <h1>MongoDB Schema设计最佳实践</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2025.02.12</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 9 min</span>
+        </span>
+        <span class="wc"><span class="num">3.5k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%96%87%E6%A1%A3%E6%A8%A1%E5%9E%8B%E5%9F%BA%E7%A1%80"><span class="toc-text">文档模型基础</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#mongodb-vs-rdbms-%E6%A6%82%E5%BF%B5%E5%AF%B9%E7%85%A7"><span class="toc-text">MongoDB vs RDBMS 概念对照</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%96%87%E6%A1%A3%E7%BB%93%E6%9E%84%E7%A4%BA%E4%BE%8B"><span class="toc-text">文档结构示例</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%B5%8C%E5%85%A5-vs-%E5%BC%95%E7%94%A8"><span class="toc-text">嵌入 vs 引用</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%B5%8C%E5%85%A5embedding"><span class="toc-text">嵌入（Embedding）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%BC%95%E7%94%A8referencing"><span class="toc-text">引用（Referencing）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%86%B3%E7%AD%96%E6%B5%81%E7%A8%8B"><span class="toc-text">决策流程</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%80%E5%AF%B9%E5%A4%9A%E5%85%B3%E7%B3%BB%E6%A8%A1%E5%BC%8F"><span class="toc-text">一对多关系模式</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A8%A1%E5%BC%8F%E4%B8%80%E5%B5%8C%E5%85%A5%E6%95%B0%E7%BB%84%E4%B8%80%E5%AF%B9%E5%B0%91%E9%87%8F"><span class="toc-text">模式一：嵌入数组（一对少量）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A8%A1%E5%BC%8F%E4%BA%8C%E5%AD%90%E5%BC%95%E7%94%A8%E4%B8%80%E5%AF%B9%E5%A4%9A"><span class="toc-text">模式二：子引用（一对多）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A8%A1%E5%BC%8F%E4%B8%89%E7%88%B6%E5%BC%95%E7%94%A8%E4%B8%80%E5%AF%B9%E5%A4%A7%E9%87%8F"><span class="toc-text">模式三：父引用（一对大量）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%AB%98%E7%BA%A7%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F"><span class="toc-text">高级设计模式</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%A4%9A%E6%80%81%E6%A8%A1%E5%BC%8Fpolymorphic-pattern"><span class="toc-text">多态模式（Polymorphic
+Pattern）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A1%B6%E6%A8%A1%E5%BC%8Fbucket-pattern"><span class="toc-text">桶模式（Bucket Pattern）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%AE%A1%E7%AE%97%E6%A8%A1%E5%BC%8Fcomputed-pattern"><span class="toc-text">计算模式（Computed Pattern）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%89%A9%E5%B1%95%E5%BC%95%E7%94%A8%E6%A8%A1%E5%BC%8Fextended-reference-pattern"><span class="toc-text">扩展引用模式（Extended
+Reference Pattern）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%B4%A2%E5%BC%95%E7%AD%96%E7%95%A5"><span class="toc-text">索引策略</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%B8%B8%E7%94%A8%E7%B4%A2%E5%BC%95%E7%B1%BB%E5%9E%8B"><span class="toc-text">常用索引类型</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#esr-%E7%B4%A2%E5%BC%95%E8%AE%BE%E8%AE%A1%E8%A7%84%E5%88%99"><span class="toc-text">ESR 索引设计规则</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%81%9A%E5%90%88%E7%AE%A1%E9%81%93"><span class="toc-text">聚合管道</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="引言">引言</h2>
+<p>MongoDB作为最流行的文档数据库，其Schema设计理念与关系型数据库有着根本性的不同。在RDBMS中，我们追求的是数据的规范化（Normal
+Form），尽量减少冗余；而在MongoDB中，Schema设计的核心原则是”数据的存储方式应该与其被使用的方式一致”。好的Schema设计可以让查询变得简单高效，而糟糕的设计则会导致性能灾难。</p>
+<h2 id="文档模型基础">文档模型基础</h2>
+<h3 id="mongodb-vs-rdbms-概念对照">MongoDB vs RDBMS 概念对照</h3>
+<pre class="mermaid">graph LR
+    subgraph RDBMS
+        A[Database] --&gt; B[Table]
+        B --&gt; C[Row]
+        C --&gt; D[Column]
+        B --&gt; E[JOIN]
+    end
+
+    subgraph MongoDB
+        F[Database] --&gt; G[Collection]
+        G --&gt; H[Document]
+        H --&gt; I[Field]
+        G --&gt; J["Embedding&lt;br/&gt;(代替JOIN)"]
+    end
+
+    A -.-&gt; F
+    B -.-&gt; G
+    C -.-&gt; H
+    D -.-&gt; I
+    E -.-&gt; J</pre>
+<h3 id="文档结构示例">文档结构示例</h3>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-comment">// MongoDB文档 vs RDBMS表</span><br><span class="hljs-comment">// RDBMS中需要3张表: users, addresses, phone_numbers</span><br><span class="hljs-comment">// MongoDB中可以用1个文档表达:</span><br>&#123;<br>  <span class="hljs-attr">_id</span>: <span class="hljs-title class_">ObjectId</span>(<span class="hljs-string">&quot;507f1f77bcf86cd799439011&quot;</span>),<br>  <span class="hljs-attr">name</span>: <span class="hljs-string">&quot;Alice&quot;</span>,<br>  <span class="hljs-attr">email</span>: <span class="hljs-string">&quot;alice@example.com&quot;</span>,<br>  <span class="hljs-attr">address</span>: &#123;<br>    <span class="hljs-attr">street</span>: <span class="hljs-string">&quot;123 Main St&quot;</span>,<br>    <span class="hljs-attr">city</span>: <span class="hljs-string">&quot;Beijing&quot;</span>,<br>    <span class="hljs-attr">zipcode</span>: <span class="hljs-string">&quot;100000&quot;</span><br>  &#125;,<br>  <span class="hljs-attr">phones</span>: [<br>    &#123; <span class="hljs-attr">type</span>: <span class="hljs-string">&quot;home&quot;</span>, <span class="hljs-attr">number</span>: <span class="hljs-string">&quot;010-12345678&quot;</span> &#125;,<br>    &#123; <span class="hljs-attr">type</span>: <span class="hljs-string">&quot;mobile&quot;</span>, <span class="hljs-attr">number</span>: <span class="hljs-string">&quot;138-0013-8000&quot;</span> &#125;<br>  ],<br>  <span class="hljs-attr">created_at</span>: <span class="hljs-title class_">ISODate</span>(<span class="hljs-string">&quot;2025-01-15T08:30:00Z&quot;</span>)<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="嵌入-vs-引用">嵌入 vs 引用</h2>
+<p>这是MongoDB Schema设计的核心决策。</p>
+<h3 id="嵌入embedding">嵌入（Embedding）</h3>
+<p>将关联数据作为子文档直接嵌入到父文档中。</p>
+<pre class="mermaid">graph TD
+    subgraph "嵌入模式"
+        A["Order Document"] --&gt; B["_id: order001&lt;br/&gt;user_name: Alice&lt;br/&gt;total: 299.00"]
+        A --&gt; C["items: [&lt;br/&gt;  {sku: 'A001', name: 'T-Shirt', qty: 2, price: 99.5},&lt;br/&gt;  {sku: 'B002', name: 'Jeans', qty: 1, price: 100.0}&lt;br/&gt;]"]
+        A --&gt; D["shipping_address: {&lt;br/&gt;  street: '123 Main St',&lt;br/&gt;  city: 'Beijing'&lt;br/&gt;}"]
+    end</pre>
+<p><strong>适用场景：</strong></p>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-comment">// 1. 一对一关系: 用户 -&gt; 个人资料</span><br>&#123;<br>  <span class="hljs-attr">_id</span>: <span class="hljs-string">&quot;user001&quot;</span>,<br>  <span class="hljs-attr">name</span>: <span class="hljs-string">&quot;Alice&quot;</span>,<br>  <span class="hljs-attr">profile</span>: &#123;                    <span class="hljs-comment">// 嵌入个人资料</span><br>    <span class="hljs-attr">bio</span>: <span class="hljs-string">&quot;Software Engineer&quot;</span>,<br>    <span class="hljs-attr">avatar_url</span>: <span class="hljs-string">&quot;/images/alice.jpg&quot;</span>,<br>    <span class="hljs-attr">social_links</span>: &#123;<br>      <span class="hljs-attr">github</span>: <span class="hljs-string">&quot;https://github.com/alice&quot;</span>,<br>      <span class="hljs-attr">twitter</span>: <span class="hljs-string">&quot;https://twitter.com/alice&quot;</span><br>    &#125;<br>  &#125;<br>&#125;<br><br><span class="hljs-comment">// 2. 一对少量关系: 博客文章 -&gt; 评论（评论数量有限）</span><br>&#123;<br>  <span class="hljs-attr">_id</span>: <span class="hljs-string">&quot;post001&quot;</span>,<br>  <span class="hljs-attr">title</span>: <span class="hljs-string">&quot;MongoDB Schema Design&quot;</span>,<br>  <span class="hljs-attr">content</span>: <span class="hljs-string">&quot;...&quot;</span>,<br>  <span class="hljs-attr">comments</span>: [                   <span class="hljs-comment">// 嵌入评论（假设评论不超过几十条）</span><br>    &#123; <span class="hljs-attr">user</span>: <span class="hljs-string">&quot;Bob&quot;</span>, <span class="hljs-attr">text</span>: <span class="hljs-string">&quot;Great article!&quot;</span>, <span class="hljs-attr">date</span>: <span class="hljs-title class_">ISODate</span>(<span class="hljs-string">&quot;2025-03-01&quot;</span>) &#125;,<br>    &#123; <span class="hljs-attr">user</span>: <span class="hljs-string">&quot;Carol&quot;</span>, <span class="hljs-attr">text</span>: <span class="hljs-string">&quot;Very helpful&quot;</span>, <span class="hljs-attr">date</span>: <span class="hljs-title class_">ISODate</span>(<span class="hljs-string">&quot;2025-03-02&quot;</span>) &#125;<br>  ]<br>&#125;<br></code></pre></td></tr></table></figure>
+<p><strong>嵌入的优缺点：</strong></p>
+<table>
+<thead>
+<tr class="header">
+<th>优点</th>
+<th>缺点</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>一次读取获取全部数据</td>
+<td>文档大小限制16MB</td>
+</tr>
+<tr class="even">
+<td>原子性更新（单文档事务）</td>
+<td>嵌入数组过大影响性能</td>
+</tr>
+<tr class="odd">
+<td>无需JOIN，查询简单高效</td>
+<td>数据冗余，更新可能需要多处修改</td>
+</tr>
+</tbody>
+</table>
+<h3 id="引用referencing">引用（Referencing）</h3>
+<p>通过存储关联文档的<code>_id</code>来建立关系。</p>
+<pre class="mermaid">graph TD
+    subgraph "引用模式"
+        A["User Document&lt;br/&gt;_id: user001&lt;br/&gt;name: Alice"]
+        B["Order 1&lt;br/&gt;_id: order001&lt;br/&gt;user_id: user001&lt;br/&gt;total: 299.00"]
+        C["Order 2&lt;br/&gt;_id: order002&lt;br/&gt;user_id: user001&lt;br/&gt;total: 159.00"]
+        D["Order 3&lt;br/&gt;_id: order003&lt;br/&gt;user_id: user001&lt;br/&gt;total: 520.00"]
+    end
+
+    B --&gt;|user_id| A
+    C --&gt;|user_id| A
+    D --&gt;|user_id| A</pre>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-comment">// 用户集合</span><br>&#123;<br>  <span class="hljs-attr">_id</span>: <span class="hljs-string">&quot;user001&quot;</span>,<br>  <span class="hljs-attr">name</span>: <span class="hljs-string">&quot;Alice&quot;</span>,<br>  <span class="hljs-attr">email</span>: <span class="hljs-string">&quot;alice@example.com&quot;</span><br>&#125;<br><br><span class="hljs-comment">// 订单集合（引用用户ID）</span><br>&#123;<br>  <span class="hljs-attr">_id</span>: <span class="hljs-string">&quot;order001&quot;</span>,<br>  <span class="hljs-attr">user_id</span>: <span class="hljs-string">&quot;user001&quot;</span>,       <span class="hljs-comment">// 引用</span><br>  <span class="hljs-attr">items</span>: [...],<br>  <span class="hljs-attr">total</span>: <span class="hljs-number">299.00</span>,<br>  <span class="hljs-attr">created_at</span>: <span class="hljs-title class_">ISODate</span>(<span class="hljs-string">&quot;2025-03-15&quot;</span>)<br>&#125;<br><br><span class="hljs-comment">// 查询时需要两次查询或使用 $lookup</span><br>db.<span class="hljs-property">orders</span>.<span class="hljs-title function_">aggregate</span>([<br>  &#123; <span class="hljs-attr">$match</span>: &#123; <span class="hljs-attr">user_id</span>: <span class="hljs-string">&quot;user001&quot;</span> &#125; &#125;,<br>  &#123;<br>    <span class="hljs-attr">$lookup</span>: &#123;<br>      <span class="hljs-attr">from</span>: <span class="hljs-string">&quot;users&quot;</span>,<br>      <span class="hljs-attr">localField</span>: <span class="hljs-string">&quot;user_id&quot;</span>,<br>      <span class="hljs-attr">foreignField</span>: <span class="hljs-string">&quot;_id&quot;</span>,<br>      <span class="hljs-attr">as</span>: <span class="hljs-string">&quot;user_info&quot;</span><br>    &#125;<br>  &#125;<br>]);<br></code></pre></td></tr></table></figure>
+<h3 id="决策流程">决策流程</h3>
+<pre class="mermaid">flowchart TD
+    A[设计数据关系] --&gt; B{关系类型?}
+    B --&gt;|一对一| C[通常嵌入]
+    B --&gt;|一对少量 1:N, N&lt;100| D{数据是否一起读取?}
+    B --&gt;|一对大量 1:N, N&gt;100| E[引用]
+    B --&gt;|多对多 M:N| F[引用 + 数组]
+
+    D --&gt;|是| G[嵌入]
+    D --&gt;|否| H{子文档独立查询?}
+    H --&gt;|是| E
+    H --&gt;|否| G
+
+    C --&gt; I{子文档会频繁更新?}
+    I --&gt;|是| J[考虑引用]
+    I --&gt;|否| K[嵌入]
+
+    E --&gt; L[确保引用字段有索引]</pre>
+<h2 id="一对多关系模式">一对多关系模式</h2>
+<h3 id="模式一嵌入数组一对少量">模式一：嵌入数组（一对少量）</h3>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-comment">// 作者 -&gt; 书籍地址 (一个作者通常只有少量地址)</span><br>&#123;<br>  <span class="hljs-attr">_id</span>: <span class="hljs-string">&quot;author001&quot;</span>,<br>  <span class="hljs-attr">name</span>: <span class="hljs-string">&quot;Zhang San&quot;</span>,<br>  <span class="hljs-attr">addresses</span>: [<br>    &#123; <span class="hljs-attr">label</span>: <span class="hljs-string">&quot;home&quot;</span>, <span class="hljs-attr">city</span>: <span class="hljs-string">&quot;Beijing&quot;</span>, <span class="hljs-attr">street</span>: <span class="hljs-string">&quot;Zhongguancun&quot;</span> &#125;,<br>    &#123; <span class="hljs-attr">label</span>: <span class="hljs-string">&quot;office&quot;</span>, <span class="hljs-attr">city</span>: <span class="hljs-string">&quot;Shanghai&quot;</span>, <span class="hljs-attr">street</span>: <span class="hljs-string">&quot;Lujiazui&quot;</span> &#125;<br>  ]<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="模式二子引用一对多">模式二：子引用（一对多）</h3>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-comment">// 产品 -&gt; 零部件 (一个产品有几十个零部件)</span><br><span class="hljs-comment">// 产品文档中存储零部件ID数组</span><br>&#123;<br>  <span class="hljs-attr">_id</span>: <span class="hljs-string">&quot;product001&quot;</span>,<br>  <span class="hljs-attr">name</span>: <span class="hljs-string">&quot;Widget X&quot;</span>,<br>  <span class="hljs-attr">part_ids</span>: [<span class="hljs-string">&quot;part001&quot;</span>, <span class="hljs-string">&quot;part002&quot;</span>, <span class="hljs-string">&quot;part003&quot;</span>, ...]  <span class="hljs-comment">// 引用数组</span><br>&#125;<br><br><span class="hljs-comment">// 零部件集合</span><br>&#123; <span class="hljs-attr">_id</span>: <span class="hljs-string">&quot;part001&quot;</span>, <span class="hljs-attr">name</span>: <span class="hljs-string">&quot;Screw M5&quot;</span>, <span class="hljs-attr">supplier</span>: <span class="hljs-string">&quot;SupplierA&quot;</span>, <span class="hljs-attr">cost</span>: <span class="hljs-number">0.5</span> &#125;<br>&#123; <span class="hljs-attr">_id</span>: <span class="hljs-string">&quot;part002&quot;</span>, <span class="hljs-attr">name</span>: <span class="hljs-string">&quot;Spring S2&quot;</span>, <span class="hljs-attr">supplier</span>: <span class="hljs-string">&quot;SupplierB&quot;</span>, <span class="hljs-attr">cost</span>: <span class="hljs-number">1.2</span> &#125;<br><br><span class="hljs-comment">// 查询产品及其所有零部件</span><br><span class="hljs-keyword">const</span> product = db.<span class="hljs-property">products</span>.<span class="hljs-title function_">findOne</span>(&#123; <span class="hljs-attr">_id</span>: <span class="hljs-string">&quot;product001&quot;</span> &#125;);<br><span class="hljs-keyword">const</span> parts = db.<span class="hljs-property">parts</span>.<span class="hljs-title function_">find</span>(&#123; <span class="hljs-attr">_id</span>: &#123; <span class="hljs-attr">$in</span>: product.<span class="hljs-property">part_ids</span> &#125; &#125;);<br></code></pre></td></tr></table></figure>
+<h3 id="模式三父引用一对大量">模式三：父引用（一对大量）</h3>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-comment">// 主机 -&gt; 日志 (一台主机可能有数百万条日志)</span><br><span class="hljs-comment">// 在子文档中存储父文档的ID</span><br><br><span class="hljs-comment">// 主机集合</span><br>&#123; <span class="hljs-attr">_id</span>: <span class="hljs-string">&quot;host001&quot;</span>, <span class="hljs-attr">name</span>: <span class="hljs-string">&quot;web-server-01&quot;</span>, <span class="hljs-attr">ip</span>: <span class="hljs-string">&quot;192.168.1.10&quot;</span> &#125;<br><br><span class="hljs-comment">// 日志集合 (每条日志引用主机)</span><br>&#123;<br>  <span class="hljs-attr">_id</span>: <span class="hljs-title class_">ObjectId</span>(<span class="hljs-string">&quot;...&quot;</span>),<br>  <span class="hljs-attr">host_id</span>: <span class="hljs-string">&quot;host001&quot;</span>,        <span class="hljs-comment">// 父引用</span><br>  <span class="hljs-attr">timestamp</span>: <span class="hljs-title class_">ISODate</span>(<span class="hljs-string">&quot;2025-03-15T10:30:00Z&quot;</span>),<br>  <span class="hljs-attr">level</span>: <span class="hljs-string">&quot;ERROR&quot;</span>,<br>  <span class="hljs-attr">message</span>: <span class="hljs-string">&quot;Connection timeout&quot;</span><br>&#125;<br><br><span class="hljs-comment">// 查询某主机的最近日志</span><br>db.<span class="hljs-property">logs</span>.<span class="hljs-title function_">find</span>(&#123; <span class="hljs-attr">host_id</span>: <span class="hljs-string">&quot;host001&quot;</span> &#125;)<br>  .<span class="hljs-title function_">sort</span>(&#123; <span class="hljs-attr">timestamp</span>: -<span class="hljs-number">1</span> &#125;)<br>  .<span class="hljs-title function_">limit</span>(<span class="hljs-number">100</span>);<br><br><span class="hljs-comment">// 确保有索引</span><br>db.<span class="hljs-property">logs</span>.<span class="hljs-title function_">createIndex</span>(&#123; <span class="hljs-attr">host_id</span>: <span class="hljs-number">1</span>, <span class="hljs-attr">timestamp</span>: -<span class="hljs-number">1</span> &#125;);<br></code></pre></td></tr></table></figure>
+<h2 id="高级设计模式">高级设计模式</h2>
+<h3 id="多态模式polymorphic-pattern">多态模式（Polymorphic
+Pattern）</h3>
+<p>同一个集合中存储不同结构的文档，通过类型字段区分。</p>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-comment">// 不同类型的产品共享一个集合</span><br><span class="hljs-comment">// 手机</span><br>&#123;<br>  <span class="hljs-attr">_id</span>: <span class="hljs-string">&quot;prod001&quot;</span>,<br>  <span class="hljs-attr">type</span>: <span class="hljs-string">&quot;phone&quot;</span>,<br>  <span class="hljs-attr">name</span>: <span class="hljs-string">&quot;iPhone 15&quot;</span>,<br>  <span class="hljs-attr">brand</span>: <span class="hljs-string">&quot;Apple&quot;</span>,<br>  <span class="hljs-attr">price</span>: <span class="hljs-number">5999</span>,<br>  <span class="hljs-attr">specs</span>: &#123;<br>    <span class="hljs-attr">screen_size</span>: <span class="hljs-number">6.1</span>,<br>    <span class="hljs-attr">ram</span>: <span class="hljs-number">8</span>,<br>    <span class="hljs-attr">storage</span>: <span class="hljs-number">256</span>,<br>    <span class="hljs-attr">camera</span>: <span class="hljs-string">&quot;48MP&quot;</span><br>  &#125;<br>&#125;<br><br><span class="hljs-comment">// 笔记本电脑</span><br>&#123;<br>  <span class="hljs-attr">_id</span>: <span class="hljs-string">&quot;prod002&quot;</span>,<br>  <span class="hljs-attr">type</span>: <span class="hljs-string">&quot;laptop&quot;</span>,<br>  <span class="hljs-attr">name</span>: <span class="hljs-string">&quot;MacBook Pro 14&quot;</span>,<br>  <span class="hljs-attr">brand</span>: <span class="hljs-string">&quot;Apple&quot;</span>,<br>  <span class="hljs-attr">price</span>: <span class="hljs-number">14999</span>,<br>  <span class="hljs-attr">specs</span>: &#123;<br>    <span class="hljs-attr">screen_size</span>: <span class="hljs-number">14.2</span>,<br>    <span class="hljs-attr">ram</span>: <span class="hljs-number">18</span>,<br>    <span class="hljs-attr">storage</span>: <span class="hljs-number">512</span>,<br>    <span class="hljs-attr">cpu</span>: <span class="hljs-string">&quot;M3 Pro&quot;</span>,<br>    <span class="hljs-attr">battery</span>: <span class="hljs-string">&quot;70Wh&quot;</span><br>  &#125;<br>&#125;<br><br><span class="hljs-comment">// 耳机</span><br>&#123;<br>  <span class="hljs-attr">_id</span>: <span class="hljs-string">&quot;prod003&quot;</span>,<br>  <span class="hljs-attr">type</span>: <span class="hljs-string">&quot;headphone&quot;</span>,<br>  <span class="hljs-attr">name</span>: <span class="hljs-string">&quot;AirPods Pro 2&quot;</span>,<br>  <span class="hljs-attr">brand</span>: <span class="hljs-string">&quot;Apple&quot;</span>,<br>  <span class="hljs-attr">price</span>: <span class="hljs-number">1799</span>,<br>  <span class="hljs-attr">specs</span>: &#123;<br>    <span class="hljs-attr">driver_size</span>: <span class="hljs-string">&quot;Custom&quot;</span>,<br>    <span class="hljs-attr">noise_cancellation</span>: <span class="hljs-literal">true</span>,<br>    <span class="hljs-attr">battery_life</span>: <span class="hljs-string">&quot;6h&quot;</span><br>  &#125;<br>&#125;<br><br><span class="hljs-comment">// 查询所有Apple产品，无论类型</span><br>db.<span class="hljs-property">products</span>.<span class="hljs-title function_">find</span>(&#123; <span class="hljs-attr">brand</span>: <span class="hljs-string">&quot;Apple&quot;</span> &#125;);<br><br><span class="hljs-comment">// 按类型查询</span><br>db.<span class="hljs-property">products</span>.<span class="hljs-title function_">find</span>(&#123; <span class="hljs-attr">type</span>: <span class="hljs-string">&quot;phone&quot;</span>, <span class="hljs-string">&quot;specs.ram&quot;</span>: &#123; <span class="hljs-attr">$gte</span>: <span class="hljs-number">8</span> &#125; &#125;);<br></code></pre></td></tr></table></figure>
+<h3 id="桶模式bucket-pattern">桶模式（Bucket Pattern）</h3>
+<p>将时间序列数据按时间段分桶，减少文档数量，提升查询效率。</p>
+<pre class="mermaid">graph TD
+    subgraph "传统方式: 每条数据一个文档"
+        A1["doc1: {sensor: 's1', ts: 10:00:01, temp: 22.5}"]
+        A2["doc2: {sensor: 's1', ts: 10:00:02, temp: 22.6}"]
+        A3["doc3: {sensor: 's1', ts: 10:00:03, temp: 22.4}"]
+        A4["...每分钟60个文档"]
+    end
+
+    subgraph "桶模式: 按时间段聚合"
+        B1["bucket: {&lt;br/&gt;sensor: 's1',&lt;br/&gt;start: 10:00:00,&lt;br/&gt;count: 60,&lt;br/&gt;sum_temp: 1350.5,&lt;br/&gt;readings: [{ts: 01, v: 22.5}, {ts: 02, v: 22.6}, ...]&lt;br/&gt;}"]
+    end</pre>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-comment">// 桶模式示例: IoT传感器数据</span><br>&#123;<br>  <span class="hljs-attr">_id</span>: <span class="hljs-title class_">ObjectId</span>(<span class="hljs-string">&quot;...&quot;</span>),<br>  <span class="hljs-attr">sensor_id</span>: <span class="hljs-string">&quot;sensor_001&quot;</span>,<br>  <span class="hljs-attr">bucket_start</span>: <span class="hljs-title class_">ISODate</span>(<span class="hljs-string">&quot;2025-03-15T10:00:00Z&quot;</span>),<br>  <span class="hljs-attr">bucket_end</span>: <span class="hljs-title class_">ISODate</span>(<span class="hljs-string">&quot;2025-03-15T11:00:00Z&quot;</span>),<br>  <span class="hljs-attr">count</span>: <span class="hljs-number">60</span>,<br>  <span class="hljs-attr">sum_temperature</span>: <span class="hljs-number">1350.5</span>,<br>  <span class="hljs-attr">min_temperature</span>: <span class="hljs-number">22.1</span>,<br>  <span class="hljs-attr">max_temperature</span>: <span class="hljs-number">23.2</span>,<br>  <span class="hljs-attr">readings</span>: [<br>    &#123; <span class="hljs-attr">timestamp</span>: <span class="hljs-title class_">ISODate</span>(<span class="hljs-string">&quot;2025-03-15T10:00:00Z&quot;</span>), <span class="hljs-attr">temperature</span>: <span class="hljs-number">22.5</span>, <span class="hljs-attr">humidity</span>: <span class="hljs-number">45</span> &#125;,<br>    &#123; <span class="hljs-attr">timestamp</span>: <span class="hljs-title class_">ISODate</span>(<span class="hljs-string">&quot;2025-03-15T10:01:00Z&quot;</span>), <span class="hljs-attr">temperature</span>: <span class="hljs-number">22.6</span>, <span class="hljs-attr">humidity</span>: <span class="hljs-number">44</span> &#125;,<br>    <span class="hljs-comment">// ... 每分钟一条，共60条</span><br>  ]<br>&#125;<br><br><span class="hljs-comment">// 使用 $push 和 $inc 原子性地添加新读数</span><br>db.<span class="hljs-property">sensor_data</span>.<span class="hljs-title function_">updateOne</span>(<br>  &#123;<br>    <span class="hljs-attr">sensor_id</span>: <span class="hljs-string">&quot;sensor_001&quot;</span>,<br>    <span class="hljs-attr">count</span>: &#123; <span class="hljs-attr">$lt</span>: <span class="hljs-number">60</span> &#125;,  <span class="hljs-comment">// 桶未满</span><br>    <span class="hljs-attr">bucket_start</span>: <span class="hljs-title class_">ISODate</span>(<span class="hljs-string">&quot;2025-03-15T10:00:00Z&quot;</span>)<br>  &#125;,<br>  &#123;<br>    <span class="hljs-attr">$push</span>: &#123;<br>      <span class="hljs-attr">readings</span>: &#123;<br>        <span class="hljs-attr">timestamp</span>: <span class="hljs-title class_">ISODate</span>(<span class="hljs-string">&quot;2025-03-15T10:30:00Z&quot;</span>),<br>        <span class="hljs-attr">temperature</span>: <span class="hljs-number">22.8</span>,<br>        <span class="hljs-attr">humidity</span>: <span class="hljs-number">43</span><br>      &#125;<br>    &#125;,<br>    <span class="hljs-attr">$inc</span>: &#123; <span class="hljs-attr">count</span>: <span class="hljs-number">1</span>, <span class="hljs-attr">sum_temperature</span>: <span class="hljs-number">22.8</span> &#125;,<br>    <span class="hljs-attr">$min</span>: &#123; <span class="hljs-attr">min_temperature</span>: <span class="hljs-number">22.8</span> &#125;,<br>    <span class="hljs-attr">$max</span>: &#123; <span class="hljs-attr">max_temperature</span>: <span class="hljs-number">22.8</span> &#125;<br>  &#125;,<br>  &#123; <span class="hljs-attr">upsert</span>: <span class="hljs-literal">true</span> &#125;<br>);<br></code></pre></td></tr></table></figure>
+<h3 id="计算模式computed-pattern">计算模式（Computed Pattern）</h3>
+<p>预计算频繁访问的汇总数据，避免重复计算。</p>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-comment">// 电商产品: 预计算评分统计</span><br>&#123;<br>  <span class="hljs-attr">_id</span>: <span class="hljs-string">&quot;product001&quot;</span>,<br>  <span class="hljs-attr">name</span>: <span class="hljs-string">&quot;Wireless Mouse&quot;</span>,<br>  <span class="hljs-attr">price</span>: <span class="hljs-number">99.00</span>,<br>  <span class="hljs-comment">// 预计算的统计数据</span><br>  <span class="hljs-attr">rating_stats</span>: &#123;<br>    <span class="hljs-attr">average</span>: <span class="hljs-number">4.3</span>,<br>    <span class="hljs-attr">count</span>: <span class="hljs-number">1256</span>,<br>    <span class="hljs-attr">distribution</span>: &#123;<br>      <span class="hljs-string">&quot;5&quot;</span>: <span class="hljs-number">680</span>,<br>      <span class="hljs-string">&quot;4&quot;</span>: <span class="hljs-number">312</span>,<br>      <span class="hljs-string">&quot;3&quot;</span>: <span class="hljs-number">156</span>,<br>      <span class="hljs-string">&quot;2&quot;</span>: <span class="hljs-number">68</span>,<br>      <span class="hljs-string">&quot;1&quot;</span>: <span class="hljs-number">40</span><br>    &#125;<br>  &#125;<br>&#125;<br><br><span class="hljs-comment">// 新增评价时，原子性更新统计</span><br>db.<span class="hljs-property">products</span>.<span class="hljs-title function_">updateOne</span>(<br>  &#123; <span class="hljs-attr">_id</span>: <span class="hljs-string">&quot;product001&quot;</span> &#125;,<br>  &#123;<br>    <span class="hljs-attr">$inc</span>: &#123;<br>      <span class="hljs-string">&quot;rating_stats.count&quot;</span>: <span class="hljs-number">1</span>,<br>      <span class="hljs-string">&quot;rating_stats.distribution.5&quot;</span>: <span class="hljs-number">1</span><br>    &#125;<br>  &#125;<br>);<br><span class="hljs-comment">// 定期用聚合管道重新计算average</span><br></code></pre></td></tr></table></figure>
+<h3 id="扩展引用模式extended-reference-pattern">扩展引用模式（Extended
+Reference Pattern）</h3>
+<p>在引用的同时冗余存储常用字段，减少JOIN查询。</p>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-comment">// 订单中冗余存储用户和商品的核心信息</span><br>&#123;<br>  <span class="hljs-attr">_id</span>: <span class="hljs-string">&quot;order001&quot;</span>,<br>  <span class="hljs-attr">user</span>: &#123;<br>    <span class="hljs-attr">_id</span>: <span class="hljs-string">&quot;user001&quot;</span>,<br>    <span class="hljs-attr">name</span>: <span class="hljs-string">&quot;Alice&quot;</span>,           <span class="hljs-comment">// 冗余</span><br>    <span class="hljs-attr">phone</span>: <span class="hljs-string">&quot;138-0013-8000&quot;</span>   <span class="hljs-comment">// 冗余</span><br>  &#125;,<br>  <span class="hljs-attr">items</span>: [<br>    &#123;<br>      <span class="hljs-attr">product_id</span>: <span class="hljs-string">&quot;prod001&quot;</span>,<br>      <span class="hljs-attr">name</span>: <span class="hljs-string">&quot;iPhone 15&quot;</span>,     <span class="hljs-comment">// 冗余</span><br>      <span class="hljs-attr">price</span>: <span class="hljs-number">5999</span>,           <span class="hljs-comment">// 下单时的价格（快照）</span><br>      <span class="hljs-attr">quantity</span>: <span class="hljs-number">1</span><br>    &#125;<br>  ],<br>  <span class="hljs-attr">total</span>: <span class="hljs-number">5999</span>,<br>  <span class="hljs-attr">status</span>: <span class="hljs-string">&quot;paid&quot;</span>,<br>  <span class="hljs-attr">created_at</span>: <span class="hljs-title class_">ISODate</span>(<span class="hljs-string">&quot;2025-03-15&quot;</span>)<br>&#125;<br><span class="hljs-comment">// 优势: 查询订单时不需要JOIN用户表和商品表</span><br><span class="hljs-comment">// 注意: 冗余字段的更新需要考虑一致性</span><br><span class="hljs-comment">// 对于订单这种场景，下单时的快照数据本身就不应该随源数据变化</span><br></code></pre></td></tr></table></figure>
+<h2 id="索引策略">索引策略</h2>
+<h3 id="常用索引类型">常用索引类型</h3>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-comment">// 单字段索引</span><br>db.<span class="hljs-property">users</span>.<span class="hljs-title function_">createIndex</span>(&#123; <span class="hljs-attr">email</span>: <span class="hljs-number">1</span> &#125;);<br><br><span class="hljs-comment">// 复合索引（遵循ESR规则: Equality, Sort, Range）</span><br>db.<span class="hljs-property">orders</span>.<span class="hljs-title function_">createIndex</span>(&#123; <span class="hljs-attr">user_id</span>: <span class="hljs-number">1</span>, <span class="hljs-attr">created_at</span>: -<span class="hljs-number">1</span>, <span class="hljs-attr">status</span>: <span class="hljs-number">1</span> &#125;);<br><span class="hljs-comment">// user_id: Equality（等值查询放前面）</span><br><span class="hljs-comment">// created_at: Sort（排序字段放中间）</span><br><span class="hljs-comment">// status: Range（范围查询放后面）</span><br><br><span class="hljs-comment">// 多键索引（数组字段）</span><br>db.<span class="hljs-property">products</span>.<span class="hljs-title function_">createIndex</span>(&#123; <span class="hljs-attr">tags</span>: <span class="hljs-number">1</span> &#125;);<br><br><span class="hljs-comment">// 文本索引</span><br>db.<span class="hljs-property">articles</span>.<span class="hljs-title function_">createIndex</span>(&#123; <span class="hljs-attr">title</span>: <span class="hljs-string">&quot;text&quot;</span>, <span class="hljs-attr">content</span>: <span class="hljs-string">&quot;text&quot;</span> &#125;);<br><br><span class="hljs-comment">// 地理空间索引</span><br>db.<span class="hljs-property">restaurants</span>.<span class="hljs-title function_">createIndex</span>(&#123; <span class="hljs-attr">location</span>: <span class="hljs-string">&quot;2dsphere&quot;</span> &#125;);<br><br><span class="hljs-comment">// 部分索引（Partial Index）</span><br>db.<span class="hljs-property">orders</span>.<span class="hljs-title function_">createIndex</span>(<br>  &#123; <span class="hljs-attr">user_id</span>: <span class="hljs-number">1</span>, <span class="hljs-attr">created_at</span>: -<span class="hljs-number">1</span> &#125;,<br>  &#123; <span class="hljs-attr">partialFilterExpression</span>: &#123; <span class="hljs-attr">status</span>: <span class="hljs-string">&quot;active&quot;</span> &#125; &#125;<br>);<br><br><span class="hljs-comment">// TTL索引（自动过期删除）</span><br>db.<span class="hljs-property">sessions</span>.<span class="hljs-title function_">createIndex</span>(<br>  &#123; <span class="hljs-attr">created_at</span>: <span class="hljs-number">1</span> &#125;,<br>  &#123; <span class="hljs-attr">expireAfterSeconds</span>: <span class="hljs-number">3600</span> &#125;  <span class="hljs-comment">// 1小时后自动删除</span><br>);<br><br><span class="hljs-comment">// 唯一索引</span><br>db.<span class="hljs-property">users</span>.<span class="hljs-title function_">createIndex</span>(&#123; <span class="hljs-attr">email</span>: <span class="hljs-number">1</span> &#125;, &#123; <span class="hljs-attr">unique</span>: <span class="hljs-literal">true</span> &#125;);<br></code></pre></td></tr></table></figure>
+<h3 id="esr-索引设计规则">ESR 索引设计规则</h3>
+<pre class="mermaid">graph LR
+    A["ESR Rule"] --&gt; B["E: Equality&lt;br/&gt;等值匹配的字段放最前"]
+    B --&gt; C["S: Sort&lt;br/&gt;排序字段放中间"]
+    C --&gt; D["R: Range&lt;br/&gt;范围查询字段放最后"]</pre>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-comment">// 查询: 查找某用户的最近活跃订单</span><br>db.<span class="hljs-property">orders</span>.<span class="hljs-title function_">find</span>(&#123;<br>  <span class="hljs-attr">user_id</span>: <span class="hljs-string">&quot;user001&quot;</span>,     <span class="hljs-comment">// Equality</span><br>  <span class="hljs-attr">status</span>: <span class="hljs-string">&quot;active&quot;</span>,       <span class="hljs-comment">// Equality</span><br>  <span class="hljs-attr">amount</span>: &#123; <span class="hljs-attr">$gte</span>: <span class="hljs-number">100</span> &#125;   <span class="hljs-comment">// Range</span><br>&#125;).<span class="hljs-title function_">sort</span>(&#123; <span class="hljs-attr">created_at</span>: -<span class="hljs-number">1</span> &#125;)  <span class="hljs-comment">// Sort</span><br><br><span class="hljs-comment">// 最优索引</span><br>db.<span class="hljs-property">orders</span>.<span class="hljs-title function_">createIndex</span>(&#123;<br>  <span class="hljs-attr">user_id</span>: <span class="hljs-number">1</span>,      <span class="hljs-comment">// E</span><br>  <span class="hljs-attr">status</span>: <span class="hljs-number">1</span>,       <span class="hljs-comment">// E</span><br>  <span class="hljs-attr">created_at</span>: -<span class="hljs-number">1</span>,  <span class="hljs-comment">// S</span><br>  <span class="hljs-attr">amount</span>: <span class="hljs-number">1</span>        <span class="hljs-comment">// R</span><br>&#125;);<br></code></pre></td></tr></table></figure>
+<h2 id="聚合管道">聚合管道</h2>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-comment">// 电商数据分析: 每月销售额Top10商品</span><br>db.<span class="hljs-property">orders</span>.<span class="hljs-title function_">aggregate</span>([<br>  <span class="hljs-comment">// Stage 1: 过滤时间范围</span><br>  &#123;<br>    <span class="hljs-attr">$match</span>: &#123;<br>      <span class="hljs-attr">status</span>: <span class="hljs-string">&quot;completed&quot;</span>,<br>      <span class="hljs-attr">created_at</span>: &#123;<br>        <span class="hljs-attr">$gte</span>: <span class="hljs-title class_">ISODate</span>(<span class="hljs-string">&quot;2025-01-01&quot;</span>),<br>        <span class="hljs-attr">$lt</span>: <span class="hljs-title class_">ISODate</span>(<span class="hljs-string">&quot;2025-04-01&quot;</span>)<br>      &#125;<br>    &#125;<br>  &#125;,<br>  <span class="hljs-comment">// Stage 2: 展开订单项</span><br>  &#123; <span class="hljs-attr">$unwind</span>: <span class="hljs-string">&quot;$items&quot;</span> &#125;,<br>  <span class="hljs-comment">// Stage 3: 按月份和商品分组</span><br>  &#123;<br>    <span class="hljs-attr">$group</span>: &#123;<br>      <span class="hljs-attr">_id</span>: &#123;<br>        <span class="hljs-attr">month</span>: &#123; <span class="hljs-attr">$dateToString</span>: &#123; <span class="hljs-attr">format</span>: <span class="hljs-string">&quot;%Y-%m&quot;</span>, <span class="hljs-attr">date</span>: <span class="hljs-string">&quot;$created_at&quot;</span> &#125; &#125;,<br>        <span class="hljs-attr">product_id</span>: <span class="hljs-string">&quot;$items.product_id&quot;</span>,<br>        <span class="hljs-attr">product_name</span>: <span class="hljs-string">&quot;$items.name&quot;</span><br>      &#125;,<br>      <span class="hljs-attr">total_revenue</span>: &#123; <span class="hljs-attr">$sum</span>: &#123; <span class="hljs-attr">$multiply</span>: [<span class="hljs-string">&quot;$items.price&quot;</span>, <span class="hljs-string">&quot;$items.quantity&quot;</span>] &#125; &#125;,<br>      <span class="hljs-attr">total_quantity</span>: &#123; <span class="hljs-attr">$sum</span>: <span class="hljs-string">&quot;$items.quantity&quot;</span> &#125;,<br>      <span class="hljs-attr">order_count</span>: &#123; <span class="hljs-attr">$sum</span>: <span class="hljs-number">1</span> &#125;<br>    &#125;<br>  &#125;,<br>  <span class="hljs-comment">// Stage 4: 按月份分组，取Top10</span><br>  &#123;<br>    <span class="hljs-attr">$sort</span>: &#123; <span class="hljs-string">&quot;_id.month&quot;</span>: <span class="hljs-number">1</span>, <span class="hljs-attr">total_revenue</span>: -<span class="hljs-number">1</span> &#125;<br>  &#125;,<br>  &#123;<br>    <span class="hljs-attr">$group</span>: &#123;<br>      <span class="hljs-attr">_id</span>: <span class="hljs-string">&quot;$_id.month&quot;</span>,<br>      <span class="hljs-attr">top_products</span>: &#123;<br>        <span class="hljs-attr">$push</span>: &#123;<br>          <span class="hljs-attr">product_id</span>: <span class="hljs-string">&quot;$_id.product_id&quot;</span>,<br>          <span class="hljs-attr">product_name</span>: <span class="hljs-string">&quot;$_id.product_name&quot;</span>,<br>          <span class="hljs-attr">revenue</span>: <span class="hljs-string">&quot;$total_revenue&quot;</span>,<br>          <span class="hljs-attr">quantity</span>: <span class="hljs-string">&quot;$total_quantity&quot;</span><br>        &#125;<br>      &#125;<br>    &#125;<br>  &#125;,<br>  <span class="hljs-comment">// Stage 5: 只取每月Top10</span><br>  &#123;<br>    <span class="hljs-attr">$project</span>: &#123;<br>      <span class="hljs-attr">month</span>: <span class="hljs-string">&quot;$_id&quot;</span>,<br>      <span class="hljs-attr">top_products</span>: &#123; <span class="hljs-attr">$slice</span>: [<span class="hljs-string">&quot;$top_products&quot;</span>, <span class="hljs-number">10</span>] &#125;<br>    &#125;<br>  &#125;,<br>  &#123; <span class="hljs-attr">$sort</span>: &#123; <span class="hljs-attr">month</span>: <span class="hljs-number">1</span> &#125; &#125;<br>]);<br></code></pre></td></tr></table></figure>
+<pre class="mermaid">flowchart LR
+    A["$match&lt;br/&gt;过滤条件"] --&gt; B["$unwind&lt;br/&gt;展开数组"]
+    B --&gt; C["$group&lt;br/&gt;分组聚合"]
+    C --&gt; D["$sort&lt;br/&gt;排序"]
+    D --&gt; E["$project&lt;br/&gt;投影"]
+    E --&gt; F["$limit&lt;br/&gt;限制结果"]
+
+    style A fill:#e3f2fd
+    style B fill:#e8f5e9
+    style C fill:#fff3e0
+    style D fill:#fce4ec
+    style E fill:#f3e5f5
+    style F fill:#e0f7fa</pre>
+<p><strong>聚合管道优化技巧：</strong></p>
+<ol type="1">
+<li><strong>$match尽早放置</strong>：在管道开头过滤数据，减少后续阶段处理量</li>
+<li>**<span
+class="math inline"><em>m</em><em>a</em><em>t</em><em>c</em><em>h</em><em>可</em><em>以</em><em>利</em><em>用</em><em>索</em><em>引</em> *  * ：<em>只</em><em>有</em><em>管</em><em>道</em><em>第</em><em>一</em><em>个</em></span>match能使用索引</li>
+<li><strong>$project提前裁剪字段</strong>：减少内存使用</li>
+<li><strong>避免$unwind产生笛卡尔积</strong>：大数组展开可能导致内存溢出</li>
+<li><strong>使用allowDiskUse</strong>：超过100MB内存限制时启用磁盘临时存储</li>
+</ol>
+<h2 id="总结">总结</h2>
+<p>MongoDB Schema设计是一门平衡的艺术：</p>
+<ul>
+<li><strong>嵌入 vs
+引用</strong>是最核心的决策，需要根据数据关系、查询模式和更新频率综合判断</li>
+<li><strong>一对少量用嵌入，一对大量用引用</strong>是基本原则</li>
+<li><strong>多态模式</strong>适合同类但结构不同的数据共享集合</li>
+<li><strong>桶模式</strong>是时序数据的高效存储方案，可以将文档数量减少一个数量级</li>
+<li><strong>扩展引用模式</strong>通过适度冗余换取查询效率，特别适合订单快照等场景</li>
+<li><strong>索引设计遵循ESR规则</strong>：等值-排序-范围的顺序</li>
+<li><strong>聚合管道</strong>是MongoDB的数据分析利器，$match前置和合理的管道顺序是性能关键</li>
+</ul>
+<p>记住MongoDB
+Schema设计的黄金法则：<strong>数据应该按照它被读取和使用的方式来建模</strong>，而不是按照它的逻辑关系来规范化。</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2025-02-12</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">3.5k 字 · 9 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/java-reflection-proxy/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Java反射与动态代理深入解析</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/java-stream-api/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Java Stream API高级用法与性能优化</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%96%87%E6%A1%A3%E6%A8%A1%E5%9E%8B%E5%9F%BA%E7%A1%80"><span class="toc-text">文档模型基础</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#mongodb-vs-rdbms-%E6%A6%82%E5%BF%B5%E5%AF%B9%E7%85%A7"><span class="toc-text">MongoDB vs RDBMS 概念对照</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%96%87%E6%A1%A3%E7%BB%93%E6%9E%84%E7%A4%BA%E4%BE%8B"><span class="toc-text">文档结构示例</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%B5%8C%E5%85%A5-vs-%E5%BC%95%E7%94%A8"><span class="toc-text">嵌入 vs 引用</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%B5%8C%E5%85%A5embedding"><span class="toc-text">嵌入（Embedding）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%BC%95%E7%94%A8referencing"><span class="toc-text">引用（Referencing）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%86%B3%E7%AD%96%E6%B5%81%E7%A8%8B"><span class="toc-text">决策流程</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%80%E5%AF%B9%E5%A4%9A%E5%85%B3%E7%B3%BB%E6%A8%A1%E5%BC%8F"><span class="toc-text">一对多关系模式</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A8%A1%E5%BC%8F%E4%B8%80%E5%B5%8C%E5%85%A5%E6%95%B0%E7%BB%84%E4%B8%80%E5%AF%B9%E5%B0%91%E9%87%8F"><span class="toc-text">模式一：嵌入数组（一对少量）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A8%A1%E5%BC%8F%E4%BA%8C%E5%AD%90%E5%BC%95%E7%94%A8%E4%B8%80%E5%AF%B9%E5%A4%9A"><span class="toc-text">模式二：子引用（一对多）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A8%A1%E5%BC%8F%E4%B8%89%E7%88%B6%E5%BC%95%E7%94%A8%E4%B8%80%E5%AF%B9%E5%A4%A7%E9%87%8F"><span class="toc-text">模式三：父引用（一对大量）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%AB%98%E7%BA%A7%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F"><span class="toc-text">高级设计模式</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%A4%9A%E6%80%81%E6%A8%A1%E5%BC%8Fpolymorphic-pattern"><span class="toc-text">多态模式（Polymorphic
+Pattern）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A1%B6%E6%A8%A1%E5%BC%8Fbucket-pattern"><span class="toc-text">桶模式（Bucket Pattern）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%AE%A1%E7%AE%97%E6%A8%A1%E5%BC%8Fcomputed-pattern"><span class="toc-text">计算模式（Computed Pattern）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%89%A9%E5%B1%95%E5%BC%95%E7%94%A8%E6%A8%A1%E5%BC%8Fextended-reference-pattern"><span class="toc-text">扩展引用模式（Extended
+Reference Pattern）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%B4%A2%E5%BC%95%E7%AD%96%E7%95%A5"><span class="toc-text">索引策略</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%B8%B8%E7%94%A8%E7%B4%A2%E5%BC%95%E7%B1%BB%E5%9E%8B"><span class="toc-text">常用索引类型</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#esr-%E7%B4%A2%E5%BC%95%E8%AE%BE%E8%AE%A1%E8%A7%84%E5%88%99"><span class="toc-text">ESR 索引设计规则</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%81%9A%E5%90%88%E7%AE%A1%E9%81%93"><span class="toc-text">聚合管道</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

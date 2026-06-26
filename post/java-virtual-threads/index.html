@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Java虚拟线程(Project Loom)深度解析 · zt&#39;s Blog</title>
+  <meta name="description" content="深入解析JDK 21正式发布的虚拟线程特性，从底层原理到实战迁移，全面掌握Java并发编程的新范式。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/java-virtual-threads/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Java虚拟线程(Project Loom)深度解析">
+  <meta property="og:description" content="深入解析JDK 21正式发布的虚拟线程特性，从底层原理到实战迁移，全面掌握Java并发编程的新范式。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/java-virtual-threads/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2025-04-15T16:00:00.000Z">
+  <meta property="article:modified_time" content="2025-04-15T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Java虚拟线程(Project Loom)深度解析">
+  <meta name="twitter:description" content="深入解析JDK 21正式发布的虚拟线程特性，从底层原理到实战迁移，全面掌握Java并发编程的新范式。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Java虚拟线程(Project Loom)深度解析","description":"深入解析JDK 21正式发布的虚拟线程特性，从底层原理到实战迁移，全面掌握Java并发编程的新范式。","datePublished":"2025-04-15T16:00:00.000Z","dateModified":"2025-04-15T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/java-virtual-threads/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Java","item":"https://withesse.co/categories/Java/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:25">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Java/">Java</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/java/"><span class="hash">#</span>java</a><a class="tag" href="/tags/virtual-threads/"><span class="hash">#</span>virtual-threads</a><a class="tag" href="/tags/loom/"><span class="hash">#</span>loom</a><a class="tag" href="/tags/jdk21/"><span class="hash">#</span>jdk21</a>
+        
+      </div>
+
+      <h1>Java虚拟线程(Project Loom)深度解析</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2025.04.16</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          <span class="row gap8" style="align-items:center"><span class="lang-dot" style="background:#E76F00"></span>Java</span>
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 8 min</span>
+        </span>
+        <span class="wc"><span class="num">3.4k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E9%9C%80%E8%A6%81%E8%99%9A%E6%8B%9F%E7%BA%BF%E7%A8%8B"><span class="toc-text">为什么需要虚拟线程</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%B9%B3%E5%8F%B0%E7%BA%BF%E7%A8%8B-vs-%E8%99%9A%E6%8B%9F%E7%BA%BF%E7%A8%8B"><span class="toc-text">平台线程 vs 虚拟线程</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%99%9A%E6%8B%9F%E7%BA%BF%E7%A8%8B%E6%A0%B8%E5%BF%83%E5%8E%9F%E7%90%86"><span class="toc-text">虚拟线程核心原理</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BD%BD%E4%BD%93%E7%BA%BF%E7%A8%8Bcarrier-thread%E6%9C%BA%E5%88%B6"><span class="toc-text">载体线程(Carrier Thread)机制</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9F%BA%E7%A1%80%E4%BD%BF%E7%94%A8"><span class="toc-text">基础使用</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%88%9B%E5%BB%BA%E8%99%9A%E6%8B%9F%E7%BA%BF%E7%A8%8B"><span class="toc-text">创建虚拟线程</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%99%BE%E4%B8%87%E5%B9%B6%E5%8F%91%E6%BC%94%E7%A4%BA"><span class="toc-text">百万并发演示</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BA%BF%E7%A8%8B%E5%9B%BA%E5%AE%9Athread-pinning%E9%97%AE%E9%A2%98"><span class="toc-text">线程固定(Thread Pinning)问题</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%A4%E7%A7%8D%E5%AF%BC%E8%87%B4%E7%BA%BF%E7%A8%8B%E5%9B%BA%E5%AE%9A%E7%9A%84%E6%83%85%E5%86%B5"><span class="toc-text">两种导致线程固定的情况</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A3%80%E6%B5%8B%E7%BA%BF%E7%A8%8B%E5%9B%BA%E5%AE%9A"><span class="toc-text">检测线程固定</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BB%93%E6%9E%84%E5%8C%96%E5%B9%B6%E5%8F%91structured-concurrency"><span class="toc-text">结构化并发(Structured
+Concurrency)</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%A7%E8%83%BD%E5%9F%BA%E5%87%86%E6%B5%8B%E8%AF%95"><span class="toc-text">性能基准测试</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#spring-boot-%E9%9B%86%E6%88%90"><span class="toc-text">Spring Boot 集成</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#spring-boot-3.2-%E9%85%8D%E7%BD%AE"><span class="toc-text">Spring Boot 3.2+ 配置</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%9E%E9%99%85%E5%BA%94%E7%94%A8%E9%AB%98%E5%B9%B6%E5%8F%91api%E6%9C%8D%E5%8A%A1"><span class="toc-text">实际应用：高并发API服务</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%BF%81%E7%A7%BB%E6%8C%87%E5%8D%97%E4%B8%8E%E6%B3%A8%E6%84%8F%E4%BA%8B%E9%A1%B9"><span class="toc-text">迁移指南与注意事项</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%80%82%E5%90%88%E8%BF%81%E7%A7%BB%E7%9A%84%E5%9C%BA%E6%99%AF"><span class="toc-text">适合迁移的场景</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%8D%E9%80%82%E5%90%88%E7%9A%84%E5%9C%BA%E6%99%AF"><span class="toc-text">不适合的场景</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BF%81%E7%A7%BB%E6%A3%80%E6%9F%A5%E6%B8%85%E5%8D%95"><span class="toc-text">迁移检查清单</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5%E6%80%BB%E7%BB%93"><span class="toc-text">最佳实践总结</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="前言">前言</h2>
+<p>Java 21（LTS）正式引入了虚拟线程（Virtual Threads），这是自Java 5引入
+<code>java.util.concurrent</code>
+以来，Java并发模型最大的一次变革。虚拟线程的目标不是替代平台线程，而是让”一个请求一个线程”的编程模型能够高效扩展到数百万并发的场景。本文将深入探讨虚拟线程的底层原理、使用方式、注意事项和迁移策略。</p>
+<h2 id="为什么需要虚拟线程">为什么需要虚拟线程</h2>
+<pre class="mermaid">graph TB
+    subgraph 传统模型
+        R1[请求1] --&gt; PT1[平台线程1]
+        R2[请求2] --&gt; PT2[平台线程2]
+        R3[请求3] --&gt; PT3[平台线程3]
+        RN[请求N] --&gt; PTN[平台线程N]
+        PTN -.-&gt;|线程数受限于OS| LIMIT[上限: 数千个]
+    end
+
+    subgraph 虚拟线程模型
+        VR1[请求1] --&gt; VT1[虚拟线程1]
+        VR2[请求2] --&gt; VT2[虚拟线程2]
+        VR3[请求3] --&gt; VT3[虚拟线程3]
+        VRM[请求M] --&gt; VTM[虚拟线程M]
+        VTM -.-&gt;|JVM管理调度| NOLIMIT[轻松百万级]
+
+        VT1 --&gt; CT1[载体线程1]
+        VT2 --&gt; CT1
+        VT3 --&gt; CT2[载体线程2]
+        VTM --&gt; CT2
+    end
+
+    style LIMIT fill:#f66,stroke:#333
+    style NOLIMIT fill:#6f6,stroke:#333</pre>
+<p>传统的平台线程（Platform
+Thread）是操作系统线程的薄包装，每个线程占用约1MB的栈空间。当应用需要处理大量并发I/O操作时，线程数量成为瓶颈。常见的解决方案是使用异步编程（CompletableFuture、Reactor），但这牺牲了代码的可读性和调试体验。</p>
+<p>虚拟线程解决了这个矛盾：保持同步编程的简洁性，同时获得异步编程的吞吐量。</p>
+<h3 id="平台线程-vs-虚拟线程">平台线程 vs 虚拟线程</h3>
+<table>
+<thead>
+<tr class="header">
+<th>特性</th>
+<th>平台线程</th>
+<th>虚拟线程</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>底层实现</td>
+<td>OS线程 1:1 映射</td>
+<td>JVM管理，M:N映射到载体线程</td>
+</tr>
+<tr class="even">
+<td>栈空间</td>
+<td>固定 ~1MB</td>
+<td>动态增长，初始仅几百字节</td>
+</tr>
+<tr class="odd">
+<td>创建成本</td>
+<td>高（系统调用）</td>
+<td>低（纯Java对象）</td>
+</tr>
+<tr class="even">
+<td>数量上限</td>
+<td>数千</td>
+<td>数百万</td>
+</tr>
+<tr class="odd">
+<td>调度</td>
+<td>OS内核调度</td>
+<td>JVM ForkJoinPool调度</td>
+</tr>
+<tr class="even">
+<td>适用场景</td>
+<td>CPU密集型</td>
+<td>I/O密集型</td>
+</tr>
+<tr class="odd">
+<td>线程池</td>
+<td>需要且推荐</td>
+<td>不需要池化</td>
+</tr>
+</tbody>
+</table>
+<h2 id="虚拟线程核心原理">虚拟线程核心原理</h2>
+<h3 id="载体线程carrier-thread机制">载体线程(Carrier Thread)机制</h3>
+<pre class="mermaid">sequenceDiagram
+    participant VT as 虚拟线程
+    participant CT as 载体线程(ForkJoinPool)
+    participant IO as I/O操作
+
+    VT-&gt;&gt;CT: 1. 挂载(mount)到载体线程
+    CT-&gt;&gt;CT: 2. 执行业务代码
+    CT-&gt;&gt;IO: 3. 发起阻塞I/O
+    Note over VT,CT: 4. 虚拟线程卸载(unmount)&lt;br/&gt;载体线程空闲
+    CT-&gt;&gt;CT: 5. 载体线程执行其他虚拟线程
+    IO--&gt;&gt;VT: 6. I/O完成
+    VT-&gt;&gt;CT: 7. 重新挂载到(可能不同的)载体线程
+    CT-&gt;&gt;CT: 8. 继续执行后续代码</pre>
+<p>虚拟线程的核心机制是<strong>continuation</strong>（延续）。当虚拟线程遇到阻塞操作时：</p>
+<ol type="1">
+<li>JVM将虚拟线程的栈帧保存为continuation对象（堆内存）</li>
+<li>虚拟线程从载体线程上卸载（unmount）</li>
+<li>载体线程可以去执行其他虚拟线程</li>
+<li>当阻塞操作完成后，虚拟线程重新挂载到一个可用的载体线程上继续执行</li>
+</ol>
+<p>这个过程对开发者完全透明，代码看起来就是同步阻塞的，但底层实现了非阻塞的效果。</p>
+<h2 id="基础使用">基础使用</h2>
+<h3 id="创建虚拟线程">创建虚拟线程</h3>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">VirtualThreadBasics</span> &#123;<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">main</span><span class="hljs-params">(String[] args)</span> <span class="hljs-keyword">throws</span> Exception &#123;<br><br>        <span class="hljs-comment">// 方式1：Thread.ofVirtual()</span><br>        <span class="hljs-type">Thread</span> <span class="hljs-variable">vt1</span> <span class="hljs-operator">=</span> Thread.ofVirtual()<br>            .name(<span class="hljs-string">&quot;vt-1&quot;</span>)<br>            .start(() -&gt; &#123;<br>                System.out.println(<span class="hljs-string">&quot;Running on: &quot;</span> + Thread.currentThread());<br>                System.out.println(<span class="hljs-string">&quot;Is virtual: &quot;</span> + Thread.currentThread().isVirtual());<br>            &#125;);<br>        vt1.join();<br><br>        <span class="hljs-comment">// 方式2：Thread.startVirtualThread() 快捷方法</span><br>        <span class="hljs-type">Thread</span> <span class="hljs-variable">vt2</span> <span class="hljs-operator">=</span> Thread.startVirtualThread(() -&gt; &#123;<br>            System.out.println(<span class="hljs-string">&quot;Quick virtual thread&quot;</span>);<br>        &#125;);<br>        vt2.join();<br><br>        <span class="hljs-comment">// 方式3：Executors.newVirtualThreadPerTaskExecutor()</span><br>        <span class="hljs-comment">// 推荐在服务端应用中使用</span><br>        <span class="hljs-keyword">try</span> (<span class="hljs-type">var</span> <span class="hljs-variable">executor</span> <span class="hljs-operator">=</span> Executors.newVirtualThreadPerTaskExecutor()) &#123;<br>            IntStream.range(<span class="hljs-number">0</span>, <span class="hljs-number">100_000</span>).forEach(i -&gt;<br>                executor.submit(() -&gt; &#123;<br>                    Thread.sleep(Duration.ofSeconds(<span class="hljs-number">1</span>));<br>                    <span class="hljs-keyword">return</span> i;<br>                &#125;)<br>            );<br>        &#125; <span class="hljs-comment">// executor.close() 会等待所有任务完成</span><br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="百万并发演示">百万并发演示</h3>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">MillionThreadsDemo</span> &#123;<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">main</span><span class="hljs-params">(String[] args)</span> <span class="hljs-keyword">throws</span> Exception &#123;<br>        <span class="hljs-type">Instant</span> <span class="hljs-variable">start</span> <span class="hljs-operator">=</span> Instant.now();<br><br>        <span class="hljs-comment">// 创建100万个虚拟线程，每个线程sleep 1秒</span><br>        <span class="hljs-keyword">try</span> (<span class="hljs-type">var</span> <span class="hljs-variable">executor</span> <span class="hljs-operator">=</span> Executors.newVirtualThreadPerTaskExecutor()) &#123;<br>            List&lt;Future&lt;String&gt;&gt; futures = <span class="hljs-keyword">new</span> <span class="hljs-title class_">ArrayList</span>&lt;&gt;();<br><br>            <span class="hljs-keyword">for</span> (<span class="hljs-type">int</span> <span class="hljs-variable">i</span> <span class="hljs-operator">=</span> <span class="hljs-number">0</span>; i &lt; <span class="hljs-number">1_000_000</span>; i++) &#123;<br>                <span class="hljs-keyword">final</span> <span class="hljs-type">int</span> <span class="hljs-variable">id</span> <span class="hljs-operator">=</span> i;<br>                futures.add(executor.submit(() -&gt; &#123;<br>                    Thread.sleep(Duration.ofSeconds(<span class="hljs-number">1</span>));<br>                    <span class="hljs-keyword">return</span> <span class="hljs-string">&quot;Task-&quot;</span> + id + <span class="hljs-string">&quot; done&quot;</span>;<br>                &#125;));<br>            &#125;<br><br>            <span class="hljs-comment">// 等待所有任务完成</span><br>            <span class="hljs-type">int</span> <span class="hljs-variable">completed</span> <span class="hljs-operator">=</span> <span class="hljs-number">0</span>;<br>            <span class="hljs-keyword">for</span> (Future&lt;String&gt; future : futures) &#123;<br>                future.get();<br>                completed++;<br>            &#125;<br>            System.out.println(<span class="hljs-string">&quot;Completed: &quot;</span> + completed);<br>        &#125;<br><br>        <span class="hljs-type">Duration</span> <span class="hljs-variable">elapsed</span> <span class="hljs-operator">=</span> Duration.between(start, Instant.now());<br>        System.out.println(<span class="hljs-string">&quot;Total time: &quot;</span> + elapsed.toSeconds() + <span class="hljs-string">&quot;s&quot;</span>);<br>        <span class="hljs-comment">// 100万个线程，每个sleep 1秒，总耗时约2-3秒（而非100万秒）</span><br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="线程固定thread-pinning问题">线程固定(Thread Pinning)问题</h2>
+<p>线程固定是虚拟线程最重要的性能陷阱。当虚拟线程无法从载体线程上卸载时，会”固定”在载体线程上，阻塞整个载体线程。</p>
+<pre class="mermaid">graph TB
+    subgraph 正常情况
+        VT1[虚拟线程A] --&gt;|阻塞I/O| UNMOUNT[卸载]
+        UNMOUNT --&gt; FREE[载体线程空闲]
+        FREE --&gt; VT2[执行其他虚拟线程]
+    end
+
+    subgraph 线程固定
+        VT3[虚拟线程B] --&gt;|synchronized块内阻塞| PINNED[固定!]
+        PINNED --&gt; BLOCKED[载体线程被阻塞]
+        BLOCKED --&gt; STUCK[其他虚拟线程无法运行]
+    end
+
+    style PINNED fill:#f66,stroke:#333
+    style BLOCKED fill:#f66,stroke:#333</pre>
+<h3 id="两种导致线程固定的情况">两种导致线程固定的情况</h3>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">ThreadPinningExamples</span> &#123;<br><br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> <span class="hljs-type">Object</span> <span class="hljs-variable">lock</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">Object</span>();<br><br>    <span class="hljs-comment">/**</span><br><span class="hljs-comment">     * 情况1：synchronized块中执行阻塞操作 -- 会导致线程固定!</span><br><span class="hljs-comment">     */</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">badSynchronized</span><span class="hljs-params">()</span> &#123;<br>        <span class="hljs-keyword">synchronized</span> (lock) &#123;<br>            <span class="hljs-comment">// 虚拟线程被固定在载体线程上</span><br>            <span class="hljs-keyword">try</span> &#123;<br>                Thread.sleep(Duration.ofSeconds(<span class="hljs-number">1</span>));<br>            &#125; <span class="hljs-keyword">catch</span> (InterruptedException e) &#123;<br>                Thread.currentThread().interrupt();<br>            &#125;<br>        &#125;<br>    &#125;<br><br>    <span class="hljs-comment">/**</span><br><span class="hljs-comment">     * 修复方案：使用ReentrantLock替代synchronized</span><br><span class="hljs-comment">     */</span><br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> <span class="hljs-type">ReentrantLock</span> <span class="hljs-variable">reentrantLock</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">ReentrantLock</span>();<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">goodReentrantLock</span><span class="hljs-params">()</span> &#123;<br>        reentrantLock.lock();<br>        <span class="hljs-keyword">try</span> &#123;<br>            <span class="hljs-comment">// 虚拟线程可以正常卸载</span><br>            Thread.sleep(Duration.ofSeconds(<span class="hljs-number">1</span>));<br>        &#125; <span class="hljs-keyword">catch</span> (InterruptedException e) &#123;<br>            Thread.currentThread().interrupt();<br>        &#125; <span class="hljs-keyword">finally</span> &#123;<br>            reentrantLock.unlock();<br>        &#125;<br>    &#125;<br><br>    <span class="hljs-comment">/**</span><br><span class="hljs-comment">     * 情况2：native方法/JNI调用中的阻塞 -- 也会导致线程固定</span><br><span class="hljs-comment">     * 这种情况通常无法避免，但影响较小</span><br><span class="hljs-comment">     */</span><br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="检测线程固定">检测线程固定</h3>
+<p>通过JVM参数可以检测线程固定：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 线程固定时打印堆栈</span><br>java -Djdk.tracePinnedThreads=full MyApp<br><br><span class="hljs-comment"># 线程固定时只打印简短信息</span><br>java -Djdk.tracePinnedThreads=short MyApp<br></code></pre></td></tr></table></figure>
+<h2 id="结构化并发structured-concurrency">结构化并发(Structured
+Concurrency)</h2>
+<p>JDK 21引入的结构化并发（Preview）让并发任务的管理更加清晰和安全。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">/**</span><br><span class="hljs-comment"> * 结构化并发：并行获取用户信息和订单列表</span><br><span class="hljs-comment"> * 两个子任务中任何一个失败，另一个会被自动取消</span><br><span class="hljs-comment"> */</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">record</span> <span class="hljs-title class_">UserProfile</span><span class="hljs-params">(User user, List&lt;Order&gt; orders)</span> &#123;&#125;<br><br><span class="hljs-keyword">public</span> UserProfile <span class="hljs-title function_">fetchUserProfile</span><span class="hljs-params">(<span class="hljs-type">long</span> userId)</span> <span class="hljs-keyword">throws</span> Exception &#123;<br><br>    <span class="hljs-keyword">try</span> (<span class="hljs-type">var</span> <span class="hljs-variable">scope</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">StructuredTaskScope</span>.ShutdownOnFailure()) &#123;<br><br>        <span class="hljs-comment">// 并行发起两个子任务</span><br>        Subtask&lt;User&gt; userTask = scope.fork(() -&gt;<br>            userService.findById(userId));<br>        Subtask&lt;List&lt;Order&gt;&gt; ordersTask = scope.fork(() -&gt;<br>            orderService.findByUserId(userId));<br><br>        <span class="hljs-comment">// 等待所有子任务完成</span><br>        scope.join();<br>        <span class="hljs-comment">// 如果有任务失败，抛出异常</span><br>        scope.throwIfFailed();<br><br>        <span class="hljs-comment">// 两个任务都成功，组合结果</span><br>        <span class="hljs-keyword">return</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">UserProfile</span>(userTask.get(), ordersTask.get());<br>    &#125;<br>&#125;<br><br><span class="hljs-comment">/**</span><br><span class="hljs-comment"> * ShutdownOnSuccess: 任一子任务成功即返回，取消其余任务</span><br><span class="hljs-comment"> * 适用于从多个源获取相同数据，取最快的结果</span><br><span class="hljs-comment"> */</span><br><span class="hljs-keyword">public</span> String <span class="hljs-title function_">fetchFromFastestMirror</span><span class="hljs-params">(String resourceId)</span> <span class="hljs-keyword">throws</span> Exception &#123;<br><br>    <span class="hljs-keyword">try</span> (<span class="hljs-type">var</span> <span class="hljs-variable">scope</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">StructuredTaskScope</span>.ShutdownOnSuccess&lt;String&gt;()) &#123;<br><br>        scope.fork(() -&gt; mirrorA.fetch(resourceId));<br>        scope.fork(() -&gt; mirrorB.fetch(resourceId));<br>        scope.fork(() -&gt; mirrorC.fetch(resourceId));<br><br>        scope.join();<br><br>        <span class="hljs-keyword">return</span> scope.result(); <span class="hljs-comment">// 返回最先成功的结果</span><br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="性能基准测试">性能基准测试</h2>
+<p>以下是一个模拟I/O密集型场景的基准测试，对比平台线程池和虚拟线程的性能：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">VirtualThreadBenchmark</span> &#123;<br><br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">final</span> <span class="hljs-type">int</span> <span class="hljs-variable">TASK_COUNT</span> <span class="hljs-operator">=</span> <span class="hljs-number">100_000</span>;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">final</span> <span class="hljs-type">Duration</span> <span class="hljs-variable">IO_DELAY</span> <span class="hljs-operator">=</span> Duration.ofMillis(<span class="hljs-number">100</span>);<br><br>    <span class="hljs-comment">/**</span><br><span class="hljs-comment">     * 模拟I/O操作</span><br><span class="hljs-comment">     */</span><br>    <span class="hljs-keyword">static</span> String <span class="hljs-title function_">simulateIOWork</span><span class="hljs-params">(<span class="hljs-type">int</span> taskId)</span> &#123;<br>        <span class="hljs-keyword">try</span> &#123;<br>            Thread.sleep(IO_DELAY);<br>        &#125; <span class="hljs-keyword">catch</span> (InterruptedException e) &#123;<br>            Thread.currentThread().interrupt();<br>        &#125;<br>        <span class="hljs-keyword">return</span> <span class="hljs-string">&quot;Result-&quot;</span> + taskId;<br>    &#125;<br><br>    <span class="hljs-comment">/**</span><br><span class="hljs-comment">     * 固定大小平台线程池</span><br><span class="hljs-comment">     */</span><br>    <span class="hljs-keyword">static</span> <span class="hljs-type">long</span> <span class="hljs-title function_">benchmarkPlatformThreads</span><span class="hljs-params">()</span> <span class="hljs-keyword">throws</span> Exception &#123;<br>        <span class="hljs-type">long</span> <span class="hljs-variable">start</span> <span class="hljs-operator">=</span> System.nanoTime();<br><br>        <span class="hljs-keyword">try</span> (<span class="hljs-type">var</span> <span class="hljs-variable">executor</span> <span class="hljs-operator">=</span> Executors.newFixedThreadPool(<span class="hljs-number">200</span>)) &#123;<br>            List&lt;Future&lt;String&gt;&gt; futures = <span class="hljs-keyword">new</span> <span class="hljs-title class_">ArrayList</span>&lt;&gt;();<br>            <span class="hljs-keyword">for</span> (<span class="hljs-type">int</span> <span class="hljs-variable">i</span> <span class="hljs-operator">=</span> <span class="hljs-number">0</span>; i &lt; TASK_COUNT; i++) &#123;<br>                <span class="hljs-keyword">final</span> <span class="hljs-type">int</span> <span class="hljs-variable">id</span> <span class="hljs-operator">=</span> i;<br>                futures.add(executor.submit(() -&gt; simulateIOWork(id)));<br>            &#125;<br>            <span class="hljs-keyword">for</span> (Future&lt;String&gt; f : futures) &#123;<br>                f.get();<br>            &#125;<br>        &#125;<br><br>        <span class="hljs-keyword">return</span> (System.nanoTime() - start) / <span class="hljs-number">1_000_000</span>;<br>    &#125;<br><br>    <span class="hljs-comment">/**</span><br><span class="hljs-comment">     * 虚拟线程</span><br><span class="hljs-comment">     */</span><br>    <span class="hljs-keyword">static</span> <span class="hljs-type">long</span> <span class="hljs-title function_">benchmarkVirtualThreads</span><span class="hljs-params">()</span> <span class="hljs-keyword">throws</span> Exception &#123;<br>        <span class="hljs-type">long</span> <span class="hljs-variable">start</span> <span class="hljs-operator">=</span> System.nanoTime();<br><br>        <span class="hljs-keyword">try</span> (<span class="hljs-type">var</span> <span class="hljs-variable">executor</span> <span class="hljs-operator">=</span> Executors.newVirtualThreadPerTaskExecutor()) &#123;<br>            List&lt;Future&lt;String&gt;&gt; futures = <span class="hljs-keyword">new</span> <span class="hljs-title class_">ArrayList</span>&lt;&gt;();<br>            <span class="hljs-keyword">for</span> (<span class="hljs-type">int</span> <span class="hljs-variable">i</span> <span class="hljs-operator">=</span> <span class="hljs-number">0</span>; i &lt; TASK_COUNT; i++) &#123;<br>                <span class="hljs-keyword">final</span> <span class="hljs-type">int</span> <span class="hljs-variable">id</span> <span class="hljs-operator">=</span> i;<br>                futures.add(executor.submit(() -&gt; simulateIOWork(id)));<br>            &#125;<br>            <span class="hljs-keyword">for</span> (Future&lt;String&gt; f : futures) &#123;<br>                f.get();<br>            &#125;<br>        &#125;<br><br>        <span class="hljs-keyword">return</span> (System.nanoTime() - start) / <span class="hljs-number">1_000_000</span>;<br>    &#125;<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">main</span><span class="hljs-params">(String[] args)</span> <span class="hljs-keyword">throws</span> Exception &#123;<br>        <span class="hljs-comment">// 预热</span><br>        benchmarkPlatformThreads();<br>        benchmarkVirtualThreads();<br><br>        <span class="hljs-comment">// 正式测试</span><br>        <span class="hljs-type">long</span> <span class="hljs-variable">platformTime</span> <span class="hljs-operator">=</span> benchmarkPlatformThreads();<br>        <span class="hljs-type">long</span> <span class="hljs-variable">virtualTime</span> <span class="hljs-operator">=</span> benchmarkVirtualThreads();<br><br>        System.out.println(<span class="hljs-string">&quot;Platform threads (200 pool): &quot;</span> + platformTime + <span class="hljs-string">&quot;ms&quot;</span>);<br>        System.out.println(<span class="hljs-string">&quot;Virtual threads:             &quot;</span> + virtualTime + <span class="hljs-string">&quot;ms&quot;</span>);<br>        System.out.printf(<span class="hljs-string">&quot;Speedup: %.2fx%n&quot;</span>, (<span class="hljs-type">double</span>) platformTime / virtualTime);<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<p>典型测试结果（10万任务，每个100ms I/O延迟）：</p>
+<table>
+<thead>
+<tr class="header">
+<th>方案</th>
+<th>线程池大小</th>
+<th>耗时</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>平台线程池</td>
+<td>200</td>
+<td>~50秒</td>
+</tr>
+<tr class="even">
+<td>平台线程池</td>
+<td>1000</td>
+<td>~10秒</td>
+</tr>
+<tr class="odd">
+<td>虚拟线程</td>
+<td>不限</td>
+<td>~0.3秒</td>
+</tr>
+</tbody>
+</table>
+<h2 id="spring-boot-集成">Spring Boot 集成</h2>
+<h3 id="spring-boot-3.2-配置">Spring Boot 3.2+ 配置</h3>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># application.yml</span><br><span class="hljs-attr">spring:</span><br>  <span class="hljs-attr">threads:</span><br>    <span class="hljs-attr">virtual:</span><br>      <span class="hljs-attr">enabled:</span> <span class="hljs-literal">true</span>  <span class="hljs-comment"># 一行配置启用虚拟线程</span><br></code></pre></td></tr></table></figure>
+<p>这会让Tomcat使用虚拟线程处理每个HTTP请求，等效于：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-meta">@Configuration</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">VirtualThreadConfig</span> &#123;<br><br>    <span class="hljs-meta">@Bean</span><br>    <span class="hljs-keyword">public</span> TomcatProtocolHandlerCustomizer&lt;?&gt; protocolHandlerCustomizer() &#123;<br>        <span class="hljs-keyword">return</span> protocolHandler -&gt; &#123;<br>            protocolHandler.setExecutor(Executors.newVirtualThreadPerTaskExecutor());<br>        &#125;;<br>    &#125;<br><br>    <span class="hljs-comment">// 异步任务也使用虚拟线程</span><br>    <span class="hljs-meta">@Bean</span><br>    <span class="hljs-keyword">public</span> AsyncTaskExecutor <span class="hljs-title function_">applicationTaskExecutor</span><span class="hljs-params">()</span> &#123;<br>        <span class="hljs-keyword">return</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">TaskExecutorAdapter</span>(Executors.newVirtualThreadPerTaskExecutor());<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="实际应用高并发api服务">实际应用：高并发API服务</h3>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-meta">@RestController</span><br><span class="hljs-meta">@RequestMapping(&quot;/api/aggregation&quot;)</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">AggregationController</span> &#123;<br><br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> UserService userService;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> ProductService productService;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> RecommendService recommendService;<br><br>    <span class="hljs-comment">/**</span><br><span class="hljs-comment">     * 聚合接口：并行调用多个下游服务</span><br><span class="hljs-comment">     * 使用虚拟线程后，每个请求都有自己的线程</span><br><span class="hljs-comment">     * 内部的并行调用也使用虚拟线程，不会耗尽线程池</span><br><span class="hljs-comment">     */</span><br>    <span class="hljs-meta">@GetMapping(&quot;/homepage/&#123;userId&#125;&quot;)</span><br>    <span class="hljs-keyword">public</span> ResponseEntity&lt;HomepageData&gt; <span class="hljs-title function_">getHomepage</span><span class="hljs-params">(<span class="hljs-meta">@PathVariable</span> Long userId)</span><br>            <span class="hljs-keyword">throws</span> Exception &#123;<br><br>        <span class="hljs-keyword">try</span> (<span class="hljs-type">var</span> <span class="hljs-variable">scope</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">StructuredTaskScope</span>.ShutdownOnFailure()) &#123;<br><br>            <span class="hljs-type">var</span> <span class="hljs-variable">userTask</span> <span class="hljs-operator">=</span> scope.fork(() -&gt; userService.getProfile(userId));<br>            <span class="hljs-type">var</span> <span class="hljs-variable">productsTask</span> <span class="hljs-operator">=</span> scope.fork(() -&gt; productService.getHotProducts());<br>            <span class="hljs-type">var</span> <span class="hljs-variable">recommendTask</span> <span class="hljs-operator">=</span> scope.fork(() -&gt;<br>                recommendService.getRecommendations(userId));<br><br>            scope.join();<br>            scope.throwIfFailed();<br><br>            <span class="hljs-keyword">return</span> ResponseEntity.ok(<span class="hljs-keyword">new</span> <span class="hljs-title class_">HomepageData</span>(<br>                userTask.get(),<br>                productsTask.get(),<br>                recommendTask.get()<br>            ));<br>        &#125;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="迁移指南与注意事项">迁移指南与注意事项</h2>
+<h3 id="适合迁移的场景">适合迁移的场景</h3>
+<ol type="1">
+<li><strong>I/O密集型应用</strong>：Web服务、微服务网关、数据库操作密集的应用</li>
+<li><strong>大量并发连接</strong>：WebSocket服务、长轮询服务</li>
+<li><strong>批处理任务</strong>：需要并行处理大量独立任务的场景</li>
+</ol>
+<h3 id="不适合的场景">不适合的场景</h3>
+<ol type="1">
+<li><strong>CPU密集型计算</strong>：虚拟线程不会加速计算任务，反而增加调度开销</li>
+<li><strong>依赖ThreadLocal大量数据</strong>：虚拟线程数量可能很大，ThreadLocal会占用过多内存</li>
+<li><strong>依赖synchronized且难以修改的代码</strong>：如使用了大量synchronized的第三方库</li>
+</ol>
+<h3 id="迁移检查清单">迁移检查清单</h3>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">/**</span><br><span class="hljs-comment"> * 迁移前的检查清单</span><br><span class="hljs-comment"> */</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">MigrationChecklist</span> &#123;<br><br>    <span class="hljs-comment">// 1. 将synchronized替换为ReentrantLock</span><br>    <span class="hljs-comment">// Before:</span><br>    <span class="hljs-comment">// synchronized (this) &#123; blockingCall(); &#125;</span><br><br>    <span class="hljs-comment">// After:</span><br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> <span class="hljs-type">ReentrantLock</span> <span class="hljs-variable">lock</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">ReentrantLock</span>();<br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">safeMethod</span><span class="hljs-params">()</span> &#123;<br>        lock.lock();<br>        <span class="hljs-keyword">try</span> &#123;<br>            blockingCall();<br>        &#125; <span class="hljs-keyword">finally</span> &#123;<br>            lock.unlock();<br>        &#125;<br>    &#125;<br><br>    <span class="hljs-comment">// 2. 避免线程池限流 -- 使用Semaphore替代</span><br>    <span class="hljs-comment">// Before:</span><br>    <span class="hljs-comment">// ExecutorService pool = Executors.newFixedThreadPool(10);</span><br><br>    <span class="hljs-comment">// After:</span><br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> <span class="hljs-type">Semaphore</span> <span class="hljs-variable">semaphore</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">Semaphore</span>(<span class="hljs-number">10</span>);<br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">rateLimitedCall</span><span class="hljs-params">()</span> <span class="hljs-keyword">throws</span> Exception &#123;<br>        semaphore.acquire();<br>        <span class="hljs-keyword">try</span> &#123;<br>            externalServiceCall();<br>        &#125; <span class="hljs-keyword">finally</span> &#123;<br>            semaphore.release();<br>        &#125;<br>    &#125;<br><br>    <span class="hljs-comment">// 3. 检查ThreadLocal使用</span><br>    <span class="hljs-comment">// 虚拟线程中ThreadLocal仍然可用，但注意内存</span><br>    <span class="hljs-comment">// 优先使用ScopedValue（Preview in JDK 21）</span><br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">final</span> ScopedValue&lt;UserContext&gt; CONTEXT = ScopedValue.newInstance();<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">handleRequest</span><span class="hljs-params">(UserContext ctx)</span> &#123;<br>        ScopedValue.runWhere(CONTEXT, ctx, () -&gt; &#123;<br>            processRequest();<br>        &#125;);<br>    &#125;<br><br>    <span class="hljs-comment">// 4. 不要池化虚拟线程</span><br>    <span class="hljs-comment">// 虚拟线程是廉价的，不需要池化</span><br>    <span class="hljs-comment">// 始终使用 newVirtualThreadPerTaskExecutor()</span><br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="最佳实践总结">最佳实践总结</h2>
+<ol type="1">
+<li><strong>不要池化虚拟线程</strong>。虚拟线程创建极其廉价，每个任务创建一个新的虚拟线程即可。</li>
+<li><strong>用Semaphore限制并发</strong>。如果需要限制对外部资源的并发访问，使用Semaphore而非固定大小线程池。</li>
+<li><strong>替换synchronized为ReentrantLock</strong>。避免线程固定问题，尤其是在锁内有阻塞I/O操作时。</li>
+<li><strong>注意ThreadLocal内存</strong>。百万虚拟线程各持有一份ThreadLocal副本可能导致内存问题，考虑使用ScopedValue。</li>
+<li><strong>监控载体线程</strong>。通过JFR（Java Flight
+Recorder）监控载体线程的使用情况和线程固定事件。</li>
+</ol>
+<h2 id="总结">总结</h2>
+<p>虚拟线程是Java并发编程的一次范式转变。它让开发者可以用简单的同步代码编写高并发应用，不再需要在”代码可读性”和”系统吞吐量”之间做妥协。关键要点：</p>
+<ul>
+<li>虚拟线程是JVM管理的轻量级线程，通过M:N调度映射到少量载体线程上</li>
+<li>阻塞I/O时虚拟线程自动卸载，不会浪费载体线程资源</li>
+<li>需要注意synchronized导致的线程固定问题，优先使用ReentrantLock</li>
+<li>结构化并发让并行任务的管理更加清晰和安全</li>
+<li>Spring Boot 3.2+只需一行配置即可启用虚拟线程</li>
+<li>虚拟线程最适合I/O密集型场景，对CPU密集型任务没有优势</li>
+</ul>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2025-04-16</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">3.4k 字 · 8 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/http3-quic-protocol/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">HTTP/3与QUIC协议深度解析</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/react/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">React 概念：深入指南</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E9%9C%80%E8%A6%81%E8%99%9A%E6%8B%9F%E7%BA%BF%E7%A8%8B"><span class="toc-text">为什么需要虚拟线程</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%B9%B3%E5%8F%B0%E7%BA%BF%E7%A8%8B-vs-%E8%99%9A%E6%8B%9F%E7%BA%BF%E7%A8%8B"><span class="toc-text">平台线程 vs 虚拟线程</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%99%9A%E6%8B%9F%E7%BA%BF%E7%A8%8B%E6%A0%B8%E5%BF%83%E5%8E%9F%E7%90%86"><span class="toc-text">虚拟线程核心原理</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BD%BD%E4%BD%93%E7%BA%BF%E7%A8%8Bcarrier-thread%E6%9C%BA%E5%88%B6"><span class="toc-text">载体线程(Carrier Thread)机制</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9F%BA%E7%A1%80%E4%BD%BF%E7%94%A8"><span class="toc-text">基础使用</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%88%9B%E5%BB%BA%E8%99%9A%E6%8B%9F%E7%BA%BF%E7%A8%8B"><span class="toc-text">创建虚拟线程</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%99%BE%E4%B8%87%E5%B9%B6%E5%8F%91%E6%BC%94%E7%A4%BA"><span class="toc-text">百万并发演示</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BA%BF%E7%A8%8B%E5%9B%BA%E5%AE%9Athread-pinning%E9%97%AE%E9%A2%98"><span class="toc-text">线程固定(Thread Pinning)问题</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%A4%E7%A7%8D%E5%AF%BC%E8%87%B4%E7%BA%BF%E7%A8%8B%E5%9B%BA%E5%AE%9A%E7%9A%84%E6%83%85%E5%86%B5"><span class="toc-text">两种导致线程固定的情况</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A3%80%E6%B5%8B%E7%BA%BF%E7%A8%8B%E5%9B%BA%E5%AE%9A"><span class="toc-text">检测线程固定</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BB%93%E6%9E%84%E5%8C%96%E5%B9%B6%E5%8F%91structured-concurrency"><span class="toc-text">结构化并发(Structured
+Concurrency)</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%A7%E8%83%BD%E5%9F%BA%E5%87%86%E6%B5%8B%E8%AF%95"><span class="toc-text">性能基准测试</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#spring-boot-%E9%9B%86%E6%88%90"><span class="toc-text">Spring Boot 集成</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#spring-boot-3.2-%E9%85%8D%E7%BD%AE"><span class="toc-text">Spring Boot 3.2+ 配置</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%9E%E9%99%85%E5%BA%94%E7%94%A8%E9%AB%98%E5%B9%B6%E5%8F%91api%E6%9C%8D%E5%8A%A1"><span class="toc-text">实际应用：高并发API服务</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%BF%81%E7%A7%BB%E6%8C%87%E5%8D%97%E4%B8%8E%E6%B3%A8%E6%84%8F%E4%BA%8B%E9%A1%B9"><span class="toc-text">迁移指南与注意事项</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%80%82%E5%90%88%E8%BF%81%E7%A7%BB%E7%9A%84%E5%9C%BA%E6%99%AF"><span class="toc-text">适合迁移的场景</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%8D%E9%80%82%E5%90%88%E7%9A%84%E5%9C%BA%E6%99%AF"><span class="toc-text">不适合的场景</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BF%81%E7%A7%BB%E6%A3%80%E6%9F%A5%E6%B8%85%E5%8D%95"><span class="toc-text">迁移检查清单</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5%E6%80%BB%E7%BB%93"><span class="toc-text">最佳实践总结</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

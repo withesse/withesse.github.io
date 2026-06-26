@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Transformer架构深度解析 · zt&#39;s Blog</title>
+  <meta name="description" content="深度解析Transformer架构的核心机制——自注意力、多头注意力、位置编码，以及GPT/BERT/T5等变体">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/transformer-architecture/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Transformer架构深度解析">
+  <meta property="og:description" content="深度解析Transformer架构的核心机制——自注意力、多头注意力、位置编码，以及GPT/BERT/T5等变体">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/transformer-architecture/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2024-09-17T16:00:00.000Z">
+  <meta property="article:modified_time" content="2024-09-17T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Transformer架构深度解析">
+  <meta name="twitter:description" content="深度解析Transformer架构的核心机制——自注意力、多头注意力、位置编码，以及GPT/BERT/T5等变体">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Transformer架构深度解析","description":"深度解析Transformer架构的核心机制——自注意力、多头注意力、位置编码，以及GPT/BERT/T5等变体","datePublished":"2024-09-17T16:00:00.000Z","dateModified":"2024-09-17T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/transformer-architecture/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"AI","item":"https://withesse.co/categories/AI/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:280">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/AI/">AI</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/transformer/"><span class="hash">#</span>transformer</a><a class="tag" href="/tags/attention/"><span class="hash">#</span>attention</a><a class="tag" href="/tags/deep-learning/"><span class="hash">#</span>deep-learning</a>
+        
+      </div>
+
+      <h1>Transformer架构深度解析</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2024.09.18</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 7 min</span>
+        </span>
+        <span class="wc"><span class="num">2.8k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#transformer-%E6%95%B4%E4%BD%93%E6%9E%B6%E6%9E%84"><span class="toc-text">Transformer 整体架构</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#self-attention-%E6%9C%BA%E5%88%B6"><span class="toc-text">Self-Attention 机制</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%AC%E5%BC%8F%E6%8E%A8%E5%AF%BC"><span class="toc-text">公式推导</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%9E%E7%8E%B0%E4%BB%A3%E7%A0%81"><span class="toc-text">实现代码</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%B3%A8%E6%84%8F%E5%8A%9B%E7%9F%A9%E9%98%B5%E5%8F%AF%E8%A7%86%E5%8C%96"><span class="toc-text">注意力矩阵可视化</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#multi-head-attention"><span class="toc-text">Multi-Head Attention</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#positional-encoding"><span class="toc-text">Positional Encoding</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BD%8D%E7%BD%AE%E7%BC%96%E7%A0%81%E5%8F%98%E4%BD%93"><span class="toc-text">位置编码变体</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#rope-rotary-position-embedding"><span class="toc-text">RoPE (Rotary Position
+Embedding)</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#feed-forward-network"><span class="toc-text">Feed-Forward Network</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%8C%E6%95%B4-transformer-%E5%B1%82"><span class="toc-text">完整 Transformer 层</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%AE%AD%E7%BB%83%E8%8C%83%E5%BC%8F%E9%A2%84%E8%AE%AD%E7%BB%83%E4%B8%8E%E5%BE%AE%E8%B0%83"><span class="toc-text">训练范式：预训练与微调</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#masked-language-model-bert"><span class="toc-text">Masked Language Model (BERT)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#causal-language-model-gpt"><span class="toc-text">Causal Language Model (GPT)</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9E%B6%E6%9E%84%E5%8F%98%E4%BD%93%E5%AF%B9%E6%AF%94"><span class="toc-text">架构变体对比</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%8E%B0%E4%BB%A3%E4%BC%98%E5%8C%96%E6%8A%80%E6%9C%AF"><span class="toc-text">现代优化技术</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#kv-cache"><span class="toc-text">KV-Cache</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#flash-attention"><span class="toc-text">Flash Attention</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#gqa-grouped-query-attention"><span class="toc-text">GQA (Grouped Query Attention)</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="引言">引言</h2>
+<p>Transformer 架构自 2017 年论文 “Attention Is All You Need”
+提出以来，彻底改变了自然语言处理乃至整个深度学习领域的格局。从 BERT 到
+GPT，从 Vision Transformer 到 Stable Diffusion，Transformer
+已经成为几乎所有 SOTA 模型的基础架构。本文将深入解析 Transformer
+的每一个核心组件——Self-Attention、Multi-Head Attention、Positional
+Encoding、Layer Normalization，并梳理 GPT、BERT、T5
+等重要变体的架构差异。</p>
+<h2 id="transformer-整体架构">Transformer 整体架构</h2>
+<pre class="mermaid">graph TB
+    subgraph "Encoder (N layers)"
+        A[Input Embedding&lt;br/&gt;+ Position Encoding] --&gt; B[Multi-Head&lt;br/&gt;Self-Attention]
+        B --&gt; C[Add &amp; Norm]
+        C --&gt; D[Feed-Forward&lt;br/&gt;Network]
+        D --&gt; E[Add &amp; Norm]
+    end
+
+    subgraph "Decoder (N layers)"
+        F[Output Embedding&lt;br/&gt;+ Position Encoding] --&gt; G[Masked Multi-Head&lt;br/&gt;Self-Attention]
+        G --&gt; H[Add &amp; Norm]
+        H --&gt; I[Multi-Head&lt;br/&gt;Cross-Attention]
+        E --&gt; I
+        I --&gt; J[Add &amp; Norm]
+        J --&gt; K[Feed-Forward&lt;br/&gt;Network]
+        K --&gt; L[Add &amp; Norm]
+    end
+
+    L --&gt; M[Linear + Softmax]
+    M --&gt; N[Output Probabilities]
+
+    style B fill:#e74c3c,color:#fff
+    style I fill:#3498db,color:#fff
+    style D fill:#2ecc71,color:#fff</pre>
+<h2 id="self-attention-机制">Self-Attention 机制</h2>
+<p>Self-Attention 是 Transformer
+的核心——它允许序列中的每个位置关注所有其他位置，捕获长距离依赖。</p>
+<h3 id="公式推导">公式推导</h3>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><code class="hljs plaintext">Attention(Q, K, V) = softmax(QK^T / sqrt(d_k)) * V<br><br>其中：<br>Q = X * W_Q   (Query: 我在找什么?)<br>K = X * W_K   (Key: 我有什么?)<br>V = X * W_V   (Value: 我的信息是什么?)<br>d_k = Key 的维度 (缩放因子，防止点积过大导致 softmax 饱和)<br></code></pre></td></tr></table></figure>
+<pre class="mermaid">graph LR
+    X[输入 X] --&gt; Q["Q = X·W_Q"]
+    X --&gt; K["K = X·W_K"]
+    X --&gt; V["V = X·W_V"]
+
+    Q --&gt; MM["QK^T"]
+    K --&gt; MM
+
+    MM --&gt; S["÷ √d_k"]
+    S --&gt; SM["Softmax"]
+    SM --&gt; MV["× V"]
+    V --&gt; MV
+
+    MV --&gt; O[输出]
+
+    style Q fill:#e74c3c,color:#fff
+    style K fill:#3498db,color:#fff
+    style V fill:#2ecc71,color:#fff</pre>
+<h3 id="实现代码">实现代码</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">import</span> torch<br><span class="hljs-keyword">import</span> torch.nn <span class="hljs-keyword">as</span> nn<br><span class="hljs-keyword">import</span> torch.nn.functional <span class="hljs-keyword">as</span> F<br><span class="hljs-keyword">import</span> math<br><br><span class="hljs-keyword">class</span> <span class="hljs-title class_">SelfAttention</span>(nn.Module):<br>    <span class="hljs-keyword">def</span> <span class="hljs-title function_">__init__</span>(<span class="hljs-params">self, d_model: <span class="hljs-built_in">int</span>, d_k: <span class="hljs-built_in">int</span></span>):<br>        <span class="hljs-built_in">super</span>().__init__()<br>        self.d_k = d_k<br>        self.W_Q = nn.Linear(d_model, d_k, bias=<span class="hljs-literal">False</span>)<br>        self.W_K = nn.Linear(d_model, d_k, bias=<span class="hljs-literal">False</span>)<br>        self.W_V = nn.Linear(d_model, d_k, bias=<span class="hljs-literal">False</span>)<br><br>    <span class="hljs-keyword">def</span> <span class="hljs-title function_">forward</span>(<span class="hljs-params">self, x, mask=<span class="hljs-literal">None</span></span>):<br>        <span class="hljs-string">&quot;&quot;&quot;</span><br><span class="hljs-string">        x: (batch_size, seq_len, d_model)</span><br><span class="hljs-string">        mask: (batch_size, seq_len, seq_len) or None</span><br><span class="hljs-string">        &quot;&quot;&quot;</span><br>        Q = self.W_Q(x)  <span class="hljs-comment"># (batch, seq_len, d_k)</span><br>        K = self.W_K(x)  <span class="hljs-comment"># (batch, seq_len, d_k)</span><br>        V = self.W_V(x)  <span class="hljs-comment"># (batch, seq_len, d_k)</span><br><br>        <span class="hljs-comment"># Scaled dot-product attention</span><br>        scores = torch.matmul(Q, K.transpose(-<span class="hljs-number">2</span>, -<span class="hljs-number">1</span>)) / math.sqrt(self.d_k)<br>        <span class="hljs-comment"># scores: (batch, seq_len, seq_len)</span><br><br>        <span class="hljs-keyword">if</span> mask <span class="hljs-keyword">is</span> <span class="hljs-keyword">not</span> <span class="hljs-literal">None</span>:<br>            scores = scores.masked_fill(mask == <span class="hljs-number">0</span>, <span class="hljs-built_in">float</span>(<span class="hljs-string">&#x27;-inf&#x27;</span>))<br><br>        attention_weights = F.softmax(scores, dim=-<span class="hljs-number">1</span>)<br>        <span class="hljs-comment"># attention_weights: (batch, seq_len, seq_len)</span><br><br>        output = torch.matmul(attention_weights, V)<br>        <span class="hljs-comment"># output: (batch, seq_len, d_k)</span><br><br>        <span class="hljs-keyword">return</span> output, attention_weights<br></code></pre></td></tr></table></figure>
+<h3 id="注意力矩阵可视化">注意力矩阵可视化</h3>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><code class="hljs plaintext">Input: &quot;我 爱 自然 语言 处理&quot;<br><br>Attention Matrix (softmax后):<br>         我    爱    自然   语言   处理<br>我     [0.15, 0.10, 0.25, 0.30, 0.20]<br>爱     [0.12, 0.08, 0.30, 0.28, 0.22]<br>自然   [0.10, 0.15, 0.20, 0.35, 0.20]<br>语言   [0.08, 0.12, 0.35, 0.25, 0.20]<br>处理   [0.10, 0.10, 0.30, 0.25, 0.25]<br><br>→ &quot;语言&quot;在关注&quot;自然&quot;时权重最高(0.35)，体现了&quot;自然语言&quot;的语义关联<br></code></pre></td></tr></table></figure>
+<h2 id="multi-head-attention">Multi-Head Attention</h2>
+<p>多头注意力让模型同时从不同的表示子空间学习注意力模式：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">class</span> <span class="hljs-title class_">MultiHeadAttention</span>(nn.Module):<br>    <span class="hljs-keyword">def</span> <span class="hljs-title function_">__init__</span>(<span class="hljs-params">self, d_model: <span class="hljs-built_in">int</span>, n_heads: <span class="hljs-built_in">int</span></span>):<br>        <span class="hljs-built_in">super</span>().__init__()<br>        <span class="hljs-keyword">assert</span> d_model % n_heads == <span class="hljs-number">0</span><br><br>        self.d_model = d_model<br>        self.n_heads = n_heads<br>        self.d_k = d_model // n_heads<br><br>        self.W_Q = nn.Linear(d_model, d_model, bias=<span class="hljs-literal">False</span>)<br>        self.W_K = nn.Linear(d_model, d_model, bias=<span class="hljs-literal">False</span>)<br>        self.W_V = nn.Linear(d_model, d_model, bias=<span class="hljs-literal">False</span>)<br>        self.W_O = nn.Linear(d_model, d_model, bias=<span class="hljs-literal">False</span>)<br><br>    <span class="hljs-keyword">def</span> <span class="hljs-title function_">forward</span>(<span class="hljs-params">self, x, mask=<span class="hljs-literal">None</span></span>):<br>        batch_size, seq_len, _ = x.shape<br><br>        <span class="hljs-comment"># Linear projections</span><br>        Q = self.W_Q(x)  <span class="hljs-comment"># (batch, seq_len, d_model)</span><br>        K = self.W_K(x)<br>        V = self.W_V(x)<br><br>        <span class="hljs-comment"># Split into heads: (batch, n_heads, seq_len, d_k)</span><br>        Q = Q.view(batch_size, seq_len, self.n_heads, self.d_k).transpose(<span class="hljs-number">1</span>, <span class="hljs-number">2</span>)<br>        K = K.view(batch_size, seq_len, self.n_heads, self.d_k).transpose(<span class="hljs-number">1</span>, <span class="hljs-number">2</span>)<br>        V = V.view(batch_size, seq_len, self.n_heads, self.d_k).transpose(<span class="hljs-number">1</span>, <span class="hljs-number">2</span>)<br><br>        <span class="hljs-comment"># Scaled dot-product attention for each head</span><br>        scores = torch.matmul(Q, K.transpose(-<span class="hljs-number">2</span>, -<span class="hljs-number">1</span>)) / math.sqrt(self.d_k)<br>        <span class="hljs-comment"># scores: (batch, n_heads, seq_len, seq_len)</span><br><br>        <span class="hljs-keyword">if</span> mask <span class="hljs-keyword">is</span> <span class="hljs-keyword">not</span> <span class="hljs-literal">None</span>:<br>            scores = scores.masked_fill(mask.unsqueeze(<span class="hljs-number">1</span>) == <span class="hljs-number">0</span>, <span class="hljs-built_in">float</span>(<span class="hljs-string">&#x27;-inf&#x27;</span>))<br><br>        attn_weights = F.softmax(scores, dim=-<span class="hljs-number">1</span>)<br>        context = torch.matmul(attn_weights, V)<br>        <span class="hljs-comment"># context: (batch, n_heads, seq_len, d_k)</span><br><br>        <span class="hljs-comment"># Concatenate heads</span><br>        context = context.transpose(<span class="hljs-number">1</span>, <span class="hljs-number">2</span>).contiguous().view(<br>            batch_size, seq_len, self.d_model<br>        )<br><br>        <span class="hljs-comment"># Final linear projection</span><br>        output = self.W_O(context)<br>        <span class="hljs-keyword">return</span> output<br></code></pre></td></tr></table></figure>
+<pre class="mermaid">graph TB
+    A[Input X] --&gt; B1["Head 1&lt;br/&gt;语法关系"]
+    A --&gt; B2["Head 2&lt;br/&gt;语义关系"]
+    A --&gt; B3["Head 3&lt;br/&gt;位置关系"]
+    A --&gt; B4["Head h&lt;br/&gt;其他模式"]
+
+    B1 --&gt; C[Concat]
+    B2 --&gt; C
+    B3 --&gt; C
+    B4 --&gt; C
+
+    C --&gt; D["W_O 线性投影"]
+    D --&gt; E[Output]
+
+    style B1 fill:#e74c3c,color:#fff
+    style B2 fill:#3498db,color:#fff
+    style B3 fill:#2ecc71,color:#fff
+    style B4 fill:#f39c12,color:#000</pre>
+<h2 id="positional-encoding">Positional Encoding</h2>
+<p>Transformer
+没有循环结构，需要额外的位置信息。原始论文使用正弦/余弦位置编码：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">class</span> <span class="hljs-title class_">PositionalEncoding</span>(nn.Module):<br>    <span class="hljs-keyword">def</span> <span class="hljs-title function_">__init__</span>(<span class="hljs-params">self, d_model: <span class="hljs-built_in">int</span>, max_seq_len: <span class="hljs-built_in">int</span> = <span class="hljs-number">5000</span></span>):<br>        <span class="hljs-built_in">super</span>().__init__()<br><br>        pe = torch.zeros(max_seq_len, d_model)<br>        position = torch.arange(<span class="hljs-number">0</span>, max_seq_len, dtype=torch.<span class="hljs-built_in">float</span>).unsqueeze(<span class="hljs-number">1</span>)<br>        div_term = torch.exp(<br>            torch.arange(<span class="hljs-number">0</span>, d_model, <span class="hljs-number">2</span>).<span class="hljs-built_in">float</span>() * (-math.log(<span class="hljs-number">10000.0</span>) / d_model)<br>        )<br><br>        pe[:, <span class="hljs-number">0</span>::<span class="hljs-number">2</span>] = torch.sin(position * div_term)  <span class="hljs-comment"># Even dimensions</span><br>        pe[:, <span class="hljs-number">1</span>::<span class="hljs-number">2</span>] = torch.cos(position * div_term)  <span class="hljs-comment"># Odd dimensions</span><br><br>        pe = pe.unsqueeze(<span class="hljs-number">0</span>)  <span class="hljs-comment"># (1, max_seq_len, d_model)</span><br>        self.register_buffer(<span class="hljs-string">&#x27;pe&#x27;</span>, pe)<br><br>    <span class="hljs-keyword">def</span> <span class="hljs-title function_">forward</span>(<span class="hljs-params">self, x</span>):<br>        <span class="hljs-string">&quot;&quot;&quot;x: (batch_size, seq_len, d_model)&quot;&quot;&quot;</span><br>        <span class="hljs-keyword">return</span> x + self.pe[:, :x.size(<span class="hljs-number">1</span>), :]<br></code></pre></td></tr></table></figure>
+<h3 id="位置编码变体">位置编码变体</h3>
+<pre class="mermaid">graph TB
+    A[位置编码方法] --&gt; B[绝对位置编码]
+    A --&gt; C[相对位置编码]
+    A --&gt; D[旋转位置编码 RoPE]
+
+    B --&gt; B1[正弦/余弦&lt;br/&gt;原始 Transformer]
+    B --&gt; B2[可学习位置编码&lt;br/&gt;BERT/GPT]
+
+    C --&gt; C1[相对位置偏置&lt;br/&gt;T5 / ALiBi]
+
+    D --&gt; D1[Llama / Qwen&lt;br/&gt;支持长度外推]
+
+    style B1 fill:#3498db,color:#fff
+    style D1 fill:#2ecc71,color:#fff</pre>
+<h3 id="rope-rotary-position-embedding">RoPE (Rotary Position
+Embedding)</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">class</span> <span class="hljs-title class_">RotaryPositionEmbedding</span>(nn.Module):<br>    <span class="hljs-string">&quot;&quot;&quot;RoPE: used in Llama, Qwen, Mistral.&quot;&quot;&quot;</span><br><br>    <span class="hljs-keyword">def</span> <span class="hljs-title function_">__init__</span>(<span class="hljs-params">self, dim: <span class="hljs-built_in">int</span>, max_seq_len: <span class="hljs-built_in">int</span> = <span class="hljs-number">8192</span>, base: <span class="hljs-built_in">int</span> = <span class="hljs-number">10000</span></span>):<br>        <span class="hljs-built_in">super</span>().__init__()<br>        inv_freq = <span class="hljs-number">1.0</span> / (base ** (torch.arange(<span class="hljs-number">0</span>, dim, <span class="hljs-number">2</span>).<span class="hljs-built_in">float</span>() / dim))<br>        self.register_buffer(<span class="hljs-string">&#x27;inv_freq&#x27;</span>, inv_freq)<br><br>        t = torch.arange(max_seq_len, dtype=torch.<span class="hljs-built_in">float</span>)<br>        freqs = torch.einsum(<span class="hljs-string">&#x27;i,j-&gt;ij&#x27;</span>, t, inv_freq)<br>        emb = torch.cat([freqs, freqs], dim=-<span class="hljs-number">1</span>)<br>        self.register_buffer(<span class="hljs-string">&#x27;cos&#x27;</span>, emb.cos())<br>        self.register_buffer(<span class="hljs-string">&#x27;sin&#x27;</span>, emb.sin())<br><br>    <span class="hljs-keyword">def</span> <span class="hljs-title function_">forward</span>(<span class="hljs-params">self, q, k, seq_len</span>):<br>        cos = self.cos[:seq_len]<br>        sin = self.sin[:seq_len]<br><br>        q_rotated = (q * cos) + (self._rotate_half(q) * sin)<br>        k_rotated = (k * cos) + (self._rotate_half(k) * sin)<br>        <span class="hljs-keyword">return</span> q_rotated, k_rotated<br><br><span class="hljs-meta">    @staticmethod</span><br>    <span class="hljs-keyword">def</span> <span class="hljs-title function_">_rotate_half</span>(<span class="hljs-params">x</span>):<br>        x1, x2 = x.chunk(<span class="hljs-number">2</span>, dim=-<span class="hljs-number">1</span>)<br>        <span class="hljs-keyword">return</span> torch.cat([-x2, x1], dim=-<span class="hljs-number">1</span>)<br></code></pre></td></tr></table></figure>
+<h2 id="feed-forward-network">Feed-Forward Network</h2>
+<p>每个 Transformer 层包含一个两层的前馈网络：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">class</span> <span class="hljs-title class_">FeedForward</span>(nn.Module):<br>    <span class="hljs-string">&quot;&quot;&quot;Original: FFN(x) = max(0, xW1 + b1)W2 + b2&quot;&quot;&quot;</span><br>    <span class="hljs-keyword">def</span> <span class="hljs-title function_">__init__</span>(<span class="hljs-params">self, d_model: <span class="hljs-built_in">int</span>, d_ff: <span class="hljs-built_in">int</span>, dropout: <span class="hljs-built_in">float</span> = <span class="hljs-number">0.1</span></span>):<br>        <span class="hljs-built_in">super</span>().__init__()<br>        self.linear1 = nn.Linear(d_model, d_ff)<br>        self.linear2 = nn.Linear(d_ff, d_model)<br>        self.dropout = nn.Dropout(dropout)<br><br>    <span class="hljs-keyword">def</span> <span class="hljs-title function_">forward</span>(<span class="hljs-params">self, x</span>):<br>        <span class="hljs-keyword">return</span> self.linear2(self.dropout(F.relu(self.linear1(x))))<br><br><span class="hljs-keyword">class</span> <span class="hljs-title class_">SwiGLUFeedForward</span>(nn.Module):<br>    <span class="hljs-string">&quot;&quot;&quot;SwiGLU variant: used in Llama, Mistral.&quot;&quot;&quot;</span><br>    <span class="hljs-keyword">def</span> <span class="hljs-title function_">__init__</span>(<span class="hljs-params">self, d_model: <span class="hljs-built_in">int</span>, d_ff: <span class="hljs-built_in">int</span></span>):<br>        <span class="hljs-built_in">super</span>().__init__()<br>        self.gate_proj = nn.Linear(d_model, d_ff, bias=<span class="hljs-literal">False</span>)<br>        self.up_proj = nn.Linear(d_model, d_ff, bias=<span class="hljs-literal">False</span>)<br>        self.down_proj = nn.Linear(d_ff, d_model, bias=<span class="hljs-literal">False</span>)<br><br>    <span class="hljs-keyword">def</span> <span class="hljs-title function_">forward</span>(<span class="hljs-params">self, x</span>):<br>        gate = F.silu(self.gate_proj(x))  <span class="hljs-comment"># SiLU activation</span><br>        up = self.up_proj(x)<br>        <span class="hljs-keyword">return</span> self.down_proj(gate * up)<br></code></pre></td></tr></table></figure>
+<h2 id="完整-transformer-层">完整 Transformer 层</h2>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">class</span> <span class="hljs-title class_">TransformerEncoderLayer</span>(nn.Module):<br>    <span class="hljs-keyword">def</span> <span class="hljs-title function_">__init__</span>(<span class="hljs-params">self, d_model: <span class="hljs-built_in">int</span>, n_heads: <span class="hljs-built_in">int</span>, d_ff: <span class="hljs-built_in">int</span>, dropout: <span class="hljs-built_in">float</span> = <span class="hljs-number">0.1</span></span>):<br>        <span class="hljs-built_in">super</span>().__init__()<br>        self.self_attn = MultiHeadAttention(d_model, n_heads)<br>        self.ffn = FeedForward(d_model, d_ff, dropout)<br>        self.norm1 = nn.LayerNorm(d_model)<br>        self.norm2 = nn.LayerNorm(d_model)<br>        self.dropout = nn.Dropout(dropout)<br><br>    <span class="hljs-keyword">def</span> <span class="hljs-title function_">forward</span>(<span class="hljs-params">self, x, mask=<span class="hljs-literal">None</span></span>):<br>        <span class="hljs-comment"># Self-attention with residual connection</span><br>        attn_output = self.self_attn(self.norm1(x), mask)  <span class="hljs-comment"># Pre-LN</span><br>        x = x + self.dropout(attn_output)<br><br>        <span class="hljs-comment"># Feed-forward with residual connection</span><br>        ffn_output = self.ffn(self.norm2(x))<br>        x = x + self.dropout(ffn_output)<br><br>        <span class="hljs-keyword">return</span> x<br></code></pre></td></tr></table></figure>
+<h2 id="训练范式预训练与微调">训练范式：预训练与微调</h2>
+<pre class="mermaid">graph TB
+    A[预训练 Pre-training] --&gt; B{训练目标}
+    B --&gt; C[Masked Language Model&lt;br/&gt;BERT: 预测被遮盖的词]
+    B --&gt; D[Causal Language Model&lt;br/&gt;GPT: 预测下一个词]
+    B --&gt; E[Seq2Seq&lt;br/&gt;T5: 文本到文本]
+
+    F[微调 Fine-tuning] --&gt; G[全量微调]
+    F --&gt; H[LoRA / QLoRA]
+    F --&gt; I[Prompt Tuning]
+
+    A --&gt; F
+
+    style C fill:#3498db,color:#fff
+    style D fill:#e74c3c,color:#fff
+    style E fill:#2ecc71,color:#fff</pre>
+<h3 id="masked-language-model-bert">Masked Language Model (BERT)</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-comment"># BERT pre-training objective</span><br><span class="hljs-comment"># Input: &quot;我 [MASK] 自然 语言 [MASK]&quot;</span><br><span class="hljs-comment"># Target: &quot;我 爱 自然 语言 处理&quot;</span><br><br><span class="hljs-comment"># 15% of tokens are selected for masking:</span><br><span class="hljs-comment"># - 80% replaced with [MASK]</span><br><span class="hljs-comment"># - 10% replaced with random token</span><br><span class="hljs-comment"># - 10% kept unchanged</span><br></code></pre></td></tr></table></figure>
+<h3 id="causal-language-model-gpt">Causal Language Model (GPT)</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-comment"># GPT pre-training objective</span><br><span class="hljs-comment"># Input: &quot;我 爱 自然 语言&quot;</span><br><span class="hljs-comment"># Target: &quot;爱 自然 语言 处理&quot;</span><br><span class="hljs-comment"># (Predict next token, with causal mask preventing looking ahead)</span><br><br><span class="hljs-comment"># Causal mask example for seq_len=4:</span><br><span class="hljs-comment"># [[1, 0, 0, 0],</span><br><span class="hljs-comment">#  [1, 1, 0, 0],</span><br><span class="hljs-comment">#  [1, 1, 1, 0],</span><br><span class="hljs-comment">#  [1, 1, 1, 1]]</span><br></code></pre></td></tr></table></figure>
+<h2 id="架构变体对比">架构变体对比</h2>
+<pre class="mermaid">graph LR
+    subgraph "Encoder-Only (BERT)"
+        A1[Input] --&gt; B1["Bidirectional&lt;br/&gt;Self-Attention"]
+        B1 --&gt; C1["[CLS] Token&lt;br/&gt;分类/相似度"]
+    end
+
+    subgraph "Decoder-Only (GPT)"
+        A2[Input] --&gt; B2["Causal (Masked)&lt;br/&gt;Self-Attention"]
+        B2 --&gt; C2["Next Token&lt;br/&gt;Prediction"]
+    end
+
+    subgraph "Encoder-Decoder (T5)"
+        A3[Input] --&gt; B3["Bidirectional&lt;br/&gt;Encoder"]
+        B3 --&gt; D3["Cross-Attention&lt;br/&gt;Decoder"]
+        D3 --&gt; C3["Seq2Seq&lt;br/&gt;Output"]
+    end
+
+    style B1 fill:#3498db,color:#fff
+    style B2 fill:#e74c3c,color:#fff
+    style B3 fill:#2ecc71,color:#fff
+    style D3 fill:#f39c12,color:#000</pre>
+<table>
+<thead>
+<tr class="header">
+<th>架构</th>
+<th>代表模型</th>
+<th>训练目标</th>
+<th>擅长任务</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Encoder-Only</td>
+<td>BERT, RoBERTa</td>
+<td>MLM + NSP</td>
+<td>分类、NER、相似度</td>
+</tr>
+<tr class="even">
+<td>Decoder-Only</td>
+<td>GPT, Llama, Qwen</td>
+<td>CLM (Next Token)</td>
+<td>文本生成、对话</td>
+</tr>
+<tr class="odd">
+<td>Encoder-Decoder</td>
+<td>T5, BART</td>
+<td>Span Corruption</td>
+<td>翻译、摘要、问答</td>
+</tr>
+</tbody>
+</table>
+<h2 id="现代优化技术">现代优化技术</h2>
+<h3 id="kv-cache">KV-Cache</h3>
+<p>在自回归生成中，每生成一个新 token，之前 token 的 Key 和 Value
+无需重新计算：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">class</span> <span class="hljs-title class_">CachedMultiHeadAttention</span>(nn.Module):<br>    <span class="hljs-keyword">def</span> <span class="hljs-title function_">forward</span>(<span class="hljs-params">self, x, kv_cache=<span class="hljs-literal">None</span></span>):<br>        Q = self.W_Q(x)<br>        K = self.W_K(x)<br>        V = self.W_V(x)<br><br>        <span class="hljs-keyword">if</span> kv_cache <span class="hljs-keyword">is</span> <span class="hljs-keyword">not</span> <span class="hljs-literal">None</span>:<br>            <span class="hljs-comment"># Append new KV to cache</span><br>            K = torch.cat([kv_cache[<span class="hljs-string">&#x27;K&#x27;</span>], K], dim=-<span class="hljs-number">2</span>)<br>            V = torch.cat([kv_cache[<span class="hljs-string">&#x27;V&#x27;</span>], V], dim=-<span class="hljs-number">2</span>)<br><br>        new_cache = &#123;<span class="hljs-string">&#x27;K&#x27;</span>: K, <span class="hljs-string">&#x27;V&#x27;</span>: V&#125;<br><br>        <span class="hljs-comment"># Only compute attention for new tokens</span><br>        scores = torch.matmul(Q, K.transpose(-<span class="hljs-number">2</span>, -<span class="hljs-number">1</span>)) / math.sqrt(self.d_k)<br>        attn = F.softmax(scores, dim=-<span class="hljs-number">1</span>)<br>        output = torch.matmul(attn, V)<br><br>        <span class="hljs-keyword">return</span> output, new_cache<br></code></pre></td></tr></table></figure>
+<h3 id="flash-attention">Flash Attention</h3>
+<p>Flash Attention 通过分块计算和 IO
+感知的算法设计，在不牺牲精度的情况下将 Attention 计算速度提升 2-4
+倍：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-comment"># Using Flash Attention 2</span><br><span class="hljs-keyword">from</span> flash_attn <span class="hljs-keyword">import</span> flash_attn_func<br><br><span class="hljs-comment"># Significantly faster and more memory efficient</span><br>output = flash_attn_func(<br>    q, k, v,<br>    dropout_p=<span class="hljs-number">0.0</span>,<br>    causal=<span class="hljs-literal">True</span>,  <span class="hljs-comment"># For decoder</span><br>    softmax_scale=<span class="hljs-number">1.0</span> / math.sqrt(d_k),<br>)<br><br><span class="hljs-comment"># Key optimizations:</span><br><span class="hljs-comment"># 1. Tiling: process attention in blocks that fit in SRAM</span><br><span class="hljs-comment"># 2. Recomputation: trade compute for memory in backward pass</span><br><span class="hljs-comment"># 3. Kernel fusion: fuse softmax and matmul into one kernel</span><br></code></pre></td></tr></table></figure>
+<h3 id="gqa-grouped-query-attention">GQA (Grouped Query Attention)</h3>
+<pre class="mermaid">graph TB
+    subgraph "MHA (Multi-Head)"
+        A1[Q1 K1 V1] --- A2[Q2 K2 V2] --- A3[Q3 K3 V3] --- A4[Q4 K4 V4]
+    end
+
+    subgraph "MQA (Multi-Query)"
+        B1[Q1] --- B5[K V&lt;br/&gt;shared]
+        B2[Q2] --- B5
+        B3[Q3] --- B5
+        B4[Q4] --- B5
+    end
+
+    subgraph "GQA (Grouped-Query)"
+        C1[Q1 Q2] --- C5[K1 V1&lt;br/&gt;Group 1]
+        C3[Q3 Q4] --- C6[K2 V2&lt;br/&gt;Group 2]
+    end
+
+    style A1 fill:#e74c3c,color:#fff
+    style B5 fill:#3498db,color:#fff
+    style C5 fill:#2ecc71,color:#fff
+    style C6 fill:#2ecc71,color:#fff</pre>
+<p>GQA 在 MHA（每个 head 独立 KV）和 MQA（所有 head 共享
+KV）之间取平衡：</p>
+<ul>
+<li>Llama 2 70B 使用 8 个 KV head，64 个 Query head</li>
+<li>大幅减少 KV-Cache 内存，同时保持接近 MHA 的效果</li>
+</ul>
+<h2 id="总结">总结</h2>
+<p>Transformer 的成功源于其灵活且强大的注意力机制——Self-Attention
+实现了全局信息交互，Multi-Head Attention
+学习多种注意力模式，位置编码注入序列位置信息。理解这些核心组件是深入 LLM
+领域的基础。</p>
+<p>现代 Transformer 的关键优化方向：</p>
+<ol type="1">
+<li><strong>RoPE</strong> 替代绝对位置编码，支持长序列外推</li>
+<li><strong>SwiGLU</strong> 替代 ReLU FFN，提升模型容量</li>
+<li><strong>GQA</strong> 减少推理时的 KV-Cache 内存</li>
+<li><strong>Flash Attention</strong> 加速训练和推理</li>
+<li><strong>Pre-LN</strong> (在 Attention 前做 LayerNorm) 比 Post-LN
+训练更稳定</li>
+</ol>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2024-09-18</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">2.8k 字 · 7 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/embedding-models/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Embedding模型原理与应用实践</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/grafana-observability/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Grafana可观测性平台搭建指南</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#transformer-%E6%95%B4%E4%BD%93%E6%9E%B6%E6%9E%84"><span class="toc-text">Transformer 整体架构</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#self-attention-%E6%9C%BA%E5%88%B6"><span class="toc-text">Self-Attention 机制</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%AC%E5%BC%8F%E6%8E%A8%E5%AF%BC"><span class="toc-text">公式推导</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%9E%E7%8E%B0%E4%BB%A3%E7%A0%81"><span class="toc-text">实现代码</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%B3%A8%E6%84%8F%E5%8A%9B%E7%9F%A9%E9%98%B5%E5%8F%AF%E8%A7%86%E5%8C%96"><span class="toc-text">注意力矩阵可视化</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#multi-head-attention"><span class="toc-text">Multi-Head Attention</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#positional-encoding"><span class="toc-text">Positional Encoding</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BD%8D%E7%BD%AE%E7%BC%96%E7%A0%81%E5%8F%98%E4%BD%93"><span class="toc-text">位置编码变体</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#rope-rotary-position-embedding"><span class="toc-text">RoPE (Rotary Position
+Embedding)</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#feed-forward-network"><span class="toc-text">Feed-Forward Network</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%8C%E6%95%B4-transformer-%E5%B1%82"><span class="toc-text">完整 Transformer 层</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%AE%AD%E7%BB%83%E8%8C%83%E5%BC%8F%E9%A2%84%E8%AE%AD%E7%BB%83%E4%B8%8E%E5%BE%AE%E8%B0%83"><span class="toc-text">训练范式：预训练与微调</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#masked-language-model-bert"><span class="toc-text">Masked Language Model (BERT)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#causal-language-model-gpt"><span class="toc-text">Causal Language Model (GPT)</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9E%B6%E6%9E%84%E5%8F%98%E4%BD%93%E5%AF%B9%E6%AF%94"><span class="toc-text">架构变体对比</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%8E%B0%E4%BB%A3%E4%BC%98%E5%8C%96%E6%8A%80%E6%9C%AF"><span class="toc-text">现代优化技术</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#kv-cache"><span class="toc-text">KV-Cache</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#flash-attention"><span class="toc-text">Flash Attention</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#gqa-grouped-query-attention"><span class="toc-text">GQA (Grouped Query Attention)</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Helm Chart开发与最佳实践 · zt&#39;s Blog</title>
+  <meta name="description" content="全面讲解Helm Chart开发，包括Chart结构、模板语法、values管理、hooks、依赖管理和发布最佳实践。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/helm-chart-development/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Helm Chart开发与最佳实践">
+  <meta property="og:description" content="全面讲解Helm Chart开发，包括Chart结构、模板语法、values管理、hooks、依赖管理和发布最佳实践。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/helm-chart-development/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2024-05-28T16:00:00.000Z">
+  <meta property="article:modified_time" content="2024-05-28T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Helm Chart开发与最佳实践">
+  <meta name="twitter:description" content="全面讲解Helm Chart开发，包括Chart结构、模板语法、values管理、hooks、依赖管理和发布最佳实践。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Helm Chart开发与最佳实践","description":"全面讲解Helm Chart开发，包括Chart结构、模板语法、values管理、hooks、依赖管理和发布最佳实践。","datePublished":"2024-05-28T16:00:00.000Z","dateModified":"2024-05-28T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/helm-chart-development/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"DevOps","item":"https://withesse.co/categories/DevOps/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:45">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/DevOps/">DevOps</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/kubernetes/"><span class="hash">#</span>kubernetes</a><a class="tag" href="/tags/helm/"><span class="hash">#</span>helm</a><a class="tag" href="/tags/chart/"><span class="hash">#</span>chart</a>
+        
+      </div>
+
+      <h1>Helm Chart开发与最佳实践</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2024.05.29</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 8 min</span>
+        </span>
+        <span class="wc"><span class="num">3.0k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#helm%E6%9E%B6%E6%9E%84"><span class="toc-text">Helm架构</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#chart%E7%BB%93%E6%9E%84"><span class="toc-text">Chart结构</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#chart.yaml"><span class="toc-text">Chart.yaml</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A8%A1%E6%9D%BF%E8%AF%AD%E6%B3%95"><span class="toc-text">模板语法</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9F%BA%E7%A1%80%E8%AF%AD%E6%B3%95"><span class="toc-text">基础语法</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#helpers%E6%A8%A1%E6%9D%BF"><span class="toc-text">helpers模板</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#values.yaml%E8%AE%BE%E8%AE%A1"><span class="toc-text">values.yaml设计</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#values.schema.json"><span class="toc-text">values.schema.json</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#hooks"><span class="toc-text">Hooks</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BE%9D%E8%B5%96%E7%AE%A1%E7%90%86"><span class="toc-text">依赖管理</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#chart%E6%B5%8B%E8%AF%95%E4%B8%8E%E8%B0%83%E8%AF%95"><span class="toc-text">Chart测试与调试</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8F%91%E5%B8%83%E4%B8%8E%E5%88%86%E5%8F%91"><span class="toc-text">发布与分发</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#chart-repository"><span class="toc-text">Chart Repository</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#oci-registry"><span class="toc-text">OCI Registry</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5"><span class="toc-text">最佳实践</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%89%88%E6%9C%AC%E7%AE%A1%E7%90%86"><span class="toc-text">1. 版本管理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%89%E5%85%A8%E5%8A%A0%E5%9B%BA"><span class="toc-text">2. 安全加固</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%A4%9A%E7%8E%AF%E5%A2%83%E7%AE%A1%E7%90%86"><span class="toc-text">3. 多环境管理</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="前言">前言</h2>
+<p>Helm是Kubernetes的包管理工具，被称为”Kubernetes的apt/yum”。它通过Chart将复杂的应用打包为可复用、可配置的部署单元。本文将深入讲解Helm
+Chart的开发全流程。</p>
+<h2 id="helm架构">Helm架构</h2>
+<pre class="mermaid">graph TB
+    subgraph Client["Helm Client"]
+        CLI["helm CLI"]
+        SDK["Helm SDK"]
+    end
+
+    subgraph ChartSources["Chart来源"]
+        Local["本地Chart"]
+        Repo["Chart Repository"]
+        OCI["OCI Registry"]
+    end
+
+    subgraph K8s["Kubernetes Cluster"]
+        API["API Server"]
+        Secret["Release Secrets"]
+        Resources["K8s Resources"]
+    end
+
+    CLI --&gt; Local
+    CLI --&gt; Repo
+    CLI --&gt; OCI
+    CLI --&gt; API
+    API --&gt; Secret
+    API --&gt; Resources</pre>
+<p>Helm 3的重要变化（相比Helm 2）： - 移除了Tiller服务端组件 -
+Release信息存储在Kubernetes Secrets中 - 使用三方合并补丁（3-way merge）
+- 支持OCI Registry存储Chart</p>
+<h2 id="chart结构">Chart结构</h2>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 创建新Chart</span><br>helm create myapp<br><br><span class="hljs-comment"># Chart目录结构</span><br>myapp/<br>├── Chart.yaml          <span class="hljs-comment"># Chart元数据</span><br>├── Chart.lock          <span class="hljs-comment"># 依赖锁定文件</span><br>├── values.yaml         <span class="hljs-comment"># 默认配置值</span><br>├── values.schema.json  <span class="hljs-comment"># values校验Schema</span><br>├── .helmignore         <span class="hljs-comment"># 打包时忽略的文件</span><br>├── charts/             <span class="hljs-comment"># 依赖Chart</span><br>├── crds/               <span class="hljs-comment"># CRD定义</span><br>└── templates/          <span class="hljs-comment"># 模板文件</span><br>    ├── NOTES.txt       <span class="hljs-comment"># 安装后的提示信息</span><br>    ├── _helpers.tpl    <span class="hljs-comment"># 模板辅助函数</span><br>    ├── deployment.yaml<br>    ├── service.yaml<br>    ├── ingress.yaml<br>    ├── hpa.yaml<br>    ├── serviceaccount.yaml<br>    └── tests/<br>        └── test-connection.yaml<br></code></pre></td></tr></table></figure>
+<pre class="mermaid">graph LR
+    subgraph Chart["Helm Chart"]
+        Meta["Chart.yaml&lt;br&gt;元数据"]
+        Values["values.yaml&lt;br&gt;配置参数"]
+        Templates["templates/&lt;br&gt;模板文件"]
+        Helpers["_helpers.tpl&lt;br&gt;辅助函数"]
+    end
+
+    Values --&gt; |"传入参数"| Templates
+    Helpers --&gt; |"模板函数"| Templates
+    Templates --&gt; |"渲染"| Manifests["K8s Manifests"]
+    Manifests --&gt; |"apply"| Cluster["Kubernetes"]</pre>
+<h3 id="chart.yaml">Chart.yaml</h3>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">v2</span><br><span class="hljs-attr">name:</span> <span class="hljs-string">myapp</span><br><span class="hljs-attr">description:</span> <span class="hljs-string">A</span> <span class="hljs-string">production-ready</span> <span class="hljs-string">web</span> <span class="hljs-string">application</span> <span class="hljs-string">chart</span><br><span class="hljs-attr">type:</span> <span class="hljs-string">application</span><br><span class="hljs-attr">version:</span> <span class="hljs-number">1.2</span><span class="hljs-number">.0</span>          <span class="hljs-comment"># Chart版本</span><br><span class="hljs-attr">appVersion:</span> <span class="hljs-string">&quot;3.5.1&quot;</span>     <span class="hljs-comment"># 应用版本</span><br><span class="hljs-attr">kubeVersion:</span> <span class="hljs-string">&quot;&gt;=1.25.0&quot;</span><br><span class="hljs-attr">home:</span> <span class="hljs-string">https://github.com/example/myapp</span><br><span class="hljs-attr">sources:</span><br>  <span class="hljs-bullet">-</span> <span class="hljs-string">https://github.com/example/myapp</span><br><span class="hljs-attr">maintainers:</span><br>  <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">zt</span><br>    <span class="hljs-attr">email:</span> <span class="hljs-string">zt@example.com</span><br><span class="hljs-attr">keywords:</span><br>  <span class="hljs-bullet">-</span> <span class="hljs-string">web</span><br>  <span class="hljs-bullet">-</span> <span class="hljs-string">api</span><br><span class="hljs-attr">annotations:</span><br>  <span class="hljs-attr">artifacthub.io/changes:</span> <span class="hljs-string">|</span><br><span class="hljs-string">    - kind: added</span><br><span class="hljs-string">      description: Support for HPA</span><br><span class="hljs-string">    - kind: fixed</span><br><span class="hljs-string">      description: Fix service port configuration</span><br><span class="hljs-string"></span><span class="hljs-attr">dependencies:</span><br>  <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">postgresql</span><br>    <span class="hljs-attr">version:</span> <span class="hljs-string">&quot;12.x.x&quot;</span><br>    <span class="hljs-attr">repository:</span> <span class="hljs-string">https://charts.bitnami.com/bitnami</span><br>    <span class="hljs-attr">condition:</span> <span class="hljs-string">postgresql.enabled</span><br>  <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">redis</span><br>    <span class="hljs-attr">version:</span> <span class="hljs-string">&quot;17.x.x&quot;</span><br>    <span class="hljs-attr">repository:</span> <span class="hljs-string">https://charts.bitnami.com/bitnami</span><br>    <span class="hljs-attr">condition:</span> <span class="hljs-string">redis.enabled</span><br></code></pre></td></tr></table></figure>
+<h2 id="模板语法">模板语法</h2>
+<h3 id="基础语法">基础语法</h3>
+<p>Helm模板使用Go template语法，结合Sprig函数库。</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># templates/deployment.yaml</span><br><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">apps/v1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">Deployment</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> &#123;&#123; <span class="hljs-string">include</span> <span class="hljs-string">&quot;myapp.fullname&quot;</span> <span class="hljs-string">.</span> &#125;&#125;<br>  <span class="hljs-attr">labels:</span><br>    &#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">include</span> <span class="hljs-string">&quot;myapp.labels&quot;</span> <span class="hljs-string">.</span> <span class="hljs-string">|</span> <span class="hljs-string">nindent</span> <span class="hljs-number">4</span> &#125;&#125;<br>  <span class="hljs-attr">annotations:</span><br>    &#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">with</span> <span class="hljs-string">.Values.deployment.annotations</span> &#125;&#125;<br>    &#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">toYaml</span> <span class="hljs-string">.</span> <span class="hljs-string">|</span> <span class="hljs-string">nindent</span> <span class="hljs-number">4</span> &#125;&#125;<br>    &#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">end</span> &#125;&#125;<br><span class="hljs-attr">spec:</span><br>  &#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">if</span> <span class="hljs-string">not</span> <span class="hljs-string">.Values.autoscaling.enabled</span> &#125;&#125;<br>  <span class="hljs-attr">replicas:</span> &#123;&#123; <span class="hljs-string">.Values.replicaCount</span> &#125;&#125;<br>  &#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">end</span> &#125;&#125;<br>  <span class="hljs-attr">selector:</span><br>    <span class="hljs-attr">matchLabels:</span><br>      &#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">include</span> <span class="hljs-string">&quot;myapp.selectorLabels&quot;</span> <span class="hljs-string">.</span> <span class="hljs-string">|</span> <span class="hljs-string">nindent</span> <span class="hljs-number">6</span> &#125;&#125;<br>  <span class="hljs-attr">template:</span><br>    <span class="hljs-attr">metadata:</span><br>      <span class="hljs-attr">annotations:</span><br>        <span class="hljs-comment"># 配置变更时自动触发滚动更新</span><br>        <span class="hljs-attr">checksum/config:</span> &#123;&#123; <span class="hljs-string">include</span> <span class="hljs-string">(print</span> <span class="hljs-string">$.Template.BasePath</span> <span class="hljs-string">&quot;/configmap.yaml&quot;</span><span class="hljs-string">)</span> <span class="hljs-string">.</span> <span class="hljs-string">|</span> <span class="hljs-string">sha256sum</span> &#125;&#125;<br>      <span class="hljs-attr">labels:</span><br>        &#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">include</span> <span class="hljs-string">&quot;myapp.selectorLabels&quot;</span> <span class="hljs-string">.</span> <span class="hljs-string">|</span> <span class="hljs-string">nindent</span> <span class="hljs-number">8</span> &#125;&#125;<br>    <span class="hljs-attr">spec:</span><br>      &#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">with</span> <span class="hljs-string">.Values.imagePullSecrets</span> &#125;&#125;<br>      <span class="hljs-attr">imagePullSecrets:</span><br>        &#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">toYaml</span> <span class="hljs-string">.</span> <span class="hljs-string">|</span> <span class="hljs-string">nindent</span> <span class="hljs-number">8</span> &#125;&#125;<br>      &#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">end</span> &#125;&#125;<br>      <span class="hljs-attr">serviceAccountName:</span> &#123;&#123; <span class="hljs-string">include</span> <span class="hljs-string">&quot;myapp.serviceAccountName&quot;</span> <span class="hljs-string">.</span> &#125;&#125;<br>      <span class="hljs-attr">securityContext:</span><br>        &#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">toYaml</span> <span class="hljs-string">.Values.podSecurityContext</span> <span class="hljs-string">|</span> <span class="hljs-string">nindent</span> <span class="hljs-number">8</span> &#125;&#125;<br>      <span class="hljs-attr">containers:</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> &#123;&#123; <span class="hljs-string">.Chart.Name</span> &#125;&#125;<br>          <span class="hljs-attr">image:</span> <span class="hljs-string">&quot;<span class="hljs-template-variable">&#123;&#123; .Values.image.repository &#125;&#125;</span>:<span class="hljs-template-variable">&#123;&#123; .Values.image.tag | default .Chart.AppVersion &#125;&#125;</span>&quot;</span><br>          <span class="hljs-attr">imagePullPolicy:</span> &#123;&#123; <span class="hljs-string">.Values.image.pullPolicy</span> &#125;&#125;<br>          <span class="hljs-attr">ports:</span><br>            <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">http</span><br>              <span class="hljs-attr">containerPort:</span> &#123;&#123; <span class="hljs-string">.Values.service.targetPort</span> <span class="hljs-string">|</span> <span class="hljs-string">default</span> <span class="hljs-number">8080</span> &#125;&#125;<br>              <span class="hljs-attr">protocol:</span> <span class="hljs-string">TCP</span><br>          &#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">if</span> <span class="hljs-string">.Values.healthCheck.enabled</span> &#125;&#125;<br>          <span class="hljs-attr">livenessProbe:</span><br>            <span class="hljs-attr">httpGet:</span><br>              <span class="hljs-attr">path:</span> &#123;&#123; <span class="hljs-string">.Values.healthCheck.livenessPath</span> <span class="hljs-string">|</span> <span class="hljs-string">default</span> <span class="hljs-string">&quot;/healthz&quot;</span> &#125;&#125;<br>              <span class="hljs-attr">port:</span> <span class="hljs-string">http</span><br>            <span class="hljs-attr">initialDelaySeconds:</span> &#123;&#123; <span class="hljs-string">.Values.healthCheck.initialDelaySeconds</span> <span class="hljs-string">|</span> <span class="hljs-string">default</span> <span class="hljs-number">15</span> &#125;&#125;<br>            <span class="hljs-attr">periodSeconds:</span> <span class="hljs-number">10</span><br>          <span class="hljs-attr">readinessProbe:</span><br>            <span class="hljs-attr">httpGet:</span><br>              <span class="hljs-attr">path:</span> &#123;&#123; <span class="hljs-string">.Values.healthCheck.readinessPath</span> <span class="hljs-string">|</span> <span class="hljs-string">default</span> <span class="hljs-string">&quot;/ready&quot;</span> &#125;&#125;<br>              <span class="hljs-attr">port:</span> <span class="hljs-string">http</span><br>            <span class="hljs-attr">initialDelaySeconds:</span> <span class="hljs-number">5</span><br>            <span class="hljs-attr">periodSeconds:</span> <span class="hljs-number">5</span><br>          &#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">end</span> &#125;&#125;<br>          <span class="hljs-attr">env:</span><br>            &#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">range</span> <span class="hljs-string">$key</span>, <span class="hljs-string">$value</span> <span class="hljs-string">:=</span> <span class="hljs-string">.Values.env</span> &#125;&#125;<br>            <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> &#123;&#123; <span class="hljs-string">$key</span> &#125;&#125;<br>              <span class="hljs-attr">value:</span> &#123;&#123; <span class="hljs-string">$value</span> <span class="hljs-string">|</span> <span class="hljs-string">quote</span> &#125;&#125;<br>            &#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">end</span> &#125;&#125;<br>            &#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">range</span> <span class="hljs-string">$key</span>, <span class="hljs-string">$secret</span> <span class="hljs-string">:=</span> <span class="hljs-string">.Values.envFromSecret</span> &#125;&#125;<br>            <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> &#123;&#123; <span class="hljs-string">$key</span> &#125;&#125;<br>              <span class="hljs-attr">valueFrom:</span><br>                <span class="hljs-attr">secretKeyRef:</span><br>                  <span class="hljs-attr">name:</span> &#123;&#123; <span class="hljs-string">$secret.name</span> &#125;&#125;<br>                  <span class="hljs-attr">key:</span> &#123;&#123; <span class="hljs-string">$secret.key</span> &#125;&#125;<br>            &#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">end</span> &#125;&#125;<br>          <span class="hljs-attr">resources:</span><br>            &#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">toYaml</span> <span class="hljs-string">.Values.resources</span> <span class="hljs-string">|</span> <span class="hljs-string">nindent</span> <span class="hljs-number">12</span> &#125;&#125;<br>          <span class="hljs-attr">volumeMounts:</span><br>            &#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">if</span> <span class="hljs-string">.Values.config</span> &#125;&#125;<br>            <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">config</span><br>              <span class="hljs-attr">mountPath:</span> <span class="hljs-string">/etc/app/config.yaml</span><br>              <span class="hljs-attr">subPath:</span> <span class="hljs-string">config.yaml</span><br>              <span class="hljs-attr">readOnly:</span> <span class="hljs-literal">true</span><br>            &#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">end</span> &#125;&#125;<br>      <span class="hljs-attr">volumes:</span><br>        &#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">if</span> <span class="hljs-string">.Values.config</span> &#125;&#125;<br>        <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">config</span><br>          <span class="hljs-attr">configMap:</span><br>            <span class="hljs-attr">name:</span> &#123;&#123; <span class="hljs-string">include</span> <span class="hljs-string">&quot;myapp.fullname&quot;</span> <span class="hljs-string">.</span> &#125;&#125;<span class="hljs-string">-config</span><br>        &#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">end</span> &#125;&#125;<br>      &#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">with</span> <span class="hljs-string">.Values.nodeSelector</span> &#125;&#125;<br>      <span class="hljs-attr">nodeSelector:</span><br>        &#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">toYaml</span> <span class="hljs-string">.</span> <span class="hljs-string">|</span> <span class="hljs-string">nindent</span> <span class="hljs-number">8</span> &#125;&#125;<br>      &#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">end</span> &#125;&#125;<br>      &#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">with</span> <span class="hljs-string">.Values.tolerations</span> &#125;&#125;<br>      <span class="hljs-attr">tolerations:</span><br>        &#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">toYaml</span> <span class="hljs-string">.</span> <span class="hljs-string">|</span> <span class="hljs-string">nindent</span> <span class="hljs-number">8</span> &#125;&#125;<br>      &#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">end</span> &#125;&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="helpers模板">helpers模板</h3>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># templates/_helpers.tpl</span><br><br>&#123;&#123;<span class="hljs-string">/*</span><br><span class="hljs-string">生成应用全名</span><br><span class="hljs-string">*/</span>&#125;&#125;<br>&#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">define</span> <span class="hljs-string">&quot;myapp.fullname&quot;</span> <span class="hljs-string">-</span>&#125;&#125;<br>&#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">if</span> <span class="hljs-string">.Values.fullnameOverride</span> &#125;&#125;<br>&#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">.Values.fullnameOverride</span> <span class="hljs-string">|</span> <span class="hljs-string">trunc</span> <span class="hljs-number">63</span> <span class="hljs-string">|</span> <span class="hljs-string">trimSuffix</span> <span class="hljs-string">&quot;-&quot;</span> &#125;&#125;<br>&#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">else</span> &#125;&#125;<br>&#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">$name</span> <span class="hljs-string">:=</span> <span class="hljs-string">default</span> <span class="hljs-string">.Chart.Name</span> <span class="hljs-string">.Values.nameOverride</span> &#125;&#125;<br>&#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">if</span> <span class="hljs-string">contains</span> <span class="hljs-string">$name</span> <span class="hljs-string">.Release.Name</span> &#125;&#125;<br>&#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">.Release.Name</span> <span class="hljs-string">|</span> <span class="hljs-string">trunc</span> <span class="hljs-number">63</span> <span class="hljs-string">|</span> <span class="hljs-string">trimSuffix</span> <span class="hljs-string">&quot;-&quot;</span> &#125;&#125;<br>&#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">else</span> &#125;&#125;<br>&#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">printf</span> <span class="hljs-string">&quot;%s-%s&quot;</span> <span class="hljs-string">.Release.Name</span> <span class="hljs-string">$name</span> <span class="hljs-string">|</span> <span class="hljs-string">trunc</span> <span class="hljs-number">63</span> <span class="hljs-string">|</span> <span class="hljs-string">trimSuffix</span> <span class="hljs-string">&quot;-&quot;</span> &#125;&#125;<br>&#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">end</span> &#125;&#125;<br>&#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">end</span> &#125;&#125;<br>&#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">end</span> &#125;&#125;<br><br>&#123;&#123;<span class="hljs-string">/*</span><br><span class="hljs-string">通用标签</span><br><span class="hljs-string">*/</span>&#125;&#125;<br>&#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">define</span> <span class="hljs-string">&quot;myapp.labels&quot;</span> <span class="hljs-string">-</span>&#125;&#125;<br><span class="hljs-attr">helm.sh/chart:</span> &#123;&#123; <span class="hljs-string">include</span> <span class="hljs-string">&quot;myapp.chart&quot;</span> <span class="hljs-string">.</span> &#125;&#125;<br>&#123;&#123; <span class="hljs-string">include</span> <span class="hljs-string">&quot;myapp.selectorLabels&quot;</span> <span class="hljs-string">.</span> &#125;&#125;<br><span class="hljs-attr">app.kubernetes.io/version:</span> &#123;&#123; <span class="hljs-string">.Chart.AppVersion</span> <span class="hljs-string">|</span> <span class="hljs-string">quote</span> &#125;&#125;<br><span class="hljs-attr">app.kubernetes.io/managed-by:</span> &#123;&#123; <span class="hljs-string">.Release.Service</span> &#125;&#125;<br>&#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">end</span> &#125;&#125;<br><br>&#123;&#123;<span class="hljs-string">/*</span><br><span class="hljs-string">选择器标签</span><br><span class="hljs-string">*/</span>&#125;&#125;<br>&#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">define</span> <span class="hljs-string">&quot;myapp.selectorLabels&quot;</span> <span class="hljs-string">-</span>&#125;&#125;<br><span class="hljs-attr">app.kubernetes.io/name:</span> &#123;&#123; <span class="hljs-string">include</span> <span class="hljs-string">&quot;myapp.name&quot;</span> <span class="hljs-string">.</span> &#125;&#125;<br><span class="hljs-attr">app.kubernetes.io/instance:</span> &#123;&#123; <span class="hljs-string">.Release.Name</span> &#125;&#125;<br>&#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">end</span> &#125;&#125;<br><br>&#123;&#123;<span class="hljs-string">/*</span><br><span class="hljs-string">Chart名称和版本</span><br><span class="hljs-string">*/</span>&#125;&#125;<br>&#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">define</span> <span class="hljs-string">&quot;myapp.chart&quot;</span> <span class="hljs-string">-</span>&#125;&#125;<br>&#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">printf</span> <span class="hljs-string">&quot;%s-%s&quot;</span> <span class="hljs-string">.Chart.Name</span> <span class="hljs-string">.Chart.Version</span> <span class="hljs-string">|</span> <span class="hljs-string">replace</span> <span class="hljs-string">&quot;+&quot;</span> <span class="hljs-string">&quot;_&quot;</span> <span class="hljs-string">|</span> <span class="hljs-string">trunc</span> <span class="hljs-number">63</span> <span class="hljs-string">|</span> <span class="hljs-string">trimSuffix</span> <span class="hljs-string">&quot;-&quot;</span> &#125;&#125;<br>&#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">end</span> &#125;&#125;<br><br>&#123;&#123;<span class="hljs-string">/*</span><br><span class="hljs-string">名称</span><br><span class="hljs-string">*/</span>&#125;&#125;<br>&#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">define</span> <span class="hljs-string">&quot;myapp.name&quot;</span> <span class="hljs-string">-</span>&#125;&#125;<br>&#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">default</span> <span class="hljs-string">.Chart.Name</span> <span class="hljs-string">.Values.nameOverride</span> <span class="hljs-string">|</span> <span class="hljs-string">trunc</span> <span class="hljs-number">63</span> <span class="hljs-string">|</span> <span class="hljs-string">trimSuffix</span> <span class="hljs-string">&quot;-&quot;</span> &#125;&#125;<br>&#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">end</span> &#125;&#125;<br><br>&#123;&#123;<span class="hljs-string">/*</span><br><span class="hljs-string">ServiceAccount名称</span><br><span class="hljs-string">*/</span>&#125;&#125;<br>&#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">define</span> <span class="hljs-string">&quot;myapp.serviceAccountName&quot;</span> <span class="hljs-string">-</span>&#125;&#125;<br>&#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">if</span> <span class="hljs-string">.Values.serviceAccount.create</span> &#125;&#125;<br>&#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">default</span> <span class="hljs-string">(include</span> <span class="hljs-string">&quot;myapp.fullname&quot;</span> <span class="hljs-string">.)</span> <span class="hljs-string">.Values.serviceAccount.name</span> &#125;&#125;<br>&#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">else</span> &#125;&#125;<br>&#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">default</span> <span class="hljs-string">&quot;default&quot;</span> <span class="hljs-string">.Values.serviceAccount.name</span> &#125;&#125;<br>&#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">end</span> &#125;&#125;<br>&#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">end</span> &#125;&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="values.yaml设计">values.yaml设计</h2>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># values.yaml - 默认配置</span><br><span class="hljs-attr">replicaCount:</span> <span class="hljs-number">2</span><br><br><span class="hljs-attr">image:</span><br>  <span class="hljs-attr">repository:</span> <span class="hljs-string">myregistry.io/myapp</span><br>  <span class="hljs-attr">pullPolicy:</span> <span class="hljs-string">IfNotPresent</span><br>  <span class="hljs-attr">tag:</span> <span class="hljs-string">&quot;&quot;</span>  <span class="hljs-comment"># 默认使用Chart.AppVersion</span><br><br><span class="hljs-attr">imagePullSecrets:</span> []<br><span class="hljs-attr">nameOverride:</span> <span class="hljs-string">&quot;&quot;</span><br><span class="hljs-attr">fullnameOverride:</span> <span class="hljs-string">&quot;&quot;</span><br><br><span class="hljs-attr">serviceAccount:</span><br>  <span class="hljs-attr">create:</span> <span class="hljs-literal">true</span><br>  <span class="hljs-attr">annotations:</span> &#123;&#125;<br>  <span class="hljs-attr">name:</span> <span class="hljs-string">&quot;&quot;</span><br><br><span class="hljs-attr">podSecurityContext:</span><br>  <span class="hljs-attr">fsGroup:</span> <span class="hljs-number">1000</span><br>  <span class="hljs-attr">runAsNonRoot:</span> <span class="hljs-literal">true</span><br><br><span class="hljs-attr">securityContext:</span><br>  <span class="hljs-attr">allowPrivilegeEscalation:</span> <span class="hljs-literal">false</span><br>  <span class="hljs-attr">readOnlyRootFilesystem:</span> <span class="hljs-literal">true</span><br>  <span class="hljs-attr">runAsUser:</span> <span class="hljs-number">1000</span><br>  <span class="hljs-attr">capabilities:</span><br>    <span class="hljs-attr">drop:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">ALL</span><br><br><span class="hljs-attr">service:</span><br>  <span class="hljs-attr">type:</span> <span class="hljs-string">ClusterIP</span><br>  <span class="hljs-attr">port:</span> <span class="hljs-number">80</span><br>  <span class="hljs-attr">targetPort:</span> <span class="hljs-number">8080</span><br><br><span class="hljs-attr">ingress:</span><br>  <span class="hljs-attr">enabled:</span> <span class="hljs-literal">false</span><br>  <span class="hljs-attr">className:</span> <span class="hljs-string">nginx</span><br>  <span class="hljs-attr">annotations:</span> &#123;&#125;<br>  <span class="hljs-attr">hosts:</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-attr">host:</span> <span class="hljs-string">myapp.example.com</span><br>      <span class="hljs-attr">paths:</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-attr">path:</span> <span class="hljs-string">/</span><br>          <span class="hljs-attr">pathType:</span> <span class="hljs-string">Prefix</span><br>  <span class="hljs-attr">tls:</span> []<br><br><span class="hljs-attr">resources:</span><br>  <span class="hljs-attr">requests:</span><br>    <span class="hljs-attr">cpu:</span> <span class="hljs-string">100m</span><br>    <span class="hljs-attr">memory:</span> <span class="hljs-string">128Mi</span><br>  <span class="hljs-attr">limits:</span><br>    <span class="hljs-attr">cpu:</span> <span class="hljs-string">500m</span><br>    <span class="hljs-attr">memory:</span> <span class="hljs-string">512Mi</span><br><br><span class="hljs-attr">autoscaling:</span><br>  <span class="hljs-attr">enabled:</span> <span class="hljs-literal">false</span><br>  <span class="hljs-attr">minReplicas:</span> <span class="hljs-number">2</span><br>  <span class="hljs-attr">maxReplicas:</span> <span class="hljs-number">10</span><br>  <span class="hljs-attr">targetCPUUtilizationPercentage:</span> <span class="hljs-number">70</span><br>  <span class="hljs-attr">targetMemoryUtilizationPercentage:</span> <span class="hljs-number">80</span><br><br><span class="hljs-attr">healthCheck:</span><br>  <span class="hljs-attr">enabled:</span> <span class="hljs-literal">true</span><br>  <span class="hljs-attr">livenessPath:</span> <span class="hljs-string">/healthz</span><br>  <span class="hljs-attr">readinessPath:</span> <span class="hljs-string">/ready</span><br>  <span class="hljs-attr">initialDelaySeconds:</span> <span class="hljs-number">15</span><br><br><span class="hljs-attr">env:</span><br>  <span class="hljs-attr">APP_ENV:</span> <span class="hljs-string">production</span><br>  <span class="hljs-attr">LOG_LEVEL:</span> <span class="hljs-string">info</span><br><br><span class="hljs-attr">envFromSecret:</span> &#123;&#125;<br>  <span class="hljs-comment"># DB_PASSWORD:</span><br>  <span class="hljs-comment">#   name: db-secret</span><br>  <span class="hljs-comment">#   key: password</span><br><br><span class="hljs-attr">config:</span> &#123;&#125;<br>  <span class="hljs-comment"># 应用配置内容，会创建ConfigMap</span><br><br><span class="hljs-comment"># 子Chart配置</span><br><span class="hljs-attr">postgresql:</span><br>  <span class="hljs-attr">enabled:</span> <span class="hljs-literal">true</span><br>  <span class="hljs-attr">auth:</span><br>    <span class="hljs-attr">database:</span> <span class="hljs-string">myapp</span><br>    <span class="hljs-attr">username:</span> <span class="hljs-string">myapp</span><br><br><span class="hljs-attr">redis:</span><br>  <span class="hljs-attr">enabled:</span> <span class="hljs-literal">false</span><br>  <span class="hljs-attr">architecture:</span> <span class="hljs-string">standalone</span><br><br><span class="hljs-attr">deployment:</span><br>  <span class="hljs-attr">annotations:</span> &#123;&#125;<br><br><span class="hljs-attr">nodeSelector:</span> &#123;&#125;<br><span class="hljs-attr">tolerations:</span> []<br><span class="hljs-attr">affinity:</span> &#123;&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="values.schema.json">values.schema.json</h3>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br></pre></td><td class="code"><pre><code class="hljs json"><span class="hljs-punctuation">&#123;</span><br>  <span class="hljs-attr">&quot;$schema&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;https://json-schema.org/draft-07/schema#&quot;</span><span class="hljs-punctuation">,</span><br>  <span class="hljs-attr">&quot;type&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;object&quot;</span><span class="hljs-punctuation">,</span><br>  <span class="hljs-attr">&quot;required&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><span class="hljs-string">&quot;image&quot;</span><span class="hljs-punctuation">,</span> <span class="hljs-string">&quot;service&quot;</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span><br>  <span class="hljs-attr">&quot;properties&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">&#123;</span><br>    <span class="hljs-attr">&quot;replicaCount&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">&#123;</span><br>      <span class="hljs-attr">&quot;type&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;integer&quot;</span><span class="hljs-punctuation">,</span><br>      <span class="hljs-attr">&quot;minimum&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-number">1</span><br>    <span class="hljs-punctuation">&#125;</span><span class="hljs-punctuation">,</span><br>    <span class="hljs-attr">&quot;image&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">&#123;</span><br>      <span class="hljs-attr">&quot;type&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;object&quot;</span><span class="hljs-punctuation">,</span><br>      <span class="hljs-attr">&quot;required&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><span class="hljs-string">&quot;repository&quot;</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span><br>      <span class="hljs-attr">&quot;properties&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">&#123;</span><br>        <span class="hljs-attr">&quot;repository&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">&#123;</span><br>          <span class="hljs-attr">&quot;type&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;string&quot;</span><br>        <span class="hljs-punctuation">&#125;</span><span class="hljs-punctuation">,</span><br>        <span class="hljs-attr">&quot;pullPolicy&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">&#123;</span><br>          <span class="hljs-attr">&quot;type&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;string&quot;</span><span class="hljs-punctuation">,</span><br>          <span class="hljs-attr">&quot;enum&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><span class="hljs-string">&quot;Always&quot;</span><span class="hljs-punctuation">,</span> <span class="hljs-string">&quot;IfNotPresent&quot;</span><span class="hljs-punctuation">,</span> <span class="hljs-string">&quot;Never&quot;</span><span class="hljs-punctuation">]</span><br>        <span class="hljs-punctuation">&#125;</span><span class="hljs-punctuation">,</span><br>        <span class="hljs-attr">&quot;tag&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">&#123;</span><br>          <span class="hljs-attr">&quot;type&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;string&quot;</span><br>        <span class="hljs-punctuation">&#125;</span><br>      <span class="hljs-punctuation">&#125;</span><br>    <span class="hljs-punctuation">&#125;</span><span class="hljs-punctuation">,</span><br>    <span class="hljs-attr">&quot;service&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">&#123;</span><br>      <span class="hljs-attr">&quot;type&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;object&quot;</span><span class="hljs-punctuation">,</span><br>      <span class="hljs-attr">&quot;properties&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">&#123;</span><br>        <span class="hljs-attr">&quot;type&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">&#123;</span><br>          <span class="hljs-attr">&quot;type&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;string&quot;</span><span class="hljs-punctuation">,</span><br>          <span class="hljs-attr">&quot;enum&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><span class="hljs-string">&quot;ClusterIP&quot;</span><span class="hljs-punctuation">,</span> <span class="hljs-string">&quot;NodePort&quot;</span><span class="hljs-punctuation">,</span> <span class="hljs-string">&quot;LoadBalancer&quot;</span><span class="hljs-punctuation">]</span><br>        <span class="hljs-punctuation">&#125;</span><span class="hljs-punctuation">,</span><br>        <span class="hljs-attr">&quot;port&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">&#123;</span><br>          <span class="hljs-attr">&quot;type&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;integer&quot;</span><span class="hljs-punctuation">,</span><br>          <span class="hljs-attr">&quot;minimum&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-number">1</span><span class="hljs-punctuation">,</span><br>          <span class="hljs-attr">&quot;maximum&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-number">65535</span><br>        <span class="hljs-punctuation">&#125;</span><br>      <span class="hljs-punctuation">&#125;</span><br>    <span class="hljs-punctuation">&#125;</span><br>  <span class="hljs-punctuation">&#125;</span><br><span class="hljs-punctuation">&#125;</span><br></code></pre></td></tr></table></figure>
+<h2 id="hooks">Hooks</h2>
+<p>Helm Hooks允许在Release生命周期的特定时间点执行操作：</p>
+<pre class="mermaid">graph LR
+    A["helm install"] --&gt; B["pre-install"]
+    B --&gt; C["安装资源"]
+    C --&gt; D["post-install"]
+
+    E["helm upgrade"] --&gt; F["pre-upgrade"]
+    F --&gt; G["升级资源"]
+    G --&gt; H["post-upgrade"]
+
+    I["helm delete"] --&gt; J["pre-delete"]
+    J --&gt; K["删除资源"]
+    K --&gt; L["post-delete"]</pre>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># templates/job-db-migrate.yaml</span><br><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">batch/v1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">Job</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> &#123;&#123; <span class="hljs-string">include</span> <span class="hljs-string">&quot;myapp.fullname&quot;</span> <span class="hljs-string">.</span> &#125;&#125;<span class="hljs-string">-db-migrate</span><br>  <span class="hljs-attr">labels:</span><br>    &#123;&#123;<span class="hljs-bullet">-</span> <span class="hljs-string">include</span> <span class="hljs-string">&quot;myapp.labels&quot;</span> <span class="hljs-string">.</span> <span class="hljs-string">|</span> <span class="hljs-string">nindent</span> <span class="hljs-number">4</span> &#125;&#125;<br>  <span class="hljs-attr">annotations:</span><br>    <span class="hljs-attr">&quot;helm.sh/hook&quot;:</span> <span class="hljs-string">pre-upgrade,pre-install</span><br>    <span class="hljs-attr">&quot;helm.sh/hook-weight&quot;:</span> <span class="hljs-string">&quot;5&quot;</span>          <span class="hljs-comment"># 执行顺序（升序）</span><br>    <span class="hljs-attr">&quot;helm.sh/hook-delete-policy&quot;:</span> <span class="hljs-string">before-hook-creation</span>  <span class="hljs-comment"># 清理策略</span><br><span class="hljs-attr">spec:</span><br>  <span class="hljs-attr">backoffLimit:</span> <span class="hljs-number">3</span><br>  <span class="hljs-attr">template:</span><br>    <span class="hljs-attr">spec:</span><br>      <span class="hljs-attr">restartPolicy:</span> <span class="hljs-string">Never</span><br>      <span class="hljs-attr">containers:</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">migrate</span><br>          <span class="hljs-attr">image:</span> <span class="hljs-string">&quot;<span class="hljs-template-variable">&#123;&#123; .Values.image.repository &#125;&#125;</span>:<span class="hljs-template-variable">&#123;&#123; .Values.image.tag | default .Chart.AppVersion &#125;&#125;</span>&quot;</span><br>          <span class="hljs-attr">command:</span> [<span class="hljs-string">&quot;./migrate&quot;</span>, <span class="hljs-string">&quot;up&quot;</span>]<br>          <span class="hljs-attr">env:</span><br>            <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">DATABASE_URL</span><br>              <span class="hljs-attr">valueFrom:</span><br>                <span class="hljs-attr">secretKeyRef:</span><br>                  <span class="hljs-attr">name:</span> &#123;&#123; <span class="hljs-string">include</span> <span class="hljs-string">&quot;myapp.fullname&quot;</span> <span class="hljs-string">.</span> &#125;&#125;<span class="hljs-string">-db</span><br>                  <span class="hljs-attr">key:</span> <span class="hljs-string">url</span><br><br><span class="hljs-meta">---</span><br><span class="hljs-comment"># templates/tests/test-connection.yaml</span><br><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">v1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">Pod</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">&quot;<span class="hljs-template-variable">&#123;&#123; include &quot;myapp.fullname&quot; . &#125;&#125;</span>-test&quot;</span><br>  <span class="hljs-attr">annotations:</span><br>    <span class="hljs-attr">&quot;helm.sh/hook&quot;:</span> <span class="hljs-string">test</span><br>    <span class="hljs-attr">&quot;helm.sh/hook-delete-policy&quot;:</span> <span class="hljs-string">before-hook-creation</span><br><span class="hljs-attr">spec:</span><br>  <span class="hljs-attr">restartPolicy:</span> <span class="hljs-string">Never</span><br>  <span class="hljs-attr">containers:</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">test</span><br>      <span class="hljs-attr">image:</span> <span class="hljs-string">busybox:1.36</span><br>      <span class="hljs-attr">command:</span> [<span class="hljs-string">&#x27;wget&#x27;</span>, <span class="hljs-string">&#x27;--timeout=5&#x27;</span>, <span class="hljs-string">&#x27;-qO-&#x27;</span>, <span class="hljs-string">&#x27;http://<span class="hljs-template-variable">&#123;&#123; include &quot;myapp.fullname&quot; . &#125;&#125;</span>:<span class="hljs-template-variable">&#123;&#123; .Values.service.port &#125;&#125;</span>/healthz&#x27;</span>]<br></code></pre></td></tr></table></figure>
+<h2 id="依赖管理">依赖管理</h2>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 添加仓库</span><br>helm repo add bitnami https://charts.bitnami.com/bitnami<br><br><span class="hljs-comment"># 更新依赖</span><br>helm dependency update ./myapp<br><br><span class="hljs-comment"># 构建依赖（下载到charts/目录）</span><br>helm dependency build ./myapp<br><br><span class="hljs-comment"># 列出依赖</span><br>helm dependency list ./myapp<br></code></pre></td></tr></table></figure>
+<p>条件依赖与标签：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># Chart.yaml中的依赖定义</span><br><span class="hljs-attr">dependencies:</span><br>  <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">postgresql</span><br>    <span class="hljs-attr">version:</span> <span class="hljs-string">&quot;12.x.x&quot;</span><br>    <span class="hljs-attr">repository:</span> <span class="hljs-string">https://charts.bitnami.com/bitnami</span><br>    <span class="hljs-attr">condition:</span> <span class="hljs-string">postgresql.enabled</span><br>    <span class="hljs-attr">tags:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">database</span><br>  <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">redis</span><br>    <span class="hljs-attr">version:</span> <span class="hljs-string">&quot;17.x.x&quot;</span><br>    <span class="hljs-attr">repository:</span> <span class="hljs-string">https://charts.bitnami.com/bitnami</span><br>    <span class="hljs-attr">condition:</span> <span class="hljs-string">redis.enabled</span><br>    <span class="hljs-attr">tags:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">cache</span><br></code></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 启用特定标签的依赖</span><br>helm install myapp ./myapp --<span class="hljs-built_in">set</span> tags.database=<span class="hljs-literal">true</span> --<span class="hljs-built_in">set</span> tags.cache=<span class="hljs-literal">false</span><br></code></pre></td></tr></table></figure>
+<h2 id="chart测试与调试">Chart测试与调试</h2>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 模板渲染（不安装）</span><br>helm template myrelease ./myapp -f custom-values.yaml<br><br><span class="hljs-comment"># 渲染并检查语法</span><br>helm template myrelease ./myapp | kubectl apply --dry-run=client -f -<br><br><span class="hljs-comment"># Lint检查</span><br>helm lint ./myapp<br>helm lint ./myapp -f production-values.yaml<br><br><span class="hljs-comment"># 调试模式安装</span><br>helm install myrelease ./myapp --debug --dry-run<br><br><span class="hljs-comment"># 运行测试</span><br>helm <span class="hljs-built_in">test</span> myrelease<br><br><span class="hljs-comment"># 查看渲染后的某个模板</span><br>helm template myrelease ./myapp -s templates/deployment.yaml<br><br><span class="hljs-comment"># 对比升级变更</span><br>helm diff upgrade myrelease ./myapp -f new-values.yaml<br></code></pre></td></tr></table></figure>
+<h2 id="发布与分发">发布与分发</h2>
+<h3 id="chart-repository">Chart Repository</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 打包Chart</span><br>helm package ./myapp<br><span class="hljs-comment"># 输出: myapp-1.2.0.tgz</span><br><br><span class="hljs-comment"># 生成index.yaml</span><br>helm repo index . --url https://charts.example.com<br><br><span class="hljs-comment"># 推送到ChartMuseum</span><br>curl --data-binary <span class="hljs-string">&quot;@myapp-1.2.0.tgz&quot;</span> https://chartmuseum.example.com/api/charts<br></code></pre></td></tr></table></figure>
+<h3 id="oci-registry">OCI Registry</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 登录OCI Registry</span><br>helm registry login ghcr.io -u username<br><br><span class="hljs-comment"># 推送到OCI Registry</span><br>helm push myapp-1.2.0.tgz oci://ghcr.io/myorg/charts<br><br><span class="hljs-comment"># 从OCI Registry安装</span><br>helm install myrelease oci://ghcr.io/myorg/charts/myapp --version 1.2.0<br></code></pre></td></tr></table></figure>
+<pre class="mermaid">graph TB
+    Dev["开发者"] --&gt; |"helm push"| Registry["OCI Registry&lt;br&gt;ghcr.io / ECR / ACR"]
+    CI["CI Pipeline"] --&gt; |"helm push"| Registry
+    Registry --&gt; |"helm install"| Staging["Staging集群"]
+    Registry --&gt; |"helm install"| Prod["Production集群"]</pre>
+<h2 id="最佳实践">最佳实践</h2>
+<h3 id="版本管理">1. 版本管理</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 使用语义化版本</span><br><span class="hljs-comment"># Chart版本: 与Chart模板变更对应</span><br><span class="hljs-comment"># AppVersion: 与应用本身版本对应</span><br><span class="hljs-comment"># 两者独立管理</span><br></code></pre></td></tr></table></figure>
+<h3 id="安全加固">2. 安全加固</h3>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># 默认安全上下文</span><br><span class="hljs-attr">podSecurityContext:</span><br>  <span class="hljs-attr">runAsNonRoot:</span> <span class="hljs-literal">true</span><br>  <span class="hljs-attr">fsGroup:</span> <span class="hljs-number">65534</span><br>  <span class="hljs-attr">seccompProfile:</span><br>    <span class="hljs-attr">type:</span> <span class="hljs-string">RuntimeDefault</span><br><br><span class="hljs-attr">securityContext:</span><br>  <span class="hljs-attr">allowPrivilegeEscalation:</span> <span class="hljs-literal">false</span><br>  <span class="hljs-attr">readOnlyRootFilesystem:</span> <span class="hljs-literal">true</span><br>  <span class="hljs-attr">runAsUser:</span> <span class="hljs-number">65534</span><br>  <span class="hljs-attr">capabilities:</span><br>    <span class="hljs-attr">drop:</span> [<span class="hljs-string">&quot;ALL&quot;</span>]<br></code></pre></td></tr></table></figure>
+<h3 id="多环境管理">3. 多环境管理</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 使用不同values文件</span><br>helm install myapp ./myapp \<br>  -f values.yaml \<br>  -f values-production.yaml \<br>  --<span class="hljs-built_in">set</span> image.tag=v3.5.1<br><br><span class="hljs-comment"># values文件优先级（从低到高）</span><br><span class="hljs-comment"># values.yaml &lt; values-production.yaml &lt; --set参数</span><br></code></pre></td></tr></table></figure>
+<h2 id="总结">总结</h2>
+<p>Helm Chart开发的核心要点：</p>
+<ol type="1">
+<li><strong>结构清晰</strong>：遵循标准Chart结构，合理组织模板</li>
+<li><strong>配置灵活</strong>：通过values.yaml提供合理的默认值和丰富的配置项</li>
+<li><strong>安全默认</strong>：默认启用安全上下文、资源限制</li>
+<li><strong>可测试</strong>：编写Chart测试，使用lint和dry-run验证</li>
+<li><strong>文档完善</strong>：NOTES.txt提供安装后指引，README说明配置项</li>
+<li><strong>版本规范</strong>：Chart版本和AppVersion独立管理，遵循语义化版本</li>
+</ol>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2024-05-29</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">3.0k 字 · 8 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/cicd-pipeline-design/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">CI/CD流水线设计：从Jenkins到GitHub Actions</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/kubernetes-resource-management/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Kubernetes资源管理与调度策略</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#helm%E6%9E%B6%E6%9E%84"><span class="toc-text">Helm架构</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#chart%E7%BB%93%E6%9E%84"><span class="toc-text">Chart结构</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#chart.yaml"><span class="toc-text">Chart.yaml</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A8%A1%E6%9D%BF%E8%AF%AD%E6%B3%95"><span class="toc-text">模板语法</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9F%BA%E7%A1%80%E8%AF%AD%E6%B3%95"><span class="toc-text">基础语法</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#helpers%E6%A8%A1%E6%9D%BF"><span class="toc-text">helpers模板</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#values.yaml%E8%AE%BE%E8%AE%A1"><span class="toc-text">values.yaml设计</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#values.schema.json"><span class="toc-text">values.schema.json</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#hooks"><span class="toc-text">Hooks</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BE%9D%E8%B5%96%E7%AE%A1%E7%90%86"><span class="toc-text">依赖管理</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#chart%E6%B5%8B%E8%AF%95%E4%B8%8E%E8%B0%83%E8%AF%95"><span class="toc-text">Chart测试与调试</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8F%91%E5%B8%83%E4%B8%8E%E5%88%86%E5%8F%91"><span class="toc-text">发布与分发</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#chart-repository"><span class="toc-text">Chart Repository</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#oci-registry"><span class="toc-text">OCI Registry</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5"><span class="toc-text">最佳实践</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%89%88%E6%9C%AC%E7%AE%A1%E7%90%86"><span class="toc-text">1. 版本管理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%89%E5%85%A8%E5%8A%A0%E5%9B%BA"><span class="toc-text">2. 安全加固</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%A4%9A%E7%8E%AF%E5%A2%83%E7%AE%A1%E7%90%86"><span class="toc-text">3. 多环境管理</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

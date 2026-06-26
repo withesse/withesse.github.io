@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OAuth2.0与OIDC协议深入解析 · zt&#39;s Blog</title>
+  <meta name="description" content="深入解析OAuth2.0各授权流程（Authorization Code、PKCE、Client Credentials、Device Flow）和OpenID Connect协议层。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/oauth2-oidc-in-depth/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="OAuth2.0与OIDC协议深入解析">
+  <meta property="og:description" content="深入解析OAuth2.0各授权流程（Authorization Code、PKCE、Client Credentials、Device Flow）和OpenID Connect协议层。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/oauth2-oidc-in-depth/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2025-06-14T16:00:00.000Z">
+  <meta property="article:modified_time" content="2025-06-14T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="OAuth2.0与OIDC协议深入解析">
+  <meta name="twitter:description" content="深入解析OAuth2.0各授权流程（Authorization Code、PKCE、Client Credentials、Device Flow）和OpenID Connect协议层。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"OAuth2.0与OIDC协议深入解析","description":"深入解析OAuth2.0各授权流程（Authorization Code、PKCE、Client Credentials、Device Flow）和OpenID Connect协议层。","datePublished":"2025-06-14T16:00:00.000Z","dateModified":"2025-06-14T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/oauth2-oidc-in-depth/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Security","item":"https://withesse.co/categories/Security/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:350">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Security/">Security</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/oauth2/"><span class="hash">#</span>oauth2</a><a class="tag" href="/tags/authentication/"><span class="hash">#</span>authentication</a><a class="tag" href="/tags/oidc/"><span class="hash">#</span>oidc</a>
+        
+      </div>
+
+      <h1>OAuth2.0与OIDC协议深入解析</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2025.06.15</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 8 min</span>
+        </span>
+        <span class="wc"><span class="num">3.2k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#oauth-2.0%E5%9F%BA%E6%9C%AC%E6%A6%82%E5%BF%B5"><span class="toc-text">OAuth 2.0基本概念</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%A7%92%E8%89%B2%E5%AE%9A%E4%B9%89"><span class="toc-text">角色定义</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#authorization-code-flow%E6%8E%88%E6%9D%83%E7%A0%81%E6%B5%81%E7%A8%8B"><span class="toc-text">Authorization Code
+Flow（授权码流程）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#authorization-code-with-pkce"><span class="toc-text">Authorization Code with PKCE</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#client-credentials-flow"><span class="toc-text">Client Credentials Flow</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#device-authorization-flow"><span class="toc-text">Device Authorization Flow</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#openid-connectoidc"><span class="toc-text">OpenID Connect（OIDC）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#id-tokenjwt"><span class="toc-text">ID Token（JWT）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#id-token%E9%AA%8C%E8%AF%81"><span class="toc-text">ID Token验证</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#userinfo-endpoint"><span class="toc-text">UserInfo Endpoint</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#oidc-discovery"><span class="toc-text">OIDC Discovery</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#token-introspection"><span class="toc-text">Token Introspection</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5"><span class="toc-text">最佳实践</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%B5%81%E7%A8%8B%E9%80%89%E6%8B%A9%E6%8C%87%E5%8D%97"><span class="toc-text">流程选择指南</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%89%E5%85%A8%E5%BB%BA%E8%AE%AE"><span class="toc-text">安全建议</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="前言">前言</h2>
+<p>OAuth
+2.0是业界标准的授权框架，允许第三方应用以有限的方式访问用户资源，而无需暴露用户密码。OpenID
+Connect（OIDC）是构建在OAuth
+2.0之上的身份认证层。本文将深入分析各种OAuth流程和OIDC的核心机制。</p>
+<h2 id="oauth-2.0基本概念">OAuth 2.0基本概念</h2>
+<h3 id="角色定义">角色定义</h3>
+<pre class="mermaid">graph TB
+    RO[Resource Owner&lt;br&gt;资源所有者&lt;br&gt;即最终用户] --&gt; CLIENT[Client&lt;br&gt;第三方应用&lt;br&gt;如某App]
+    CLIENT --&gt; AS[Authorization Server&lt;br&gt;授权服务器&lt;br&gt;如Google OAuth]
+    AS --&gt; RS[Resource Server&lt;br&gt;资源服务器&lt;br&gt;如Google API]
+    RO -.-&gt;|拥有资源| RS
+
+    style RO fill:#1976d2,color:#fff
+    style CLIENT fill:#388e3c,color:#fff
+    style AS fill:#f57c00,color:#fff
+    style RS fill:#7b1fa2,color:#fff</pre>
+<ul>
+<li><strong>Resource Owner</strong>：拥有受保护资源的用户</li>
+<li><strong>Client</strong>：想要访问用户资源的第三方应用</li>
+<li><strong>Authorization Server</strong>：颁发令牌的服务器</li>
+<li><strong>Resource Server</strong>：托管受保护资源的服务器</li>
+</ul>
+<h2 id="authorization-code-flow授权码流程">Authorization Code
+Flow（授权码流程）</h2>
+<p>最安全、最推荐的OAuth流程，适用于有后端的Web应用。</p>
+<pre class="mermaid">sequenceDiagram
+    participant U as User (Browser)
+    participant C as Client (Backend)
+    participant AS as Auth Server
+    participant RS as Resource Server
+
+    U-&gt;&gt;C: 1. 点击"使用Google登录"
+    C-&gt;&gt;U: 2. 重定向到授权端点
+    U-&gt;&gt;AS: 3. GET /authorize?&lt;br&gt;response_type=code&amp;&lt;br&gt;client_id=xxx&amp;&lt;br&gt;redirect_uri=xxx&amp;&lt;br&gt;scope=openid profile&amp;&lt;br&gt;state=random123
+
+    AS-&gt;&gt;U: 4. 展示登录和授权页面
+    U-&gt;&gt;AS: 5. 用户授权
+    AS-&gt;&gt;U: 6. 重定向到 redirect_uri?code=AUTH_CODE&amp;state=random123
+    U-&gt;&gt;C: 7. 回调请求 (携带code)
+
+    Note over C: 8. 验证state防止CSRF
+    C-&gt;&gt;AS: 9. POST /token&lt;br&gt;grant_type=authorization_code&amp;&lt;br&gt;code=AUTH_CODE&amp;&lt;br&gt;client_id=xxx&amp;&lt;br&gt;client_secret=xxx
+    AS-&gt;&gt;C: 10. 返回 access_token + refresh_token
+
+    C-&gt;&gt;RS: 11. GET /api/user&lt;br&gt;Authorization: Bearer access_token
+    RS-&gt;&gt;C: 12. 返回用户资源</pre>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-comment"># Flask OAuth2 Authorization Code实现</span><br><span class="hljs-keyword">from</span> flask <span class="hljs-keyword">import</span> Flask, redirect, request, session<br><span class="hljs-keyword">import</span> requests<br><span class="hljs-keyword">import</span> secrets<br><br>app = Flask(__name__)<br><br>OAUTH_CONFIG = &#123;<br>    <span class="hljs-string">&quot;client_id&quot;</span>: <span class="hljs-string">&quot;your_client_id&quot;</span>,<br>    <span class="hljs-string">&quot;client_secret&quot;</span>: <span class="hljs-string">&quot;your_client_secret&quot;</span>,<br>    <span class="hljs-string">&quot;authorize_url&quot;</span>: <span class="hljs-string">&quot;https://accounts.google.com/o/oauth2/v2/auth&quot;</span>,<br>    <span class="hljs-string">&quot;token_url&quot;</span>: <span class="hljs-string">&quot;https://oauth2.googleapis.com/token&quot;</span>,<br>    <span class="hljs-string">&quot;redirect_uri&quot;</span>: <span class="hljs-string">&quot;https://yourapp.com/callback&quot;</span>,<br>    <span class="hljs-string">&quot;scope&quot;</span>: <span class="hljs-string">&quot;openid email profile&quot;</span>,<br>&#125;<br><br><span class="hljs-meta">@app.route(<span class="hljs-params"><span class="hljs-string">&quot;/login&quot;</span></span>)</span><br><span class="hljs-keyword">def</span> <span class="hljs-title function_">login</span>():<br>    state = secrets.token_urlsafe(<span class="hljs-number">32</span>)<br>    session[<span class="hljs-string">&quot;oauth_state&quot;</span>] = state<br><br>    params = &#123;<br>        <span class="hljs-string">&quot;response_type&quot;</span>: <span class="hljs-string">&quot;code&quot;</span>,<br>        <span class="hljs-string">&quot;client_id&quot;</span>: OAUTH_CONFIG[<span class="hljs-string">&quot;client_id&quot;</span>],<br>        <span class="hljs-string">&quot;redirect_uri&quot;</span>: OAUTH_CONFIG[<span class="hljs-string">&quot;redirect_uri&quot;</span>],<br>        <span class="hljs-string">&quot;scope&quot;</span>: OAUTH_CONFIG[<span class="hljs-string">&quot;scope&quot;</span>],<br>        <span class="hljs-string">&quot;state&quot;</span>: state,<br>        <span class="hljs-string">&quot;access_type&quot;</span>: <span class="hljs-string">&quot;offline&quot;</span>,  <span class="hljs-comment"># 获取refresh_token</span><br>        <span class="hljs-string">&quot;prompt&quot;</span>: <span class="hljs-string">&quot;consent&quot;</span>,<br>    &#125;<br>    auth_url = <span class="hljs-string">f&quot;<span class="hljs-subst">&#123;OAUTH_CONFIG[<span class="hljs-string">&#x27;authorize_url&#x27;</span>]&#125;</span>?<span class="hljs-subst">&#123;urlencode(params)&#125;</span>&quot;</span><br>    <span class="hljs-keyword">return</span> redirect(auth_url)<br><br><span class="hljs-meta">@app.route(<span class="hljs-params"><span class="hljs-string">&quot;/callback&quot;</span></span>)</span><br><span class="hljs-keyword">def</span> <span class="hljs-title function_">callback</span>():<br>    <span class="hljs-comment"># 验证state防止CSRF</span><br>    <span class="hljs-keyword">if</span> request.args.get(<span class="hljs-string">&quot;state&quot;</span>) != session.pop(<span class="hljs-string">&quot;oauth_state&quot;</span>, <span class="hljs-literal">None</span>):<br>        <span class="hljs-keyword">return</span> <span class="hljs-string">&quot;Invalid state&quot;</span>, <span class="hljs-number">403</span><br><br>    code = request.args.get(<span class="hljs-string">&quot;code&quot;</span>)<br>    <span class="hljs-keyword">if</span> <span class="hljs-keyword">not</span> code:<br>        <span class="hljs-keyword">return</span> <span class="hljs-string">&quot;Missing authorization code&quot;</span>, <span class="hljs-number">400</span><br><br>    <span class="hljs-comment"># 用code换取token</span><br>    token_response = requests.post(OAUTH_CONFIG[<span class="hljs-string">&quot;token_url&quot;</span>], data=&#123;<br>        <span class="hljs-string">&quot;grant_type&quot;</span>: <span class="hljs-string">&quot;authorization_code&quot;</span>,<br>        <span class="hljs-string">&quot;code&quot;</span>: code,<br>        <span class="hljs-string">&quot;client_id&quot;</span>: OAUTH_CONFIG[<span class="hljs-string">&quot;client_id&quot;</span>],<br>        <span class="hljs-string">&quot;client_secret&quot;</span>: OAUTH_CONFIG[<span class="hljs-string">&quot;client_secret&quot;</span>],<br>        <span class="hljs-string">&quot;redirect_uri&quot;</span>: OAUTH_CONFIG[<span class="hljs-string">&quot;redirect_uri&quot;</span>],<br>    &#125;)<br>    tokens = token_response.json()<br><br>    access_token = tokens[<span class="hljs-string">&quot;access_token&quot;</span>]<br>    refresh_token = tokens.get(<span class="hljs-string">&quot;refresh_token&quot;</span>)<br><br>    <span class="hljs-comment"># 使用access_token获取用户信息</span><br>    user_info = requests.get(<br>        <span class="hljs-string">&quot;https://www.googleapis.com/oauth2/v3/userinfo&quot;</span>,<br>        headers=&#123;<span class="hljs-string">&quot;Authorization&quot;</span>: <span class="hljs-string">f&quot;Bearer <span class="hljs-subst">&#123;access_token&#125;</span>&quot;</span>&#125;<br>    ).json()<br><br>    <span class="hljs-keyword">return</span> <span class="hljs-string">f&quot;Welcome, <span class="hljs-subst">&#123;user_info[<span class="hljs-string">&#x27;name&#x27;</span>]&#125;</span>!&quot;</span><br></code></pre></td></tr></table></figure>
+<h2 id="authorization-code-with-pkce">Authorization Code with PKCE</h2>
+<p>PKCE（Proof Key for Code
+Exchange）是为公开客户端（SPA、移动端）设计的增强安全机制，不需要client_secret。</p>
+<pre class="mermaid">sequenceDiagram
+    participant U as User
+    participant SPA as SPA/Mobile App
+    participant AS as Auth Server
+
+    Note over SPA: 生成 code_verifier (随机字符串)&lt;br&gt;计算 code_challenge = SHA256(code_verifier)
+
+    SPA-&gt;&gt;AS: GET /authorize?&lt;br&gt;response_type=code&amp;&lt;br&gt;code_challenge=xxx&amp;&lt;br&gt;code_challenge_method=S256
+
+    AS-&gt;&gt;U: 登录授权页面
+    U-&gt;&gt;AS: 授权
+    AS-&gt;&gt;SPA: redirect_uri?code=AUTH_CODE
+
+    SPA-&gt;&gt;AS: POST /token&lt;br&gt;grant_type=authorization_code&amp;&lt;br&gt;code=AUTH_CODE&amp;&lt;br&gt;code_verifier=原始随机字符串
+
+    Note over AS: 验证 SHA256(code_verifier) == 之前的code_challenge
+
+    AS-&gt;&gt;SPA: access_token + refresh_token</pre>
+<figure class="highlight typescript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br></pre></td><td class="code"><pre><code class="hljs typescript"><span class="hljs-comment">// PKCE实现（TypeScript）</span><br><span class="hljs-keyword">import</span> crypto <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;crypto&#x27;</span>;<br><br><span class="hljs-keyword">class</span> <span class="hljs-title class_">PKCEAuthFlow</span> &#123;<br>  <span class="hljs-comment">// 1. 生成code_verifier（43-128个字符）</span><br>  <span class="hljs-title function_">generateCodeVerifier</span>(): <span class="hljs-built_in">string</span> &#123;<br>    <span class="hljs-keyword">return</span> crypto.<span class="hljs-title function_">randomBytes</span>(<span class="hljs-number">32</span>)<br>      .<span class="hljs-title function_">toString</span>(<span class="hljs-string">&#x27;base64url&#x27;</span>);<br>  &#125;<br><br>  <span class="hljs-comment">// 2. 计算code_challenge</span><br>  <span class="hljs-title function_">generateCodeChallenge</span>(<span class="hljs-attr">verifier</span>: <span class="hljs-built_in">string</span>): <span class="hljs-built_in">string</span> &#123;<br>    <span class="hljs-keyword">return</span> crypto.<span class="hljs-title function_">createHash</span>(<span class="hljs-string">&#x27;sha256&#x27;</span>)<br>      .<span class="hljs-title function_">update</span>(verifier)<br>      .<span class="hljs-title function_">digest</span>(<span class="hljs-string">&#x27;base64url&#x27;</span>);<br>  &#125;<br><br>  <span class="hljs-comment">// 3. 构造授权URL</span><br>  <span class="hljs-title function_">buildAuthUrl</span>(<span class="hljs-attr">codeChallenge</span>: <span class="hljs-built_in">string</span>): <span class="hljs-built_in">string</span> &#123;<br>    <span class="hljs-keyword">const</span> params = <span class="hljs-keyword">new</span> <span class="hljs-title class_">URLSearchParams</span>(&#123;<br>      <span class="hljs-attr">response_type</span>: <span class="hljs-string">&#x27;code&#x27;</span>,<br>      <span class="hljs-attr">client_id</span>: <span class="hljs-string">&#x27;your_client_id&#x27;</span>,<br>      <span class="hljs-attr">redirect_uri</span>: <span class="hljs-string">&#x27;https://app.example.com/callback&#x27;</span>,<br>      <span class="hljs-attr">scope</span>: <span class="hljs-string">&#x27;openid profile email&#x27;</span>,<br>      <span class="hljs-attr">state</span>: crypto.<span class="hljs-title function_">randomBytes</span>(<span class="hljs-number">16</span>).<span class="hljs-title function_">toString</span>(<span class="hljs-string">&#x27;hex&#x27;</span>),<br>      <span class="hljs-attr">code_challenge</span>: codeChallenge,<br>      <span class="hljs-attr">code_challenge_method</span>: <span class="hljs-string">&#x27;S256&#x27;</span>,<br>    &#125;);<br>    <span class="hljs-keyword">return</span> <span class="hljs-string">`https://auth.example.com/authorize?<span class="hljs-subst">$&#123;params&#125;</span>`</span>;<br>  &#125;<br><br>  <span class="hljs-comment">// 4. 用code换取token（携带code_verifier）</span><br>  <span class="hljs-keyword">async</span> <span class="hljs-title function_">exchangeToken</span>(<span class="hljs-params">code: <span class="hljs-built_in">string</span>, codeVerifier: <span class="hljs-built_in">string</span></span>) &#123;<br>    <span class="hljs-keyword">const</span> response = <span class="hljs-keyword">await</span> <span class="hljs-title function_">fetch</span>(<span class="hljs-string">&#x27;https://auth.example.com/token&#x27;</span>, &#123;<br>      <span class="hljs-attr">method</span>: <span class="hljs-string">&#x27;POST&#x27;</span>,<br>      <span class="hljs-attr">headers</span>: &#123; <span class="hljs-string">&#x27;Content-Type&#x27;</span>: <span class="hljs-string">&#x27;application/x-www-form-urlencoded&#x27;</span> &#125;,<br>      <span class="hljs-attr">body</span>: <span class="hljs-keyword">new</span> <span class="hljs-title class_">URLSearchParams</span>(&#123;<br>        <span class="hljs-attr">grant_type</span>: <span class="hljs-string">&#x27;authorization_code&#x27;</span>,<br>        code,<br>        <span class="hljs-attr">client_id</span>: <span class="hljs-string">&#x27;your_client_id&#x27;</span>,<br>        <span class="hljs-attr">redirect_uri</span>: <span class="hljs-string">&#x27;https://app.example.com/callback&#x27;</span>,<br>        <span class="hljs-attr">code_verifier</span>: codeVerifier,  <span class="hljs-comment">// 关键：发送原始verifier</span><br>      &#125;),<br>    &#125;);<br>    <span class="hljs-keyword">return</span> response.<span class="hljs-title function_">json</span>();<br>  &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="client-credentials-flow">Client Credentials Flow</h2>
+<p>适用于服务间通信（M2M），没有用户参与。</p>
+<pre class="mermaid">sequenceDiagram
+    participant S as Service A
+    participant AS as Auth Server
+    participant RS as Service B (Resource)
+
+    S-&gt;&gt;AS: POST /token&lt;br&gt;grant_type=client_credentials&amp;&lt;br&gt;client_id=xxx&amp;&lt;br&gt;client_secret=xxx&amp;&lt;br&gt;scope=api:read
+
+    AS-&gt;&gt;S: access_token (短生命周期)
+
+    S-&gt;&gt;RS: GET /api/data&lt;br&gt;Authorization: Bearer access_token
+    RS-&gt;&gt;RS: 验证token
+    RS-&gt;&gt;S: 返回数据</pre>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-comment">// Go Client Credentials实现</span><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">getM2MToken</span><span class="hljs-params">(clientID, clientSecret, tokenURL <span class="hljs-type">string</span>)</span></span> (<span class="hljs-type">string</span>, <span class="hljs-type">error</span>) &#123;<br>    data := url.Values&#123;<br>        <span class="hljs-string">&quot;grant_type&quot;</span>:    &#123;<span class="hljs-string">&quot;client_credentials&quot;</span>&#125;,<br>        <span class="hljs-string">&quot;client_id&quot;</span>:     &#123;clientID&#125;,<br>        <span class="hljs-string">&quot;client_secret&quot;</span>: &#123;clientSecret&#125;,<br>        <span class="hljs-string">&quot;scope&quot;</span>:         &#123;<span class="hljs-string">&quot;api:read api:write&quot;</span>&#125;,<br>    &#125;<br><br>    resp, err := http.PostForm(tokenURL, data)<br>    <span class="hljs-keyword">if</span> err != <span class="hljs-literal">nil</span> &#123;<br>        <span class="hljs-keyword">return</span> <span class="hljs-string">&quot;&quot;</span>, fmt.Errorf(<span class="hljs-string">&quot;token request failed: %w&quot;</span>, err)<br>    &#125;<br>    <span class="hljs-keyword">defer</span> resp.Body.Close()<br><br>    <span class="hljs-keyword">var</span> result <span class="hljs-keyword">struct</span> &#123;<br>        AccessToken <span class="hljs-type">string</span> <span class="hljs-string">`json:&quot;access_token&quot;`</span><br>        ExpiresIn   <span class="hljs-type">int</span>    <span class="hljs-string">`json:&quot;expires_in&quot;`</span><br>        TokenType   <span class="hljs-type">string</span> <span class="hljs-string">`json:&quot;token_type&quot;`</span><br>    &#125;<br><br>    <span class="hljs-keyword">if</span> err := json.NewDecoder(resp.Body).Decode(&amp;result); err != <span class="hljs-literal">nil</span> &#123;<br>        <span class="hljs-keyword">return</span> <span class="hljs-string">&quot;&quot;</span>, fmt.Errorf(<span class="hljs-string">&quot;decode response failed: %w&quot;</span>, err)<br>    &#125;<br><br>    <span class="hljs-keyword">return</span> result.AccessToken, <span class="hljs-literal">nil</span><br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="device-authorization-flow">Device Authorization Flow</h2>
+<p>适用于输入受限的设备（智能电视、IoT设备、CLI工具）。</p>
+<pre class="mermaid">sequenceDiagram
+    participant D as Device (Smart TV)
+    participant U as User (Phone/PC)
+    participant AS as Auth Server
+
+    D-&gt;&gt;AS: POST /device/code&lt;br&gt;client_id=xxx&amp;scope=openid
+
+    AS-&gt;&gt;D: device_code + user_code + verification_uri
+
+    Note over D: 显示: 请访问 https://auth.example.com/device&lt;br&gt;输入代码: WDJB-MJHT
+
+    D-&gt;&gt;AS: 轮询 POST /token&lt;br&gt;grant_type=urn:ietf:params:oauth:grant-type:device_code&amp;&lt;br&gt;device_code=xxx
+
+    U-&gt;&gt;AS: 访问验证URI，输入user_code
+    U-&gt;&gt;AS: 登录并授权
+
+    AS-&gt;&gt;D: access_token + refresh_token (轮询成功)
+    Note over D: 设备登录完成</pre>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-comment"># Device Flow实现</span><br><span class="hljs-keyword">import</span> time<br><span class="hljs-keyword">import</span> requests<br><br><span class="hljs-keyword">def</span> <span class="hljs-title function_">device_auth_flow</span>(<span class="hljs-params">client_id, auth_server</span>):<br>    <span class="hljs-comment"># 1. 获取设备码</span><br>    resp = requests.post(<span class="hljs-string">f&quot;<span class="hljs-subst">&#123;auth_server&#125;</span>/device/code&quot;</span>, data=&#123;<br>        <span class="hljs-string">&quot;client_id&quot;</span>: client_id,<br>        <span class="hljs-string">&quot;scope&quot;</span>: <span class="hljs-string">&quot;openid profile&quot;</span><br>    &#125;)<br>    device_data = resp.json()<br><br>    <span class="hljs-built_in">print</span>(<span class="hljs-string">f&quot;请访问: <span class="hljs-subst">&#123;device_data[<span class="hljs-string">&#x27;verification_uri_complete&#x27;</span>]&#125;</span>&quot;</span>)<br>    <span class="hljs-built_in">print</span>(<span class="hljs-string">f&quot;或访问 <span class="hljs-subst">&#123;device_data[<span class="hljs-string">&#x27;verification_uri&#x27;</span>]&#125;</span> 输入代码: <span class="hljs-subst">&#123;device_data[<span class="hljs-string">&#x27;user_code&#x27;</span>]&#125;</span>&quot;</span>)<br><br>    <span class="hljs-comment"># 2. 轮询等待用户授权</span><br>    interval = device_data.get(<span class="hljs-string">&quot;interval&quot;</span>, <span class="hljs-number">5</span>)<br>    device_code = device_data[<span class="hljs-string">&quot;device_code&quot;</span>]<br><br>    <span class="hljs-keyword">while</span> <span class="hljs-literal">True</span>:<br>        time.sleep(interval)<br><br>        token_resp = requests.post(<span class="hljs-string">f&quot;<span class="hljs-subst">&#123;auth_server&#125;</span>/token&quot;</span>, data=&#123;<br>            <span class="hljs-string">&quot;grant_type&quot;</span>: <span class="hljs-string">&quot;urn:ietf:params:oauth:grant-type:device_code&quot;</span>,<br>            <span class="hljs-string">&quot;device_code&quot;</span>: device_code,<br>            <span class="hljs-string">&quot;client_id&quot;</span>: client_id,<br>        &#125;)<br><br>        result = token_resp.json()<br><br>        <span class="hljs-keyword">if</span> <span class="hljs-string">&quot;access_token&quot;</span> <span class="hljs-keyword">in</span> result:<br>            <span class="hljs-keyword">return</span> result<br>        <span class="hljs-keyword">elif</span> result.get(<span class="hljs-string">&quot;error&quot;</span>) == <span class="hljs-string">&quot;authorization_pending&quot;</span>:<br>            <span class="hljs-keyword">continue</span><br>        <span class="hljs-keyword">elif</span> result.get(<span class="hljs-string">&quot;error&quot;</span>) == <span class="hljs-string">&quot;slow_down&quot;</span>:<br>            interval += <span class="hljs-number">5</span><br>        <span class="hljs-keyword">elif</span> result.get(<span class="hljs-string">&quot;error&quot;</span>) == <span class="hljs-string">&quot;expired_token&quot;</span>:<br>            <span class="hljs-keyword">raise</span> Exception(<span class="hljs-string">&quot;Device code expired&quot;</span>)<br>        <span class="hljs-keyword">else</span>:<br>            <span class="hljs-keyword">raise</span> Exception(<span class="hljs-string">f&quot;Error: <span class="hljs-subst">&#123;result.get(<span class="hljs-string">&#x27;error&#x27;</span>)&#125;</span>&quot;</span>)<br></code></pre></td></tr></table></figure>
+<h2 id="openid-connectoidc">OpenID Connect（OIDC）</h2>
+<p>OIDC在OAuth 2.0之上添加身份认证层。OAuth
+2.0只负责授权（authorization），OIDC增加了认证（authentication）。</p>
+<pre class="mermaid">graph TB
+    subgraph "OAuth 2.0"
+        AUTH[Authorization&lt;br&gt;授权]
+        AT[Access Token&lt;br&gt;访问令牌]
+    end
+
+    subgraph "OIDC (基于OAuth 2.0)"
+        AUTHN[Authentication&lt;br&gt;认证]
+        IDT[ID Token (JWT)&lt;br&gt;身份令牌]
+        UI[UserInfo Endpoint&lt;br&gt;用户信息端点]
+        DISC[Discovery&lt;br&gt;/.well-known/openid-configuration]
+    end
+
+    AUTH --&gt; AUTHN
+    AT --&gt; IDT
+    AT --&gt; UI
+
+    style OIDC fill:#e8f5e9</pre>
+<h3 id="id-tokenjwt">ID Token（JWT）</h3>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><code class="hljs json"><span class="hljs-comment">// ID Token解码后的内容</span><br><span class="hljs-punctuation">&#123;</span><br>  <span class="hljs-comment">// Header</span><br>  <span class="hljs-attr">&quot;alg&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;RS256&quot;</span><span class="hljs-punctuation">,</span><br>  <span class="hljs-attr">&quot;kid&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;1234567890&quot;</span><span class="hljs-punctuation">,</span><br>  <span class="hljs-attr">&quot;typ&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;JWT&quot;</span><br><span class="hljs-punctuation">&#125;</span><br>.<br><span class="hljs-punctuation">&#123;</span><br>  <span class="hljs-comment">// Payload</span><br>  <span class="hljs-attr">&quot;iss&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;https://accounts.google.com&quot;</span><span class="hljs-punctuation">,</span>        <span class="hljs-comment">// 签发者</span><br>  <span class="hljs-attr">&quot;sub&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;110169484474386276334&quot;</span><span class="hljs-punctuation">,</span>               <span class="hljs-comment">// 用户唯一标识</span><br>  <span class="hljs-attr">&quot;aud&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;your_client_id&quot;</span><span class="hljs-punctuation">,</span>                      <span class="hljs-comment">// 接收者（Client ID）</span><br>  <span class="hljs-attr">&quot;exp&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-number">1723456789</span><span class="hljs-punctuation">,</span>                            <span class="hljs-comment">// 过期时间</span><br>  <span class="hljs-attr">&quot;iat&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-number">1723453189</span><span class="hljs-punctuation">,</span>                            <span class="hljs-comment">// 签发时间</span><br>  <span class="hljs-attr">&quot;nonce&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;abc123&quot;</span><span class="hljs-punctuation">,</span>                            <span class="hljs-comment">// 防重放</span><br>  <span class="hljs-attr">&quot;at_hash&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;HK6E_P6Dh8Y93mRNtsDB1Q&quot;</span><span class="hljs-punctuation">,</span>        <span class="hljs-comment">// access_token哈希</span><br>  <span class="hljs-attr">&quot;email&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;user@gmail.com&quot;</span><span class="hljs-punctuation">,</span><br>  <span class="hljs-attr">&quot;email_verified&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-literal"><span class="hljs-keyword">true</span></span><span class="hljs-punctuation">,</span><br>  <span class="hljs-attr">&quot;name&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;John Doe&quot;</span><span class="hljs-punctuation">,</span><br>  <span class="hljs-attr">&quot;picture&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;https://example.com/photo.jpg&quot;</span><br><span class="hljs-punctuation">&#125;</span><br>.<br><span class="hljs-punctuation">&#123;</span>signature<span class="hljs-punctuation">&#125;</span><br></code></pre></td></tr></table></figure>
+<h3 id="id-token验证">ID Token验证</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-comment"># ID Token验证流程</span><br><span class="hljs-keyword">from</span> jose <span class="hljs-keyword">import</span> jwt, JWTError<br><span class="hljs-keyword">import</span> requests<br><br><span class="hljs-keyword">class</span> <span class="hljs-title class_">IDTokenVerifier</span>:<br>    <span class="hljs-keyword">def</span> <span class="hljs-title function_">__init__</span>(<span class="hljs-params">self, issuer, client_id</span>):<br>        self.issuer = issuer<br>        self.client_id = client_id<br>        self.jwks = self._fetch_jwks()<br><br>    <span class="hljs-keyword">def</span> <span class="hljs-title function_">_fetch_jwks</span>(<span class="hljs-params">self</span>):<br>        <span class="hljs-string">&quot;&quot;&quot;从OIDC Discovery获取签名公钥&quot;&quot;&quot;</span><br>        config_url = <span class="hljs-string">f&quot;<span class="hljs-subst">&#123;self.issuer&#125;</span>/.well-known/openid-configuration&quot;</span><br>        config = requests.get(config_url).json()<br>        jwks_uri = config[<span class="hljs-string">&quot;jwks_uri&quot;</span>]<br>        <span class="hljs-keyword">return</span> requests.get(jwks_uri).json()<br><br>    <span class="hljs-keyword">def</span> <span class="hljs-title function_">verify</span>(<span class="hljs-params">self, id_token, nonce=<span class="hljs-literal">None</span></span>):<br>        <span class="hljs-string">&quot;&quot;&quot;验证ID Token&quot;&quot;&quot;</span><br>        <span class="hljs-keyword">try</span>:<br>            payload = jwt.decode(<br>                id_token,<br>                self.jwks,<br>                algorithms=[<span class="hljs-string">&quot;RS256&quot;</span>],<br>                audience=self.client_id,<br>                issuer=self.issuer,<br>            )<br><br>            <span class="hljs-comment"># 验证nonce（防止重放攻击）</span><br>            <span class="hljs-keyword">if</span> nonce <span class="hljs-keyword">and</span> payload.get(<span class="hljs-string">&quot;nonce&quot;</span>) != nonce:<br>                <span class="hljs-keyword">raise</span> ValueError(<span class="hljs-string">&quot;Invalid nonce&quot;</span>)<br><br>            <span class="hljs-keyword">return</span> payload<br><br>        <span class="hljs-keyword">except</span> JWTError <span class="hljs-keyword">as</span> e:<br>            <span class="hljs-keyword">raise</span> ValueError(<span class="hljs-string">f&quot;Invalid ID token: <span class="hljs-subst">&#123;e&#125;</span>&quot;</span>)<br></code></pre></td></tr></table></figure>
+<h3 id="userinfo-endpoint">UserInfo Endpoint</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 获取用户信息</span><br>curl -H <span class="hljs-string">&quot;Authorization: Bearer ACCESS_TOKEN&quot;</span> \<br>     https://openidconnect.googleapis.com/v1/userinfo<br><br><span class="hljs-comment"># 响应</span><br>&#123;<br>  <span class="hljs-string">&quot;sub&quot;</span>: <span class="hljs-string">&quot;110169484474386276334&quot;</span>,<br>  <span class="hljs-string">&quot;name&quot;</span>: <span class="hljs-string">&quot;John Doe&quot;</span>,<br>  <span class="hljs-string">&quot;given_name&quot;</span>: <span class="hljs-string">&quot;John&quot;</span>,<br>  <span class="hljs-string">&quot;family_name&quot;</span>: <span class="hljs-string">&quot;Doe&quot;</span>,<br>  <span class="hljs-string">&quot;picture&quot;</span>: <span class="hljs-string">&quot;https://example.com/photo.jpg&quot;</span>,<br>  <span class="hljs-string">&quot;email&quot;</span>: <span class="hljs-string">&quot;user@gmail.com&quot;</span>,<br>  <span class="hljs-string">&quot;email_verified&quot;</span>: <span class="hljs-literal">true</span>,<br>  <span class="hljs-string">&quot;locale&quot;</span>: <span class="hljs-string">&quot;en&quot;</span><br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="oidc-discovery">OIDC Discovery</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 标准发现端点</span><br>curl https://accounts.google.com/.well-known/openid-configuration | jq<br><br>&#123;<br>  <span class="hljs-string">&quot;issuer&quot;</span>: <span class="hljs-string">&quot;https://accounts.google.com&quot;</span>,<br>  <span class="hljs-string">&quot;authorization_endpoint&quot;</span>: <span class="hljs-string">&quot;https://accounts.google.com/o/oauth2/v2/auth&quot;</span>,<br>  <span class="hljs-string">&quot;token_endpoint&quot;</span>: <span class="hljs-string">&quot;https://oauth2.googleapis.com/token&quot;</span>,<br>  <span class="hljs-string">&quot;userinfo_endpoint&quot;</span>: <span class="hljs-string">&quot;https://openidconnect.googleapis.com/v1/userinfo&quot;</span>,<br>  <span class="hljs-string">&quot;revocation_endpoint&quot;</span>: <span class="hljs-string">&quot;https://oauth2.googleapis.com/revoke&quot;</span>,<br>  <span class="hljs-string">&quot;jwks_uri&quot;</span>: <span class="hljs-string">&quot;https://www.googleapis.com/oauth2/v3/certs&quot;</span>,<br>  <span class="hljs-string">&quot;response_types_supported&quot;</span>: [<span class="hljs-string">&quot;code&quot;</span>, <span class="hljs-string">&quot;token&quot;</span>, <span class="hljs-string">&quot;id_token&quot;</span>, ...],<br>  <span class="hljs-string">&quot;scopes_supported&quot;</span>: [<span class="hljs-string">&quot;openid&quot;</span>, <span class="hljs-string">&quot;email&quot;</span>, <span class="hljs-string">&quot;profile&quot;</span>],<br>  <span class="hljs-string">&quot;id_token_signing_alg_values_supported&quot;</span>: [<span class="hljs-string">&quot;RS256&quot;</span>]<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="token-introspection">Token Introspection</h2>
+<p>用于验证token是否有效（RFC 7662），常用于资源服务器。</p>
+<pre class="mermaid">sequenceDiagram
+    participant C as Client
+    participant RS as Resource Server
+    participant AS as Auth Server
+
+    C-&gt;&gt;RS: GET /api/resource&lt;br&gt;Authorization: Bearer TOKEN
+
+    RS-&gt;&gt;AS: POST /introspect&lt;br&gt;token=TOKEN&amp;&lt;br&gt;token_type_hint=access_token
+
+    AS-&gt;&gt;RS: {active: true, sub: "user123", scope: "read write", exp: 1723456789}
+
+    alt token有效
+        RS-&gt;&gt;C: 200 OK + Resource
+    else token无效
+        RS-&gt;&gt;C: 401 Unauthorized
+    end</pre>
+<h2 id="最佳实践">最佳实践</h2>
+<h3 id="流程选择指南">流程选择指南</h3>
+<pre class="mermaid">flowchart TB
+    START[选择OAuth流程] --&gt; Q1{有用户参与?}
+    Q1 --&gt;|否| CC[Client Credentials]
+    Q1 --&gt;|是| Q2{客户端类型?}
+    Q2 --&gt;|Web后端| AC[Authorization Code]
+    Q2 --&gt;|SPA/Mobile| PKCE[Authorization Code + PKCE]
+    Q2 --&gt;|输入受限设备| DEVICE[Device Authorization]
+
+    CC --&gt; NOTE_CC[M2M通信&lt;br&gt;微服务间调用]
+    AC --&gt; NOTE_AC[最安全&lt;br&gt;可存储client_secret]
+    PKCE --&gt; NOTE_PKCE[不需要client_secret&lt;br&gt;防止授权码拦截]
+    DEVICE --&gt; NOTE_DEVICE[智能TV/CLI&lt;br&gt;用户在其他设备授权]</pre>
+<h3 id="安全建议">安全建议</h3>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-attr">security_best_practices:</span><br>  <span class="hljs-attr">tokens:</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-string">&quot;Access Token生命周期短 (5-15分钟)&quot;</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-string">&quot;使用Refresh Token轮换 (Rotation)&quot;</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-string">&quot;Refresh Token绑定设备/客户端&quot;</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-string">&quot;Token存储在安全位置 (HttpOnly Cookie / Secure Storage)&quot;</span><br><br>  <span class="hljs-attr">authorization:</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-string">&quot;始终验证state参数防止CSRF&quot;</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-string">&quot;使用PKCE (即使是机密客户端也推荐)&quot;</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-string">&quot;严格的redirect_uri白名单，精确匹配&quot;</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-string">&quot;最小scope原则&quot;</span><br><br>  <span class="hljs-attr">implementation:</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-string">&quot;使用成熟的OAuth库而非自己实现&quot;</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-string">&quot;ID Token必须验证签名、issuer、audience、expiry&quot;</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-string">&quot;不要在URL中传递token (用POST body或Header)&quot;</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-string">&quot;实现token撤销机制&quot;</span><br></code></pre></td></tr></table></figure>
+<h2 id="总结">总结</h2>
+<p>OAuth 2.0和OIDC是现代应用身份认证和授权的基石：</p>
+<ol type="1">
+<li><strong>Authorization Code +
+PKCE</strong>是最推荐的流程，即使是机密客户端也应使用PKCE</li>
+<li><strong>Client Credentials</strong>适用于无用户参与的服务间通信</li>
+<li><strong>OIDC</strong>在OAuth之上提供标准化的身份认证，ID
+Token携带用户身份信息</li>
+<li><strong>Token管理</strong>是安全的关键——短生命周期、安全存储、及时轮换</li>
+<li><strong>永远不要自己实现OAuth</strong>——使用经过审计的成熟库</li>
+</ol>
+<p>正确理解和实现OAuth/OIDC，是构建安全可靠的现代应用的必备技能。</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2025-06-15</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">3.2k 字 · 8 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/web-performance-optimization/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Web性能优化：Core Web Vitals全攻略</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/nodejs-stream-programming/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Node.js Stream编程实战</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#oauth-2.0%E5%9F%BA%E6%9C%AC%E6%A6%82%E5%BF%B5"><span class="toc-text">OAuth 2.0基本概念</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%A7%92%E8%89%B2%E5%AE%9A%E4%B9%89"><span class="toc-text">角色定义</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#authorization-code-flow%E6%8E%88%E6%9D%83%E7%A0%81%E6%B5%81%E7%A8%8B"><span class="toc-text">Authorization Code
+Flow（授权码流程）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#authorization-code-with-pkce"><span class="toc-text">Authorization Code with PKCE</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#client-credentials-flow"><span class="toc-text">Client Credentials Flow</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#device-authorization-flow"><span class="toc-text">Device Authorization Flow</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#openid-connectoidc"><span class="toc-text">OpenID Connect（OIDC）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#id-tokenjwt"><span class="toc-text">ID Token（JWT）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#id-token%E9%AA%8C%E8%AF%81"><span class="toc-text">ID Token验证</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#userinfo-endpoint"><span class="toc-text">UserInfo Endpoint</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#oidc-discovery"><span class="toc-text">OIDC Discovery</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#token-introspection"><span class="toc-text">Token Introspection</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5"><span class="toc-text">最佳实践</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%B5%81%E7%A8%8B%E9%80%89%E6%8B%A9%E6%8C%87%E5%8D%97"><span class="toc-text">流程选择指南</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%89%E5%85%A8%E5%BB%BA%E8%AE%AE"><span class="toc-text">安全建议</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

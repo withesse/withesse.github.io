@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>JVM 内部机制：我在排查线上问题时真正用到的那些 · zt&#39;s Blog</title>
+  <meta name="description" content="记录从 C# 转 Java 之后系统补 JVM 知识的过程，重点是那些在实际排查 GC 问题、OOM、容器内存异常时真正用上的部分。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/jvm-overview-guide/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="JVM 内部机制：我在排查线上问题时真正用到的那些">
+  <meta property="og:description" content="记录从 C# 转 Java 之后系统补 JVM 知识的过程，重点是那些在实际排查 GC 问题、OOM、容器内存异常时真正用上的部分。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/jvm-overview-guide/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2019-12-16T16:00:00.000Z">
+  <meta property="article:modified_time" content="2019-12-16T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="JVM 内部机制：我在排查线上问题时真正用到的那些">
+  <meta name="twitter:description" content="记录从 C# 转 Java 之后系统补 JVM 知识的过程，重点是那些在实际排查 GC 问题、OOM、容器内存异常时真正用上的部分。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"JVM 内部机制：我在排查线上问题时真正用到的那些","description":"记录从 C# 转 Java 之后系统补 JVM 知识的过程，重点是那些在实际排查 GC 问题、OOM、容器内存异常时真正用上的部分。","datePublished":"2019-12-16T16:00:00.000Z","dateModified":"2019-12-16T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/jvm-overview-guide/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Java","item":"https://withesse.co/categories/Java/"},{"@type":"ListItem","position":2,"name":"JVM","item":"https://withesse.co/categories/Java/JVM/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:25">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Java/">Java</a><span class="catsep">/</span><a class="catlink" href="/categories/Java/JVM/">JVM</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/performance/"><span class="hash">#</span>performance</a><a class="tag" href="/tags/gc/"><span class="hash">#</span>gc</a><a class="tag" href="/tags/jvm/"><span class="hash">#</span>jvm</a><a class="tag" href="/tags/hotspot/"><span class="hash">#</span>hotspot</a>
+        
+      </div>
+
+      <h1>JVM 内部机制：我在排查线上问题时真正用到的那些</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2019.12.17</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          <span class="row gap8" style="align-items:center"><span class="lang-dot" style="background:#E76F00"></span>Java</span>
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 4 min</span>
+        </span>
+        <span class="wc"><span class="num">1.5k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%B1%BB%E5%8A%A0%E8%BD%BD%E4%BB%80%E4%B9%88%E6%97%B6%E5%80%99%E4%BC%9A%E8%A7%A6%E5%8F%91"><span class="toc-text">类加载：什么时候会触发？</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%A0%86%E7%9A%84%E5%88%86%E4%BB%A3%E7%BB%93%E6%9E%84"><span class="toc-text">堆的分代结构</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#gc-%E6%97%A5%E5%BF%97%E6%98%AF%E6%9C%80%E6%9C%89%E6%95%88%E7%9A%84%E6%8E%92%E6%9F%A5%E5%B7%A5%E5%85%B7"><span class="toc-text">GC 日志是最有效的排查工具</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#gc-%E6%94%B6%E9%9B%86%E5%99%A8%E6%80%8E%E4%B9%88%E9%80%89"><span class="toc-text">GC 收集器怎么选</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%A0%86%E5%86%85%E5%AD%98-dump-%E5%88%86%E6%9E%90-oom"><span class="toc-text">堆内存 dump 分析 OOM</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%B8%A9%E5%9D%91%E8%AE%B0%E5%BD%95"><span class="toc-text">踩坑记录</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <p>从 .NET 转到 Java 之后，JVM 是我花时间最多的一块。两者的 CLR 和 JVM
+在大方向上相似——都是托管运行时、有 GC——但实现细节差很多，很多在 C#
+里不需要操心的问题在 Java 里要手动处理。</p>
+<p>这篇文章不是 JVM
+的全面梳理，而是从实际排查线上问题的经历出发，写下那些真正用到的知识点。</p>
+<h2 id="类加载什么时候会触发">类加载：什么时候会触发？</h2>
+<p>刚开始写 Java
+时踩过一个坑：一个类明明存在，但在某些条件下就是加载不到，报
+<code>ClassNotFoundException</code>。后来才搞清楚类加载的双亲委派模型。</p>
+<p>双亲委派的意思是：任何一个类加载请求，先委托给父加载器，父加载器找不到才自己来。Bootstrap
+→ Extension → Application ClassLoader，这个顺序保证了
+<code>java.lang.String</code> 这样的核心类不会被用户代码替换。</p>
+<p>这个机制在多框架共存的应用里会出问题。比如 Tomcat 里多个 Web
+应用各自有自己的类加载器，保证 App A 和 App B
+用的同名类互相隔离。但有时候你希望某个类用自己的版本而不是父加载器里的，这时候就得打破双亲委派（OSGi、SPI
+机制都是这么干的）。</p>
+<p>类的初始化（执行 <code>&lt;clinit&gt;</code>
+静态初始化块）有明确的触发条件：<code>new</code>
+对象、访问静态变量/方法、反射调用、初始化子类时父类未初始化。只有这几种情况，纯粹的”类引用”不会触发。</p>
+<h2 id="堆的分代结构">堆的分代结构</h2>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs plaintext">Heap<br>├── Young Generation（新生代）<br>│   ├── Eden（大部分对象在这里分配）<br>│   └── Survivor S0 / S1（每次 Minor GC 存活的对象在两块间复制）<br>└── Old Generation（老年代，长期存活的对象晋升到这里）<br></code></pre></td></tr></table></figure>
+<p>Young 区占堆的 1/3，Old 区占 2/3（默认值）。Young 区的 GC 叫 Minor
+GC，通常很快（几毫秒到几十毫秒）。Old 区触发的 GC（Major GC / Full
+GC）代价大得多，这也是 JVM 调优重点关注的地方。</p>
+<p>对象从 Eden 分配，经过 Minor GC 存活后进入 Survivor，经过 15
+次（默认）还在，就晋升到 Old Generation。如果 Survivor
+放不下或者大对象超过阈值，也会直接进 Old。</p>
+<h2 id="gc-日志是最有效的排查工具">GC 日志是最有效的排查工具</h2>
+<p>出现 GC 相关问题（停顿、OOM、内存泄漏），第一件事是看 GC 日志。</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># JDK 9+ 的 GC 日志参数</span><br>-Xlog:gc*:file=/var/log/app-gc.log:time,level:filecount=5,filesize=20m<br><br><span class="hljs-comment"># JDK 8 的写法</span><br>-XX:+PrintGCDetails -XX:+PrintGCDateStamps -Xloggc:/var/log/app-gc.log<br></code></pre></td></tr></table></figure>
+<p>有了 GC 日志之后，用 <code>jstat</code> 实时看：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 每 1 秒打印一次 GC 统计</span><br>jstat -gcutil &lt;pid&gt; 1000<br><br><span class="hljs-comment"># 输出类似：</span><br>S0     S1     E      O      M     CCS    YGC  YGCT  FGC  FGCT   GCT<br>0.00  18.32  72.41  85.30  95.81  93.42  892   6.82   3   0.52  7.34<br></code></pre></td></tr></table></figure>
+<p>O（Old 使用率）持续上涨是内存泄漏的信号。FGC（Full GC
+次数）频繁意味着 Old 区压力大。这两个数字一般就能判断问题的大方向。</p>
+<p>GC 日志上传到 <a target="_blank" rel="noopener external nofollow noreferrer" href="https://gceasy.io/">GCEasy</a>
+可以可视化分析，比肉眼读日志快很多。</p>
+<h2 id="gc-收集器怎么选">GC 收集器怎么选</h2>
+<p>Java 8 默认是 Parallel
+GC（吞吐量优先），但停顿时间不可控，生产环境推荐切到 G1：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><code class="hljs bash">-XX:+UseG1GC<br>-XX:MaxGCPauseMillis=200   <span class="hljs-comment"># 目标停顿时间，G1 会尽量满足</span><br>-Xms4g -Xmx4g              <span class="hljs-comment"># 堆大小建议最小=最大，避免动态扩容带来的停顿</span><br></code></pre></td></tr></table></figure>
+<p>JDK 11+ 可以用
+ZGC，停顿时间可以压到个位数毫秒，适合延迟敏感的服务。</p>
+<p>我现在的选择标准很简单：JDK 8 就上 G1，JDK 11/17 接口延迟要求高就试
+ZGC，不复杂。</p>
+<h2 id="堆内存-dump-分析-oom">堆内存 dump 分析 OOM</h2>
+<p>遇到 <code>OutOfMemoryError</code>，配置在 OOM 时自动导出堆快照：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><code class="hljs bash">-XX:+HeapDumpOnOutOfMemoryError<br>-XX:HeapDumpPath=/var/dump/heap.hprof<br></code></pre></td></tr></table></figure>
+<p>dump 文件用 Eclipse MAT 或者 JVisualVM 打开，看”Leak Suspects
+Report”基本能直接告诉你哪个对象占了最多内存、被谁引用导致无法回收。</p>
+<h2 id="踩坑记录">踩坑记录</h2>
+<p><strong>坑 1：新服务上线后 Full GC 频繁，每次停顿 4-5 秒</strong></p>
+<p><code>jstat</code> 看 Old 区使用率缓慢但持续上涨，最终在 90% 触发
+Full GC。用 <code>jmap -dump</code> 导出堆快照，MAT 分析发现一个静态
+<code>HashMap</code>
+存了大量对象，而且没有清理机制，所有进过这个服务的请求上下文对象都在里面。</p>
+<p>根本原因是早期的一个”请求日志”功能把对象放进了这个
+Map，写的时候没想到生命周期问题。改用 Caffeine
+加了过期时间，问题解决。</p>
+<p><strong>坑 2：容器里 JVM 把宿主机内存当自己的</strong></p>
+<p>这个坑坑了不少人。JDK 8u191 之前，JVM 不识别 cgroup
+内存限制，会读取宿主机的物理内存大小（比如 64GB），然后按 1/4
+设置默认堆（16GB），远超容器限制（比如 2GB），直接被 OOM Killer
+干掉。</p>
+<p>进容器一看日志，发现 JVM 正常启动，但隔一会儿进程就消失了，没有任何
+Java 异常。在宿主机上 <code>dmesg | grep -i kill</code> 才看到 OOM
+Killed。</p>
+<p>修复方法：JDK 8u191+ 加 <code>-XX:+UseContainerSupport</code>（JDK
+10+ 默认开启），或者直接显式指定 <code>-Xmx1500m</code>（容器 2GB
+内存，留 500MB 给 JVM 非堆用）。</p>
+<p><strong>坑 3：Metaspace 无限增长</strong></p>
+<p>服务跑一段时间报 <code>OutOfMemoryError: Metaspace</code>。用
+<code>-XX:+TraceClassLoading</code>
+看日志，发现类加载数量持续增长，最终确认是某个框架功能在运行时动态生成代理类，每次请求都创建新的
+ClassLoader，旧的因为被某个地方持有引用而无法被 GC 掉。</p>
+<p>临时加 <code>-XX:MaxMetaspaceSize=512m</code> 让 OOM
+更快暴露而不是无限等待，然后修复了代理对象的生命周期管理。</p>
+<hr />
+<p>JVM
+调优没有固定公式，但有一个基本原则：<strong>先观察再调整</strong>，没有监控数据就动参数，改了也不知道为什么有效。GC
+日志 + <code>jstat</code> + 堆快照，这三样工具覆盖了 90% 的 JVM
+问题。</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2019-12-17</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">1.5k 字 · 4 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/hotspot-glossary-of-terms/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">HotSpot术语表（待整理）</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/java-concurrency-in-depth/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Java并发编程深入解析：从synchronized到Lock</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%B1%BB%E5%8A%A0%E8%BD%BD%E4%BB%80%E4%B9%88%E6%97%B6%E5%80%99%E4%BC%9A%E8%A7%A6%E5%8F%91"><span class="toc-text">类加载：什么时候会触发？</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%A0%86%E7%9A%84%E5%88%86%E4%BB%A3%E7%BB%93%E6%9E%84"><span class="toc-text">堆的分代结构</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#gc-%E6%97%A5%E5%BF%97%E6%98%AF%E6%9C%80%E6%9C%89%E6%95%88%E7%9A%84%E6%8E%92%E6%9F%A5%E5%B7%A5%E5%85%B7"><span class="toc-text">GC 日志是最有效的排查工具</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#gc-%E6%94%B6%E9%9B%86%E5%99%A8%E6%80%8E%E4%B9%88%E9%80%89"><span class="toc-text">GC 收集器怎么选</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%A0%86%E5%86%85%E5%AD%98-dump-%E5%88%86%E6%9E%90-oom"><span class="toc-text">堆内存 dump 分析 OOM</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%B8%A9%E5%9D%91%E8%AE%B0%E5%BD%95"><span class="toc-text">踩坑记录</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

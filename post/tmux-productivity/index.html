@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tmux高效终端管理 · zt&#39;s Blog</title>
+  <meta name="description" content="全面介绍Tmux终端复用器，涵盖会话/窗口/面板管理、自定义配置、插件系统、tmux-resurrect持久化和高效工作流技巧。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/tmux-productivity/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Tmux高效终端管理">
+  <meta property="og:description" content="全面介绍Tmux终端复用器，涵盖会话/窗口/面板管理、自定义配置、插件系统、tmux-resurrect持久化和高效工作流技巧。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/tmux-productivity/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2025-11-04T16:00:00.000Z">
+  <meta property="article:modified_time" content="2025-11-04T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Tmux高效终端管理">
+  <meta name="twitter:description" content="全面介绍Tmux终端复用器，涵盖会话/窗口/面板管理、自定义配置、插件系统、tmux-resurrect持久化和高效工作流技巧。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Tmux高效终端管理","description":"全面介绍Tmux终端复用器，涵盖会话/窗口/面板管理、自定义配置、插件系统、tmux-resurrect持久化和高效工作流技巧。","datePublished":"2025-11-04T16:00:00.000Z","dateModified":"2025-11-04T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/tmux-productivity/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Productivity","item":"https://withesse.co/categories/Productivity/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:60">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Productivity/">Productivity</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/productivity/"><span class="hash">#</span>productivity</a><a class="tag" href="/tags/tmux/"><span class="hash">#</span>tmux</a><a class="tag" href="/tags/terminal/"><span class="hash">#</span>terminal</a>
+        
+      </div>
+
+      <h1>Tmux高效终端管理</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2025.11.05</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 7 min</span>
+        </span>
+        <span class="wc"><span class="num">2.9k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E6%A6%82%E5%BF%B5"><span class="toc-text">核心概念</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9F%BA%E7%A1%80%E6%93%8D%E4%BD%9C"><span class="toc-text">基础操作</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#session%E7%AE%A1%E7%90%86"><span class="toc-text">Session管理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#window%E7%AE%A1%E7%90%86"><span class="toc-text">Window管理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#pane%E7%AE%A1%E7%90%86"><span class="toc-text">Pane管理</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%87%AA%E5%AE%9A%E4%B9%89%E9%85%8D%E7%BD%AE"><span class="toc-text">自定义配置</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%8F%92%E4%BB%B6%E7%B3%BB%E7%BB%9Ftpm"><span class="toc-text">插件系统（TPM）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#tmux-resurrect%E4%BC%9A%E8%AF%9D%E6%8C%81%E4%B9%85%E5%8C%96"><span class="toc-text">tmux-resurrect会话持久化</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#vim-tmux-navigator"><span class="toc-text">vim-tmux-navigator</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#tmux%E8%84%9A%E6%9C%AC%E5%8C%96"><span class="toc-text">Tmux脚本化</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%A4%8D%E5%88%B6%E6%A8%A1%E5%BC%8F%E5%92%8C%E6%90%9C%E7%B4%A2"><span class="toc-text">复制模式和搜索</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#pair-programming"><span class="toc-text">Pair Programming</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%AB%98%E6%95%88%E5%B7%A5%E4%BD%9C%E6%B5%81%E7%A4%BA%E4%BE%8B"><span class="toc-text">高效工作流示例</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#web%E5%BC%80%E5%8F%91%E5%B7%A5%E4%BD%9C%E6%B5%81"><span class="toc-text">Web开发工作流</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%B8%B8%E7%94%A8%E5%BF%AB%E6%8D%B7%E9%94%AE%E9%80%9F%E6%9F%A5"><span class="toc-text">常用快捷键速查</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="前言">前言</h2>
+<p>Tmux（Terminal
+Multiplexer）是终端复用器，允许在一个终端窗口中运行多个终端会话。它的核心价值在于：会话持久化（SSH断开后任务继续运行）、窗口管理（多面板分屏）和高效的键盘操作。本文将从基础到高级，系统介绍Tmux的使用和配置。</p>
+<h2 id="核心概念">核心概念</h2>
+<pre class="mermaid">graph TB
+    SERVER[Tmux Server] --&gt; S1[Session 1: dev]
+    SERVER --&gt; S2[Session 2: ops]
+
+    S1 --&gt; W1[Window 1: editor]
+    S1 --&gt; W2[Window 2: terminal]
+    S1 --&gt; W3[Window 3: logs]
+
+    W1 --&gt; P1[Pane 1: vim]
+    W1 --&gt; P2[Pane 2: file tree]
+    W2 --&gt; P3[Pane 3: shell]
+    W2 --&gt; P4[Pane 4: shell]
+
+    style SERVER fill:#1976d2,color:#fff
+    style S1 fill:#388e3c,color:#fff
+    style S2 fill:#388e3c,color:#fff
+    style W1 fill:#f57c00,color:#fff</pre>
+<ul>
+<li><strong>Server</strong>：后台进程，管理所有会话</li>
+<li><strong>Session</strong>：一组窗口的集合，代表一个工作环境</li>
+<li><strong>Window</strong>：会话中的标签页，占满整个终端</li>
+<li><strong>Pane</strong>：窗口中的分屏面板</li>
+</ul>
+<h2 id="基础操作">基础操作</h2>
+<p>所有Tmux命令以前缀键（默认<code>Ctrl+b</code>）开始，下文记为<code>&lt;prefix&gt;</code>。</p>
+<h3 id="session管理">Session管理</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 创建会话</span><br>tmux new -s dev              <span class="hljs-comment"># 创建名为dev的会话</span><br>tmux new -s ops -d           <span class="hljs-comment"># 创建但不进入（后台）</span><br><br><span class="hljs-comment"># 列出会话</span><br>tmux <span class="hljs-built_in">ls</span><br><br><span class="hljs-comment"># 连接会话</span><br>tmux attach -t dev           <span class="hljs-comment"># 连接到dev会话</span><br>tmux a -t dev                <span class="hljs-comment"># 简写</span><br><br><span class="hljs-comment"># 在tmux中</span><br><span class="hljs-comment"># &lt;prefix&gt; d    - 分离（detach）当前会话</span><br><span class="hljs-comment"># &lt;prefix&gt; s    - 选择会话列表</span><br><span class="hljs-comment"># &lt;prefix&gt; $    - 重命名当前会话</span><br><span class="hljs-comment"># &lt;prefix&gt; (    - 切换到上一个会话</span><br><span class="hljs-comment"># &lt;prefix&gt; )    - 切换到下一个会话</span><br><br><span class="hljs-comment"># 关闭会话</span><br>tmux kill-session -t dev<br>tmux kill-server              <span class="hljs-comment"># 关闭所有会话</span><br></code></pre></td></tr></table></figure>
+<h3 id="window管理">Window管理</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># &lt;prefix&gt; c    - 创建新窗口</span><br><span class="hljs-comment"># &lt;prefix&gt; ,    - 重命名当前窗口</span><br><span class="hljs-comment"># &lt;prefix&gt; w    - 窗口列表（可预览）</span><br><span class="hljs-comment"># &lt;prefix&gt; n    - 下一个窗口</span><br><span class="hljs-comment"># &lt;prefix&gt; p    - 上一个窗口</span><br><span class="hljs-comment"># &lt;prefix&gt; 0-9  - 切换到指定编号窗口</span><br><span class="hljs-comment"># &lt;prefix&gt; &amp;    - 关闭当前窗口（确认）</span><br><span class="hljs-comment"># &lt;prefix&gt; l    - 切换到上次使用的窗口</span><br></code></pre></td></tr></table></figure>
+<h3 id="pane管理">Pane管理</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 创建面板</span><br><span class="hljs-comment"># &lt;prefix&gt; %    - 水平分割（左右）</span><br><span class="hljs-comment"># &lt;prefix&gt; &quot;    - 垂直分割（上下）</span><br><br><span class="hljs-comment"># 导航</span><br><span class="hljs-comment"># &lt;prefix&gt; 方向键  - 在面板间移动</span><br><span class="hljs-comment"># &lt;prefix&gt; o       - 循环切换面板</span><br><span class="hljs-comment"># &lt;prefix&gt; ;       - 切换到上一个活动面板</span><br><span class="hljs-comment"># &lt;prefix&gt; q       - 显示面板编号，输入数字跳转</span><br><br><span class="hljs-comment"># 调整大小</span><br><span class="hljs-comment"># &lt;prefix&gt; Ctrl+方向键  - 按方向调整大小</span><br><span class="hljs-comment"># &lt;prefix&gt; z            - 面板最大化/还原（zoom）</span><br><br><span class="hljs-comment"># 布局</span><br><span class="hljs-comment"># &lt;prefix&gt; Space        - 循环切换布局</span><br><span class="hljs-comment"># &lt;prefix&gt; Alt+1-5      - 预设布局</span><br><br><span class="hljs-comment"># 交换</span><br><span class="hljs-comment"># &lt;prefix&gt; &#123;    - 与上一个面板交换</span><br><span class="hljs-comment"># &lt;prefix&gt; &#125;    - 与下一个面板交换</span><br><br><span class="hljs-comment"># 关闭</span><br><span class="hljs-comment"># &lt;prefix&gt; x    - 关闭当前面板</span><br></code></pre></td></tr></table></figure>
+<pre class="mermaid">graph TB
+    subgraph "Even-horizontal (Alt+1)"
+        direction LR
+        EH1[P1] --- EH2[P2] --- EH3[P3]
+    end
+
+    subgraph "Even-vertical (Alt+2)"
+        EV1[P1]
+        EV2[P2]
+        EV3[P3]
+    end
+
+    subgraph "Main-horizontal (Alt+3)"
+        MH1[P1 - Main&lt;br&gt;顶部大面板]
+        MH2[P2] --- MH3[P3]
+    end
+
+    subgraph "Tiled (Alt+5)"
+        T1[P1] --- T2[P2]
+        T3[P3] --- T4[P4]
+    end</pre>
+<h2 id="自定义配置">自定义配置</h2>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># ~/.tmux.conf</span><br><br><span class="hljs-comment"># === 基础设置 ===</span><br><span class="hljs-comment"># 修改前缀键为Ctrl+a</span><br><span class="hljs-built_in">set</span> -g prefix C-a<br>unbind C-b<br><span class="hljs-built_in">bind</span> C-a send-prefix<br><br><span class="hljs-comment"># 支持256色和true color</span><br><span class="hljs-built_in">set</span> -g default-terminal <span class="hljs-string">&quot;tmux-256color&quot;</span><br><span class="hljs-built_in">set</span> -ag terminal-overrides <span class="hljs-string">&quot;,xterm-256color:RGB&quot;</span><br><br><span class="hljs-comment"># 开启鼠标支持</span><br><span class="hljs-built_in">set</span> -g mouse on<br><br><span class="hljs-comment"># 历史记录行数</span><br><span class="hljs-built_in">set</span> -g history-limit 50000<br><br><span class="hljs-comment"># 减少ESC延迟（对Vim用户重要）</span><br><span class="hljs-built_in">set</span> -sg escape-time 0<br><br><span class="hljs-comment"># 窗口编号从1开始</span><br><span class="hljs-built_in">set</span> -g base-index 1<br>setw -g pane-base-index 1<br><br><span class="hljs-comment"># 窗口关闭后自动重新编号</span><br><span class="hljs-built_in">set</span> -g renumber-windows on<br><br><span class="hljs-comment"># 焦点事件（对Vim autoread有用）</span><br><span class="hljs-built_in">set</span> -g focus-events on<br><br><span class="hljs-comment"># === 按键绑定 ===</span><br><span class="hljs-comment"># 重载配置</span><br><span class="hljs-built_in">bind</span> r source-file ~/.tmux.conf \; display <span class="hljs-string">&quot;Config reloaded!&quot;</span><br><br><span class="hljs-comment"># 分屏（更直观的按键）</span><br><span class="hljs-built_in">bind</span> | split-window -h -c <span class="hljs-string">&quot;#&#123;pane_current_path&#125;&quot;</span><br><span class="hljs-built_in">bind</span> - split-window -v -c <span class="hljs-string">&quot;#&#123;pane_current_path&#125;&quot;</span><br>unbind <span class="hljs-string">&#x27;&quot;&#x27;</span><br>unbind %<br><br><span class="hljs-comment"># 新窗口保持当前路径</span><br><span class="hljs-built_in">bind</span> c new-window -c <span class="hljs-string">&quot;#&#123;pane_current_path&#125;&quot;</span><br><br><span class="hljs-comment"># Vim风格的面板导航</span><br><span class="hljs-built_in">bind</span> h select-pane -L<br><span class="hljs-built_in">bind</span> j select-pane -D<br><span class="hljs-built_in">bind</span> k select-pane -U<br><span class="hljs-built_in">bind</span> l select-pane -R<br><br><span class="hljs-comment"># 调整面板大小</span><br><span class="hljs-built_in">bind</span> -r H resize-pane -L 5<br><span class="hljs-built_in">bind</span> -r J resize-pane -D 5<br><span class="hljs-built_in">bind</span> -r K resize-pane -U 5<br><span class="hljs-built_in">bind</span> -r L resize-pane -R 5<br><br><span class="hljs-comment"># 快速切换面板最大化</span><br><span class="hljs-built_in">bind</span> -r m resize-pane -Z<br><br><span class="hljs-comment"># Vi模式（复制模式）</span><br>setw -g mode-keys vi<br><span class="hljs-built_in">bind</span> -T copy-mode-vi v send -X begin-selection<br><span class="hljs-built_in">bind</span> -T copy-mode-vi y send -X copy-pipe-and-cancel <span class="hljs-string">&quot;pbcopy&quot;</span><br><span class="hljs-comment"># Linux: 将pbcopy改为xclip -selection clipboard</span><br><br><span class="hljs-comment"># === 状态栏 ===</span><br><span class="hljs-built_in">set</span> -g status-position top<br><span class="hljs-built_in">set</span> -g status-interval 5<br><span class="hljs-built_in">set</span> -g status-style <span class="hljs-string">&quot;bg=#1e1e2e,fg=#cdd6f4&quot;</span><br><br><span class="hljs-comment"># 左侧</span><br><span class="hljs-built_in">set</span> -g status-left-length 50<br><span class="hljs-built_in">set</span> -g status-left <span class="hljs-string">&quot;#[fg=#1e1e2e,bg=#89b4fa,bold] #S #[default] &quot;</span><br><br><span class="hljs-comment"># 右侧</span><br><span class="hljs-built_in">set</span> -g status-right-length 100<br><span class="hljs-built_in">set</span> -g status-right <span class="hljs-string">&quot;#[fg=#a6adc8] %Y-%m-%d %H:%M #[fg=#1e1e2e,bg=#a6e3a1,bold] #H &quot;</span><br><br><span class="hljs-comment"># 窗口标签</span><br>setw -g window-status-format <span class="hljs-string">&quot; #I:#W &quot;</span><br>setw -g window-status-current-format <span class="hljs-string">&quot;#[fg=#1e1e2e,bg=#f9e2af,bold] #I:#W &quot;</span><br><br><span class="hljs-comment"># 面板边框</span><br><span class="hljs-built_in">set</span> -g pane-border-style <span class="hljs-string">&quot;fg=#45475a&quot;</span><br><span class="hljs-built_in">set</span> -g pane-active-border-style <span class="hljs-string">&quot;fg=#89b4fa&quot;</span><br></code></pre></td></tr></table></figure>
+<h2 id="插件系统tpm">插件系统（TPM）</h2>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 安装TPM</span><br>git <span class="hljs-built_in">clone</span> https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm<br></code></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># ~/.tmux.conf 底部添加</span><br><br><span class="hljs-comment"># === 插件 ===</span><br><span class="hljs-built_in">set</span> -g @plugin <span class="hljs-string">&#x27;tmux-plugins/tpm&#x27;</span><br><span class="hljs-built_in">set</span> -g @plugin <span class="hljs-string">&#x27;tmux-plugins/tmux-sensible&#x27;</span>      <span class="hljs-comment"># 合理默认设置</span><br><span class="hljs-built_in">set</span> -g @plugin <span class="hljs-string">&#x27;tmux-plugins/tmux-resurrect&#x27;</span>      <span class="hljs-comment"># 会话持久化</span><br><span class="hljs-built_in">set</span> -g @plugin <span class="hljs-string">&#x27;tmux-plugins/tmux-continuum&#x27;</span>       <span class="hljs-comment"># 自动保存/恢复</span><br><span class="hljs-built_in">set</span> -g @plugin <span class="hljs-string">&#x27;christoomey/vim-tmux-navigator&#x27;</span>    <span class="hljs-comment"># Vim-Tmux无缝导航</span><br><span class="hljs-built_in">set</span> -g @plugin <span class="hljs-string">&#x27;tmux-plugins/tmux-yank&#x27;</span>            <span class="hljs-comment"># 系统剪贴板集成</span><br><span class="hljs-built_in">set</span> -g @plugin <span class="hljs-string">&#x27;catppuccin/tmux&#x27;</span>                    <span class="hljs-comment"># 主题</span><br><br><span class="hljs-comment"># Resurrect设置</span><br><span class="hljs-built_in">set</span> -g @resurrect-capture-pane-contents <span class="hljs-string">&#x27;on&#x27;</span><br><span class="hljs-built_in">set</span> -g @resurrect-strategy-nvim <span class="hljs-string">&#x27;session&#x27;</span><br><br><span class="hljs-comment"># Continuum设置</span><br><span class="hljs-built_in">set</span> -g @continuum-restore <span class="hljs-string">&#x27;on&#x27;</span><br><span class="hljs-built_in">set</span> -g @continuum-save-interval <span class="hljs-string">&#x27;15&#x27;</span><br><br><span class="hljs-comment"># 初始化TPM（必须放在最后）</span><br>run <span class="hljs-string">&#x27;~/.tmux/plugins/tpm/tpm&#x27;</span><br><br><span class="hljs-comment"># 安装插件: &lt;prefix&gt; I</span><br><span class="hljs-comment"># 更新插件: &lt;prefix&gt; U</span><br><span class="hljs-comment"># 卸载插件: &lt;prefix&gt; Alt+u</span><br></code></pre></td></tr></table></figure>
+<h3 id="tmux-resurrect会话持久化">tmux-resurrect会话持久化</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 保存会话状态</span><br><span class="hljs-comment"># &lt;prefix&gt; Ctrl+s</span><br><br><span class="hljs-comment"># 恢复会话状态</span><br><span class="hljs-comment"># &lt;prefix&gt; Ctrl+r</span><br><br><span class="hljs-comment"># 保存的内容：</span><br><span class="hljs-comment"># - 所有Session和Window</span><br><span class="hljs-comment"># - 面板布局</span><br><span class="hljs-comment"># - 当前工作目录</span><br><span class="hljs-comment"># - 运行中的命令（部分支持）</span><br></code></pre></td></tr></table></figure>
+<h3 id="vim-tmux-navigator">vim-tmux-navigator</h3>
+<p>实现Vim和Tmux面板之间的无缝导航：</p>
+<figure class="highlight lua"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><code class="hljs lua"><span class="hljs-comment">-- Neovim配置（如果使用vim-tmux-navigator）</span><br><span class="hljs-comment">-- 在lua/plugins/中添加</span><br><span class="hljs-keyword">return</span> &#123;<br>    <span class="hljs-string">&quot;christoomey/vim-tmux-navigator&quot;</span>,<br>    lazy = <span class="hljs-literal">false</span>,<br>    keys = &#123;<br>        &#123; <span class="hljs-string">&quot;&lt;C-h&gt;&quot;</span>, <span class="hljs-string">&quot;&lt;cmd&gt;TmuxNavigateLeft&lt;cr&gt;&quot;</span> &#125;,<br>        &#123; <span class="hljs-string">&quot;&lt;C-j&gt;&quot;</span>, <span class="hljs-string">&quot;&lt;cmd&gt;TmuxNavigateDown&lt;cr&gt;&quot;</span> &#125;,<br>        &#123; <span class="hljs-string">&quot;&lt;C-k&gt;&quot;</span>, <span class="hljs-string">&quot;&lt;cmd&gt;TmuxNavigateUp&lt;cr&gt;&quot;</span> &#125;,<br>        &#123; <span class="hljs-string">&quot;&lt;C-l&gt;&quot;</span>, <span class="hljs-string">&quot;&lt;cmd&gt;TmuxNavigateRight&lt;cr&gt;&quot;</span> &#125;,<br>    &#125;,<br>&#125;<br></code></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># tmux.conf中添加</span><br><span class="hljs-comment"># vim-tmux-navigator自动处理，但手动配置如下：</span><br>is_vim=<span class="hljs-string">&quot;ps -o state= -o comm= -t &#x27;#&#123;pane_tty&#125;&#x27; | grep -iqE &#x27;^[^TXZ ]+ +(\\S+\\/)?g?(view|n?vim?x?)(diff)?$&#x27;&quot;</span><br><span class="hljs-built_in">bind</span> -n C-h if-shell <span class="hljs-string">&quot;<span class="hljs-variable">$is_vim</span>&quot;</span> <span class="hljs-string">&quot;send-keys C-h&quot;</span> <span class="hljs-string">&quot;select-pane -L&quot;</span><br><span class="hljs-built_in">bind</span> -n C-j if-shell <span class="hljs-string">&quot;<span class="hljs-variable">$is_vim</span>&quot;</span> <span class="hljs-string">&quot;send-keys C-j&quot;</span> <span class="hljs-string">&quot;select-pane -D&quot;</span><br><span class="hljs-built_in">bind</span> -n C-k if-shell <span class="hljs-string">&quot;<span class="hljs-variable">$is_vim</span>&quot;</span> <span class="hljs-string">&quot;send-keys C-k&quot;</span> <span class="hljs-string">&quot;select-pane -U&quot;</span><br><span class="hljs-built_in">bind</span> -n C-l if-shell <span class="hljs-string">&quot;<span class="hljs-variable">$is_vim</span>&quot;</span> <span class="hljs-string">&quot;send-keys C-l&quot;</span> <span class="hljs-string">&quot;select-pane -R&quot;</span><br></code></pre></td></tr></table></figure>
+<h2 id="tmux脚本化">Tmux脚本化</h2>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-meta">#!/bin/bash</span><br><span class="hljs-comment"># dev-session.sh - 自动化创建开发环境</span><br><br>SESSION=<span class="hljs-string">&quot;dev&quot;</span><br>PROJECT_DIR=<span class="hljs-string">&quot;<span class="hljs-variable">$HOME</span>/projects/my-app&quot;</span><br><br><span class="hljs-comment"># 如果会话已存在则连接</span><br>tmux has-session -t <span class="hljs-variable">$SESSION</span> 2&gt;/dev/null<br><span class="hljs-keyword">if</span> [ $? -eq 0 ]; <span class="hljs-keyword">then</span><br>    tmux attach -t <span class="hljs-variable">$SESSION</span><br>    <span class="hljs-built_in">exit</span> 0<br><span class="hljs-keyword">fi</span><br><br><span class="hljs-comment"># 创建新会话</span><br>tmux new-session -d -s <span class="hljs-variable">$SESSION</span> -c <span class="hljs-variable">$PROJECT_DIR</span><br><br><span class="hljs-comment"># 窗口1: Editor</span><br>tmux rename-window -t <span class="hljs-variable">$SESSION</span>:1 <span class="hljs-string">&quot;editor&quot;</span><br>tmux send-keys -t <span class="hljs-variable">$SESSION</span>:1 <span class="hljs-string">&quot;nvim .&quot;</span> C-m<br><br><span class="hljs-comment"># 窗口2: Server</span><br>tmux new-window -t <span class="hljs-variable">$SESSION</span>:2 -n <span class="hljs-string">&quot;server&quot;</span> -c <span class="hljs-variable">$PROJECT_DIR</span><br>tmux send-keys -t <span class="hljs-variable">$SESSION</span>:2 <span class="hljs-string">&quot;npm run dev&quot;</span> C-m<br><br><span class="hljs-comment"># 窗口3: Terminal (分两个面板)</span><br>tmux new-window -t <span class="hljs-variable">$SESSION</span>:3 -n <span class="hljs-string">&quot;terminal&quot;</span> -c <span class="hljs-variable">$PROJECT_DIR</span><br>tmux split-window -h -t <span class="hljs-variable">$SESSION</span>:3 -c <span class="hljs-variable">$PROJECT_DIR</span><br>tmux send-keys -t <span class="hljs-variable">$SESSION</span>:3.1 <span class="hljs-string">&quot;git status&quot;</span> C-m<br><br><span class="hljs-comment"># 窗口4: Logs</span><br>tmux new-window -t <span class="hljs-variable">$SESSION</span>:4 -n <span class="hljs-string">&quot;logs&quot;</span> -c <span class="hljs-variable">$PROJECT_DIR</span><br>tmux send-keys -t <span class="hljs-variable">$SESSION</span>:4 <span class="hljs-string">&quot;tail -f logs/app.log&quot;</span> C-m<br><br><span class="hljs-comment"># 选择第一个窗口</span><br>tmux select-window -t <span class="hljs-variable">$SESSION</span>:1<br><br><span class="hljs-comment"># 连接到会话</span><br>tmux attach -t <span class="hljs-variable">$SESSION</span><br></code></pre></td></tr></table></figure>
+<h2 id="复制模式和搜索">复制模式和搜索</h2>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 进入复制模式</span><br><span class="hljs-comment"># &lt;prefix&gt; [</span><br><br><span class="hljs-comment"># 在复制模式中（Vi模式）</span><br><span class="hljs-comment"># v          - 开始选择</span><br><span class="hljs-comment"># V          - 行选择</span><br><span class="hljs-comment"># Ctrl+v     - 块选择</span><br><span class="hljs-comment"># y          - 复制选中内容</span><br><span class="hljs-comment"># q / Escape - 退出复制模式</span><br><br><span class="hljs-comment"># 搜索</span><br><span class="hljs-comment"># &lt;prefix&gt; [    进入复制模式</span><br><span class="hljs-comment"># /             向下搜索</span><br><span class="hljs-comment"># ?             向上搜索</span><br><span class="hljs-comment"># n             下一个匹配</span><br><span class="hljs-comment"># N             上一个匹配</span><br><br><span class="hljs-comment"># 粘贴</span><br><span class="hljs-comment"># &lt;prefix&gt; ]</span><br><br><span class="hljs-comment"># 查看粘贴缓冲区</span><br><span class="hljs-comment"># &lt;prefix&gt; =    选择粘贴缓冲区</span><br></code></pre></td></tr></table></figure>
+<h2 id="pair-programming">Pair Programming</h2>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 方法1: 共享会话（两人看到完全相同的内容）</span><br><span class="hljs-comment"># 用户A创建会话</span><br>tmux new -s pair<br><br><span class="hljs-comment"># 用户B连接同一个会话（通过SSH）</span><br>ssh user@host<br>tmux attach -t pair<br><span class="hljs-comment"># 两人看到和操作完全相同的窗口</span><br><br><span class="hljs-comment"># 方法2: 共享会话但独立窗口</span><br><span class="hljs-comment"># 用户A</span><br>tmux new -s pair<br><br><span class="hljs-comment"># 用户B（创建新会话连接到同一服务端）</span><br>tmux new -t pair -s pair-b<br><span class="hljs-comment"># 两人可以在不同窗口中操作</span><br></code></pre></td></tr></table></figure>
+<h2 id="高效工作流示例">高效工作流示例</h2>
+<h3 id="web开发工作流">Web开发工作流</h3>
+<pre class="mermaid">graph TB
+    subgraph "Session: web-dev"
+        subgraph "Window 1: Code"
+            W1P1[Neovim&lt;br&gt;左侧 70%]
+            W1P2[Terminal&lt;br&gt;右侧 30%]
+        end
+        subgraph "Window 2: Server"
+            W2P1[Dev Server&lt;br&gt;上方]
+            W2P2[API Server&lt;br&gt;下方]
+        end
+        subgraph "Window 3: DB &amp; Logs"
+            W3P1[Database CLI&lt;br&gt;左侧]
+            W3P2[App Logs&lt;br&gt;右上]
+            W3P3[Error Logs&lt;br&gt;右下]
+        end
+        subgraph "Window 4: Git"
+            W4P1[git log / lazygit]
+        end
+    end</pre>
+<h3 id="常用快捷键速查">常用快捷键速查</h3>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><code class="hljs plaintext">Session:<br>  &lt;prefix&gt; d      detach<br>  &lt;prefix&gt; s      session列表<br>  &lt;prefix&gt; $      重命名session<br><br>Window:<br>  &lt;prefix&gt; c      新建窗口<br>  &lt;prefix&gt; ,      重命名窗口<br>  &lt;prefix&gt; n/p    上/下一个窗口<br>  &lt;prefix&gt; 0-9    切换到指定窗口<br>  &lt;prefix&gt; w      窗口预览列表<br><br>Pane:<br>  &lt;prefix&gt; |      水平分割 (自定义)<br>  &lt;prefix&gt; -      垂直分割 (自定义)<br>  &lt;prefix&gt; h/j/k/l  导航 (自定义)<br>  &lt;prefix&gt; z      最大化/还原<br>  &lt;prefix&gt; x      关闭面板<br>  &lt;prefix&gt; Space  切换布局<br><br>Copy:<br>  &lt;prefix&gt; [      进入复制模式<br>  v               开始选择<br>  y               复制<br>  &lt;prefix&gt; ]      粘贴<br><br>Other:<br>  &lt;prefix&gt; r      重载配置 (自定义)<br>  &lt;prefix&gt; :      命令模式<br>  &lt;prefix&gt; ?      快捷键帮助<br></code></pre></td></tr></table></figure>
+<h2 id="总结">总结</h2>
+<p>Tmux高效终端管理的核心要点：</p>
+<ol type="1">
+<li><strong>会话持久化</strong>：SSH断开后任务继续运行，tmux-resurrect/continuum实现重启恢复</li>
+<li><strong>窗口和面板</strong>：灵活的分屏和窗口管理，一个终端承载完整开发环境</li>
+<li><strong>自定义配置</strong>：改前缀键、Vim风格导航、保持当前路径等提升效率</li>
+<li><strong>vim-tmux-navigator</strong>：Vim和Tmux面板之间无缝切换</li>
+<li><strong>脚本化</strong>：用Shell脚本自动创建项目工作环境</li>
+<li><strong>插件生态</strong>：TPM管理插件，按需扩展功能</li>
+</ol>
+<p>Tmux是服务器操作和日常开发的必备工具。花一个下午配置好你的tmux.conf，之后每天都能节省大量时间。</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2025-11-05</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">2.9k 字 · 7 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/local-llm-deployment/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">本地LLM部署方案：vLLM与Ollama进阶</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/mlops-pipeline/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">MLOps流水线设计与实现</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E6%A6%82%E5%BF%B5"><span class="toc-text">核心概念</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9F%BA%E7%A1%80%E6%93%8D%E4%BD%9C"><span class="toc-text">基础操作</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#session%E7%AE%A1%E7%90%86"><span class="toc-text">Session管理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#window%E7%AE%A1%E7%90%86"><span class="toc-text">Window管理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#pane%E7%AE%A1%E7%90%86"><span class="toc-text">Pane管理</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%87%AA%E5%AE%9A%E4%B9%89%E9%85%8D%E7%BD%AE"><span class="toc-text">自定义配置</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%8F%92%E4%BB%B6%E7%B3%BB%E7%BB%9Ftpm"><span class="toc-text">插件系统（TPM）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#tmux-resurrect%E4%BC%9A%E8%AF%9D%E6%8C%81%E4%B9%85%E5%8C%96"><span class="toc-text">tmux-resurrect会话持久化</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#vim-tmux-navigator"><span class="toc-text">vim-tmux-navigator</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#tmux%E8%84%9A%E6%9C%AC%E5%8C%96"><span class="toc-text">Tmux脚本化</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%A4%8D%E5%88%B6%E6%A8%A1%E5%BC%8F%E5%92%8C%E6%90%9C%E7%B4%A2"><span class="toc-text">复制模式和搜索</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#pair-programming"><span class="toc-text">Pair Programming</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%AB%98%E6%95%88%E5%B7%A5%E4%BD%9C%E6%B5%81%E7%A4%BA%E4%BE%8B"><span class="toc-text">高效工作流示例</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#web%E5%BC%80%E5%8F%91%E5%B7%A5%E4%BD%9C%E6%B5%81"><span class="toc-text">Web开发工作流</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%B8%B8%E7%94%A8%E5%BF%AB%E6%8D%B7%E9%94%AE%E9%80%9F%E6%9F%A5"><span class="toc-text">常用快捷键速查</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

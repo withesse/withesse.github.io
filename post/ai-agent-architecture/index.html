@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI Agent架构设计与实现模式 · zt&#39;s Blog</title>
+  <meta name="description" content="深入探讨AI Agent架构设计，涵盖ReAct模式、规划策略、工具调用、记忆管理与多Agent系统">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/ai-agent-architecture/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="AI Agent架构设计与实现模式">
+  <meta property="og:description" content="深入探讨AI Agent架构设计，涵盖ReAct模式、规划策略、工具调用、记忆管理与多Agent系统">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/ai-agent-architecture/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2025-10-14T16:00:00.000Z">
+  <meta property="article:modified_time" content="2025-10-14T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="AI Agent架构设计与实现模式">
+  <meta name="twitter:description" content="深入探讨AI Agent架构设计，涵盖ReAct模式、规划策略、工具调用、记忆管理与多Agent系统">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"AI Agent架构设计与实现模式","description":"深入探讨AI Agent架构设计，涵盖ReAct模式、规划策略、工具调用、记忆管理与多Agent系统","datePublished":"2025-10-14T16:00:00.000Z","dateModified":"2025-10-14T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/ai-agent-architecture/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"AI","item":"https://withesse.co/categories/AI/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:280">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/AI/">AI</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/ai-agent/"><span class="hash">#</span>ai-agent</a><a class="tag" href="/tags/llm/"><span class="hash">#</span>llm</a><a class="tag" href="/tags/planning/"><span class="hash">#</span>planning</a>
+        
+      </div>
+
+      <h1>AI Agent架构设计与实现模式</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2025.10.15</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 8 min</span>
+        </span>
+        <span class="wc"><span class="num">3.2k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#agent-%E6%A0%B8%E5%BF%83%E6%9E%B6%E6%9E%84"><span class="toc-text">Agent 核心架构</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#react-%E6%A8%A1%E5%BC%8F"><span class="toc-text">ReAct 模式</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#react-%E5%AE%9E%E7%8E%B0"><span class="toc-text">ReAct 实现</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%A7%84%E5%88%92%E7%AD%96%E7%95%A5"><span class="toc-text">规划策略</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#plan-and-execute"><span class="toc-text">Plan-and-Execute</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#adaptive-planninglanggraph-%E5%AE%9E%E7%8E%B0"><span class="toc-text">Adaptive Planning（LangGraph
+实现）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%B7%A5%E5%85%B7%E4%BD%BF%E7%94%A8tool-use"><span class="toc-text">工具使用（Tool Use）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%B7%A5%E5%85%B7%E8%AE%BE%E8%AE%A1%E5%8E%9F%E5%88%99"><span class="toc-text">工具设计原则</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%AE%B0%E5%BF%86%E7%AE%A1%E7%90%86"><span class="toc-text">记忆管理</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%9E%E7%8E%B0%E5%A4%9A%E5%B1%82%E8%AE%B0%E5%BF%86"><span class="toc-text">实现多层记忆</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%A4%9A-agent-%E7%B3%BB%E7%BB%9F"><span class="toc-text">多 Agent 系统</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#supervisor-%E6%A8%A1%E5%BC%8F"><span class="toc-text">Supervisor 模式</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#agent-%E8%AF%84%E4%BC%B0"><span class="toc-text">Agent 评估</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#agent-%E6%A1%86%E6%9E%B6%E5%AF%B9%E6%AF%94"><span class="toc-text">Agent 框架对比</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="引言">引言</h2>
+<p>AI Agent 是当前 LLM
+应用最激动人心的方向——让模型从被动回答问题，进化为主动规划、使用工具、持续学习的自主体。从
+ChatGPT Plugins 到 AutoGPT，从 LangGraph 到 CrewAI，Agent
+生态正在快速演变。本文将系统探讨 Agent 的核心架构——ReAct
+模式、规划策略、工具使用、记忆管理以及多 Agent
+协作系统的设计与实现。</p>
+<h2 id="agent-核心架构">Agent 核心架构</h2>
+<pre class="mermaid">graph TB
+    A[AI Agent] --&gt; B[感知 Perception]
+    A --&gt; C[推理 Reasoning]
+    A --&gt; D[行动 Action]
+    A --&gt; E[记忆 Memory]
+
+    B --&gt; B1[用户输入]
+    B --&gt; B2[环境观察]
+    B --&gt; B3[工具返回值]
+
+    C --&gt; C1[任务分解]
+    C --&gt; C2[计划生成]
+    C --&gt; C3[决策选择]
+
+    D --&gt; D1[调用工具]
+    D --&gt; D2[生成回复]
+    D --&gt; D3[修改环境]
+
+    E --&gt; E1[短期记忆&lt;br/&gt;对话上下文]
+    E --&gt; E2[工作记忆&lt;br/&gt;当前任务状态]
+    E --&gt; E3[长期记忆&lt;br/&gt;知识库 / 经验]
+
+    style A fill:#2c3e50,color:#fff
+    style C fill:#e74c3c,color:#fff
+    style D fill:#3498db,color:#fff
+    style E fill:#2ecc71,color:#fff</pre>
+<h2 id="react-模式">ReAct 模式</h2>
+<p>ReAct (Reasoning + Acting) 是最基础也最实用的 Agent
+模式，让模型交替进行推理（Thought）和行动（Action）：</p>
+<pre class="mermaid">sequenceDiagram
+    participant U as User
+    participant A as Agent (LLM)
+    participant T as Tools
+
+    U-&gt;&gt;A: "北京和上海哪个城市今天更热?"
+
+    Note over A: Thought: 需要查询两个城市的温度
+    A-&gt;&gt;T: Action: get_weather("北京")
+    T--&gt;&gt;A: Observation: 北京 32°C
+
+    Note over A: Thought: 已获得北京温度，还需上海
+    A-&gt;&gt;T: Action: get_weather("上海")
+    T--&gt;&gt;A: Observation: 上海 35°C
+
+    Note over A: Thought: 上海35°C &gt; 北京32°C
+    A-&gt;&gt;U: "上海今天更热(35°C &gt; 32°C)"</pre>
+<h3 id="react-实现">ReAct 实现</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">from</span> langchain.agents <span class="hljs-keyword">import</span> create_react_agent, AgentExecutor<br><span class="hljs-keyword">from</span> langchain_core.prompts <span class="hljs-keyword">import</span> PromptTemplate<br><br>REACT_PROMPT = PromptTemplate.from_template(<span class="hljs-string">&quot;&quot;&quot;Answer the following questions as best you can. You have access to the following tools:</span><br><span class="hljs-string"></span><br><span class="hljs-string">&#123;tools&#125;</span><br><span class="hljs-string"></span><br><span class="hljs-string">Use the following format:</span><br><span class="hljs-string"></span><br><span class="hljs-string">Question: the input question you must answer</span><br><span class="hljs-string">Thought: you should always think about what to do</span><br><span class="hljs-string">Action: the action to take, should be one of [&#123;tool_names&#125;]</span><br><span class="hljs-string">Action Input: the input to the action</span><br><span class="hljs-string">Observation: the result of the action</span><br><span class="hljs-string"><span class="hljs-meta">... </span>(this Thought/Action/Action Input/Observation can repeat N times)</span><br><span class="hljs-string">Thought: I now know the final answer</span><br><span class="hljs-string">Final Answer: the final answer to the original input question</span><br><span class="hljs-string"></span><br><span class="hljs-string">Begin!</span><br><span class="hljs-string"></span><br><span class="hljs-string">Question: &#123;input&#125;</span><br><span class="hljs-string">Thought: &#123;agent_scratchpad&#125;&quot;&quot;&quot;</span>)<br><br>agent = create_react_agent(llm, tools, REACT_PROMPT)<br>executor = AgentExecutor(agent=agent, tools=tools, verbose=<span class="hljs-literal">True</span>, max_iterations=<span class="hljs-number">10</span>)<br><br>result = executor.invoke(&#123;<span class="hljs-string">&quot;input&quot;</span>: <span class="hljs-string">&quot;北京和上海哪个城市今天更热?&quot;</span>&#125;)<br></code></pre></td></tr></table></figure>
+<h2 id="规划策略">规划策略</h2>
+<h3 id="plan-and-execute">Plan-and-Execute</h3>
+<p>先制定完整计划，再逐步执行——适合复杂的多步任务：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">from</span> langchain.agents <span class="hljs-keyword">import</span> create_plan_and_execute_agent<br><span class="hljs-keyword">from</span> langchain_experimental.plan_and_execute <span class="hljs-keyword">import</span> PlanAndExecute, load_agent_executor, load_chat_planner<br><br><span class="hljs-comment"># Planner: generates step-by-step plan</span><br>planner = load_chat_planner(llm)<br><br><span class="hljs-comment"># Executor: executes each step</span><br>executor_agent = load_agent_executor(llm, tools, verbose=<span class="hljs-literal">True</span>)<br><br><span class="hljs-comment"># Combined</span><br>agent = PlanAndExecute(planner=planner, executor=executor_agent, verbose=<span class="hljs-literal">True</span>)<br><br>result = agent.invoke(&#123;<br>    <span class="hljs-string">&quot;input&quot;</span>: <span class="hljs-string">&quot;帮我调研目前主流的向量数据库，对比它们的性能，然后写一份推荐报告&quot;</span><br>&#125;)<br></code></pre></td></tr></table></figure>
+<pre class="mermaid">graph TD
+    A[复杂任务] --&gt; B[Planner&lt;br/&gt;LLM 生成计划]
+    B --&gt; C["Step 1: 列出主流向量数据库"]
+    C --&gt; D["Step 2: 搜索各数据库性能数据"]
+    D --&gt; E["Step 3: 制作对比表格"]
+    E --&gt; F["Step 4: 撰写推荐报告"]
+
+    C --&gt; G[Executor&lt;br/&gt;执行并观察]
+    D --&gt; G
+    E --&gt; G
+    F --&gt; G
+
+    G --&gt; H{需要重新规划?}
+    H --&gt;|是| B
+    H --&gt;|否| I[最终结果]
+
+    style B fill:#e74c3c,color:#fff
+    style G fill:#3498db,color:#fff
+    style I fill:#2ecc71,color:#fff</pre>
+<h3 id="adaptive-planninglanggraph-实现">Adaptive Planning（LangGraph
+实现）</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">from</span> langgraph.graph <span class="hljs-keyword">import</span> StateGraph, END<br><span class="hljs-keyword">from</span> typing <span class="hljs-keyword">import</span> TypedDict, Annotated, <span class="hljs-type">Sequence</span><br><span class="hljs-keyword">import</span> operator<br><br><span class="hljs-keyword">class</span> <span class="hljs-title class_">AgentState</span>(<span class="hljs-title class_ inherited__">TypedDict</span>):<br>    messages: Annotated[<span class="hljs-type">Sequence</span>[<span class="hljs-built_in">dict</span>], operator.add]<br>    plan: <span class="hljs-built_in">list</span>[<span class="hljs-built_in">str</span>]<br>    current_step: <span class="hljs-built_in">int</span><br>    results: <span class="hljs-built_in">dict</span><br>    should_replan: <span class="hljs-built_in">bool</span><br><br><span class="hljs-keyword">def</span> <span class="hljs-title function_">planner_node</span>(<span class="hljs-params">state: AgentState</span>) -&gt; AgentState:<br>    <span class="hljs-string">&quot;&quot;&quot;Generate or revise the plan.&quot;&quot;&quot;</span><br>    messages = state[<span class="hljs-string">&quot;messages&quot;</span>]<br>    plan_prompt = <span class="hljs-string">f&quot;&quot;&quot;Based on the task and current progress, create a plan.</span><br><span class="hljs-string"></span><br><span class="hljs-string">Task: <span class="hljs-subst">&#123;messages[<span class="hljs-number">0</span>][<span class="hljs-string">&#x27;content&#x27;</span>]&#125;</span></span><br><span class="hljs-string">Previous results: <span class="hljs-subst">&#123;state.get(<span class="hljs-string">&#x27;results&#x27;</span>, &#123;&#125;</span>)&#125;</span><br><span class="hljs-string"></span><br><span class="hljs-string">Output a numbered list of steps.&quot;&quot;&quot;</span><br><br>    plan = llm.invoke(plan_prompt).content<br>    steps = [s.strip() <span class="hljs-keyword">for</span> s <span class="hljs-keyword">in</span> plan.split(<span class="hljs-string">&quot;\n&quot;</span>) <span class="hljs-keyword">if</span> s.strip()]<br>    <span class="hljs-keyword">return</span> &#123;<span class="hljs-string">&quot;plan&quot;</span>: steps, <span class="hljs-string">&quot;current_step&quot;</span>: <span class="hljs-number">0</span>&#125;<br><br><span class="hljs-keyword">def</span> <span class="hljs-title function_">executor_node</span>(<span class="hljs-params">state: AgentState</span>) -&gt; AgentState:<br>    <span class="hljs-string">&quot;&quot;&quot;Execute the current step.&quot;&quot;&quot;</span><br>    step = state[<span class="hljs-string">&quot;plan&quot;</span>][state[<span class="hljs-string">&quot;current_step&quot;</span>]]<br>    result = agent_executor.invoke(&#123;<span class="hljs-string">&quot;input&quot;</span>: step&#125;)<br>    <span class="hljs-keyword">return</span> &#123;<br>        <span class="hljs-string">&quot;results&quot;</span>: &#123;**state.get(<span class="hljs-string">&quot;results&quot;</span>, &#123;&#125;), step: result[<span class="hljs-string">&quot;output&quot;</span>]&#125;,<br>        <span class="hljs-string">&quot;current_step&quot;</span>: state[<span class="hljs-string">&quot;current_step&quot;</span>] + <span class="hljs-number">1</span>,<br>    &#125;<br><br><span class="hljs-keyword">def</span> <span class="hljs-title function_">should_continue</span>(<span class="hljs-params">state: AgentState</span>) -&gt; <span class="hljs-built_in">str</span>:<br>    <span class="hljs-string">&quot;&quot;&quot;Decide whether to continue, replan, or finish.&quot;&quot;&quot;</span><br>    <span class="hljs-keyword">if</span> state[<span class="hljs-string">&quot;current_step&quot;</span>] &gt;= <span class="hljs-built_in">len</span>(state[<span class="hljs-string">&quot;plan&quot;</span>]):<br>        <span class="hljs-keyword">return</span> <span class="hljs-string">&quot;finish&quot;</span><br>    <span class="hljs-keyword">if</span> state.get(<span class="hljs-string">&quot;should_replan&quot;</span>):<br>        <span class="hljs-keyword">return</span> <span class="hljs-string">&quot;replan&quot;</span><br>    <span class="hljs-keyword">return</span> <span class="hljs-string">&quot;execute&quot;</span><br><br><span class="hljs-comment"># Build graph</span><br>workflow = StateGraph(AgentState)<br>workflow.add_node(<span class="hljs-string">&quot;planner&quot;</span>, planner_node)<br>workflow.add_node(<span class="hljs-string">&quot;executor&quot;</span>, executor_node)<br>workflow.add_node(<span class="hljs-string">&quot;evaluator&quot;</span>, evaluator_node)<br><br>workflow.set_entry_point(<span class="hljs-string">&quot;planner&quot;</span>)<br>workflow.add_edge(<span class="hljs-string">&quot;planner&quot;</span>, <span class="hljs-string">&quot;executor&quot;</span>)<br>workflow.add_edge(<span class="hljs-string">&quot;executor&quot;</span>, <span class="hljs-string">&quot;evaluator&quot;</span>)<br>workflow.add_conditional_edges(<span class="hljs-string">&quot;evaluator&quot;</span>, should_continue, &#123;<br>    <span class="hljs-string">&quot;execute&quot;</span>: <span class="hljs-string">&quot;executor&quot;</span>,<br>    <span class="hljs-string">&quot;replan&quot;</span>: <span class="hljs-string">&quot;planner&quot;</span>,<br>    <span class="hljs-string">&quot;finish&quot;</span>: END,<br>&#125;)<br><br>app = workflow.<span class="hljs-built_in">compile</span>()<br>result = app.invoke(&#123;<span class="hljs-string">&quot;messages&quot;</span>: [&#123;<span class="hljs-string">&quot;role&quot;</span>: <span class="hljs-string">&quot;user&quot;</span>, <span class="hljs-string">&quot;content&quot;</span>: <span class="hljs-string">&quot;研究RAG最新进展&quot;</span>&#125;]&#125;)<br></code></pre></td></tr></table></figure>
+<h2 id="工具使用tool-use">工具使用（Tool Use）</h2>
+<h3 id="工具设计原则">工具设计原则</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">from</span> langchain_core.tools <span class="hljs-keyword">import</span> tool<br><span class="hljs-keyword">from</span> pydantic <span class="hljs-keyword">import</span> BaseModel, Field<br><br><span class="hljs-comment"># 1. Clear schema with descriptions</span><br><span class="hljs-keyword">class</span> <span class="hljs-title class_">SearchInput</span>(<span class="hljs-title class_ inherited__">BaseModel</span>):<br>    query: <span class="hljs-built_in">str</span> = Field(description=<span class="hljs-string">&quot;搜索关键词&quot;</span>)<br>    max_results: <span class="hljs-built_in">int</span> = Field(default=<span class="hljs-number">5</span>, description=<span class="hljs-string">&quot;最大返回结果数&quot;</span>)<br>    date_range: <span class="hljs-built_in">str</span> = Field(default=<span class="hljs-string">&quot;all&quot;</span>, description=<span class="hljs-string">&quot;时间范围: today/week/month/year/all&quot;</span>)<br><br><span class="hljs-meta">@tool(<span class="hljs-params">args_schema=SearchInput</span>)</span><br><span class="hljs-keyword">def</span> <span class="hljs-title function_">web_search</span>(<span class="hljs-params">query: <span class="hljs-built_in">str</span>, max_results: <span class="hljs-built_in">int</span> = <span class="hljs-number">5</span>, date_range: <span class="hljs-built_in">str</span> = <span class="hljs-string">&quot;all&quot;</span></span>) -&gt; <span class="hljs-built_in">str</span>:<br>    <span class="hljs-string">&quot;&quot;&quot;搜索互联网获取最新信息。适用于需要实时数据或最新资讯的场景。&quot;&quot;&quot;</span><br>    <span class="hljs-comment"># Implementation</span><br>    <span class="hljs-keyword">pass</span><br><br><span class="hljs-comment"># 2. Error handling in tools</span><br><span class="hljs-meta">@tool</span><br><span class="hljs-keyword">def</span> <span class="hljs-title function_">execute_sql</span>(<span class="hljs-params">query: <span class="hljs-built_in">str</span></span>) -&gt; <span class="hljs-built_in">str</span>:<br>    <span class="hljs-string">&quot;&quot;&quot;在只读数据库上执行SQL查询。仅支持SELECT语句。&quot;&quot;&quot;</span><br>    <span class="hljs-keyword">if</span> <span class="hljs-keyword">not</span> query.strip().upper().startswith(<span class="hljs-string">&quot;SELECT&quot;</span>):<br>        <span class="hljs-keyword">return</span> <span class="hljs-string">&quot;Error: Only SELECT statements are allowed for security.&quot;</span><br><br>    <span class="hljs-keyword">try</span>:<br>        results = db.execute(query)<br>        <span class="hljs-keyword">return</span> json.dumps(results, ensure_ascii=<span class="hljs-literal">False</span>, indent=<span class="hljs-number">2</span>)<br>    <span class="hljs-keyword">except</span> Exception <span class="hljs-keyword">as</span> e:<br>        <span class="hljs-keyword">return</span> <span class="hljs-string">f&quot;SQL Error: <span class="hljs-subst">&#123;<span class="hljs-built_in">str</span>(e)&#125;</span>. Please check your query syntax.&quot;</span><br><br><span class="hljs-comment"># 3. Compound tools (tool that uses other tools)</span><br><span class="hljs-meta">@tool</span><br><span class="hljs-keyword">def</span> <span class="hljs-title function_">analyze_repository</span>(<span class="hljs-params">repo_url: <span class="hljs-built_in">str</span></span>) -&gt; <span class="hljs-built_in">str</span>:<br>    <span class="hljs-string">&quot;&quot;&quot;分析GitHub仓库的代码质量、技术栈和活跃度。&quot;&quot;&quot;</span><br>    <span class="hljs-comment"># Uses multiple sub-tools internally</span><br>    readme = fetch_github_file(repo_url, <span class="hljs-string">&quot;README.md&quot;</span>)<br>    languages = fetch_github_languages(repo_url)<br>    commits = fetch_recent_commits(repo_url, days=<span class="hljs-number">30</span>)<br><br>    analysis = llm.invoke(<span class="hljs-string">f&quot;&quot;&quot;分析以下仓库信息：</span><br><span class="hljs-string">    README: <span class="hljs-subst">&#123;readme&#125;</span></span><br><span class="hljs-string">    语言: <span class="hljs-subst">&#123;languages&#125;</span></span><br><span class="hljs-string">    近30天提交数: <span class="hljs-subst">&#123;<span class="hljs-built_in">len</span>(commits)&#125;</span></span><br><span class="hljs-string">    &quot;&quot;&quot;</span>)<br><br>    <span class="hljs-keyword">return</span> analysis.content<br></code></pre></td></tr></table></figure>
+<h2 id="记忆管理">记忆管理</h2>
+<pre class="mermaid">graph TB
+    A[Agent Memory Architecture] --&gt; B[Sensory Memory&lt;br/&gt;当前输入]
+    A --&gt; C[Short-term Memory&lt;br/&gt;对话窗口]
+    A --&gt; D[Long-term Memory&lt;br/&gt;持久存储]
+
+    C --&gt; C1[最近 N 轮对话]
+    C --&gt; C2[当前任务上下文]
+
+    D --&gt; D1[Episodic&lt;br/&gt;历史事件记忆]
+    D --&gt; D2[Semantic&lt;br/&gt;知识库 / 向量存储]
+    D --&gt; D3[Procedural&lt;br/&gt;技能 / 工具使用经验]
+
+    style B fill:#ffd700,color:#000
+    style C fill:#3498db,color:#fff
+    style D fill:#2ecc71,color:#fff</pre>
+<h3 id="实现多层记忆">实现多层记忆</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">from</span> langchain_community.vectorstores <span class="hljs-keyword">import</span> Chroma<br><span class="hljs-keyword">from</span> langchain_openai <span class="hljs-keyword">import</span> OpenAIEmbeddings<br><span class="hljs-keyword">from</span> datetime <span class="hljs-keyword">import</span> datetime<br><span class="hljs-keyword">import</span> json<br><br><span class="hljs-keyword">class</span> <span class="hljs-title class_">AgentMemory</span>:<br>    <span class="hljs-keyword">def</span> <span class="hljs-title function_">__init__</span>(<span class="hljs-params">self</span>):<br>        <span class="hljs-comment"># Short-term: conversation buffer</span><br>        self.conversation_history = []<br>        self.max_history = <span class="hljs-number">20</span><br><br>        <span class="hljs-comment"># Long-term: vector store for episodic memory</span><br>        self.episodic_memory = Chroma(<br>            collection_name=<span class="hljs-string">&quot;episodic&quot;</span>,<br>            embedding_function=OpenAIEmbeddings(),<br>            persist_directory=<span class="hljs-string">&quot;./memory/episodic&quot;</span>,<br>        )<br><br>        <span class="hljs-comment"># Semantic memory: knowledge base</span><br>        self.semantic_memory = Chroma(<br>            collection_name=<span class="hljs-string">&quot;semantic&quot;</span>,<br>            embedding_function=OpenAIEmbeddings(),<br>            persist_directory=<span class="hljs-string">&quot;./memory/semantic&quot;</span>,<br>        )<br><br>    <span class="hljs-keyword">def</span> <span class="hljs-title function_">add_conversation</span>(<span class="hljs-params">self, role: <span class="hljs-built_in">str</span>, content: <span class="hljs-built_in">str</span></span>):<br>        <span class="hljs-string">&quot;&quot;&quot;Add to short-term memory.&quot;&quot;&quot;</span><br>        self.conversation_history.append(&#123;<br>            <span class="hljs-string">&quot;role&quot;</span>: role,<br>            <span class="hljs-string">&quot;content&quot;</span>: content,<br>            <span class="hljs-string">&quot;timestamp&quot;</span>: datetime.now().isoformat(),<br>        &#125;)<br>        <span class="hljs-keyword">if</span> <span class="hljs-built_in">len</span>(self.conversation_history) &gt; self.max_history:<br>            <span class="hljs-comment"># Summarize and archive old conversations</span><br>            self._archive_old_conversations()<br><br>    <span class="hljs-keyword">def</span> <span class="hljs-title function_">_archive_old_conversations</span>(<span class="hljs-params">self</span>):<br>        <span class="hljs-string">&quot;&quot;&quot;Move old conversations to long-term memory.&quot;&quot;&quot;</span><br>        old = self.conversation_history[:<span class="hljs-number">10</span>]<br>        summary = self._summarize(old)<br>        self.episodic_memory.add_texts(<br>            texts=[summary],<br>            metadatas=[&#123;<span class="hljs-string">&quot;type&quot;</span>: <span class="hljs-string">&quot;conversation_summary&quot;</span>, <span class="hljs-string">&quot;date&quot;</span>: datetime.now().isoformat()&#125;],<br>        )<br>        self.conversation_history = self.conversation_history[<span class="hljs-number">10</span>:]<br><br>    <span class="hljs-keyword">def</span> <span class="hljs-title function_">recall</span>(<span class="hljs-params">self, query: <span class="hljs-built_in">str</span>, k: <span class="hljs-built_in">int</span> = <span class="hljs-number">3</span></span>) -&gt; <span class="hljs-built_in">str</span>:<br>        <span class="hljs-string">&quot;&quot;&quot;Retrieve relevant memories.&quot;&quot;&quot;</span><br>        episodic = self.episodic_memory.similarity_search(query, k=k)<br>        semantic = self.semantic_memory.similarity_search(query, k=k)<br><br>        memories = []<br>        <span class="hljs-keyword">if</span> episodic:<br>            memories.append(<span class="hljs-string">&quot;相关历史记忆:\n&quot;</span> + <span class="hljs-string">&quot;\n&quot;</span>.join([d.page_content <span class="hljs-keyword">for</span> d <span class="hljs-keyword">in</span> episodic]))<br>        <span class="hljs-keyword">if</span> semantic:<br>            memories.append(<span class="hljs-string">&quot;相关知识:\n&quot;</span> + <span class="hljs-string">&quot;\n&quot;</span>.join([d.page_content <span class="hljs-keyword">for</span> d <span class="hljs-keyword">in</span> semantic]))<br><br>        <span class="hljs-keyword">return</span> <span class="hljs-string">&quot;\n\n&quot;</span>.join(memories)<br><br>    <span class="hljs-keyword">def</span> <span class="hljs-title function_">learn</span>(<span class="hljs-params">self, knowledge: <span class="hljs-built_in">str</span>, metadata: <span class="hljs-built_in">dict</span> = <span class="hljs-literal">None</span></span>):<br>        <span class="hljs-string">&quot;&quot;&quot;Store new knowledge in semantic memory.&quot;&quot;&quot;</span><br>        self.semantic_memory.add_texts(<br>            texts=[knowledge],<br>            metadatas=[metadata <span class="hljs-keyword">or</span> &#123;&#125;],<br>        )<br></code></pre></td></tr></table></figure>
+<h2 id="多-agent-系统">多 Agent 系统</h2>
+<h3 id="supervisor-模式">Supervisor 模式</h3>
+<pre class="mermaid">graph TB
+    A[User Query] --&gt; B[Supervisor Agent]
+    B --&gt; C{任务分配}
+    C --&gt; D[Research Agent&lt;br/&gt;信息搜集]
+    C --&gt; E[Code Agent&lt;br/&gt;代码编写]
+    C --&gt; F[Review Agent&lt;br/&gt;质量审查]
+
+    D --&gt; G[汇报结果]
+    E --&gt; G
+    F --&gt; G
+    G --&gt; B
+    B --&gt; H[综合回答]
+
+    style B fill:#e74c3c,color:#fff
+    style D fill:#3498db,color:#fff
+    style E fill:#f39c12,color:#000
+    style F fill:#2ecc71,color:#fff</pre>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">from</span> langgraph.graph <span class="hljs-keyword">import</span> StateGraph, END<br><span class="hljs-keyword">from</span> langchain_core.messages <span class="hljs-keyword">import</span> HumanMessage, SystemMessage<br><br><span class="hljs-keyword">class</span> <span class="hljs-title class_">MultiAgentState</span>(<span class="hljs-title class_ inherited__">TypedDict</span>):<br>    messages: <span class="hljs-built_in">list</span><br>    next_agent: <span class="hljs-built_in">str</span><br>    results: <span class="hljs-built_in">dict</span><br><br><span class="hljs-keyword">def</span> <span class="hljs-title function_">supervisor_node</span>(<span class="hljs-params">state: MultiAgentState</span>) -&gt; MultiAgentState:<br>    <span class="hljs-string">&quot;&quot;&quot;Supervisor decides which agent to invoke next.&quot;&quot;&quot;</span><br>    supervisor_prompt = <span class="hljs-string">&quot;&quot;&quot;你是一个项目经理。根据用户需求和当前进度，决定下一步应该交给哪个团队成员。</span><br><span class="hljs-string"></span><br><span class="hljs-string">可用的团队成员：</span><br><span class="hljs-string">- researcher: 负责信息搜集和调研</span><br><span class="hljs-string">- coder: 负责编写代码</span><br><span class="hljs-string">- reviewer: 负责审查代码和文档质量</span><br><span class="hljs-string">- FINISH: 所有工作已完成</span><br><span class="hljs-string"></span><br><span class="hljs-string">当前状态：</span><br><span class="hljs-string">&#123;state_summary&#125;</span><br><span class="hljs-string"></span><br><span class="hljs-string">请只回答下一步应该交给谁（researcher/coder/reviewer/FINISH）。&quot;&quot;&quot;</span><br><br>    response = llm.invoke(supervisor_prompt.<span class="hljs-built_in">format</span>(<br>        state_summary=json.dumps(state.get(<span class="hljs-string">&quot;results&quot;</span>, &#123;&#125;), ensure_ascii=<span class="hljs-literal">False</span>)<br>    ))<br><br>    <span class="hljs-keyword">return</span> &#123;<span class="hljs-string">&quot;next_agent&quot;</span>: response.content.strip()&#125;<br><br><span class="hljs-keyword">def</span> <span class="hljs-title function_">researcher_node</span>(<span class="hljs-params">state: MultiAgentState</span>) -&gt; MultiAgentState:<br>    <span class="hljs-string">&quot;&quot;&quot;Research agent gathers information.&quot;&quot;&quot;</span><br>    task = state[<span class="hljs-string">&quot;messages&quot;</span>][-<span class="hljs-number">1</span>][<span class="hljs-string">&quot;content&quot;</span>]<br>    result = research_executor.invoke(&#123;<span class="hljs-string">&quot;input&quot;</span>: <span class="hljs-string">f&quot;调研以下主题: <span class="hljs-subst">&#123;task&#125;</span>&quot;</span>&#125;)<br>    <span class="hljs-keyword">return</span> &#123;<br>        <span class="hljs-string">&quot;results&quot;</span>: &#123;**state.get(<span class="hljs-string">&quot;results&quot;</span>, &#123;&#125;), <span class="hljs-string">&quot;research&quot;</span>: result[<span class="hljs-string">&quot;output&quot;</span>]&#125;,<br>        <span class="hljs-string">&quot;messages&quot;</span>: state[<span class="hljs-string">&quot;messages&quot;</span>] + [&#123;<span class="hljs-string">&quot;role&quot;</span>: <span class="hljs-string">&quot;assistant&quot;</span>, <span class="hljs-string">&quot;content&quot;</span>: <span class="hljs-string">f&quot;调研完成: <span class="hljs-subst">&#123;result[<span class="hljs-string">&#x27;output&#x27;</span>]&#125;</span>&quot;</span>&#125;],<br>    &#125;<br><br><span class="hljs-keyword">def</span> <span class="hljs-title function_">coder_node</span>(<span class="hljs-params">state: MultiAgentState</span>) -&gt; MultiAgentState:<br>    <span class="hljs-string">&quot;&quot;&quot;Coder agent writes code.&quot;&quot;&quot;</span><br>    research = state.get(<span class="hljs-string">&quot;results&quot;</span>, &#123;&#125;).get(<span class="hljs-string">&quot;research&quot;</span>, <span class="hljs-string">&quot;&quot;</span>)<br>    result = code_executor.invoke(&#123;<br>        <span class="hljs-string">&quot;input&quot;</span>: <span class="hljs-string">f&quot;基于以下调研结果编写代码:\n<span class="hljs-subst">&#123;research&#125;</span>&quot;</span><br>    &#125;)<br>    <span class="hljs-keyword">return</span> &#123;<br>        <span class="hljs-string">&quot;results&quot;</span>: &#123;**state.get(<span class="hljs-string">&quot;results&quot;</span>, &#123;&#125;), <span class="hljs-string">&quot;code&quot;</span>: result[<span class="hljs-string">&quot;output&quot;</span>]&#125;,<br>    &#125;<br><br><span class="hljs-comment"># Build multi-agent graph</span><br>workflow = StateGraph(MultiAgentState)<br>workflow.add_node(<span class="hljs-string">&quot;supervisor&quot;</span>, supervisor_node)<br>workflow.add_node(<span class="hljs-string">&quot;researcher&quot;</span>, researcher_node)<br>workflow.add_node(<span class="hljs-string">&quot;coder&quot;</span>, coder_node)<br>workflow.add_node(<span class="hljs-string">&quot;reviewer&quot;</span>, reviewer_node)<br><br>workflow.set_entry_point(<span class="hljs-string">&quot;supervisor&quot;</span>)<br>workflow.add_conditional_edges(<span class="hljs-string">&quot;supervisor&quot;</span>, <span class="hljs-keyword">lambda</span> s: s[<span class="hljs-string">&quot;next_agent&quot;</span>], &#123;<br>    <span class="hljs-string">&quot;researcher&quot;</span>: <span class="hljs-string">&quot;researcher&quot;</span>,<br>    <span class="hljs-string">&quot;coder&quot;</span>: <span class="hljs-string">&quot;coder&quot;</span>,<br>    <span class="hljs-string">&quot;reviewer&quot;</span>: <span class="hljs-string">&quot;reviewer&quot;</span>,<br>    <span class="hljs-string">&quot;FINISH&quot;</span>: END,<br>&#125;)<br>workflow.add_edge(<span class="hljs-string">&quot;researcher&quot;</span>, <span class="hljs-string">&quot;supervisor&quot;</span>)<br>workflow.add_edge(<span class="hljs-string">&quot;coder&quot;</span>, <span class="hljs-string">&quot;supervisor&quot;</span>)<br>workflow.add_edge(<span class="hljs-string">&quot;reviewer&quot;</span>, <span class="hljs-string">&quot;supervisor&quot;</span>)<br><br>multi_agent = workflow.<span class="hljs-built_in">compile</span>()<br></code></pre></td></tr></table></figure>
+<h2 id="agent-评估">Agent 评估</h2>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-comment"># Agent evaluation dimensions</span><br>evaluation_framework = &#123;<br>    <span class="hljs-string">&quot;task_completion&quot;</span>: &#123;<br>        <span class="hljs-string">&quot;description&quot;</span>: <span class="hljs-string">&quot;是否完成了用户请求的任务&quot;</span>,<br>        <span class="hljs-string">&quot;metric&quot;</span>: <span class="hljs-string">&quot;success_rate&quot;</span>,<br>        <span class="hljs-string">&quot;target&quot;</span>: <span class="hljs-number">0.9</span>,<br>    &#125;,<br>    <span class="hljs-string">&quot;efficiency&quot;</span>: &#123;<br>        <span class="hljs-string">&quot;description&quot;</span>: <span class="hljs-string">&quot;完成任务所需的步骤数&quot;</span>,<br>        <span class="hljs-string">&quot;metric&quot;</span>: <span class="hljs-string">&quot;avg_steps&quot;</span>,<br>        <span class="hljs-string">&quot;target&quot;</span>: <span class="hljs-string">&quot;&lt; 5 steps&quot;</span>,<br>    &#125;,<br>    <span class="hljs-string">&quot;tool_selection&quot;</span>: &#123;<br>        <span class="hljs-string">&quot;description&quot;</span>: <span class="hljs-string">&quot;是否选择了正确的工具&quot;</span>,<br>        <span class="hljs-string">&quot;metric&quot;</span>: <span class="hljs-string">&quot;tool_accuracy&quot;</span>,<br>        <span class="hljs-string">&quot;target&quot;</span>: <span class="hljs-number">0.95</span>,<br>    &#125;,<br>    <span class="hljs-string">&quot;error_recovery&quot;</span>: &#123;<br>        <span class="hljs-string">&quot;description&quot;</span>: <span class="hljs-string">&quot;遇到错误时能否恢复&quot;</span>,<br>        <span class="hljs-string">&quot;metric&quot;</span>: <span class="hljs-string">&quot;recovery_rate&quot;</span>,<br>        <span class="hljs-string">&quot;target&quot;</span>: <span class="hljs-number">0.8</span>,<br>    &#125;,<br>    <span class="hljs-string">&quot;hallucination&quot;</span>: &#123;<br>        <span class="hljs-string">&quot;description&quot;</span>: <span class="hljs-string">&quot;是否产生了不基于工具返回值的内容&quot;</span>,<br>        <span class="hljs-string">&quot;metric&quot;</span>: <span class="hljs-string">&quot;faithfulness_score&quot;</span>,<br>        <span class="hljs-string">&quot;target&quot;</span>: <span class="hljs-number">0.95</span>,<br>    &#125;,<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="agent-框架对比">Agent 框架对比</h2>
+<table>
+<thead>
+<tr class="header">
+<th>框架</th>
+<th>特点</th>
+<th>适用场景</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>LangGraph</td>
+<td>基于状态图，细粒度控制</td>
+<td>复杂流程、需要精确控制</td>
+</tr>
+<tr class="even">
+<td>CrewAI</td>
+<td>角色扮演、团队协作</td>
+<td>多 Agent 协作任务</td>
+</tr>
+<tr class="odd">
+<td>AutoGen</td>
+<td>对话驱动的多 Agent</td>
+<td>研究和实验</td>
+</tr>
+<tr class="even">
+<td>Haystack</td>
+<td>管道化设计</td>
+<td>RAG 为主的应用</td>
+</tr>
+<tr class="odd">
+<td>Semantic Kernel</td>
+<td>微软生态，企业级</td>
+<td>企业 AI 集成</td>
+</tr>
+</tbody>
+</table>
+<h2 id="总结">总结</h2>
+<p>AI Agent 的核心挑战在于：如何让 LLM 可靠地规划和执行多步骤任务。ReAct
+是最基础且实用的模式；Plan-and-Execute 适合复杂任务；多 Agent
+系统适合需要专业分工的场景。</p>
+<p>关键设计原则：</p>
+<ol type="1">
+<li><strong>明确工具边界</strong>：工具描述要精确，输入输出要清晰</li>
+<li><strong>控制迭代上限</strong>：防止 Agent 陷入无限循环</li>
+<li><strong>错误处理</strong>：工具调用失败时提供有意义的错误信息</li>
+<li><strong>记忆管理</strong>：平衡上下文长度和信息保留</li>
+<li><strong>人在环中</strong>：关键决策点加入人工审批</li>
+<li><strong>可观测性</strong>：记录每一步的
+Thought/Action/Observation</li>
+</ol>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2025-10-15</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">3.2k 字 · 8 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/neovim-ide-setup/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Neovim IDE化配置完全指南</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/git-advanced-workflow/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Git高级工作流：rebase/cherry-pick/bisect</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#agent-%E6%A0%B8%E5%BF%83%E6%9E%B6%E6%9E%84"><span class="toc-text">Agent 核心架构</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#react-%E6%A8%A1%E5%BC%8F"><span class="toc-text">ReAct 模式</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#react-%E5%AE%9E%E7%8E%B0"><span class="toc-text">ReAct 实现</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%A7%84%E5%88%92%E7%AD%96%E7%95%A5"><span class="toc-text">规划策略</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#plan-and-execute"><span class="toc-text">Plan-and-Execute</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#adaptive-planninglanggraph-%E5%AE%9E%E7%8E%B0"><span class="toc-text">Adaptive Planning（LangGraph
+实现）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%B7%A5%E5%85%B7%E4%BD%BF%E7%94%A8tool-use"><span class="toc-text">工具使用（Tool Use）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%B7%A5%E5%85%B7%E8%AE%BE%E8%AE%A1%E5%8E%9F%E5%88%99"><span class="toc-text">工具设计原则</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%AE%B0%E5%BF%86%E7%AE%A1%E7%90%86"><span class="toc-text">记忆管理</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%9E%E7%8E%B0%E5%A4%9A%E5%B1%82%E8%AE%B0%E5%BF%86"><span class="toc-text">实现多层记忆</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%A4%9A-agent-%E7%B3%BB%E7%BB%9F"><span class="toc-text">多 Agent 系统</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#supervisor-%E6%A8%A1%E5%BC%8F"><span class="toc-text">Supervisor 模式</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#agent-%E8%AF%84%E4%BC%B0"><span class="toc-text">Agent 评估</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#agent-%E6%A1%86%E6%9E%B6%E5%AF%B9%E6%AF%94"><span class="toc-text">Agent 框架对比</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

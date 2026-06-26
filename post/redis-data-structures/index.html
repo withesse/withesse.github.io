@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Redis数据结构底层实现详解 · zt&#39;s Blog</title>
+  <meta name="description" content="深入解析Redis五种数据类型背后的底层数据结构实现，包括SDS、ziplist、quicklist、skiplist等，以及编码转换机制。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/redis-data-structures/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Redis数据结构底层实现详解">
+  <meta property="og:description" content="深入解析Redis五种数据类型背后的底层数据结构实现，包括SDS、ziplist、quicklist、skiplist等，以及编码转换机制。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/redis-data-structures/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2024-12-10T16:00:00.000Z">
+  <meta property="article:modified_time" content="2024-12-10T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Redis数据结构底层实现详解">
+  <meta name="twitter:description" content="深入解析Redis五种数据类型背后的底层数据结构实现，包括SDS、ziplist、quicklist、skiplist等，以及编码转换机制。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Redis数据结构底层实现详解","description":"深入解析Redis五种数据类型背后的底层数据结构实现，包括SDS、ziplist、quicklist、skiplist等，以及编码转换机制。","datePublished":"2024-12-10T16:00:00.000Z","dateModified":"2024-12-10T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/redis-data-structures/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Database","item":"https://withesse.co/categories/Database/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:330">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Database/">Database</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/redis/"><span class="hash">#</span>redis</a><a class="tag" href="/tags/data-structures/"><span class="hash">#</span>data-structures</a><a class="tag" href="/tags/sds/"><span class="hash">#</span>sds</a><a class="tag" href="/tags/skiplist/"><span class="hash">#</span>skiplist</a>
+        
+      </div>
+
+      <h1>Redis数据结构底层实现详解</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2024.12.11</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 8 min</span>
+        </span>
+        <span class="wc"><span class="num">3.3k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#redis-%E5%AF%B9%E8%B1%A1%E7%B3%BB%E7%BB%9F"><span class="toc-text">Redis 对象系统</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#sdssimple-dynamic-string"><span class="toc-text">SDS（Simple Dynamic String）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#sds-%E7%BB%93%E6%9E%84"><span class="toc-text">SDS 结构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#sds-vs-c%E5%AD%97%E7%AC%A6%E4%B8%B2"><span class="toc-text">SDS vs C字符串</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#sds-%E7%A9%BA%E9%97%B4%E9%A2%84%E5%88%86%E9%85%8D%E7%AD%96%E7%95%A5"><span class="toc-text">SDS 空间预分配策略</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#string-%E7%9A%84%E4%B8%89%E7%A7%8D%E7%BC%96%E7%A0%81"><span class="toc-text">String 的三种编码</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#ziplist%E5%8E%8B%E7%BC%A9%E5%88%97%E8%A1%A8"><span class="toc-text">ziplist（压缩列表）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#ziplist-%E5%86%85%E5%AD%98%E5%B8%83%E5%B1%80"><span class="toc-text">ziplist 内存布局</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BF%9E%E9%94%81%E6%9B%B4%E6%96%B0%E9%97%AE%E9%A2%98"><span class="toc-text">连锁更新问题</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#listpack%E7%B4%A7%E5%87%91%E5%88%97%E8%A1%A8"><span class="toc-text">listpack（紧凑列表）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#quicklist%E5%BF%AB%E9%80%9F%E5%88%97%E8%A1%A8"><span class="toc-text">quicklist（快速列表）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#skiplist%E8%B7%B3%E8%B7%83%E8%A1%A8"><span class="toc-text">skiplist（跳跃表）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%B7%B3%E8%B7%83%E8%A1%A8%E7%BB%93%E6%9E%84"><span class="toc-text">跳跃表结构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%B1%82%E6%95%B0%E7%9A%84%E9%9A%8F%E6%9C%BA%E7%94%9F%E6%88%90"><span class="toc-text">层数的随机生成</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88sorted-set%E7%94%A8skiplist%E8%80%8C%E4%B8%8D%E6%98%AF%E7%BA%A2%E9%BB%91%E6%A0%91"><span class="toc-text">为什么Sorted
+Set用skiplist而不是红黑树</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#intset%E6%95%B4%E6%95%B0%E9%9B%86%E5%90%88"><span class="toc-text">intset（整数集合）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#hashtable%E5%AD%97%E5%85%B8"><span class="toc-text">hashtable（字典）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%B8%90%E8%BF%9B%E5%BC%8F-rehash"><span class="toc-text">渐进式 Rehash</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BC%96%E7%A0%81%E8%BD%AC%E6%8D%A2%E8%A7%84%E5%88%99"><span class="toc-text">编码转换规则</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%86%85%E5%AD%98%E6%95%88%E7%8E%87%E4%BC%98%E5%8C%96%E5%AE%9E%E8%B7%B5"><span class="toc-text">内存效率优化实践</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BD%BF%E7%94%A8%E5%90%88%E9%80%82%E7%9A%84%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84"><span class="toc-text">使用合适的数据结构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%B3%E9%94%AE%E5%86%85%E5%AD%98%E4%BC%98%E5%8C%96%E5%BB%BA%E8%AE%AE"><span class="toc-text">关键内存优化建议</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="引言">引言</h2>
+<p>Redis之所以能在内存中实现极高的读写性能，除了单线程事件驱动模型外，精心设计的底层数据结构功不可没。Redis对外暴露的五种数据类型（String、List、Hash、Set、Sorted
+Set）在内部有着多种不同的编码实现，会根据数据特征自动选择最优的底层结构。理解这些底层实现，有助于我们在实际使用中做出正确的设计决策。</p>
+<h2 id="redis-对象系统">Redis 对象系统</h2>
+<p>每个Redis键值对都通过<code>redisObject</code>结构体表示：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-keyword">typedef</span> <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">redisObject</span> &#123;</span><br>    <span class="hljs-type">unsigned</span> type:<span class="hljs-number">4</span>;      <span class="hljs-comment">// 数据类型: string, list, hash, set, zset</span><br>    <span class="hljs-type">unsigned</span> encoding:<span class="hljs-number">4</span>;  <span class="hljs-comment">// 编码方式: int, embstr, raw, ziplist, quicklist, ...</span><br>    <span class="hljs-type">unsigned</span> lru:<span class="hljs-number">24</span>;      <span class="hljs-comment">// LRU时间或LFU计数</span><br>    <span class="hljs-type">int</span> refcount;         <span class="hljs-comment">// 引用计数</span><br>    <span class="hljs-type">void</span> *ptr;            <span class="hljs-comment">// 指向底层数据结构的指针</span><br>&#125; robj;<br></code></pre></td></tr></table></figure>
+<pre class="mermaid">graph TD
+    subgraph "Redis数据类型与编码"
+        A[String] --&gt; A1[int]
+        A --&gt; A2[embstr]
+        A --&gt; A3[raw]
+
+        B[List] --&gt; B1[listpack&lt;br/&gt;Redis 7.0+]
+        B --&gt; B2[quicklist]
+
+        C[Hash] --&gt; C1[listpack&lt;br/&gt;Redis 7.0+]
+        C --&gt; C2[hashtable]
+
+        D[Set] --&gt; D1[intset]
+        D --&gt; D2[listpack]
+        D --&gt; D3[hashtable]
+
+        E[Sorted Set] --&gt; E1[listpack]
+        E --&gt; E2[skiplist + hashtable]
+    end</pre>
+<h2 id="sdssimple-dynamic-string">SDS（Simple Dynamic String）</h2>
+<p>Redis没有使用C语言原生的字符串（以<code>\0</code>结尾的char数组），而是自己实现了SDS。</p>
+<h3 id="sds-结构">SDS 结构</h3>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-comment">// Redis 6.0+ 使用不同头部节省内存</span><br><span class="hljs-class"><span class="hljs-keyword">struct</span> __<span class="hljs-title">attribute__</span> ((__<span class="hljs-title">packed__</span>)) <span class="hljs-title">sdshdr8</span> &#123;</span><br>    <span class="hljs-type">uint8_t</span> len;        <span class="hljs-comment">// 已使用长度</span><br>    <span class="hljs-type">uint8_t</span> alloc;      <span class="hljs-comment">// 分配的总长度（不含头部和末尾\0）</span><br>    <span class="hljs-type">unsigned</span> <span class="hljs-type">char</span> flags; <span class="hljs-comment">// 类型标志（sdshdr5/8/16/32/64）</span><br>    <span class="hljs-type">char</span> buf[];          <span class="hljs-comment">// 实际数据</span><br>&#125;;<br></code></pre></td></tr></table></figure>
+<h3 id="sds-vs-c字符串">SDS vs C字符串</h3>
+<table>
+<thead>
+<tr class="header">
+<th>特性</th>
+<th>C字符串</th>
+<th>SDS</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>获取长度</td>
+<td>O(n) 遍历</td>
+<td>O(1) 直接读len</td>
+</tr>
+<tr class="even">
+<td>缓冲区溢出</td>
+<td>可能</td>
+<td>自动扩容，不会溢出</td>
+</tr>
+<tr class="odd">
+<td>修改字符串的内存分配</td>
+<td>每次修改都需要</td>
+<td>预分配+惰性释放</td>
+</tr>
+<tr class="even">
+<td>二进制安全</td>
+<td>不是（\0截断）</td>
+<td>是（通过len判断结束）</td>
+</tr>
+<tr class="odd">
+<td>兼容C函数</td>
+<td>是</td>
+<td>部分兼容（buf末尾也有\0）</td>
+</tr>
+</tbody>
+</table>
+<h3 id="sds-空间预分配策略">SDS 空间预分配策略</h3>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs plaintext">修改后 SDS 长度 &lt; 1MB:<br>    分配 2 * len + 1 字节<br><br>修改后 SDS 长度 &gt;= 1MB:<br>    分配 len + 1MB + 1 字节<br></code></pre></td></tr></table></figure>
+<pre class="mermaid">graph LR
+    subgraph "SDS空间预分配示例"
+        A["原始: len=5, alloc=5&lt;br/&gt;'hello'"] --&gt;|APPEND ' world'| B["扩容后: len=11, alloc=22&lt;br/&gt;'hello world' + 11字节空闲"]
+        B --&gt;|APPEND '!'| C["无需扩容: len=12, alloc=22&lt;br/&gt;'hello world!' + 10字节空闲"]
+    end</pre>
+<h3 id="string-的三种编码">String 的三种编码</h3>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- int编码: 值为整数且可以用long表示</span><br><span class="hljs-keyword">SET</span> counter <span class="hljs-number">12345</span><br>OBJECT ENCODING counter  <span class="hljs-comment">-- &quot;int&quot;</span><br><br><span class="hljs-comment">-- embstr编码: 字符串长度 &lt;= 44字节</span><br><span class="hljs-keyword">SET</span> name &quot;hello&quot;<br>OBJECT ENCODING name  <span class="hljs-comment">-- &quot;embstr&quot;</span><br><br><span class="hljs-comment">-- raw编码: 字符串长度 &gt; 44字节</span><br><span class="hljs-keyword">SET</span> longstr &quot;this is a very long string that exceeds 44 bytes limit...&quot;<br>OBJECT ENCODING longstr  <span class="hljs-comment">-- &quot;raw&quot;</span><br></code></pre></td></tr></table></figure>
+<p><strong>embstr vs raw 的区别：</strong></p>
+<pre class="mermaid">graph LR
+    subgraph "embstr: redisObject和SDS连续内存"
+        A[redisObject | SDS header | buf]
+    end
+    subgraph "raw: 两次内存分配"
+        B[redisObject] --&gt; C[SDS header | buf]
+    end</pre>
+<p>embstr只需一次内存分配，且内存连续，对CPU缓存友好。但embstr是只读的，修改时会转为raw编码。</p>
+<h2 id="ziplist压缩列表">ziplist（压缩列表）</h2>
+<p>ziplist是一块连续的内存区域，Redis
+7.0之前用于小数据量的List、Hash和Sorted Set。</p>
+<h3 id="ziplist-内存布局">ziplist 内存布局</h3>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><code class="hljs plaintext">+--------+------+-------+---------+---------+-----+---------+---------+<br>| zlbytes| zltail| zllen | entry1  | entry2  | ... | entryN  | zlend   |<br>| 4bytes | 4bytes|2bytes |         |         |     |         | 1byte   |<br>+--------+------+-------+---------+---------+-----+---------+---------+<br><br>每个entry的结构:<br>+--------------+----------+--------+<br>| prevlen      | encoding | data   |<br>| 1或5 bytes   | 1-5bytes |        |<br>+--------------+----------+--------+<br></code></pre></td></tr></table></figure>
+<ul>
+<li><strong>zlbytes</strong>：整个ziplist占用的字节数</li>
+<li><strong>zltail</strong>：最后一个entry距起始地址的偏移（支持反向遍历）</li>
+<li><strong>zllen</strong>：entry数量（&lt;65535时为精确值）</li>
+<li><strong>prevlen</strong>：前一个entry的长度（用于反向遍历）</li>
+</ul>
+<h3 id="连锁更新问题">连锁更新问题</h3>
+<p>ziplist的一个缺点是可能发生连锁更新（cascade update）：</p>
+<pre class="mermaid">sequenceDiagram
+    participant Z as ziplist
+    Note over Z: 所有entry的prevlen都是1字节(前一个entry&lt;254字节)
+    Z-&gt;&gt;Z: 在头部插入一个&gt;254字节的entry
+    Note over Z: entry1的prevlen需要从1字节扩展为5字节
+    Z-&gt;&gt;Z: entry1长度增加4字节,可能&gt;254字节
+    Note over Z: entry2的prevlen也需要扩展...
+    Z-&gt;&gt;Z: 连锁更新传播到entryN
+    Note over Z: 最坏情况O(N^2)</pre>
+<h3 id="listpack紧凑列表">listpack（紧凑列表）</h3>
+<p>Redis 7.0引入listpack替代ziplist，解决了连锁更新问题：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><code class="hljs plaintext">listpack entry结构:<br>+---------+--------+--------+<br>| encoding| data   | backlen|<br>+---------+--------+--------+<br><br>关键区别: backlen记录的是当前entry自身的长度(而非前一个entry)<br>这样修改一个entry不会影响其他entry<br></code></pre></td></tr></table></figure>
+<h2 id="quicklist快速列表">quicklist（快速列表）</h2>
+<p>quicklist是Redis
+3.2引入的List底层实现，它是一个由ziplist（或listpack）节点组成的双向链表。</p>
+<pre class="mermaid">graph LR
+    A[quicklist head] --&gt; B[quicklistNode&lt;br/&gt;ziplist/listpack&lt;br/&gt;entry1, entry2, entry3]
+    B --&gt; C[quicklistNode&lt;br/&gt;ziplist/listpack&lt;br/&gt;entry4, entry5]
+    C --&gt; D[quicklistNode&lt;br/&gt;ziplist/listpack&lt;br/&gt;entry6, entry7, entry8]
+    D --&gt; E[quicklist tail]
+    B &lt;--&gt; C
+    C &lt;--&gt; D</pre>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-keyword">typedef</span> <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">quicklist</span> &#123;</span><br>    quicklistNode *head;<br>    quicklistNode *tail;<br>    <span class="hljs-type">unsigned</span> <span class="hljs-type">long</span> count;        <span class="hljs-comment">// 所有entry总数</span><br>    <span class="hljs-type">unsigned</span> <span class="hljs-type">long</span> len;          <span class="hljs-comment">// quicklistNode数量</span><br>    <span class="hljs-type">signed</span> <span class="hljs-type">int</span> fill : QL_FILL_BITS;  <span class="hljs-comment">// 每个node的填充因子</span><br>    <span class="hljs-type">unsigned</span> <span class="hljs-type">int</span> compress : QL_COMP_BITS; <span class="hljs-comment">// 压缩深度</span><br>    <span class="hljs-comment">// ...</span><br>&#125; quicklist;<br><br><span class="hljs-keyword">typedef</span> <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">quicklistNode</span> &#123;</span><br>    <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">quicklistNode</span> *<span class="hljs-title">prev</span>;</span><br>    <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">quicklistNode</span> *<span class="hljs-title">next</span>;</span><br>    <span class="hljs-type">unsigned</span> <span class="hljs-type">char</span> *entry;     <span class="hljs-comment">// 指向ziplist/listpack</span><br>    <span class="hljs-type">size_t</span> sz;                <span class="hljs-comment">// ziplist/listpack的总字节数</span><br>    <span class="hljs-type">unsigned</span> <span class="hljs-type">int</span> count : <span class="hljs-number">16</span>;  <span class="hljs-comment">// ziplist/listpack中entry的数量</span><br>    <span class="hljs-type">unsigned</span> <span class="hljs-type">int</span> encoding : <span class="hljs-number">2</span>; <span class="hljs-comment">// RAW or LZF压缩</span><br>    <span class="hljs-comment">// ...</span><br>&#125; quicklistNode;<br></code></pre></td></tr></table></figure>
+<p><strong>fill参数控制（list-max-ziplist-size）：</strong></p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs plaintext">fill &gt; 0: 每个ziplist/listpack最多fill个entry<br>fill = -1: 每个ziplist/listpack最大4KB<br>fill = -2: 每个ziplist/listpack最大8KB (默认)<br>fill = -3: 每个ziplist/listpack最大16KB<br>fill = -4: 每个ziplist/listpack最大32KB<br>fill = -5: 每个ziplist/listpack最大64KB<br></code></pre></td></tr></table></figure>
+<p><strong>compress参数（list-compress-depth）：</strong>
+压缩深度为N表示两端各N个节点不压缩，中间的节点使用LZF压缩。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><code class="hljs plaintext">compress = 0: 不压缩 (默认)<br>compress = 1: 两端各1个节点不压缩<br>compress = 2: 两端各2个节点不压缩<br></code></pre></td></tr></table></figure>
+<h2 id="skiplist跳跃表">skiplist（跳跃表）</h2>
+<p>跳跃表是Sorted Set的底层实现之一，支持O(log
+n)的查找、插入和删除。</p>
+<h3 id="跳跃表结构">跳跃表结构</h3>
+<pre class="mermaid">graph LR
+    subgraph "skiplist示例"
+        direction LR
+        H[Header&lt;br/&gt;L4: →&lt;br/&gt;L3: →&lt;br/&gt;L2: →&lt;br/&gt;L1: →] --&gt; N1["score=1.0&lt;br/&gt;L1: →"]
+        H --&gt; N2
+        N1 --&gt; N2["score=2.0&lt;br/&gt;L2: →&lt;br/&gt;L1: →"]
+        H --&gt; N3
+        N2 --&gt; N3["score=3.0&lt;br/&gt;L4: →&lt;br/&gt;L3: →&lt;br/&gt;L2: →&lt;br/&gt;L1: →"]
+        N1 --&gt; N2
+        N2 --&gt; N4
+        N3 --&gt; N4["score=5.0&lt;br/&gt;L1: →"]
+        N3 --&gt; N5
+        N4 --&gt; N5["score=8.0&lt;br/&gt;L3: →&lt;br/&gt;L2: →&lt;br/&gt;L1: →"]
+        N5 --&gt; T[NULL]
+    end</pre>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-keyword">typedef</span> <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">zskiplistNode</span> &#123;</span><br>    sds ele;                     <span class="hljs-comment">// 成员值</span><br>    <span class="hljs-type">double</span> score;                <span class="hljs-comment">// 分数</span><br>    <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">zskiplistNode</span> *<span class="hljs-title">backward</span>;</span> <span class="hljs-comment">// 后退指针（用于反向遍历）</span><br>    <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">zskiplistLevel</span> &#123;</span><br>        <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">zskiplistNode</span> *<span class="hljs-title">forward</span>;</span> <span class="hljs-comment">// 前进指针</span><br>        <span class="hljs-type">unsigned</span> <span class="hljs-type">long</span> span;             <span class="hljs-comment">// 跨度（用于计算排名）</span><br>    &#125; level[];                   <span class="hljs-comment">// 层级数组</span><br>&#125; zskiplistNode;<br><br><span class="hljs-keyword">typedef</span> <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">zskiplist</span> &#123;</span><br>    <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">zskiplistNode</span> *<span class="hljs-title">header</span>, *<span class="hljs-title">tail</span>;</span><br>    <span class="hljs-type">unsigned</span> <span class="hljs-type">long</span> length;        <span class="hljs-comment">// 节点数量</span><br>    <span class="hljs-type">int</span> level;                   <span class="hljs-comment">// 当前最大层数</span><br>&#125; zskiplist;<br></code></pre></td></tr></table></figure>
+<h3 id="层数的随机生成">层数的随机生成</h3>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-comment">// 每层的概率为 ZSKIPLIST_P = 0.25</span><br><span class="hljs-comment">// 最大层数 ZSKIPLIST_MAXLEVEL = 32 (Redis 7.0改为64)</span><br><span class="hljs-type">int</span> <span class="hljs-title function_">zslRandomLevel</span><span class="hljs-params">(<span class="hljs-type">void</span>)</span> &#123;<br>    <span class="hljs-type">int</span> level = <span class="hljs-number">1</span>;<br>    <span class="hljs-keyword">while</span> ((random() &amp; <span class="hljs-number">0xFFFF</span>) &lt; (ZSKIPLIST_P * <span class="hljs-number">0xFFFF</span>))<br>        level += <span class="hljs-number">1</span>;<br>    <span class="hljs-keyword">return</span> (level &lt; ZSKIPLIST_MAXLEVEL) ? level : ZSKIPLIST_MAXLEVEL;<br>&#125;<br><span class="hljs-comment">// 平均每个节点 1/(1-0.25) = 1.33 层</span><br></code></pre></td></tr></table></figure>
+<h3 id="为什么sorted-set用skiplist而不是红黑树">为什么Sorted
+Set用skiplist而不是红黑树</h3>
+<ol type="1">
+<li><strong>实现简单</strong>：跳跃表的实现比红黑树简单得多，更容易调试和维护</li>
+<li><strong>范围查询高效</strong>：找到起始节点后，沿前进指针遍历即可，时间复杂度O(log
+n + m)</li>
+<li><strong>内存局部性</strong>：节点在内存中可以不连续，但通过指针跳跃访问</li>
+<li><strong>并发友好</strong>：如果需要加锁，跳跃表只需对部分层加锁</li>
+</ol>
+<h2 id="intset整数集合">intset（整数集合）</h2>
+<p>当Set的所有元素都是整数且数量较少时，使用intset编码。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-keyword">typedef</span> <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">intset</span> &#123;</span><br>    <span class="hljs-type">uint32_t</span> encoding;  <span class="hljs-comment">// 编码方式: INTSET_ENC_INT16/32/64</span><br>    <span class="hljs-type">uint32_t</span> length;    <span class="hljs-comment">// 元素数量</span><br>    <span class="hljs-type">int8_t</span> contents[];  <span class="hljs-comment">// 有序整数数组</span><br>&#125; intset;<br></code></pre></td></tr></table></figure>
+<pre class="mermaid">graph TD
+    A["SADD myset 1 5 10 3"] --&gt; B["intset encoding=INT16&lt;br/&gt;contents: [1, 3, 5, 10]&lt;br/&gt;有序排列，二分查找O(log n)"]
+    B --&gt;|"SADD myset 65536&lt;br/&gt;超过INT16范围"| C["intset encoding=INT32&lt;br/&gt;contents: [1, 3, 5, 10, 65536]&lt;br/&gt;升级编码，所有元素扩展为INT32"]</pre>
+<p><strong>intset的升级机制：</strong>
+当新加入的元素类型比当前编码大时，intset会升级编码。升级过程： 1.
+按新编码大小扩展数组空间 2. 从后向前将现有元素转换为新编码放到正确位置
+3. 添加新元素 4. 更新encoding字段</p>
+<p>注意：intset只能升级不能降级。</p>
+<h2 id="hashtable字典">hashtable（字典）</h2>
+<p>Redis的字典使用链地址法处理哈希冲突，支持渐进式rehash。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-keyword">typedef</span> <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">dict</span> &#123;</span><br>    dictType *type;<br>    dictEntry **ht_table[<span class="hljs-number">2</span>];   <span class="hljs-comment">// 两个哈希表，用于rehash</span><br>    <span class="hljs-type">unsigned</span> <span class="hljs-type">long</span> ht_used[<span class="hljs-number">2</span>];  <span class="hljs-comment">// 每个哈希表已使用的节点数</span><br>    <span class="hljs-type">long</span> rehashidx;            <span class="hljs-comment">// rehash进度，-1表示未在rehash</span><br>    <span class="hljs-comment">// ...</span><br>&#125; dict;<br><br><span class="hljs-keyword">typedef</span> <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">dictEntry</span> &#123;</span><br>    <span class="hljs-type">void</span> *key;<br>    <span class="hljs-class"><span class="hljs-keyword">union</span> &#123;</span><br>        <span class="hljs-type">void</span> *val;<br>        <span class="hljs-type">uint64_t</span> u64;<br>        <span class="hljs-type">int64_t</span> s64;<br>        <span class="hljs-type">double</span> d;<br>    &#125; v;<br>    <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">dictEntry</span> *<span class="hljs-title">next</span>;</span>  <span class="hljs-comment">// 链表法处理冲突</span><br>&#125; dictEntry;<br></code></pre></td></tr></table></figure>
+<h3 id="渐进式-rehash">渐进式 Rehash</h3>
+<pre class="mermaid">sequenceDiagram
+    participant C as Client
+    participant D as Dict
+
+    Note over D: ht_table[0] 负载因子过高, 开始rehash
+    D-&gt;&gt;D: 分配 ht_table[1] (大小为 ht_table[0] 的 2 倍)
+    D-&gt;&gt;D: rehashidx = 0
+
+    C-&gt;&gt;D: GET key1
+    D-&gt;&gt;D: 从 ht_table[0] 的 bucket[0] 迁移到 ht_table[1]
+    D-&gt;&gt;D: rehashidx = 1
+    D-&gt;&gt;C: 在两个表中查找 key1 返回
+
+    C-&gt;&gt;D: SET key2 value2
+    D-&gt;&gt;D: 迁移 ht_table[0] 的 bucket[1]
+    D-&gt;&gt;D: rehashidx = 2
+    D-&gt;&gt;D: 新数据写入 ht_table[1]
+
+    Note over D: ...每次操作迁移一个bucket...
+
+    Note over D: rehash完成
+    D-&gt;&gt;D: 释放 ht_table[0]
+    D-&gt;&gt;D: ht_table[0] = ht_table[1]
+    D-&gt;&gt;D: ht_table[1] = NULL
+    D-&gt;&gt;D: rehashidx = -1</pre>
+<p><strong>Rehash触发条件：</strong></p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><code class="hljs plaintext">扩容:<br>  - 没有在执行 BGSAVE/BGREWRITEAOF 时: 负载因子 &gt;= 1<br>  - 在执行 BGSAVE/BGREWRITEAOF 时: 负载因子 &gt;= 5<br>  (负载因子 = ht_used[0] / ht_size[0])<br><br>缩容:<br>  - 负载因子 &lt; 0.1<br></code></pre></td></tr></table></figure>
+<h2 id="编码转换规则">编码转换规则</h2>
+<pre class="mermaid">flowchart TD
+    subgraph String
+        S1[int] --&gt;|"不再是整数"| S2[embstr]
+        S2 --&gt;|"修改操作"| S3[raw]
+        S2 --&gt;|"长度&gt;44"| S3
+    end
+
+    subgraph List
+        L1[listpack] --&gt;|"元素数&gt;128&lt;br/&gt;或元素大小&gt;64字节"| L2[quicklist]
+    end
+
+    subgraph Hash
+        H1[listpack] --&gt;|"字段数&gt;128&lt;br/&gt;或值大小&gt;64字节"| H2[hashtable]
+    end
+
+    subgraph Set
+        T1[intset] --&gt;|"元素非整数&lt;br/&gt;或数量&gt;512"| T2[hashtable]
+    end
+
+    subgraph "Sorted Set"
+        Z1[listpack] --&gt;|"元素数&gt;128&lt;br/&gt;或元素大小&gt;64字节"| Z2["skiplist + hashtable"]
+    end</pre>
+<p>相关配置参数：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># List</span><br>list-max-listpack-size -2    <span class="hljs-comment"># quicklist中每个node的大小限制</span><br>list-compress-depth 0         <span class="hljs-comment"># 压缩深度</span><br><br><span class="hljs-comment"># Hash</span><br>hash-max-listpack-entries 128  <span class="hljs-comment"># listpack-&gt;hashtable的元素数阈值</span><br>hash-max-listpack-value 64     <span class="hljs-comment"># listpack-&gt;hashtable的值大小阈值</span><br><br><span class="hljs-comment"># Set</span><br>set-max-intset-entries 512     <span class="hljs-comment"># intset-&gt;hashtable的元素数阈值</span><br>set-max-listpack-entries 128   <span class="hljs-comment"># listpack-&gt;hashtable的元素数阈值</span><br><br><span class="hljs-comment"># Sorted Set</span><br>zset-max-listpack-entries 128  <span class="hljs-comment"># listpack-&gt;skiplist的元素数阈值</span><br>zset-max-listpack-value 64     <span class="hljs-comment"># listpack-&gt;skiplist的值大小阈值</span><br></code></pre></td></tr></table></figure>
+<h2 id="内存效率优化实践">内存效率优化实践</h2>
+<h3 id="使用合适的数据结构">使用合适的数据结构</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 查看对象编码</span><br>redis-cli OBJECT ENCODING mykey<br><br><span class="hljs-comment"># 查看内存使用</span><br>redis-cli MEMORY USAGE mykey<br></code></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 小Hash比String更省内存（利用listpack编码）</span><br><span class="hljs-comment"># 不推荐: 100万个独立key</span><br>SET user:1:name <span class="hljs-string">&quot;Alice&quot;</span><br>SET user:1:age <span class="hljs-string">&quot;25&quot;</span><br>SET user:1:email <span class="hljs-string">&quot;alice@example.com&quot;</span><br><span class="hljs-comment"># 每个key都有redisObject开销</span><br><br><span class="hljs-comment"># 推荐: Hash分桶</span><br><span class="hljs-comment"># 将 user:1 映射到 bucket = 1 / 100 = 0, field = 1</span><br>HSET user_bucket:0 1:name <span class="hljs-string">&quot;Alice&quot;</span><br>HSET user_bucket:0 1:age <span class="hljs-string">&quot;25&quot;</span><br>HSET user_bucket:0 1:email <span class="hljs-string">&quot;alice@example.com&quot;</span><br><span class="hljs-comment"># 每个bucket内使用listpack，大幅减少内存开销</span><br></code></pre></td></tr></table></figure>
+<h3 id="关键内存优化建议">关键内存优化建议</h3>
+<ol type="1">
+<li><strong>控制key的长度</strong>：key本身占用内存，尽量简洁（如<code>u:1:n</code>代替<code>user:1:name</code>）</li>
+<li><strong>利用紧凑编码</strong>：保持Hash/Set/ZSet的元素数量和大小在阈值内</li>
+<li><strong>使用整数ID</strong>：Sorted
+Set的member使用整数ID而非长字符串</li>
+<li><strong>选择合适的数据类型</strong>：位图用于布尔标记，HyperLogLog用于基数统计</li>
+<li><strong>设置过期时间</strong>：避免冗余数据长期占用内存</li>
+</ol>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 分析Redis内存分布</span><br>redis-cli --bigkeys           <span class="hljs-comment"># 查找大key</span><br>redis-cli --memkeys           <span class="hljs-comment"># 按内存排序</span><br>redis-cli INFO memory         <span class="hljs-comment"># 内存总览</span><br>redis-cli MEMORY DOCTOR       <span class="hljs-comment"># 内存诊断建议</span><br></code></pre></td></tr></table></figure>
+<h2 id="总结">总结</h2>
+<p>Redis底层数据结构的设计体现了对内存效率和访问性能的极致追求：</p>
+<ul>
+<li><strong>SDS</strong>以少量额外空间换取O(1)长度获取、缓冲区安全和二进制安全</li>
+<li><strong>ziplist/listpack</strong>通过连续内存和紧凑编码，在小数据量时节省大量内存</li>
+<li><strong>quicklist</strong>将ziplist/listpack组织成双向链表，兼顾了内存效率和操作性能</li>
+<li><strong>skiplist</strong>以简洁的概率数据结构实现了高效的有序集合操作</li>
+<li><strong>渐进式rehash</strong>避免了一次性rehash导致的服务卡顿</li>
+<li><strong>编码转换机制</strong>根据数据特征自动选择最优的底层实现</li>
+</ul>
+<p>理解这些底层实现，能帮助我们在实际项目中做出更好的数据结构选择，充分发挥Redis的性能潜力。</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2024-12-11</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">3.3k 字 · 8 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/java-threadpool-best-practices/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Java线程池最佳实践与源码分析</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/java-classloader/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Java类加载机制与自定义ClassLoader</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#redis-%E5%AF%B9%E8%B1%A1%E7%B3%BB%E7%BB%9F"><span class="toc-text">Redis 对象系统</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#sdssimple-dynamic-string"><span class="toc-text">SDS（Simple Dynamic String）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#sds-%E7%BB%93%E6%9E%84"><span class="toc-text">SDS 结构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#sds-vs-c%E5%AD%97%E7%AC%A6%E4%B8%B2"><span class="toc-text">SDS vs C字符串</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#sds-%E7%A9%BA%E9%97%B4%E9%A2%84%E5%88%86%E9%85%8D%E7%AD%96%E7%95%A5"><span class="toc-text">SDS 空间预分配策略</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#string-%E7%9A%84%E4%B8%89%E7%A7%8D%E7%BC%96%E7%A0%81"><span class="toc-text">String 的三种编码</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#ziplist%E5%8E%8B%E7%BC%A9%E5%88%97%E8%A1%A8"><span class="toc-text">ziplist（压缩列表）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#ziplist-%E5%86%85%E5%AD%98%E5%B8%83%E5%B1%80"><span class="toc-text">ziplist 内存布局</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BF%9E%E9%94%81%E6%9B%B4%E6%96%B0%E9%97%AE%E9%A2%98"><span class="toc-text">连锁更新问题</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#listpack%E7%B4%A7%E5%87%91%E5%88%97%E8%A1%A8"><span class="toc-text">listpack（紧凑列表）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#quicklist%E5%BF%AB%E9%80%9F%E5%88%97%E8%A1%A8"><span class="toc-text">quicklist（快速列表）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#skiplist%E8%B7%B3%E8%B7%83%E8%A1%A8"><span class="toc-text">skiplist（跳跃表）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%B7%B3%E8%B7%83%E8%A1%A8%E7%BB%93%E6%9E%84"><span class="toc-text">跳跃表结构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%B1%82%E6%95%B0%E7%9A%84%E9%9A%8F%E6%9C%BA%E7%94%9F%E6%88%90"><span class="toc-text">层数的随机生成</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88sorted-set%E7%94%A8skiplist%E8%80%8C%E4%B8%8D%E6%98%AF%E7%BA%A2%E9%BB%91%E6%A0%91"><span class="toc-text">为什么Sorted
+Set用skiplist而不是红黑树</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#intset%E6%95%B4%E6%95%B0%E9%9B%86%E5%90%88"><span class="toc-text">intset（整数集合）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#hashtable%E5%AD%97%E5%85%B8"><span class="toc-text">hashtable（字典）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%B8%90%E8%BF%9B%E5%BC%8F-rehash"><span class="toc-text">渐进式 Rehash</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BC%96%E7%A0%81%E8%BD%AC%E6%8D%A2%E8%A7%84%E5%88%99"><span class="toc-text">编码转换规则</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%86%85%E5%AD%98%E6%95%88%E7%8E%87%E4%BC%98%E5%8C%96%E5%AE%9E%E8%B7%B5"><span class="toc-text">内存效率优化实践</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BD%BF%E7%94%A8%E5%90%88%E9%80%82%E7%9A%84%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84"><span class="toc-text">使用合适的数据结构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%B3%E9%94%AE%E5%86%85%E5%AD%98%E4%BC%98%E5%8C%96%E5%BB%BA%E8%AE%AE"><span class="toc-text">关键内存优化建议</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

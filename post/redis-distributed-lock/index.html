@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Redis分布式锁的正确实现方式 · zt&#39;s Blog</title>
+  <meta name="description" content="系统分析Redis分布式锁的各种实现方式，从SETNX基础方案到Redisson实现，再到Redlock算法争议与Fencing Token机制。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/redis-distributed-lock/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Redis分布式锁的正确实现方式">
+  <meta property="og:description" content="系统分析Redis分布式锁的各种实现方式，从SETNX基础方案到Redisson实现，再到Redlock算法争议与Fencing Token机制。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/redis-distributed-lock/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2024-10-13T16:00:00.000Z">
+  <meta property="article:modified_time" content="2024-10-13T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Redis分布式锁的正确实现方式">
+  <meta name="twitter:description" content="系统分析Redis分布式锁的各种实现方式，从SETNX基础方案到Redisson实现，再到Redlock算法争议与Fencing Token机制。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Redis分布式锁的正确实现方式","description":"系统分析Redis分布式锁的各种实现方式，从SETNX基础方案到Redisson实现，再到Redlock算法争议与Fencing Token机制。","datePublished":"2024-10-13T16:00:00.000Z","dateModified":"2024-10-13T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/redis-distributed-lock/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Database","item":"https://withesse.co/categories/Database/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:330">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Database/">Database</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/redis/"><span class="hash">#</span>redis</a><a class="tag" href="/tags/distributed-lock/"><span class="hash">#</span>distributed-lock</a><a class="tag" href="/tags/redlock/"><span class="hash">#</span>redlock</a>
+        
+      </div>
+
+      <h1>Redis分布式锁的正确实现方式</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2024.10.14</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 11 min</span>
+        </span>
+        <span class="wc"><span class="num">4.3k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9F%BA%E7%A1%80%E6%96%B9%E6%A1%88setnx"><span class="toc-text">基础方案：SETNX</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%9C%80%E7%AE%80%E5%8D%95%E7%9A%84%E5%88%86%E5%B8%83%E5%BC%8F%E9%94%81"><span class="toc-text">最简单的分布式锁</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E9%9C%80%E8%A6%81%E9%9A%8F%E6%9C%BA-value"><span class="toc-text">为什么需要随机 value</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%AD%A3%E7%A1%AE%E7%9A%84%E8%A7%A3%E9%94%81%E6%93%8D%E4%BD%9C"><span class="toc-text">正确的解锁操作</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9F%BA%E7%A1%80%E6%96%B9%E6%A1%88%E7%9A%84%E9%97%AE%E9%A2%98"><span class="toc-text">基础方案的问题</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#redisson-%E5%AE%9E%E7%8E%B0%E6%96%B9%E6%A1%88"><span class="toc-text">Redisson 实现方案</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#redisson-%E9%94%81%E7%9A%84%E6%A0%B8%E5%BF%83%E6%9C%BA%E5%88%B6"><span class="toc-text">Redisson 锁的核心机制</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#redisson-%E5%8A%A0%E9%94%81%E7%9A%84-lua-%E8%84%9A%E6%9C%AC"><span class="toc-text">Redisson 加锁的 Lua 脚本</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#watchdog-%E8%87%AA%E5%8A%A8%E7%BB%AD%E6%9C%9F"><span class="toc-text">WatchDog 自动续期</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#redlock-%E7%AE%97%E6%B3%95"><span class="toc-text">Redlock 算法</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8D%95%E8%8A%82%E7%82%B9-redis-%E7%9A%84%E9%97%AE%E9%A2%98"><span class="toc-text">单节点 Redis 的问题</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#redlock-%E7%AE%97%E6%B3%95%E6%B5%81%E7%A8%8B"><span class="toc-text">Redlock 算法流程</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#martin-kleppmann-%E7%9A%84%E8%B4%A8%E7%96%91"><span class="toc-text">Martin Kleppmann 的质疑</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%B4%A8%E7%96%91%E4%B8%80gc%E6%9A%82%E5%81%9C%E5%AF%BC%E8%87%B4%E9%94%81%E5%A4%B1%E6%95%88"><span class="toc-text">质疑一：GC暂停导致锁失效</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%B4%A8%E7%96%91%E4%BA%8C%E6%97%B6%E9%92%9F%E8%B7%B3%E5%8F%98%E9%97%AE%E9%A2%98"><span class="toc-text">质疑二：时钟跳变问题</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#fencing-token-%E6%96%B9%E6%A1%88"><span class="toc-text">Fencing Token 方案</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#redis-%E5%88%86%E5%B8%83%E5%BC%8F%E9%94%81-vs-zookeeper"><span class="toc-text">Redis 分布式锁 vs ZooKeeper</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E8%B7%B5%E5%BB%BA%E8%AE%AE"><span class="toc-text">实践建议</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%80%89%E6%8B%A9%E5%90%88%E9%80%82%E7%9A%84%E6%96%B9%E6%A1%88"><span class="toc-text">选择合适的方案</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5"><span class="toc-text">最佳实践</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%94%81%E8%B6%85%E6%97%B6%E6%97%B6%E9%97%B4%E7%9A%84%E9%80%89%E6%8B%A9"><span class="toc-text">锁超时时间的选择</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%B8%A9%E5%9D%91%E8%AE%B0%E5%BD%95"><span class="toc-text">踩坑记录</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E6%B5%8B%E7%BB%93%E6%9E%9C"><span class="toc-text">实测结果</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%88%91%E7%9A%84%E7%9C%8B%E6%B3%95"><span class="toc-text">我的看法</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="引言">引言</h2>
+<p>分布式锁是分布式系统中最常见的协调原语之一。在微服务架构下，多个服务实例需要互斥地访问共享资源（如库存扣减、订单创建等），分布式锁就是解决这类问题的核心工具。Redis由于其高性能和广泛使用，成为实现分布式锁的热门选择，但要正确实现一个可靠的Redis分布式锁并不简单。</p>
+<h2 id="基础方案setnx">基础方案：SETNX</h2>
+<h3 id="最简单的分布式锁">最简单的分布式锁</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 加锁: SET key value NX EX seconds</span><br><span class="hljs-comment"># NX: 只在key不存在时设置（Not eXists）</span><br><span class="hljs-comment"># EX: 设置过期时间（秒）</span><br>SET lock:order:1001 <span class="hljs-string">&quot;uuid-random-value&quot;</span> NX EX 30<br><br><span class="hljs-comment"># 解锁: 先验证value再删除（需要Lua脚本保证原子性）</span><br></code></pre></td></tr></table></figure>
+<pre class="mermaid">sequenceDiagram
+    participant C1 as Client 1
+    participant R as Redis
+    participant C2 as Client 2
+
+    C1-&gt;&gt;R: SET lock:order NX EX 30 (value=uuid1)
+    R-&gt;&gt;C1: OK (获取锁成功)
+
+    C2-&gt;&gt;R: SET lock:order NX EX 30 (value=uuid2)
+    R-&gt;&gt;C2: nil (获取锁失败,key已存在)
+
+    Note over C1: 执行业务逻辑...
+
+    C1-&gt;&gt;R: Lua脚本: if GET == uuid1 then DEL
+    R-&gt;&gt;C1: 1 (释放锁成功)
+
+    C2-&gt;&gt;R: SET lock:order NX EX 30 (value=uuid2)
+    R-&gt;&gt;C2: OK (现在获取锁成功)</pre>
+<h3 id="为什么需要随机-value">为什么需要随机 value</h3>
+<p>value必须是一个随机唯一值（如UUID），用于释放锁时验证身份。</p>
+<pre class="mermaid">sequenceDiagram
+    participant C1 as Client 1
+    participant R as Redis
+    participant C2 as Client 2
+
+    C1-&gt;&gt;R: SET lock NX EX 30
+    R-&gt;&gt;C1: OK
+
+    Note over C1: 业务处理耗时过长&lt;br/&gt;锁自动过期了!
+
+    C2-&gt;&gt;R: SET lock NX EX 30
+    R-&gt;&gt;C2: OK (锁已过期,C2获取到锁)
+
+    Note over C1: 业务处理完成,释放锁
+    C1-&gt;&gt;R: DEL lock
+    Note over R: 删除了C2的锁!
+
+    Note over C2: C2的锁被C1误删&lt;br/&gt;其他客户端可以获取锁&lt;br/&gt;互斥性被破坏!</pre>
+<h3 id="正确的解锁操作">正确的解锁操作</h3>
+<p>必须使用Lua脚本保证”检查value并删除”的原子性：</p>
+<figure class="highlight lua"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><code class="hljs lua"><span class="hljs-comment">-- unlock.lua</span><br><span class="hljs-comment">-- KEYS[1]: 锁的key</span><br><span class="hljs-comment">-- ARGV[1]: 锁的value（当前客户端的uuid）</span><br><span class="hljs-keyword">if</span> redis.call(<span class="hljs-string">&quot;GET&quot;</span>, KEYS[<span class="hljs-number">1</span>]) == ARGV[<span class="hljs-number">1</span>] <span class="hljs-keyword">then</span><br>    <span class="hljs-keyword">return</span> redis.call(<span class="hljs-string">&quot;DEL&quot;</span>, KEYS[<span class="hljs-number">1</span>])<br><span class="hljs-keyword">else</span><br>    <span class="hljs-keyword">return</span> <span class="hljs-number">0</span><br><span class="hljs-keyword">end</span><br></code></pre></td></tr></table></figure>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">import</span> redis<br><span class="hljs-keyword">import</span> uuid<br><br><span class="hljs-keyword">class</span> <span class="hljs-title class_">SimpleRedisLock</span>:<br>    <span class="hljs-keyword">def</span> <span class="hljs-title function_">__init__</span>(<span class="hljs-params">self, client, key, ttl=<span class="hljs-number">30</span></span>):<br>        self.client = client<br>        self.key = <span class="hljs-string">f&quot;lock:<span class="hljs-subst">&#123;key&#125;</span>&quot;</span><br>        self.ttl = ttl<br>        self.value = <span class="hljs-built_in">str</span>(uuid.uuid4())<br><br>    <span class="hljs-keyword">def</span> <span class="hljs-title function_">acquire</span>(<span class="hljs-params">self</span>):<br>        <span class="hljs-string">&quot;&quot;&quot;尝试获取锁&quot;&quot;&quot;</span><br>        <span class="hljs-keyword">return</span> self.client.<span class="hljs-built_in">set</span>(<br>            self.key, self.value,<br>            nx=<span class="hljs-literal">True</span>, ex=self.ttl<br>        )<br><br>    <span class="hljs-keyword">def</span> <span class="hljs-title function_">release</span>(<span class="hljs-params">self</span>):<br>        <span class="hljs-string">&quot;&quot;&quot;释放锁（Lua脚本保证原子性）&quot;&quot;&quot;</span><br>        script = <span class="hljs-string">&quot;&quot;&quot;</span><br><span class="hljs-string">        if redis.call(&quot;GET&quot;, KEYS[1]) == ARGV[1] then</span><br><span class="hljs-string">            return redis.call(&quot;DEL&quot;, KEYS[1])</span><br><span class="hljs-string">        else</span><br><span class="hljs-string">            return 0</span><br><span class="hljs-string">        end</span><br><span class="hljs-string">        &quot;&quot;&quot;</span><br>        <span class="hljs-comment"># 使用 Redis EVAL 命令执行 Lua 脚本，保证原子性</span><br>        <span class="hljs-keyword">return</span> self.client.execute_command(<br>            <span class="hljs-string">&quot;EVAL&quot;</span>, script, <span class="hljs-number">1</span>, self.key, self.value<br>        )<br></code></pre></td></tr></table></figure>
+<h3 id="基础方案的问题">基础方案的问题</h3>
+<ol type="1">
+<li><strong>锁过期但业务未完成</strong>：TTL到期后锁自动释放，但业务还在执行</li>
+<li><strong>不可重入</strong>：同一线程不能重复获取同一把锁</li>
+<li><strong>不支持阻塞等待</strong>：获取失败只能轮询重试</li>
+<li><strong>单点故障</strong>：Redis
+Master宕机时，Slave可能没有同步到锁数据</li>
+</ol>
+<h2 id="redisson-实现方案">Redisson 实现方案</h2>
+<p>Redisson是Java生态中最成熟的Redis客户端，提供了功能完善的分布式锁实现。</p>
+<h3 id="redisson-锁的核心机制">Redisson 锁的核心机制</h3>
+<pre class="mermaid">flowchart TD
+    A[尝试获取锁] --&gt; B{锁是否存在?}
+    B --&gt;|不存在| C[创建Hash&lt;br/&gt;field=clientId:threadId&lt;br/&gt;value=1]
+    B --&gt;|存在| D{是否是自己的锁?}
+    D --&gt;|是| E[重入: value+1]
+    D --&gt;|否| F[返回锁的剩余TTL]
+    C --&gt; G[设置过期时间]
+    E --&gt; G
+    G --&gt; H[启动WatchDog&lt;br/&gt;每10秒续期到30秒]
+    F --&gt; I[订阅解锁消息&lt;br/&gt;等待通知后重试]</pre>
+<h3 id="redisson-加锁的-lua-脚本">Redisson 加锁的 Lua 脚本</h3>
+<figure class="highlight lua"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><code class="hljs lua"><span class="hljs-comment">-- 尝试获取锁</span><br><span class="hljs-comment">-- KEYS[1]: 锁的key</span><br><span class="hljs-comment">-- ARGV[1]: 锁的过期时间 (默认30000ms)</span><br><span class="hljs-comment">-- ARGV[2]: 客户端标识 (clientId:threadId)</span><br><br><span class="hljs-comment">-- 锁不存在,直接获取</span><br><span class="hljs-keyword">if</span> (redis.call(<span class="hljs-string">&#x27;exists&#x27;</span>, KEYS[<span class="hljs-number">1</span>]) == <span class="hljs-number">0</span>) <span class="hljs-keyword">then</span><br>    redis.call(<span class="hljs-string">&#x27;hincrby&#x27;</span>, KEYS[<span class="hljs-number">1</span>], ARGV[<span class="hljs-number">2</span>], <span class="hljs-number">1</span>)<br>    redis.call(<span class="hljs-string">&#x27;pexpire&#x27;</span>, KEYS[<span class="hljs-number">1</span>], ARGV[<span class="hljs-number">1</span>])<br>    <span class="hljs-keyword">return</span> <span class="hljs-literal">nil</span><br><span class="hljs-keyword">end</span><br><br><span class="hljs-comment">-- 锁存在且是自己的,重入</span><br><span class="hljs-keyword">if</span> (redis.call(<span class="hljs-string">&#x27;hexists&#x27;</span>, KEYS[<span class="hljs-number">1</span>], ARGV[<span class="hljs-number">2</span>]) == <span class="hljs-number">1</span>) <span class="hljs-keyword">then</span><br>    redis.call(<span class="hljs-string">&#x27;hincrby&#x27;</span>, KEYS[<span class="hljs-number">1</span>], ARGV[<span class="hljs-number">2</span>], <span class="hljs-number">1</span>)<br>    redis.call(<span class="hljs-string">&#x27;pexpire&#x27;</span>, KEYS[<span class="hljs-number">1</span>], ARGV[<span class="hljs-number">1</span>])<br>    <span class="hljs-keyword">return</span> <span class="hljs-literal">nil</span><br><span class="hljs-keyword">end</span><br><br><span class="hljs-comment">-- 锁存在且不是自己的,返回剩余TTL</span><br><span class="hljs-keyword">return</span> redis.call(<span class="hljs-string">&#x27;pttl&#x27;</span>, KEYS[<span class="hljs-number">1</span>])<br></code></pre></td></tr></table></figure>
+<h3 id="watchdog-自动续期">WatchDog 自动续期</h3>
+<p>Redisson的WatchDog机制解决了”锁过期但业务未完成”的问题：</p>
+<pre class="mermaid">sequenceDiagram
+    participant C as Client
+    participant WD as WatchDog Timer
+    participant R as Redis
+
+    C-&gt;&gt;R: 获取锁 (TTL=30s)
+    R-&gt;&gt;C: OK
+    C-&gt;&gt;WD: 启动WatchDog
+
+    Note over C: 执行业务逻辑...
+
+    WD-&gt;&gt;R: 第10秒: PEXPIRE lock 30000 (续期到30s)
+    R-&gt;&gt;WD: OK
+
+    Note over C: 继续执行...
+
+    WD-&gt;&gt;R: 第20秒: PEXPIRE lock 30000 (再次续期)
+    R-&gt;&gt;WD: OK
+
+    Note over C: 业务完成
+
+    C-&gt;&gt;R: 释放锁
+    C-&gt;&gt;WD: 停止WatchDog</pre>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">// Redisson分布式锁使用示例</span><br><span class="hljs-type">RLock</span> <span class="hljs-variable">lock</span> <span class="hljs-operator">=</span> redissonClient.getLock(<span class="hljs-string">&quot;lock:order:1001&quot;</span>);<br><br><span class="hljs-keyword">try</span> &#123;<br>    <span class="hljs-comment">// 尝试获取锁，最多等待10秒，锁自动过期时间30秒</span><br>    <span class="hljs-comment">// 如果不指定leaseTime，WatchDog会自动续期</span><br>    <span class="hljs-type">boolean</span> <span class="hljs-variable">acquired</span> <span class="hljs-operator">=</span> lock.tryLock(<span class="hljs-number">10</span>, TimeUnit.SECONDS);<br>    <span class="hljs-keyword">if</span> (acquired) &#123;<br>        <span class="hljs-comment">// 执行业务逻辑</span><br>        processOrder(<span class="hljs-string">&quot;1001&quot;</span>);<br>    &#125;<br>&#125; <span class="hljs-keyword">finally</span> &#123;<br>    <span class="hljs-keyword">if</span> (lock.isHeldByCurrentThread()) &#123;<br>        lock.unlock();<br>    &#125;<br>&#125;<br><br><span class="hljs-comment">// 可重入锁</span><br><span class="hljs-type">RLock</span> <span class="hljs-variable">lock</span> <span class="hljs-operator">=</span> redissonClient.getLock(<span class="hljs-string">&quot;lock:inventory&quot;</span>);<br>lock.lock();  <span class="hljs-comment">// 第一次加锁</span><br>lock.lock();  <span class="hljs-comment">// 重入，计数+1</span><br>lock.unlock(); <span class="hljs-comment">// 计数-1</span><br>lock.unlock(); <span class="hljs-comment">// 计数归零，真正释放锁</span><br><br><span class="hljs-comment">// 公平锁（按请求顺序获取）</span><br><span class="hljs-type">RLock</span> <span class="hljs-variable">fairLock</span> <span class="hljs-operator">=</span> redissonClient.getFairLock(<span class="hljs-string">&quot;lock:fair&quot;</span>);<br><br><span class="hljs-comment">// 读写锁</span><br><span class="hljs-type">RReadWriteLock</span> <span class="hljs-variable">rwLock</span> <span class="hljs-operator">=</span> redissonClient.getReadWriteLock(<span class="hljs-string">&quot;lock:rw&quot;</span>);<br><span class="hljs-type">RLock</span> <span class="hljs-variable">readLock</span> <span class="hljs-operator">=</span> rwLock.readLock();<br><span class="hljs-type">RLock</span> <span class="hljs-variable">writeLock</span> <span class="hljs-operator">=</span> rwLock.writeLock();<br><br><span class="hljs-comment">// 联锁（MultiLock）: 对多个资源同时加锁</span><br><span class="hljs-type">RLock</span> <span class="hljs-variable">lock1</span> <span class="hljs-operator">=</span> redissonClient.getLock(<span class="hljs-string">&quot;lock:account:1&quot;</span>);<br><span class="hljs-type">RLock</span> <span class="hljs-variable">lock2</span> <span class="hljs-operator">=</span> redissonClient.getLock(<span class="hljs-string">&quot;lock:account:2&quot;</span>);<br><span class="hljs-type">RLock</span> <span class="hljs-variable">multiLock</span> <span class="hljs-operator">=</span> redissonClient.getMultiLock(lock1, lock2);<br>multiLock.lock();<br></code></pre></td></tr></table></figure>
+<h2 id="redlock-算法">Redlock 算法</h2>
+<h3 id="单节点-redis-的问题">单节点 Redis 的问题</h3>
+<pre class="mermaid">sequenceDiagram
+    participant C1 as Client 1
+    participant M as Redis Master
+    participant S as Redis Slave
+
+    C1-&gt;&gt;M: SET lock NX EX 30
+    M-&gt;&gt;C1: OK (获取锁成功)
+
+    Note over M: Master宕机!&lt;br/&gt;锁数据尚未同步到Slave
+
+    S-&gt;&gt;S: 提升为新Master
+
+    participant C2 as Client 2
+    C2-&gt;&gt;S: SET lock NX EX 30
+    S-&gt;&gt;C2: OK (也获取到了锁!)
+
+    Note over C1, C2: 两个客户端同时持有锁!&lt;br/&gt;互斥性被破坏!</pre>
+<h3 id="redlock-算法流程">Redlock 算法流程</h3>
+<p>Redis作者antirez提出的Redlock算法，使用N个（通常5个）独立的Redis实例来实现更安全的分布式锁：</p>
+<pre class="mermaid">flowchart TD
+    A[开始获取锁] --&gt; B[记录当前时间 T1]
+    B --&gt; C[依次向N个Redis实例请求加锁&lt;br/&gt;每个实例设置较短的超时时间]
+    C --&gt; D[记录当前时间 T2]
+    D --&gt; E{在过半实例 N/2+1&lt;br/&gt;上加锁成功?}
+    E --&gt;|否| F[在所有实例上释放锁&lt;br/&gt;随机延迟后重试]
+    E --&gt;|是| G{T2-T1 小于锁的过期时间?}
+    G --&gt;|否| F
+    G --&gt;|是| H[获取锁成功!&lt;br/&gt;锁的有效时间 = 过期时间 - T2加T1]
+    H --&gt; I[执行业务逻辑]
+    I --&gt; J[在所有实例上释放锁]</pre>
+<p><strong>Redlock的关键步骤：</strong></p>
+<ol type="1">
+<li>获取当前时间T1（毫秒级）</li>
+<li>依次向N个独立Redis实例发送SET NX
+EX请求，每个实例设置较短的网络超时（如5-50ms）</li>
+<li>获取当前时间T2，计算获取锁总耗时</li>
+<li>如果在过半实例（N/2+1）上加锁成功，且总耗时小于锁的TTL，则认为获取锁成功</li>
+<li>锁的实际有效时间 = TTL - (T2-T1) - 时钟漂移补偿</li>
+<li>如果获取失败，在所有实例上释放锁</li>
+</ol>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">import</span> time<br><span class="hljs-keyword">import</span> uuid<br><span class="hljs-keyword">import</span> redis<br><br><span class="hljs-keyword">class</span> <span class="hljs-title class_">RedLock</span>:<br>    <span class="hljs-keyword">def</span> <span class="hljs-title function_">__init__</span>(<span class="hljs-params">self, redis_instances, ttl=<span class="hljs-number">30000</span></span>):<br>        <span class="hljs-string">&quot;&quot;&quot;</span><br><span class="hljs-string">        redis_instances: N个独立Redis连接</span><br><span class="hljs-string">        ttl: 锁的过期时间(毫秒)</span><br><span class="hljs-string">        &quot;&quot;&quot;</span><br>        self.instances = redis_instances<br>        self.ttl = ttl<br>        self.quorum = <span class="hljs-built_in">len</span>(redis_instances) // <span class="hljs-number">2</span> + <span class="hljs-number">1</span><br>        self.clock_drift_factor = <span class="hljs-number">0.01</span><br>        self.retry_count = <span class="hljs-number">3</span><br>        self.retry_delay = <span class="hljs-number">200</span>  <span class="hljs-comment"># ms</span><br><br>    <span class="hljs-keyword">def</span> <span class="hljs-title function_">acquire</span>(<span class="hljs-params">self, resource</span>):<br>        value = <span class="hljs-built_in">str</span>(uuid.uuid4())<br>        retry = <span class="hljs-number">0</span><br><br>        <span class="hljs-keyword">while</span> retry &lt; self.retry_count:<br>            n = <span class="hljs-number">0</span><br>            start_time = <span class="hljs-built_in">int</span>(time.time() * <span class="hljs-number">1000</span>)<br><br>            <span class="hljs-comment"># 依次在每个实例上尝试加锁</span><br>            <span class="hljs-keyword">for</span> instance <span class="hljs-keyword">in</span> self.instances:<br>                <span class="hljs-keyword">try</span>:<br>                    <span class="hljs-keyword">if</span> instance.<span class="hljs-built_in">set</span>(resource, value,<br>                                   nx=<span class="hljs-literal">True</span>, px=self.ttl):<br>                        n += <span class="hljs-number">1</span><br>                <span class="hljs-keyword">except</span> redis.RedisError:<br>                    <span class="hljs-keyword">pass</span><br><br>            elapsed = <span class="hljs-built_in">int</span>(time.time() * <span class="hljs-number">1000</span>) - start_time<br>            drift = <span class="hljs-built_in">int</span>(self.ttl * self.clock_drift_factor) + <span class="hljs-number">2</span><br><br>            <span class="hljs-comment"># 判断是否获取成功</span><br>            validity = self.ttl - elapsed - drift<br>            <span class="hljs-keyword">if</span> n &gt;= self.quorum <span class="hljs-keyword">and</span> validity &gt; <span class="hljs-number">0</span>:<br>                <span class="hljs-keyword">return</span> &#123;<br>                    <span class="hljs-string">&#x27;value&#x27;</span>: value,<br>                    <span class="hljs-string">&#x27;validity&#x27;</span>: validity<br>                &#125;<br><br>            <span class="hljs-comment"># 获取失败，释放所有实例上的锁</span><br>            <span class="hljs-keyword">for</span> instance <span class="hljs-keyword">in</span> self.instances:<br>                self._release_instance(instance, resource, value)<br><br>            retry += <span class="hljs-number">1</span><br>            time.sleep(self.retry_delay / <span class="hljs-number">1000.0</span>)<br><br>        <span class="hljs-keyword">return</span> <span class="hljs-literal">None</span><br><br>    <span class="hljs-keyword">def</span> <span class="hljs-title function_">release</span>(<span class="hljs-params">self, resource, value</span>):<br>        <span class="hljs-keyword">for</span> instance <span class="hljs-keyword">in</span> self.instances:<br>            self._release_instance(instance, resource, value)<br><br>    <span class="hljs-keyword">def</span> <span class="hljs-title function_">_release_instance</span>(<span class="hljs-params">self, instance, resource, value</span>):<br>        <span class="hljs-string">&quot;&quot;&quot;使用Lua脚本原子性地验证并释放锁&quot;&quot;&quot;</span><br>        unlock_script = <span class="hljs-string">&quot;&quot;&quot;</span><br><span class="hljs-string">        if redis.call(&quot;GET&quot;, KEYS[1]) == ARGV[1] then</span><br><span class="hljs-string">            return redis.call(&quot;DEL&quot;, KEYS[1])</span><br><span class="hljs-string">        else</span><br><span class="hljs-string">            return 0</span><br><span class="hljs-string">        end</span><br><span class="hljs-string">        &quot;&quot;&quot;</span><br>        <span class="hljs-keyword">try</span>:<br>            instance.execute_command(<br>                <span class="hljs-string">&quot;EVAL&quot;</span>, unlock_script, <span class="hljs-number">1</span>, resource, value<br>            )<br>        <span class="hljs-keyword">except</span> redis.RedisError:<br>            <span class="hljs-keyword">pass</span><br></code></pre></td></tr></table></figure>
+<h2 id="martin-kleppmann-的质疑">Martin Kleppmann 的质疑</h2>
+<p>分布式系统专家Martin Kleppmann发表了著名的文章”How to do distributed
+locking”，对Redlock算法提出了深刻的质疑。</p>
+<h3 id="质疑一gc暂停导致锁失效">质疑一：GC暂停导致锁失效</h3>
+<pre class="mermaid">sequenceDiagram
+    participant C1 as Client 1
+    participant R as Redis 5个实例
+    participant DB as 共享资源
+
+    C1-&gt;&gt;R: 获取Redlock TTL=30s
+    R-&gt;&gt;C1: 锁获取成功
+
+    Note over C1: GC暂停了35秒!&lt;br/&gt;Full GC / STW
+
+    Note over R: 30秒后锁过期
+
+    participant C2 as Client 2
+    C2-&gt;&gt;R: 获取Redlock
+    R-&gt;&gt;C2: 锁获取成功
+
+    Note over C1: GC恢复,认为自己还持有锁
+
+    C1-&gt;&gt;DB: 写入数据
+    C2-&gt;&gt;DB: 写入数据
+    Note over DB: 数据不一致!</pre>
+<h3 id="质疑二时钟跳变问题">质疑二：时钟跳变问题</h3>
+<p>Redlock的安全性依赖于各Redis实例的时钟大致同步。如果某个实例发生时钟跳变（NTP调整、闰秒等），可能导致锁提前过期：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><code class="hljs plaintext">实例1: 锁过期时间 T+30s<br>实例2: 锁过期时间 T+30s<br>实例3: 时钟向前跳了15s，锁只剩 15s 就过期<br>实例4: 锁过期时间 T+30s<br>实例5: 锁过期时间 T+30s<br><br>如果实例3的锁过期 + 实例5网络故障:<br>只有实例1, 2, 4持有锁 (3个 &gt;= quorum)<br>但如果实例3锁过期后，另一个客户端在实例3, 5上获取到锁 (2个)<br>加上实例3本身 = 3个 &gt;= quorum<br>两个客户端同时持有锁!<br></code></pre></td></tr></table></figure>
+<h3 id="fencing-token-方案">Fencing Token 方案</h3>
+<p>Martin Kleppmann提出，真正安全的分布式锁应该使用Fencing Token：</p>
+<pre class="mermaid">sequenceDiagram
+    participant C1 as Client 1
+    participant Lock as Lock Service
+    participant DB as Storage
+
+    C1-&gt;&gt;Lock: 获取锁
+    Lock-&gt;&gt;C1: token=33
+
+    Note over C1: GC暂停,锁过期
+
+    participant C2 as Client 2
+    C2-&gt;&gt;Lock: 获取锁
+    Lock-&gt;&gt;C2: token=34
+
+    C2-&gt;&gt;DB: 写入 token=34
+    DB-&gt;&gt;DB: 记录最新token=34
+    DB-&gt;&gt;C2: OK
+
+    Note over C1: GC恢复
+
+    C1-&gt;&gt;DB: 写入 token=33
+    DB-&gt;&gt;DB: token=33 小于最新token=34
+    DB-&gt;&gt;C1: REJECTED 过期的token
+
+    Note over DB: 数据一致性得到保证!</pre>
+<p>Fencing Token的关键点： 1. 每次获取锁时返回一个单调递增的token 2.
+写入共享资源时必须携带token 3. 共享资源（如数据库）拒绝旧token的写入</p>
+<h2 id="redis-分布式锁-vs-zookeeper">Redis 分布式锁 vs ZooKeeper</h2>
+<pre class="mermaid">graph TD
+    subgraph Redis分布式锁
+        R1[优点] --&gt; R1a[性能极高 10万+ QPS]
+        R1 --&gt; R1b[实现简单]
+        R1 --&gt; R1c[客户端生态丰富]
+        R2[缺点] --&gt; R2a[主从切换可能丢失锁]
+        R2 --&gt; R2b[时钟依赖]
+        R2 --&gt; R2c[没有原生Fencing Token]
+    end
+    subgraph ZooKeeper分布式锁
+        Z1[优点] --&gt; Z1a[CP系统 一致性保证强]
+        Z1 --&gt; Z1b[临时有序节点 天然支持]
+        Z1 --&gt; Z1c[Watch机制 无需轮询]
+        Z2[缺点] --&gt; Z2a[性能较低 1万左右QPS]
+        Z2 --&gt; Z2b[运维复杂]
+        Z2 --&gt; Z2c[客户端实现复杂]
+    end</pre>
+<table>
+<thead>
+<tr class="header">
+<th>维度</th>
+<th>Redis</th>
+<th>ZooKeeper</th>
+<th>etcd</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>一致性模型</td>
+<td>AP（最终一致性）</td>
+<td>CP（强一致性）</td>
+<td>CP（强一致性）</td>
+</tr>
+<tr class="even">
+<td>性能</td>
+<td>极高</td>
+<td>中等</td>
+<td>中等偏高</td>
+</tr>
+<tr class="odd">
+<td>锁释放机制</td>
+<td>TTL过期</td>
+<td>临时节点 + Session</td>
+<td>Lease + TTL</td>
+</tr>
+<tr class="even">
+<td>可重入</td>
+<td>需要客户端实现</td>
+<td>客户端支持</td>
+<td>需要客户端实现</td>
+</tr>
+<tr class="odd">
+<td>公平性</td>
+<td>需要额外实现</td>
+<td>有序节点天然支持</td>
+<td>需要额外实现</td>
+</tr>
+<tr class="even">
+<td>生态</td>
+<td>Redisson等成熟方案</td>
+<td>Curator</td>
+<td>clientv3</td>
+</tr>
+</tbody>
+</table>
+<h2 id="实践建议">实践建议</h2>
+<h3 id="选择合适的方案">选择合适的方案</h3>
+<pre class="mermaid">flowchart TD
+    A[需要分布式锁] --&gt; B{对一致性要求?}
+    B --&gt;|极高: 金融/交易| C[ZooKeeper / etcd]
+    B --&gt;|较高: 库存/订单| D{能否接受极低概率的锁失效?}
+    D --&gt;|能| E[Redisson + 幂等设计]
+    D --&gt;|不能| C
+    B --&gt;|一般: 缓存/限流| F[Redis SETNX 基础方案]
+    E --&gt; G[配合业务层Fencing]
+    F --&gt; H[注意设置合理的TTL]</pre>
+<h3 id="最佳实践">最佳实践</h3>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">// 1. 锁的粒度要尽可能细</span><br><span class="hljs-comment">// Bad: 锁整个库存服务</span><br><span class="hljs-type">RLock</span> <span class="hljs-variable">lock</span> <span class="hljs-operator">=</span> redisson.getLock(<span class="hljs-string">&quot;lock:inventory&quot;</span>);<br><br><span class="hljs-comment">// Good: 只锁特定商品的库存</span><br><span class="hljs-type">RLock</span> <span class="hljs-variable">lock</span> <span class="hljs-operator">=</span> redisson.getLock(<span class="hljs-string">&quot;lock:inventory:sku:&quot;</span> + skuId);<br><br><span class="hljs-comment">// 2. 设置合理的等待时间和过期时间</span><br><span class="hljs-type">boolean</span> <span class="hljs-variable">acquired</span> <span class="hljs-operator">=</span> lock.tryLock(<br>    <span class="hljs-number">5</span>,    <span class="hljs-comment">// 最多等待5秒</span><br>    <span class="hljs-number">30</span>,   <span class="hljs-comment">// 锁自动过期时间30秒</span><br>    TimeUnit.SECONDS<br>);<br><br><span class="hljs-comment">// 3. 在finally中释放锁</span><br><span class="hljs-keyword">try</span> &#123;<br>    <span class="hljs-keyword">if</span> (acquired) &#123;<br>        <span class="hljs-comment">// 业务逻辑</span><br>    &#125;<br>&#125; <span class="hljs-keyword">finally</span> &#123;<br>    <span class="hljs-keyword">if</span> (lock.isHeldByCurrentThread()) &#123;<br>        lock.unlock();<br>    &#125;<br>&#125;<br><br><span class="hljs-comment">// 4. 配合幂等性设计</span><br><span class="hljs-comment">// 即使锁出现极端情况下的失效,幂等操作也不会造成数据错误</span><br><span class="hljs-comment">// 例如: 使用数据库唯一约束防止重复创建订单</span><br><span class="hljs-comment">// INSERT INTO orders (order_no, ...) VALUES (?, ...)</span><br><span class="hljs-comment">// 唯一约束on order_no保证不会重复</span><br><br><span class="hljs-comment">// 5. 监控锁的使用情况</span><br><span class="hljs-comment">// 记录锁的获取时间、持有时间、等待时间</span><br><span class="hljs-comment">// 对持有时间过长的锁发出告警</span><br></code></pre></td></tr></table></figure>
+<h3 id="锁超时时间的选择">锁超时时间的选择</h3>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><code class="hljs plaintext">TTL的设置原则:<br>- 太短: 业务未完成锁就过期了 -&gt; 互斥性问题<br>- 太长: 持有锁的客户端宕机后，其他客户端等待时间过长<br><br>推荐方案:<br>1. 使用Redisson的WatchDog自动续期（不手动设置leaseTime）<br>2. 如果手动设置TTL，设为业务最长执行时间的3-5倍<br>3. 结合监控，如果锁持有时间经常接近TTL，说明需要调大<br></code></pre></td></tr></table></figure>
+<h2 id="总结">总结</h2>
+<p>Redis分布式锁的正确实现需要理解其局限性并做出合理的权衡：</p>
+<ul>
+<li><strong>SETNX + TTL +
+Lua解锁</strong>是基础方案，适用于对一致性要求不极高的场景</li>
+<li><strong>Redisson</strong>提供了可重入锁、公平锁、WatchDog等完善的功能，是Java生态的首选</li>
+<li><strong>Redlock算法</strong>通过多个独立Redis实例提升安全性，但Martin
+Kleppmann指出了其在GC暂停和时钟跳变场景下的理论缺陷</li>
+<li><strong>Fencing
+Token</strong>是从根本上解决分布式锁安全性问题的方案，但需要共享资源端的配合</li>
+<li>对一致性要求极高的场景，建议使用<strong>ZooKeeper或etcd</strong>等CP系统</li>
+<li>无论使用哪种分布式锁方案，都应该在业务层面做好<strong>幂等性设计</strong>作为最后的安全网</li>
+</ul>
+<hr />
+<h2 id="踩坑记录">踩坑记录</h2>
+<p>优惠券核销服务出现重复核销
+bug，损失了一批优惠券额度，复盘才发现历史遗留代码用的是
+<code>SETNX</code> + <code>EXPIRE</code>
+两步实现分布式锁。在高并发下，<code>SETNX</code>
+成功后服务进程偶发重启，<code>EXPIRE</code>
+没来得及执行，锁永久不释放，其他线程全部阻塞在等锁。</p>
+<p>更严重的是另一个问题：锁超时设置
+5s，但优惠券核销偶尔因下游支付系统慢会超过
+5s，锁到期后自动释放，第二个线程拿到锁进来，导致同一张券被核销两次。</p>
+<p>修复分三步：第一步用 <code>SET key value NX EX seconds</code>
+原子命令替换两步操作；第二步加 Lua
+脚本保证「只有持有者才能释放锁」（验证 value 是自己的 UUID）；第三步引入
+Redisson 的 watchdog 机制，持有锁期间每 10s
+自动续期，彻底消除业务超时导致的锁提前释放。</p>
+<h2 id="实测结果">实测结果</h2>
+<table style="width:100%;">
+<colgroup>
+<col style="width: 11%" />
+<col style="width: 40%" />
+<col style="width: 25%" />
+<col style="width: 22%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>方案</th>
+<th>压测重复核销率（1000次/轮）</th>
+<th>锁永久不释放风险</th>
+<th>业务超时安全性</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>SETNX</code> + <code>EXPIRE</code>（两步）</td>
+<td>0.3%</td>
+<td>有（进程崩溃时）</td>
+<td>不安全（超时自动丢锁）</td>
+</tr>
+<tr class="even">
+<td><code>SET NX EX</code> + Lua 验证</td>
+<td>0%</td>
+<td>无</td>
+<td>不安全（超时仍丢锁）</td>
+</tr>
+<tr class="odd">
+<td>Redisson（含 watchdog）</td>
+<td>0%</td>
+<td>无</td>
+<td>安全（自动续期）</td>
+</tr>
+</tbody>
+</table>
+<p>bug 影响范围：约 3,000 张优惠券被重复核销，损失已通过补偿处理。</p>
+<h2 id="我的看法">我的看法</h2>
+<p>Redis 分布式锁有一个经常被忽视的问题：即使用了 Redlock，在 Redis
+主从切换的瞬间，新主节点可能没有原来的锁数据，导致两个客户端同时持锁。</p>
+<p>对资金、库存、优惠券这种<strong>强一致性</strong>场景，我更倾向于用数据库的
+<code>SELECT FOR UPDATE</code> 或乐观锁（version
+字段），性能低一点，但可靠性远高于 Redis 锁。Redis
+分布式锁更适合「排他但允许偶发失效」的场景，比如防重复提交、任务调度去重。不要把
+Redis 锁用在不能出错的地方。</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2024-10-14</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">4.3k 字 · 11 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/java-memory-model/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">深入理解Java内存模型(JMM)</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/embedding-models/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Embedding模型原理与应用实践</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9F%BA%E7%A1%80%E6%96%B9%E6%A1%88setnx"><span class="toc-text">基础方案：SETNX</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%9C%80%E7%AE%80%E5%8D%95%E7%9A%84%E5%88%86%E5%B8%83%E5%BC%8F%E9%94%81"><span class="toc-text">最简单的分布式锁</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E9%9C%80%E8%A6%81%E9%9A%8F%E6%9C%BA-value"><span class="toc-text">为什么需要随机 value</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%AD%A3%E7%A1%AE%E7%9A%84%E8%A7%A3%E9%94%81%E6%93%8D%E4%BD%9C"><span class="toc-text">正确的解锁操作</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9F%BA%E7%A1%80%E6%96%B9%E6%A1%88%E7%9A%84%E9%97%AE%E9%A2%98"><span class="toc-text">基础方案的问题</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#redisson-%E5%AE%9E%E7%8E%B0%E6%96%B9%E6%A1%88"><span class="toc-text">Redisson 实现方案</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#redisson-%E9%94%81%E7%9A%84%E6%A0%B8%E5%BF%83%E6%9C%BA%E5%88%B6"><span class="toc-text">Redisson 锁的核心机制</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#redisson-%E5%8A%A0%E9%94%81%E7%9A%84-lua-%E8%84%9A%E6%9C%AC"><span class="toc-text">Redisson 加锁的 Lua 脚本</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#watchdog-%E8%87%AA%E5%8A%A8%E7%BB%AD%E6%9C%9F"><span class="toc-text">WatchDog 自动续期</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#redlock-%E7%AE%97%E6%B3%95"><span class="toc-text">Redlock 算法</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8D%95%E8%8A%82%E7%82%B9-redis-%E7%9A%84%E9%97%AE%E9%A2%98"><span class="toc-text">单节点 Redis 的问题</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#redlock-%E7%AE%97%E6%B3%95%E6%B5%81%E7%A8%8B"><span class="toc-text">Redlock 算法流程</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#martin-kleppmann-%E7%9A%84%E8%B4%A8%E7%96%91"><span class="toc-text">Martin Kleppmann 的质疑</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%B4%A8%E7%96%91%E4%B8%80gc%E6%9A%82%E5%81%9C%E5%AF%BC%E8%87%B4%E9%94%81%E5%A4%B1%E6%95%88"><span class="toc-text">质疑一：GC暂停导致锁失效</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%B4%A8%E7%96%91%E4%BA%8C%E6%97%B6%E9%92%9F%E8%B7%B3%E5%8F%98%E9%97%AE%E9%A2%98"><span class="toc-text">质疑二：时钟跳变问题</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#fencing-token-%E6%96%B9%E6%A1%88"><span class="toc-text">Fencing Token 方案</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#redis-%E5%88%86%E5%B8%83%E5%BC%8F%E9%94%81-vs-zookeeper"><span class="toc-text">Redis 分布式锁 vs ZooKeeper</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E8%B7%B5%E5%BB%BA%E8%AE%AE"><span class="toc-text">实践建议</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%80%89%E6%8B%A9%E5%90%88%E9%80%82%E7%9A%84%E6%96%B9%E6%A1%88"><span class="toc-text">选择合适的方案</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5"><span class="toc-text">最佳实践</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%94%81%E8%B6%85%E6%97%B6%E6%97%B6%E9%97%B4%E7%9A%84%E9%80%89%E6%8B%A9"><span class="toc-text">锁超时时间的选择</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%B8%A9%E5%9D%91%E8%AE%B0%E5%BD%95"><span class="toc-text">踩坑记录</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E6%B5%8B%E7%BB%93%E6%9E%9C"><span class="toc-text">实测结果</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%88%91%E7%9A%84%E7%9C%8B%E6%B3%95"><span class="toc-text">我的看法</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

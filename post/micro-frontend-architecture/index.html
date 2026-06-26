@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>微前端架构方案对比与实践 · zt&#39;s Blog</title>
+  <meta name="description" content="对比主流微前端方案（iframe、Web Components、qiankun、Module Federation），详解通信策略与依赖共享">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/micro-frontend-architecture/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="微前端架构方案对比与实践">
+  <meta property="og:description" content="对比主流微前端方案（iframe、Web Components、qiankun、Module Federation），详解通信策略与依赖共享">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/micro-frontend-architecture/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2025-07-01T16:00:00.000Z">
+  <meta property="article:modified_time" content="2025-07-01T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="微前端架构方案对比与实践">
+  <meta name="twitter:description" content="对比主流微前端方案（iframe、Web Components、qiankun、Module Federation），详解通信策略与依赖共享">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"微前端架构方案对比与实践","description":"对比主流微前端方案（iframe、Web Components、qiankun、Module Federation），详解通信策略与依赖共享","datePublished":"2025-07-01T16:00:00.000Z","dateModified":"2025-07-01T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/micro-frontend-architecture/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Frontend","item":"https://withesse.co/categories/Frontend/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:200">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Frontend/">Frontend</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/micro-frontend/"><span class="hash">#</span>micro-frontend</a><a class="tag" href="/tags/qiankun/"><span class="hash">#</span>qiankun</a><a class="tag" href="/tags/module-federation/"><span class="hash">#</span>module-federation</a>
+        
+      </div>
+
+      <h1>微前端架构方案对比与实践</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2025.07.02</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 7 min</span>
+        </span>
+        <span class="wc"><span class="num">2.6k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BE%AE%E5%89%8D%E7%AB%AF%E6%A0%B8%E5%BF%83%E6%A6%82%E5%BF%B5"><span class="toc-text">微前端核心概念</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%BE%AE%E5%89%8D%E7%AB%AF%E7%9A%84%E6%A0%B8%E5%BF%83%E5%8E%9F%E5%88%99"><span class="toc-text">微前端的核心原则</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%96%B9%E6%A1%88%E4%B8%80iframe"><span class="toc-text">方案一：iframe</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%96%B9%E6%A1%88%E4%BA%8Cweb-components"><span class="toc-text">方案二：Web Components</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%96%B9%E6%A1%88%E4%B8%89qiankun-%E5%9F%BA%E4%BA%8E-single-spa"><span class="toc-text">方案三：qiankun (基于
+single-spa)</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%BB%E5%BA%94%E7%94%A8%E9%85%8D%E7%BD%AE"><span class="toc-text">主应用配置</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AD%90%E5%BA%94%E7%94%A8%E6%94%B9%E9%80%A0react"><span class="toc-text">子应用改造（React）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%96%B9%E6%A1%88%E5%9B%9Bmodule-federation-webpack-5"><span class="toc-text">方案四：Module Federation
+(Webpack 5)</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#host-%E5%BA%94%E7%94%A8%E9%85%8D%E7%BD%AE"><span class="toc-text">Host 应用配置</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#remote-%E5%BA%94%E7%94%A8%E9%85%8D%E7%BD%AE"><span class="toc-text">Remote 应用配置</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BA%94%E7%94%A8%E9%97%B4%E9%80%9A%E4%BF%A1%E7%AD%96%E7%95%A5"><span class="toc-text">应用间通信策略</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#custom-events-%E9%80%9A%E4%BF%A1"><span class="toc-text">Custom Events 通信</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%B1%E4%BA%AB%E7%8A%B6%E6%80%81%E7%AE%A1%E7%90%86"><span class="toc-text">共享状态管理</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%96%B9%E6%A1%88%E5%AF%B9%E6%AF%94%E6%80%BB%E7%BB%93"><span class="toc-text">方案对比总结</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%80%89%E5%9E%8B%E5%BB%BA%E8%AE%AE"><span class="toc-text">选型建议</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="引言">引言</h2>
+<p>随着前端应用规模的膨胀，单体前端应用面临着构建慢、团队协作困难、技术栈升级阻力大等问题。微前端（Micro
+Frontend）借鉴了微服务的思想，将大型前端应用拆分为多个独立开发、独立部署的子应用。本文将系统对比
+iframe、Web Components、qiankun/single-spa、Module Federation
+等主流方案，深入探讨应用间通信、依赖共享和生产实践。</p>
+<h2 id="微前端核心概念">微前端核心概念</h2>
+<pre class="mermaid">graph TB
+    A[主应用 / 基座 Container] --&gt; B[子应用 A&lt;br/&gt;React App]
+    A --&gt; C[子应用 B&lt;br/&gt;Vue App]
+    A --&gt; D[子应用 C&lt;br/&gt;Angular App]
+
+    A --&gt; E[路由分发]
+    A --&gt; F[应用注册]
+    A --&gt; G[生命周期管理]
+    A --&gt; H[应用间通信]
+
+    subgraph "独立开发 &amp; 部署"
+        B
+        C
+        D
+    end
+
+    style A fill:#2c3e50,color:#fff
+    style B fill:#61dafb,color:#000
+    style C fill:#42b883,color:#fff
+    style D fill:#dd1b16,color:#fff</pre>
+<h3 id="微前端的核心原则">微前端的核心原则</h3>
+<ol type="1">
+<li><strong>技术栈无关</strong>：每个子应用可以使用不同的框架</li>
+<li><strong>独立开发部署</strong>：各子应用有独立的代码仓库和 CI/CD</li>
+<li><strong>增量升级</strong>：逐步迁移，无需大范围重写</li>
+<li><strong>运行时隔离</strong>：子应用之间的样式和 JS 互不干扰</li>
+</ol>
+<h2 id="方案一iframe">方案一：iframe</h2>
+<p>最简单的隔离方案——用 iframe 嵌入子应用：</p>
+<figure class="highlight html"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><code class="hljs html"><span class="hljs-comment">&lt;!-- Main app --&gt;</span><br><span class="hljs-tag">&lt;<span class="hljs-name">div</span> <span class="hljs-attr">id</span>=<span class="hljs-string">&quot;app&quot;</span>&gt;</span><br>  <span class="hljs-tag">&lt;<span class="hljs-name">nav</span>&gt;</span>Main Navigation<span class="hljs-tag">&lt;/<span class="hljs-name">nav</span>&gt;</span><br>  <span class="hljs-tag">&lt;<span class="hljs-name">div</span> <span class="hljs-attr">id</span>=<span class="hljs-string">&quot;micro-app-container&quot;</span>&gt;</span><br>    <span class="hljs-tag">&lt;<span class="hljs-name">iframe</span></span><br><span class="hljs-tag">      <span class="hljs-attr">src</span>=<span class="hljs-string">&quot;https://sub-app.example.com/dashboard&quot;</span></span><br><span class="hljs-tag">      <span class="hljs-attr">style</span>=<span class="hljs-string">&quot;width: 100%; height: calc(100vh - 60px); border: none;&quot;</span></span><br><span class="hljs-tag">      <span class="hljs-attr">sandbox</span>=<span class="hljs-string">&quot;allow-scripts allow-same-origin allow-forms allow-popups&quot;</span></span><br><span class="hljs-tag">    &gt;</span><span class="hljs-tag">&lt;/<span class="hljs-name">iframe</span>&gt;</span><br>  <span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span><br><span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span><br></code></pre></td></tr></table></figure>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-comment">// Cross-iframe communication via postMessage</span><br><span class="hljs-comment">// Parent -&gt; Child</span><br><span class="hljs-keyword">const</span> iframe = <span class="hljs-variable language_">document</span>.<span class="hljs-title function_">querySelector</span>(<span class="hljs-string">&#x27;#micro-app-container iframe&#x27;</span>);<br>iframe.<span class="hljs-property">contentWindow</span>.<span class="hljs-title function_">postMessage</span>(&#123;<br>  <span class="hljs-attr">type</span>: <span class="hljs-string">&#x27;USER_INFO&#x27;</span>,<br>  <span class="hljs-attr">payload</span>: &#123; <span class="hljs-attr">userId</span>: <span class="hljs-string">&#x27;123&#x27;</span>, <span class="hljs-attr">token</span>: <span class="hljs-string">&#x27;abc&#x27;</span> &#125;,<br>&#125;, <span class="hljs-string">&#x27;https://sub-app.example.com&#x27;</span>);<br><br><span class="hljs-comment">// Child -&gt; Parent</span><br><span class="hljs-variable language_">window</span>.<span class="hljs-property">parent</span>.<span class="hljs-title function_">postMessage</span>(&#123;<br>  <span class="hljs-attr">type</span>: <span class="hljs-string">&#x27;NAVIGATE&#x27;</span>,<br>  <span class="hljs-attr">payload</span>: &#123; <span class="hljs-attr">path</span>: <span class="hljs-string">&#x27;/settings&#x27;</span> &#125;,<br>&#125;, <span class="hljs-string">&#x27;https://main-app.example.com&#x27;</span>);<br><br><span class="hljs-comment">// Listening for messages with origin validation</span><br><span class="hljs-variable language_">window</span>.<span class="hljs-title function_">addEventListener</span>(<span class="hljs-string">&#x27;message&#x27;</span>, <span class="hljs-function">(<span class="hljs-params">event</span>) =&gt;</span> &#123;<br>  <span class="hljs-keyword">if</span> (event.<span class="hljs-property">origin</span> !== <span class="hljs-string">&#x27;https://sub-app.example.com&#x27;</span>) <span class="hljs-keyword">return</span>;<br>  <span class="hljs-keyword">const</span> &#123; type, payload &#125; = event.<span class="hljs-property">data</span>;<br>  <span class="hljs-keyword">switch</span> (type) &#123;<br>    <span class="hljs-keyword">case</span> <span class="hljs-string">&#x27;NAVIGATE&#x27;</span>:<br>      router.<span class="hljs-title function_">push</span>(payload.<span class="hljs-property">path</span>);<br>      <span class="hljs-keyword">break</span>;<br>    <span class="hljs-keyword">case</span> <span class="hljs-string">&#x27;RESIZE&#x27;</span>:<br>      iframe.<span class="hljs-property">style</span>.<span class="hljs-property">height</span> = <span class="hljs-string">`<span class="hljs-subst">$&#123;payload.height&#125;</span>px`</span>;<br>      <span class="hljs-keyword">break</span>;<br>  &#125;<br>&#125;);<br></code></pre></td></tr></table></figure>
+<table>
+<thead>
+<tr class="header">
+<th>优点</th>
+<th>缺点</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>天然隔离（JS/CSS/DOM）</td>
+<td>URL 不同步，无法使用浏览器前进后退</td>
+</tr>
+<tr class="even">
+<td>实现简单</td>
+<td>性能差（额外的浏览器上下文）</td>
+</tr>
+<tr class="odd">
+<td>安全性好（sandbox）</td>
+<td>弹窗无法突破 iframe 边界</td>
+</tr>
+<tr class="even">
+<td></td>
+<td>SEO 不友好</td>
+</tr>
+</tbody>
+</table>
+<h2 id="方案二web-components">方案二：Web Components</h2>
+<p>利用 Shadow DOM 实现样式隔离：</p>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-comment">// Define micro-app as Web Component</span><br><span class="hljs-keyword">class</span> <span class="hljs-title class_">MicroApp</span> <span class="hljs-keyword">extends</span> <span class="hljs-title class_ inherited__">HTMLElement</span> &#123;<br>  <span class="hljs-title function_">constructor</span>(<span class="hljs-params"></span>) &#123;<br>    <span class="hljs-variable language_">super</span>();<br>    <span class="hljs-variable language_">this</span>.<span class="hljs-title function_">attachShadow</span>(&#123; <span class="hljs-attr">mode</span>: <span class="hljs-string">&#x27;open&#x27;</span> &#125;);<br>  &#125;<br><br>  <span class="hljs-keyword">static</span> <span class="hljs-keyword">get</span> <span class="hljs-title function_">observedAttributes</span>() &#123;<br>    <span class="hljs-keyword">return</span> [<span class="hljs-string">&#x27;app-name&#x27;</span>, <span class="hljs-string">&#x27;base-url&#x27;</span>];<br>  &#125;<br><br>  <span class="hljs-keyword">async</span> <span class="hljs-title function_">connectedCallback</span>(<span class="hljs-params"></span>) &#123;<br>    <span class="hljs-keyword">const</span> appName = <span class="hljs-variable language_">this</span>.<span class="hljs-title function_">getAttribute</span>(<span class="hljs-string">&#x27;app-name&#x27;</span>);<br>    <span class="hljs-keyword">const</span> baseUrl = <span class="hljs-variable language_">this</span>.<span class="hljs-title function_">getAttribute</span>(<span class="hljs-string">&#x27;base-url&#x27;</span>);<br><br>    <span class="hljs-comment">// Load sub-app resources</span><br>    <span class="hljs-keyword">const</span> manifest = <span class="hljs-keyword">await</span> <span class="hljs-title function_">fetch</span>(<span class="hljs-string">`<span class="hljs-subst">$&#123;baseUrl&#125;</span>/asset-manifest.json`</span>).<span class="hljs-title function_">then</span>(<span class="hljs-function"><span class="hljs-params">r</span> =&gt;</span> r.<span class="hljs-title function_">json</span>());<br><br>    <span class="hljs-comment">// Create isolated DOM using safe DOM API methods</span><br>    <span class="hljs-keyword">const</span> style = <span class="hljs-variable language_">document</span>.<span class="hljs-title function_">createElement</span>(<span class="hljs-string">&#x27;style&#x27;</span>);<br>    style.<span class="hljs-property">textContent</span> = <span class="hljs-string">&#x27;:host &#123; display: block; &#125;&#x27;</span>;<br>    <span class="hljs-variable language_">this</span>.<span class="hljs-property">shadowRoot</span>.<span class="hljs-title function_">appendChild</span>(style);<br><br>    <span class="hljs-keyword">const</span> container = <span class="hljs-variable language_">document</span>.<span class="hljs-title function_">createElement</span>(<span class="hljs-string">&#x27;div&#x27;</span>);<br>    container.<span class="hljs-property">id</span> = <span class="hljs-string">`<span class="hljs-subst">$&#123;appName&#125;</span>-root`</span>;<br>    <span class="hljs-variable language_">this</span>.<span class="hljs-property">shadowRoot</span>.<span class="hljs-title function_">appendChild</span>(container);<br><br>    <span class="hljs-comment">// Load and execute sub-app scripts</span><br>    <span class="hljs-keyword">const</span> script = <span class="hljs-variable language_">document</span>.<span class="hljs-title function_">createElement</span>(<span class="hljs-string">&#x27;script&#x27;</span>);<br>    script.<span class="hljs-property">src</span> = <span class="hljs-string">`<span class="hljs-subst">$&#123;baseUrl&#125;</span>/<span class="hljs-subst">$&#123;manifest[<span class="hljs-string">&#x27;main.js&#x27;</span>]&#125;</span>`</span>;<br>    <span class="hljs-variable language_">this</span>.<span class="hljs-property">shadowRoot</span>.<span class="hljs-title function_">appendChild</span>(script);<br>  &#125;<br><br>  <span class="hljs-title function_">disconnectedCallback</span>(<span class="hljs-params"></span>) &#123;<br>    <span class="hljs-comment">// Cleanup: unmount sub-app</span><br>    <span class="hljs-variable language_">this</span>.<span class="hljs-title function_">dispatchEvent</span>(<span class="hljs-keyword">new</span> <span class="hljs-title class_">CustomEvent</span>(<span class="hljs-string">&#x27;micro-app-unmount&#x27;</span>));<br>  &#125;<br>&#125;<br><br>customElements.<span class="hljs-title function_">define</span>(<span class="hljs-string">&#x27;micro-app&#x27;</span>, <span class="hljs-title class_">MicroApp</span>);<br><br><span class="hljs-comment">// Usage in HTML</span><br><span class="hljs-comment">// &lt;micro-app app-name=&quot;dashboard&quot; base-url=&quot;https://dashboard.example.com&quot;&gt;&lt;/micro-app&gt;</span><br></code></pre></td></tr></table></figure>
+<h2 id="方案三qiankun-基于-single-spa">方案三：qiankun (基于
+single-spa)</h2>
+<p>qiankun 是蚂蚁金服开源的微前端框架，基于 single-spa
+并提供了开箱即用的 JS 沙箱和样式隔离：</p>
+<pre class="mermaid">sequenceDiagram
+    participant M as 主应用
+    participant Q as qiankun
+    participant S as 子应用
+
+    M-&gt;&gt;Q: registerMicroApps(apps)
+    M-&gt;&gt;Q: start()
+    Q-&gt;&gt;Q: 监听路由变化
+    Q-&gt;&gt;S: 加载子应用 entry HTML
+    S--&gt;&gt;Q: 返回 HTML/JS/CSS
+    Q-&gt;&gt;Q: 解析 HTML, 创建 JS 沙箱
+    Q-&gt;&gt;S: 调用 bootstrap()
+    Q-&gt;&gt;S: 调用 mount(props)
+    S-&gt;&gt;S: 渲染到指定容器
+    Note over Q,S: 路由切换
+    Q-&gt;&gt;S: 调用 unmount()
+    Q-&gt;&gt;S: 加载新子应用...</pre>
+<h3 id="主应用配置">主应用配置</h3>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-comment">// main-app/src/micro-apps.js</span><br><span class="hljs-keyword">import</span> &#123; registerMicroApps, start, setDefaultMountApp &#125; <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;qiankun&#x27;</span>;<br><br><span class="hljs-title function_">registerMicroApps</span>([<br>  &#123;<br>    <span class="hljs-attr">name</span>: <span class="hljs-string">&#x27;dashboard&#x27;</span>,<br>    <span class="hljs-attr">entry</span>: <span class="hljs-string">&#x27;//localhost:8081&#x27;</span>, <span class="hljs-comment">// Sub-app dev server</span><br>    <span class="hljs-attr">container</span>: <span class="hljs-string">&#x27;#micro-app-container&#x27;</span>,<br>    <span class="hljs-attr">activeRule</span>: <span class="hljs-string">&#x27;/dashboard&#x27;</span>,<br>    <span class="hljs-attr">props</span>: &#123;<br>      <span class="hljs-attr">token</span>: <span class="hljs-title function_">getToken</span>(),<br>      <span class="hljs-attr">onNavigate</span>: <span class="hljs-function">(<span class="hljs-params">path</span>) =&gt;</span> router.<span class="hljs-title function_">push</span>(path),<br>    &#125;,<br>  &#125;,<br>  &#123;<br>    <span class="hljs-attr">name</span>: <span class="hljs-string">&#x27;settings&#x27;</span>,<br>    <span class="hljs-attr">entry</span>: <span class="hljs-string">&#x27;//localhost:8082&#x27;</span>,<br>    <span class="hljs-attr">container</span>: <span class="hljs-string">&#x27;#micro-app-container&#x27;</span>,<br>    <span class="hljs-attr">activeRule</span>: <span class="hljs-string">&#x27;/settings&#x27;</span>,<br>  &#125;,<br>  &#123;<br>    <span class="hljs-attr">name</span>: <span class="hljs-string">&#x27;legacy-app&#x27;</span>,<br>    <span class="hljs-attr">entry</span>: <span class="hljs-string">&#x27;//localhost:8083&#x27;</span>,<br>    <span class="hljs-attr">container</span>: <span class="hljs-string">&#x27;#micro-app-container&#x27;</span>,<br>    <span class="hljs-attr">activeRule</span>: <span class="hljs-string">&#x27;/legacy&#x27;</span>,<br>    <span class="hljs-attr">sandbox</span>: &#123;<br>      <span class="hljs-attr">strictStyleIsolation</span>: <span class="hljs-literal">true</span>, <span class="hljs-comment">// Shadow DOM isolation</span><br>    &#125;,<br>  &#125;,<br>]);<br><br><span class="hljs-title function_">setDefaultMountApp</span>(<span class="hljs-string">&#x27;/dashboard&#x27;</span>);<br><span class="hljs-title function_">start</span>(&#123;<br>  <span class="hljs-attr">sandbox</span>: &#123;<br>    <span class="hljs-attr">experimentalStyleIsolation</span>: <span class="hljs-literal">true</span>,<br>  &#125;,<br>  <span class="hljs-attr">prefetch</span>: <span class="hljs-string">&#x27;all&#x27;</span>, <span class="hljs-comment">// Prefetch all sub-apps after first app mounted</span><br>&#125;);<br></code></pre></td></tr></table></figure>
+<h3 id="子应用改造react">子应用改造（React）</h3>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-comment">// sub-app/src/index.js</span><br><span class="hljs-keyword">import</span> <span class="hljs-title class_">React</span> <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;react&#x27;</span>;<br><span class="hljs-keyword">import</span> <span class="hljs-title class_">ReactDOM</span> <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;react-dom/client&#x27;</span>;<br><span class="hljs-keyword">import</span> <span class="hljs-title class_">App</span> <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;./App&#x27;</span>;<br><br><span class="hljs-keyword">let</span> root = <span class="hljs-literal">null</span>;<br><br><span class="hljs-keyword">function</span> <span class="hljs-title function_">getRootContainer</span>(<span class="hljs-params">container</span>) &#123;<br>  <span class="hljs-keyword">return</span> container<br>    ? container.<span class="hljs-title function_">querySelector</span>(<span class="hljs-string">&#x27;#root&#x27;</span>)<br>    : <span class="hljs-variable language_">document</span>.<span class="hljs-title function_">getElementById</span>(<span class="hljs-string">&#x27;root&#x27;</span>);<br>&#125;<br><br><span class="hljs-comment">// qiankun lifecycle exports</span><br><span class="hljs-keyword">export</span> <span class="hljs-keyword">async</span> <span class="hljs-keyword">function</span> <span class="hljs-title function_">bootstrap</span>(<span class="hljs-params"></span>) &#123;<br>  <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">&#x27;Dashboard app bootstrapped&#x27;</span>);<br>&#125;<br><br><span class="hljs-keyword">export</span> <span class="hljs-keyword">async</span> <span class="hljs-keyword">function</span> <span class="hljs-title function_">mount</span>(<span class="hljs-params">props</span>) &#123;<br>  <span class="hljs-keyword">const</span> &#123; container, token, onNavigate &#125; = props;<br>  root = <span class="hljs-title class_">ReactDOM</span>.<span class="hljs-title function_">createRoot</span>(<span class="hljs-title function_">getRootContainer</span>(container));<br>  root.<span class="hljs-title function_">render</span>(<br>    <span class="language-xml"><span class="hljs-tag">&lt;<span class="hljs-name">App</span> <span class="hljs-attr">token</span>=<span class="hljs-string">&#123;token&#125;</span> <span class="hljs-attr">onNavigate</span>=<span class="hljs-string">&#123;onNavigate&#125;</span> /&gt;</span></span><br>  );<br>&#125;<br><br><span class="hljs-keyword">export</span> <span class="hljs-keyword">async</span> <span class="hljs-keyword">function</span> <span class="hljs-title function_">unmount</span>(<span class="hljs-params">props</span>) &#123;<br>  root.<span class="hljs-title function_">unmount</span>();<br>  root = <span class="hljs-literal">null</span>;<br>&#125;<br><br><span class="hljs-comment">// Standalone mode (for independent development)</span><br><span class="hljs-keyword">if</span> (!<span class="hljs-variable language_">window</span>.<span class="hljs-property">__POWERED_BY_QIANKUN__</span>) &#123;<br>  root = <span class="hljs-title class_">ReactDOM</span>.<span class="hljs-title function_">createRoot</span>(<span class="hljs-variable language_">document</span>.<span class="hljs-title function_">getElementById</span>(<span class="hljs-string">&#x27;root&#x27;</span>));<br>  root.<span class="hljs-title function_">render</span>(<span class="language-xml"><span class="hljs-tag">&lt;<span class="hljs-name">App</span> /&gt;</span></span>);<br>&#125;<br></code></pre></td></tr></table></figure>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-comment">// sub-app webpack config — important for qiankun</span><br><span class="hljs-comment">// vue.config.js or webpack.config.js</span><br><span class="hljs-variable language_">module</span>.<span class="hljs-property">exports</span> = &#123;<br>  <span class="hljs-attr">output</span>: &#123;<br>    <span class="hljs-attr">library</span>: <span class="hljs-string">&#x27;dashboard&#x27;</span>, <span class="hljs-comment">// Must match name in registerMicroApps</span><br>    <span class="hljs-attr">libraryTarget</span>: <span class="hljs-string">&#x27;umd&#x27;</span>,<br>    <span class="hljs-attr">chunkLoadingGlobal</span>: <span class="hljs-string">`webpackJsonp_dashboard`</span>,<br>  &#125;,<br>  <span class="hljs-attr">devServer</span>: &#123;<br>    <span class="hljs-attr">headers</span>: &#123;<br>      <span class="hljs-string">&#x27;Access-Control-Allow-Origin&#x27;</span>: <span class="hljs-string">&#x27;*&#x27;</span>, <span class="hljs-comment">// Required for cross-origin loading</span><br>    &#125;,<br>  &#125;,<br>&#125;;<br></code></pre></td></tr></table></figure>
+<h2 id="方案四module-federation-webpack-5">方案四：Module Federation
+(Webpack 5)</h2>
+<p>Module Federation
+允许在运行时动态加载远程模块，实现组件级别的微前端：</p>
+<pre class="mermaid">graph TB
+    A[Host App&lt;br/&gt;webpack.config.js] --&gt;|动态导入| B[Remote App A&lt;br/&gt;exposes: ./Button]
+    A --&gt;|动态导入| C[Remote App B&lt;br/&gt;exposes: ./Chart]
+
+    subgraph "Shared Dependencies"
+        D[react]
+        E[react-dom]
+    end
+
+    B --&gt; D
+    C --&gt; D
+    A --&gt; D
+
+    style A fill:#8dd6f9,color:#000
+    style B fill:#f5a623,color:#000
+    style C fill:#7ed321,color:#000
+    style D fill:#e74c3c,color:#fff</pre>
+<h3 id="host-应用配置">Host 应用配置</h3>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-comment">// host-app/webpack.config.js</span><br><span class="hljs-keyword">const</span> &#123; <span class="hljs-title class_">ModuleFederationPlugin</span> &#125; = <span class="hljs-built_in">require</span>(<span class="hljs-string">&#x27;webpack&#x27;</span>).<span class="hljs-property">container</span>;<br><br><span class="hljs-variable language_">module</span>.<span class="hljs-property">exports</span> = &#123;<br>  <span class="hljs-attr">plugins</span>: [<br>    <span class="hljs-keyword">new</span> <span class="hljs-title class_">ModuleFederationPlugin</span>(&#123;<br>      <span class="hljs-attr">name</span>: <span class="hljs-string">&#x27;host&#x27;</span>,<br>      <span class="hljs-attr">remotes</span>: &#123;<br>        <span class="hljs-attr">dashboard</span>: <span class="hljs-string">&#x27;dashboard@https://dashboard.example.com/remoteEntry.js&#x27;</span>,<br>        <span class="hljs-attr">shared_ui</span>: <span class="hljs-string">&#x27;shared_ui@https://ui.example.com/remoteEntry.js&#x27;</span>,<br>      &#125;,<br>      <span class="hljs-attr">shared</span>: &#123;<br>        <span class="hljs-attr">react</span>: &#123; <span class="hljs-attr">singleton</span>: <span class="hljs-literal">true</span>, <span class="hljs-attr">requiredVersion</span>: <span class="hljs-string">&#x27;^18.0.0&#x27;</span> &#125;,<br>        <span class="hljs-string">&#x27;react-dom&#x27;</span>: &#123; <span class="hljs-attr">singleton</span>: <span class="hljs-literal">true</span>, <span class="hljs-attr">requiredVersion</span>: <span class="hljs-string">&#x27;^18.0.0&#x27;</span> &#125;,<br>      &#125;,<br>    &#125;),<br>  ],<br>&#125;;<br><br><span class="hljs-comment">// Usage in host app</span><br><span class="hljs-keyword">const</span> <span class="hljs-title class_">DashboardPage</span> = <span class="hljs-title class_">React</span>.<span class="hljs-title function_">lazy</span>(<span class="hljs-function">() =&gt;</span> <span class="hljs-keyword">import</span>(<span class="hljs-string">&#x27;dashboard/DashboardPage&#x27;</span>));<br><span class="hljs-keyword">const</span> <span class="hljs-title class_">SharedButton</span> = <span class="hljs-title class_">React</span>.<span class="hljs-title function_">lazy</span>(<span class="hljs-function">() =&gt;</span> <span class="hljs-keyword">import</span>(<span class="hljs-string">&#x27;shared_ui/Button&#x27;</span>));<br><br><span class="hljs-keyword">function</span> <span class="hljs-title function_">App</span>(<span class="hljs-params"></span>) &#123;<br>  <span class="hljs-keyword">return</span> (<br>    <span class="language-xml"><span class="hljs-tag">&lt;<span class="hljs-name">Suspense</span> <span class="hljs-attr">fallback</span>=<span class="hljs-string">&#123;</span>&lt;<span class="hljs-attr">Loading</span> /&gt;</span>&#125;&gt;</span><br><span class="language-xml">      <span class="hljs-tag">&lt;<span class="hljs-name">SharedButton</span> <span class="hljs-attr">label</span>=<span class="hljs-string">&quot;Click me&quot;</span> /&gt;</span></span><br><span class="language-xml">      <span class="hljs-tag">&lt;<span class="hljs-name">DashboardPage</span> /&gt;</span></span><br><span class="language-xml">    <span class="hljs-tag">&lt;/<span class="hljs-name">Suspense</span>&gt;</span></span><br>  );<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="remote-应用配置">Remote 应用配置</h3>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-comment">// dashboard-app/webpack.config.js</span><br><span class="hljs-keyword">const</span> &#123; <span class="hljs-title class_">ModuleFederationPlugin</span> &#125; = <span class="hljs-built_in">require</span>(<span class="hljs-string">&#x27;webpack&#x27;</span>).<span class="hljs-property">container</span>;<br><br><span class="hljs-variable language_">module</span>.<span class="hljs-property">exports</span> = &#123;<br>  <span class="hljs-attr">plugins</span>: [<br>    <span class="hljs-keyword">new</span> <span class="hljs-title class_">ModuleFederationPlugin</span>(&#123;<br>      <span class="hljs-attr">name</span>: <span class="hljs-string">&#x27;dashboard&#x27;</span>,<br>      <span class="hljs-attr">filename</span>: <span class="hljs-string">&#x27;remoteEntry.js&#x27;</span>,<br>      <span class="hljs-attr">exposes</span>: &#123;<br>        <span class="hljs-string">&#x27;./DashboardPage&#x27;</span>: <span class="hljs-string">&#x27;./src/pages/DashboardPage&#x27;</span>,<br>        <span class="hljs-string">&#x27;./StatCard&#x27;</span>: <span class="hljs-string">&#x27;./src/components/StatCard&#x27;</span>,<br>      &#125;,<br>      <span class="hljs-attr">shared</span>: &#123;<br>        <span class="hljs-attr">react</span>: &#123; <span class="hljs-attr">singleton</span>: <span class="hljs-literal">true</span>, <span class="hljs-attr">requiredVersion</span>: <span class="hljs-string">&#x27;^18.0.0&#x27;</span> &#125;,<br>        <span class="hljs-string">&#x27;react-dom&#x27;</span>: &#123; <span class="hljs-attr">singleton</span>: <span class="hljs-literal">true</span>, <span class="hljs-attr">requiredVersion</span>: <span class="hljs-string">&#x27;^18.0.0&#x27;</span> &#125;,<br>        <span class="hljs-comment">// Shared state management</span><br>        <span class="hljs-attr">zustand</span>: &#123; <span class="hljs-attr">singleton</span>: <span class="hljs-literal">true</span> &#125;,<br>      &#125;,<br>    &#125;),<br>  ],<br>&#125;;<br></code></pre></td></tr></table></figure>
+<h2 id="应用间通信策略">应用间通信策略</h2>
+<pre class="mermaid">graph TB
+    A[应用间通信] --&gt; B[Props 传递]
+    A --&gt; C[Custom Events]
+    A --&gt; D[共享状态]
+    A --&gt; E[URL 参数]
+
+    B --&gt; B1[主应用 → 子应用&lt;br/&gt;mount props]
+    C --&gt; C1[CustomEvent API&lt;br/&gt;松耦合通信]
+    D --&gt; D1[共享 Store&lt;br/&gt;Redux/Zustand]
+    E --&gt; E1[路由参数&lt;br/&gt;Query String]
+
+    style A fill:#2c3e50,color:#fff
+    style C fill:#e74c3c,color:#fff
+    style D fill:#3498db,color:#fff</pre>
+<h3 id="custom-events-通信">Custom Events 通信</h3>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-comment">// Event bus using CustomEvent (framework-agnostic)</span><br><span class="hljs-keyword">class</span> <span class="hljs-title class_">MicroAppEventBus</span> &#123;<br>  <span class="hljs-title function_">emit</span>(<span class="hljs-params">eventName, detail</span>) &#123;<br>    <span class="hljs-variable language_">window</span>.<span class="hljs-title function_">dispatchEvent</span>(<br>      <span class="hljs-keyword">new</span> <span class="hljs-title class_">CustomEvent</span>(<span class="hljs-string">`micro-app:<span class="hljs-subst">$&#123;eventName&#125;</span>`</span>, &#123; detail &#125;)<br>    );<br>  &#125;<br><br>  <span class="hljs-title function_">on</span>(<span class="hljs-params">eventName, handler</span>) &#123;<br>    <span class="hljs-keyword">const</span> <span class="hljs-title function_">wrappedHandler</span> = (<span class="hljs-params">e</span>) =&gt; <span class="hljs-title function_">handler</span>(e.<span class="hljs-property">detail</span>);<br>    <span class="hljs-variable language_">window</span>.<span class="hljs-title function_">addEventListener</span>(<span class="hljs-string">`micro-app:<span class="hljs-subst">$&#123;eventName&#125;</span>`</span>, wrappedHandler);<br>    <span class="hljs-keyword">return</span> <span class="hljs-function">() =&gt;</span> <span class="hljs-variable language_">window</span>.<span class="hljs-title function_">removeEventListener</span>(<span class="hljs-string">`micro-app:<span class="hljs-subst">$&#123;eventName&#125;</span>`</span>, wrappedHandler);<br>  &#125;<br>&#125;<br><br><span class="hljs-keyword">const</span> eventBus = <span class="hljs-keyword">new</span> <span class="hljs-title class_">MicroAppEventBus</span>();<br><br><span class="hljs-comment">// In sub-app A (sender)</span><br>eventBus.<span class="hljs-title function_">emit</span>(<span class="hljs-string">&#x27;user-selected&#x27;</span>, &#123; <span class="hljs-attr">userId</span>: <span class="hljs-string">&#x27;123&#x27;</span>, <span class="hljs-attr">name</span>: <span class="hljs-string">&#x27;Alice&#x27;</span> &#125;);<br><br><span class="hljs-comment">// In sub-app B (receiver)</span><br><span class="hljs-keyword">const</span> unsubscribe = eventBus.<span class="hljs-title function_">on</span>(<span class="hljs-string">&#x27;user-selected&#x27;</span>, <span class="hljs-function">(<span class="hljs-params">data</span>) =&gt;</span> &#123;<br>  <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">&#x27;User selected:&#x27;</span>, data.<span class="hljs-property">name</span>);<br>  <span class="hljs-title function_">loadUserDetails</span>(data.<span class="hljs-property">userId</span>);<br>&#125;);<br><br><span class="hljs-comment">// Cleanup on unmount</span><br><span class="hljs-keyword">export</span> <span class="hljs-keyword">async</span> <span class="hljs-keyword">function</span> <span class="hljs-title function_">unmount</span>(<span class="hljs-params"></span>) &#123;<br>  <span class="hljs-title function_">unsubscribe</span>();<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="共享状态管理">共享状态管理</h3>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-comment">// Shared store using Zustand (works across Module Federation)</span><br><span class="hljs-comment">// shared-store/src/userStore.js</span><br><span class="hljs-keyword">import</span> &#123; createStore &#125; <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;zustand/vanilla&#x27;</span>;<br><br><span class="hljs-keyword">export</span> <span class="hljs-keyword">const</span> userStore = <span class="hljs-title function_">createStore</span>(<span class="hljs-function">(<span class="hljs-params">set</span>) =&gt;</span> (&#123;<br>  <span class="hljs-attr">user</span>: <span class="hljs-literal">null</span>,<br>  <span class="hljs-attr">token</span>: <span class="hljs-literal">null</span>,<br>  <span class="hljs-attr">setUser</span>: <span class="hljs-function">(<span class="hljs-params">user</span>) =&gt;</span> <span class="hljs-title function_">set</span>(&#123; user &#125;),<br>  <span class="hljs-attr">setToken</span>: <span class="hljs-function">(<span class="hljs-params">token</span>) =&gt;</span> <span class="hljs-title function_">set</span>(&#123; token &#125;),<br>  <span class="hljs-attr">logout</span>: <span class="hljs-function">() =&gt;</span> <span class="hljs-title function_">set</span>(&#123; <span class="hljs-attr">user</span>: <span class="hljs-literal">null</span>, <span class="hljs-attr">token</span>: <span class="hljs-literal">null</span> &#125;),<br>&#125;));<br><br><span class="hljs-comment">// In any micro-app</span><br><span class="hljs-keyword">import</span> &#123; userStore &#125; <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;shared_store/userStore&#x27;</span>;<br><span class="hljs-keyword">import</span> &#123; useStore &#125; <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;zustand&#x27;</span>;<br><br><span class="hljs-keyword">function</span> <span class="hljs-title function_">UserInfo</span>(<span class="hljs-params"></span>) &#123;<br>  <span class="hljs-keyword">const</span> user = <span class="hljs-title function_">useStore</span>(userStore, <span class="hljs-function">(<span class="hljs-params">state</span>) =&gt;</span> state.<span class="hljs-property">user</span>);<br>  <span class="hljs-keyword">return</span> user ? <span class="language-xml"><span class="hljs-tag">&lt;<span class="hljs-name">span</span>&gt;</span>&#123;user.name&#125;<span class="hljs-tag">&lt;/<span class="hljs-name">span</span>&gt;</span></span> : <span class="language-xml"><span class="hljs-tag">&lt;<span class="hljs-name">span</span>&gt;</span>未登录<span class="hljs-tag">&lt;/<span class="hljs-name">span</span>&gt;</span></span>;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="方案对比总结">方案对比总结</h2>
+<table>
+<thead>
+<tr class="header">
+<th>特性</th>
+<th>iframe</th>
+<th>Web Components</th>
+<th>qiankun</th>
+<th>Module Federation</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>隔离性</td>
+<td>最强</td>
+<td>较强 (Shadow DOM)</td>
+<td>中等 (JS 沙箱)</td>
+<td>弱</td>
+</tr>
+<tr class="even">
+<td>性能</td>
+<td>差</td>
+<td>中</td>
+<td>中</td>
+<td>好</td>
+</tr>
+<tr class="odd">
+<td>接入成本</td>
+<td>低</td>
+<td>中</td>
+<td>中</td>
+<td>高</td>
+</tr>
+<tr class="even">
+<td>通信便捷性</td>
+<td>差</td>
+<td>中</td>
+<td>好</td>
+<td>好</td>
+</tr>
+<tr class="odd">
+<td>技术栈无关</td>
+<td>是</td>
+<td>是</td>
+<td>是</td>
+<td>受限 (Webpack)</td>
+</tr>
+<tr class="even">
+<td>共享依赖</td>
+<td>不能</td>
+<td>不能</td>
+<td>有限</td>
+<td>完善</td>
+</tr>
+<tr class="odd">
+<td>独立部署</td>
+<td>是</td>
+<td>是</td>
+<td>是</td>
+<td>是</td>
+</tr>
+<tr class="even">
+<td>粒度</td>
+<td>页面级</td>
+<td>组件级</td>
+<td>页面级</td>
+<td>组件级</td>
+</tr>
+</tbody>
+</table>
+<h2 id="选型建议">选型建议</h2>
+<pre class="mermaid">flowchart TD
+    A[微前端需求] --&gt; B{需要组件级共享?}
+    B --&gt;|是| C{使用 Webpack?}
+    C --&gt;|是| D[Module Federation]
+    C --&gt;|否 / Vite| E[Vite Federation Plugin]
+    B --&gt;|否, 页面级| F{需要强隔离?}
+    F --&gt;|是| G{接受 iframe 缺陷?}
+    G --&gt;|是| H[iframe]
+    G --&gt;|否| I[qiankun + strictStyleIsolation]
+    F --&gt;|否| J[qiankun / single-spa]
+
+    style D fill:#8dd6f9,color:#000
+    style H fill:#95a5a6,color:#fff
+    style I fill:#e74c3c,color:#fff
+    style J fill:#e74c3c,color:#fff</pre>
+<h2 id="总结">总结</h2>
+<p>微前端架构的选择没有银弹，需要根据团队规模、技术栈差异、隔离需求和性能要求综合权衡。对于大型企业级应用，qiankun
+提供了较完善的开箱即用方案；对于同技术栈的模块化拆分，Module Federation
+在性能和共享能力上更具优势；而对于需要嵌入第三方应用的场景，iframe
+仍然是最安全的选择。无论选择哪种方案，都应优先保证子应用的独立可运行性，避免过度耦合。</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2025-07-02</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">2.6k 字 · 7 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/deno-vs-nodejs/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Deno vs Node.js：运行时之争</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/web-security-defense/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Web安全攻防：XSS/CSRF/SQL注入防护</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BE%AE%E5%89%8D%E7%AB%AF%E6%A0%B8%E5%BF%83%E6%A6%82%E5%BF%B5"><span class="toc-text">微前端核心概念</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%BE%AE%E5%89%8D%E7%AB%AF%E7%9A%84%E6%A0%B8%E5%BF%83%E5%8E%9F%E5%88%99"><span class="toc-text">微前端的核心原则</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%96%B9%E6%A1%88%E4%B8%80iframe"><span class="toc-text">方案一：iframe</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%96%B9%E6%A1%88%E4%BA%8Cweb-components"><span class="toc-text">方案二：Web Components</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%96%B9%E6%A1%88%E4%B8%89qiankun-%E5%9F%BA%E4%BA%8E-single-spa"><span class="toc-text">方案三：qiankun (基于
+single-spa)</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%BB%E5%BA%94%E7%94%A8%E9%85%8D%E7%BD%AE"><span class="toc-text">主应用配置</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AD%90%E5%BA%94%E7%94%A8%E6%94%B9%E9%80%A0react"><span class="toc-text">子应用改造（React）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%96%B9%E6%A1%88%E5%9B%9Bmodule-federation-webpack-5"><span class="toc-text">方案四：Module Federation
+(Webpack 5)</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#host-%E5%BA%94%E7%94%A8%E9%85%8D%E7%BD%AE"><span class="toc-text">Host 应用配置</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#remote-%E5%BA%94%E7%94%A8%E9%85%8D%E7%BD%AE"><span class="toc-text">Remote 应用配置</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BA%94%E7%94%A8%E9%97%B4%E9%80%9A%E4%BF%A1%E7%AD%96%E7%95%A5"><span class="toc-text">应用间通信策略</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#custom-events-%E9%80%9A%E4%BF%A1"><span class="toc-text">Custom Events 通信</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%B1%E4%BA%AB%E7%8A%B6%E6%80%81%E7%AE%A1%E7%90%86"><span class="toc-text">共享状态管理</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%96%B9%E6%A1%88%E5%AF%B9%E6%AF%94%E6%80%BB%E7%BB%93"><span class="toc-text">方案对比总结</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%80%89%E5%9E%8B%E5%BB%BA%E8%AE%AE"><span class="toc-text">选型建议</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>容器安全最佳实践与工具链 · zt&#39;s Blog</title>
+  <meta name="description" content="全面介绍容器安全最佳实践，涵盖镜像扫描、运行时安全、网络策略、Pod安全标准、密钥管理和供应链安全。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/container-security/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="容器安全最佳实践与工具链">
+  <meta property="og:description" content="全面介绍容器安全最佳实践，涵盖镜像扫描、运行时安全、网络策略、Pod安全标准、密钥管理和供应链安全。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/container-security/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2025-07-12T16:00:00.000Z">
+  <meta property="article:modified_time" content="2025-07-12T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="容器安全最佳实践与工具链">
+  <meta name="twitter:description" content="全面介绍容器安全最佳实践，涵盖镜像扫描、运行时安全、网络策略、Pod安全标准、密钥管理和供应链安全。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"容器安全最佳实践与工具链","description":"全面介绍容器安全最佳实践，涵盖镜像扫描、运行时安全、网络策略、Pod安全标准、密钥管理和供应链安全。","datePublished":"2025-07-12T16:00:00.000Z","dateModified":"2025-07-12T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/container-security/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Security","item":"https://withesse.co/categories/Security/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:350">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Security/">Security</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/docker/"><span class="hash">#</span>docker</a><a class="tag" href="/tags/container/"><span class="hash">#</span>container</a><a class="tag" href="/tags/kubernetes/"><span class="hash">#</span>kubernetes</a><a class="tag" href="/tags/security/"><span class="hash">#</span>security</a>
+        
+      </div>
+
+      <h1>容器安全最佳实践与工具链</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2025.07.13</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 7 min</span>
+        </span>
+        <span class="wc"><span class="num">2.6k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%B9%E5%99%A8%E5%AE%89%E5%85%A8%E5%85%A8%E6%99%AF"><span class="toc-text">容器安全全景</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%95%9C%E5%83%8F%E5%AE%89%E5%85%A8"><span class="toc-text">镜像安全</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%89%E5%85%A8%E7%9A%84dockerfile"><span class="toc-text">安全的Dockerfile</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#dockerfile%E5%AE%89%E5%85%A8%E6%A3%80%E6%9F%A5%E6%B8%85%E5%8D%95"><span class="toc-text">Dockerfile安全检查清单</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%95%9C%E5%83%8F%E6%89%AB%E6%8F%8F%E5%B7%A5%E5%85%B7"><span class="toc-text">镜像扫描工具</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%BF%90%E8%A1%8C%E6%97%B6%E5%AE%89%E5%85%A8"><span class="toc-text">运行时安全</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#falco%E8%A7%84%E5%88%99"><span class="toc-text">Falco规则</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BF%90%E8%A1%8C%E6%97%B6%E5%AE%89%E5%85%A8%E7%AD%96%E7%95%A5"><span class="toc-text">运行时安全策略</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#kubernetes-pod%E5%AE%89%E5%85%A8"><span class="toc-text">Kubernetes Pod安全</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#pod-security-standards-pss"><span class="toc-text">Pod Security Standards (PSS)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%BD%91%E7%BB%9C%E7%AD%96%E7%95%A5"><span class="toc-text">网络策略</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AF%86%E9%92%A5%E7%AE%A1%E7%90%86"><span class="toc-text">密钥管理</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#kubernetes-secrets%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5"><span class="toc-text">Kubernetes Secrets最佳实践</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AF%86%E9%92%A5%E7%AE%A1%E7%90%86%E6%96%B9%E6%A1%88%E5%AF%B9%E6%AF%94"><span class="toc-text">密钥管理方案对比</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BE%9B%E5%BA%94%E9%93%BE%E5%AE%89%E5%85%A8"><span class="toc-text">供应链安全</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%95%9C%E5%83%8F%E7%AD%BE%E5%90%8Dcosign"><span class="toc-text">镜像签名（Cosign）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#sbomsoftware-bill-of-materials"><span class="toc-text">SBOM（Software Bill of
+Materials）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%87%86%E5%85%A5%E6%8E%A7%E5%88%B6admission-control"><span class="toc-text">准入控制（Admission Control）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%89%E5%85%A8%E6%89%AB%E6%8F%8F%E5%B7%A5%E5%85%B7%E5%AF%B9%E6%AF%94"><span class="toc-text">安全扫描工具对比</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="前言">前言</h2>
+<p>容器技术极大地简化了应用的部署和管理，但也带来了新的安全挑战。从镜像构建到运行时，从网络隔离到密钥管理，每个环节都可能成为攻击者的突破口。本文将系统性地介绍容器安全的最佳实践和工具链。</p>
+<h2 id="容器安全全景">容器安全全景</h2>
+<pre class="mermaid">graph TB
+    subgraph "构建阶段 Build"
+        B1[基础镜像安全]
+        B2[Dockerfile最佳实践]
+        B3[依赖漏洞扫描]
+        B4[镜像签名]
+    end
+
+    subgraph "分发阶段 Ship"
+        S1[镜像仓库安全]
+        S2[准入控制]
+        S3[SBOM生成]
+    end
+
+    subgraph "运行阶段 Run"
+        R1[运行时安全监控]
+        R2[网络策略]
+        R3[密钥管理]
+        R4[Pod安全标准]
+    end
+
+    B1 --&gt; S1
+    B2 --&gt; S1
+    B3 --&gt; S1
+    B4 --&gt; S1
+    S1 --&gt; R1
+    S2 --&gt; R1
+    S3 --&gt; R1</pre>
+<h2 id="镜像安全">镜像安全</h2>
+<h3 id="安全的dockerfile">安全的Dockerfile</h3>
+<figure class="highlight dockerfile"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><code class="hljs dockerfile"><span class="hljs-comment"># 不安全的Dockerfile</span><br><span class="hljs-keyword">FROM</span> ubuntu:latest<br><span class="hljs-keyword">RUN</span><span class="language-bash"> apt-get update &amp;&amp; apt-get install -y python3 curl wget</span><br><span class="hljs-keyword">COPY</span><span class="language-bash"> . /app</span><br><span class="hljs-keyword">RUN</span><span class="language-bash"> pip install -r requirements.txt</span><br><span class="hljs-keyword">USER</span> root<br><span class="hljs-keyword">CMD</span><span class="language-bash"> [<span class="hljs-string">&quot;python3&quot;</span>, <span class="hljs-string">&quot;app.py&quot;</span>]</span><br></code></pre></td></tr></table></figure>
+<figure class="highlight dockerfile"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><code class="hljs dockerfile"><span class="hljs-comment"># 安全的Dockerfile</span><br><span class="hljs-comment"># 1. 使用特定版本的最小基础镜像</span><br><span class="hljs-keyword">FROM</span> python:<span class="hljs-number">3.12</span>-slim-bookworm AS builder<br><br><span class="hljs-comment"># 2. 安装依赖（构建阶段）</span><br><span class="hljs-keyword">WORKDIR</span><span class="language-bash"> /app</span><br><span class="hljs-keyword">COPY</span><span class="language-bash"> requirements.txt .</span><br><span class="hljs-keyword">RUN</span><span class="language-bash"> pip install --no-cache-dir --user -r requirements.txt</span><br><br><span class="hljs-comment"># 3. 多阶段构建，最终镜像更小更安全</span><br><span class="hljs-keyword">FROM</span> python:<span class="hljs-number">3.12</span>-slim-bookworm<br><br><span class="hljs-comment"># 4. 创建非root用户</span><br><span class="hljs-keyword">RUN</span><span class="language-bash"> groupadd -r appgroup &amp;&amp; useradd -r -g appgroup -d /app -s /sbin/nologin appuser</span><br><br><span class="hljs-comment"># 5. 只复制必要的文件</span><br><span class="hljs-keyword">WORKDIR</span><span class="language-bash"> /app</span><br><span class="hljs-keyword">COPY</span><span class="language-bash"> --from=builder /root/.local /home/appuser/.local</span><br><span class="hljs-keyword">COPY</span><span class="language-bash"> --<span class="hljs-built_in">chown</span>=appuser:appgroup . .</span><br><br><span class="hljs-comment"># 6. 设置环境变量</span><br><span class="hljs-keyword">ENV</span> PATH=<span class="hljs-string">&quot;/home/appuser/.local/bin:$&#123;PATH&#125;&quot;</span><br><br><span class="hljs-comment"># 7. 切换到非root用户</span><br><span class="hljs-keyword">USER</span> appuser<br><br><span class="hljs-comment"># 8. 健康检查</span><br><span class="hljs-keyword">HEALTHCHECK</span><span class="language-bash"> --interval=30s --<span class="hljs-built_in">timeout</span>=3s --retries=3 \</span><br><span class="language-bash">    CMD python3 -c <span class="hljs-string">&quot;import urllib.request; urllib.request.urlopen(&#x27;http://localhost:8080/health&#x27;)&quot;</span></span><br><br><span class="hljs-comment"># 9. 只暴露必要端口</span><br><span class="hljs-keyword">EXPOSE</span> <span class="hljs-number">8080</span><br><br><span class="hljs-comment"># 10. 使用exec形式的CMD</span><br><span class="hljs-keyword">CMD</span><span class="language-bash"> [<span class="hljs-string">&quot;python3&quot;</span>, <span class="hljs-string">&quot;app.py&quot;</span>]</span><br></code></pre></td></tr></table></figure>
+<h3 id="dockerfile安全检查清单">Dockerfile安全检查清单</h3>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-attr">dockerfile_security_checklist:</span><br>  <span class="hljs-attr">base_image:</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-string">&quot;使用特定版本tag，不用latest&quot;</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-string">&quot;选择最小基础镜像（alpine/slim/distroless）&quot;</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-string">&quot;使用可信的官方镜像&quot;</span><br><br>  <span class="hljs-attr">build_process:</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-string">&quot;多阶段构建，减小最终镜像体积&quot;</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-string">&quot;不在镜像中包含密钥、证书、SSH私钥&quot;</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-string">&quot;使用.dockerignore排除不必要文件&quot;</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-string">&quot;合并RUN命令减少层数&quot;</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-string">&quot;清理包管理器缓存&quot;</span><br><br>  <span class="hljs-attr">runtime:</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-string">&quot;使用非root用户运行&quot;</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-string">&quot;只暴露必要端口&quot;</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-string">&quot;设置只读文件系统（如可行）&quot;</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-string">&quot;使用HEALTHCHECK&quot;</span><br></code></pre></td></tr></table></figure>
+<h3 id="镜像扫描工具">镜像扫描工具</h3>
+<h4 id="trivy">Trivy</h4>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 扫描镜像漏洞</span><br>trivy image myapp:latest<br><br><span class="hljs-comment"># 只显示高危和严重漏洞</span><br>trivy image --severity HIGH,CRITICAL myapp:latest<br><br><span class="hljs-comment"># 扫描Dockerfile</span><br>trivy config Dockerfile<br><br><span class="hljs-comment"># 扫描文件系统（项目依赖）</span><br>trivy fs --scanners vuln,secret,misconfig .<br><br><span class="hljs-comment"># JSON输出（用于CI/CD集成）</span><br>trivy image --format json --output result.json myapp:latest<br><br><span class="hljs-comment"># CI/CD中使用（发现高危漏洞时失败）</span><br>trivy image --exit-code 1 --severity HIGH,CRITICAL myapp:latest<br></code></pre></td></tr></table></figure>
+<h4 id="集成到cicd">集成到CI/CD</h4>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># GitHub Actions集成Trivy</span><br><span class="hljs-attr">name:</span> <span class="hljs-string">Security</span> <span class="hljs-string">Scan</span><br><span class="hljs-attr">on:</span> [<span class="hljs-string">push</span>, <span class="hljs-string">pull_request</span>]<br><br><span class="hljs-attr">jobs:</span><br>  <span class="hljs-attr">trivy-scan:</span><br>    <span class="hljs-attr">runs-on:</span> <span class="hljs-string">ubuntu-latest</span><br>    <span class="hljs-attr">steps:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">uses:</span> <span class="hljs-string">actions/checkout@v4</span><br><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Build</span> <span class="hljs-string">image</span><br>        <span class="hljs-attr">run:</span> <span class="hljs-string">docker</span> <span class="hljs-string">build</span> <span class="hljs-string">-t</span> <span class="hljs-string">myapp:$&#123;&#123;</span> <span class="hljs-string">github.sha</span> <span class="hljs-string">&#125;&#125;</span> <span class="hljs-string">.</span><br><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Run</span> <span class="hljs-string">Trivy</span> <span class="hljs-string">vulnerability</span> <span class="hljs-string">scanner</span><br>        <span class="hljs-attr">uses:</span> <span class="hljs-string">aquasecurity/trivy-action@master</span><br>        <span class="hljs-attr">with:</span><br>          <span class="hljs-attr">image-ref:</span> <span class="hljs-string">myapp:$&#123;&#123;</span> <span class="hljs-string">github.sha</span> <span class="hljs-string">&#125;&#125;</span><br>          <span class="hljs-attr">format:</span> <span class="hljs-string">sarif</span><br>          <span class="hljs-attr">output:</span> <span class="hljs-string">trivy-results.sarif</span><br>          <span class="hljs-attr">severity:</span> <span class="hljs-string">CRITICAL,HIGH</span><br>          <span class="hljs-attr">exit-code:</span> <span class="hljs-number">1</span><br><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Upload</span> <span class="hljs-string">Trivy</span> <span class="hljs-string">scan</span> <span class="hljs-string">results</span><br>        <span class="hljs-attr">uses:</span> <span class="hljs-string">github/codeql-action/upload-sarif@v3</span><br>        <span class="hljs-attr">if:</span> <span class="hljs-string">always()</span><br>        <span class="hljs-attr">with:</span><br>          <span class="hljs-attr">sarif_file:</span> <span class="hljs-string">trivy-results.sarif</span><br></code></pre></td></tr></table></figure>
+<h2 id="运行时安全">运行时安全</h2>
+<h3 id="falco规则">Falco规则</h3>
+<p>Falco是开源的云原生运行时安全工具，检测异常行为。</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># Falco自定义规则</span><br><span class="hljs-bullet">-</span> <span class="hljs-attr">rule:</span> <span class="hljs-string">Detect</span> <span class="hljs-string">Shell</span> <span class="hljs-string">in</span> <span class="hljs-string">Container</span><br>  <span class="hljs-attr">desc:</span> <span class="hljs-string">检测容器中启动Shell</span><br>  <span class="hljs-attr">condition:</span> <span class="hljs-string">&gt;</span><br><span class="hljs-string">    spawned_process and</span><br><span class="hljs-string">    container and</span><br><span class="hljs-string">    proc.name in (bash, sh, zsh, ash) and</span><br><span class="hljs-string">    not proc.pname in (cron, supervisord)</span><br><span class="hljs-string"></span>  <span class="hljs-attr">output:</span> <span class="hljs-string">&gt;</span><br><span class="hljs-string">    Shell started in container</span><br><span class="hljs-string">    (user=%user.name container=%container.name</span><br><span class="hljs-string">     shell=%proc.name parent=%proc.pname</span><br><span class="hljs-string">     image=%container.image.repository)</span><br><span class="hljs-string"></span>  <span class="hljs-attr">priority:</span> <span class="hljs-string">WARNING</span><br>  <span class="hljs-attr">tags:</span> [<span class="hljs-string">container</span>, <span class="hljs-string">shell</span>, <span class="hljs-string">runtime</span>]<br><br><span class="hljs-bullet">-</span> <span class="hljs-attr">rule:</span> <span class="hljs-string">Write</span> <span class="hljs-string">Below</span> <span class="hljs-string">/etc</span><br>  <span class="hljs-attr">desc:</span> <span class="hljs-string">检测对/etc目录的写入</span><br>  <span class="hljs-attr">condition:</span> <span class="hljs-string">&gt;</span><br><span class="hljs-string">    write_etc_common and</span><br><span class="hljs-string">    container and</span><br><span class="hljs-string">    not user_known_write_etc_conditions</span><br><span class="hljs-string"></span>  <span class="hljs-attr">output:</span> <span class="hljs-string">&gt;</span><br><span class="hljs-string">    File written below /etc in container</span><br><span class="hljs-string">    (user=%user.name file=%fd.name</span><br><span class="hljs-string">     container=%container.name image=%container.image.repository)</span><br><span class="hljs-string"></span>  <span class="hljs-attr">priority:</span> <span class="hljs-string">ERROR</span><br>  <span class="hljs-attr">tags:</span> [<span class="hljs-string">container</span>, <span class="hljs-string">filesystem</span>]<br><br><span class="hljs-bullet">-</span> <span class="hljs-attr">rule:</span> <span class="hljs-string">Outbound</span> <span class="hljs-string">Connection</span> <span class="hljs-string">to</span> <span class="hljs-string">Suspicious</span> <span class="hljs-string">IP</span><br>  <span class="hljs-attr">desc:</span> <span class="hljs-string">检测连接到可疑IP</span><br>  <span class="hljs-attr">condition:</span> <span class="hljs-string">&gt;</span><br><span class="hljs-string">    outbound and</span><br><span class="hljs-string">    container and</span><br><span class="hljs-string">    fd.sip.name in (miners_ip_list)</span><br><span class="hljs-string"></span>  <span class="hljs-attr">output:</span> <span class="hljs-string">&gt;</span><br><span class="hljs-string">    Suspicious outbound connection</span><br><span class="hljs-string">    (container=%container.name ip=%fd.sip command=%proc.cmdline)</span><br><span class="hljs-string"></span>  <span class="hljs-attr">priority:</span> <span class="hljs-string">CRITICAL</span><br>  <span class="hljs-attr">tags:</span> [<span class="hljs-string">container</span>, <span class="hljs-string">network</span>]<br></code></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 安装Falco（Kubernetes）</span><br>helm repo add falcosecurity https://falcosecurity.github.io/charts<br>helm install falco falcosecurity/falco \<br>    --namespace falco \<br>    --create-namespace \<br>    --<span class="hljs-built_in">set</span> falcosidekick.enabled=<span class="hljs-literal">true</span> \<br>    --<span class="hljs-built_in">set</span> falcosidekick.config.slack.webhookurl=<span class="hljs-string">&quot;https://hooks.slack.com/xxx&quot;</span><br></code></pre></td></tr></table></figure>
+<h3 id="运行时安全策略">运行时安全策略</h3>
+<pre class="mermaid">flowchart TB
+    EVENT[系统调用事件] --&gt; FALCO[Falco Engine]
+    FALCO --&gt; |匹配规则| ALERT[告警]
+    ALERT --&gt; SLACK[Slack通知]
+    ALERT --&gt; SIEM[SIEM系统]
+    ALERT --&gt; OPA[OPA/Admission Controller]
+    OPA --&gt; |自动响应| KILL[终止Pod]
+    OPA --&gt; |自动响应| ISOLATE[网络隔离]</pre>
+<h2 id="kubernetes-pod安全">Kubernetes Pod安全</h2>
+<h3 id="pod-security-standards-pss">Pod Security Standards (PSS)</h3>
+<p>Kubernetes 1.25+使用Pod Security
+Admission替代了PodSecurityPolicy。</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># 命名空间级别的安全标准</span><br><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">v1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">Namespace</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">production</span><br>  <span class="hljs-attr">labels:</span><br>    <span class="hljs-comment"># 三种安全级别: privileged, baseline, restricted</span><br>    <span class="hljs-attr">pod-security.kubernetes.io/enforce:</span> <span class="hljs-string">restricted</span><br>    <span class="hljs-attr">pod-security.kubernetes.io/audit:</span> <span class="hljs-string">restricted</span><br>    <span class="hljs-attr">pod-security.kubernetes.io/warn:</span> <span class="hljs-string">restricted</span><br></code></pre></td></tr></table></figure>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># 符合 restricted 安全标准的Pod</span><br><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">v1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">Pod</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">secure-app</span><br>  <span class="hljs-attr">namespace:</span> <span class="hljs-string">production</span><br><span class="hljs-attr">spec:</span><br>  <span class="hljs-comment"># 不使用hostNetwork</span><br>  <span class="hljs-attr">hostNetwork:</span> <span class="hljs-literal">false</span><br>  <span class="hljs-comment"># 不使用hostPID</span><br>  <span class="hljs-attr">hostPID:</span> <span class="hljs-literal">false</span><br><br>  <span class="hljs-attr">securityContext:</span><br>    <span class="hljs-comment"># 以非root用户运行</span><br>    <span class="hljs-attr">runAsNonRoot:</span> <span class="hljs-literal">true</span><br>    <span class="hljs-attr">runAsUser:</span> <span class="hljs-number">1000</span><br>    <span class="hljs-attr">runAsGroup:</span> <span class="hljs-number">1000</span><br>    <span class="hljs-attr">fsGroup:</span> <span class="hljs-number">1000</span><br>    <span class="hljs-comment"># 使用Seccomp</span><br>    <span class="hljs-attr">seccompProfile:</span><br>      <span class="hljs-attr">type:</span> <span class="hljs-string">RuntimeDefault</span><br><br>  <span class="hljs-attr">containers:</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">app</span><br>      <span class="hljs-attr">image:</span> <span class="hljs-string">myapp:1.0.0@sha256:abc123...</span>  <span class="hljs-comment"># 使用digest</span><br>      <span class="hljs-attr">securityContext:</span><br>        <span class="hljs-comment"># 不允许提权</span><br>        <span class="hljs-attr">allowPrivilegeEscalation:</span> <span class="hljs-literal">false</span><br>        <span class="hljs-comment"># 不使用特权模式</span><br>        <span class="hljs-attr">privileged:</span> <span class="hljs-literal">false</span><br>        <span class="hljs-comment"># 只读根文件系统</span><br>        <span class="hljs-attr">readOnlyRootFilesystem:</span> <span class="hljs-literal">true</span><br>        <span class="hljs-comment"># 删除所有Linux capabilities</span><br>        <span class="hljs-attr">capabilities:</span><br>          <span class="hljs-attr">drop:</span> [<span class="hljs-string">&quot;ALL&quot;</span>]<br>      <span class="hljs-attr">resources:</span><br>        <span class="hljs-attr">limits:</span><br>          <span class="hljs-attr">cpu:</span> <span class="hljs-string">&quot;500m&quot;</span><br>          <span class="hljs-attr">memory:</span> <span class="hljs-string">&quot;256Mi&quot;</span><br>        <span class="hljs-attr">requests:</span><br>          <span class="hljs-attr">cpu:</span> <span class="hljs-string">&quot;100m&quot;</span><br>          <span class="hljs-attr">memory:</span> <span class="hljs-string">&quot;128Mi&quot;</span><br>      <span class="hljs-comment"># 需要可写目录时使用emptyDir</span><br>      <span class="hljs-attr">volumeMounts:</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">tmp</span><br>          <span class="hljs-attr">mountPath:</span> <span class="hljs-string">/tmp</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">cache</span><br>          <span class="hljs-attr">mountPath:</span> <span class="hljs-string">/app/cache</span><br><br>  <span class="hljs-attr">volumes:</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">tmp</span><br>      <span class="hljs-attr">emptyDir:</span><br>        <span class="hljs-attr">sizeLimit:</span> <span class="hljs-string">&quot;100Mi&quot;</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">cache</span><br>      <span class="hljs-attr">emptyDir:</span><br>        <span class="hljs-attr">sizeLimit:</span> <span class="hljs-string">&quot;200Mi&quot;</span><br><br>  <span class="hljs-comment"># 使用专用ServiceAccount</span><br>  <span class="hljs-attr">serviceAccountName:</span> <span class="hljs-string">app-sa</span><br>  <span class="hljs-attr">automountServiceAccountToken:</span> <span class="hljs-literal">false</span>  <span class="hljs-comment"># 不需要K8s API访问时禁用</span><br></code></pre></td></tr></table></figure>
+<h3 id="网络策略">网络策略</h3>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># 默认拒绝所有流量</span><br><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">networking.k8s.io/v1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">NetworkPolicy</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">default-deny-all</span><br>  <span class="hljs-attr">namespace:</span> <span class="hljs-string">production</span><br><span class="hljs-attr">spec:</span><br>  <span class="hljs-attr">podSelector:</span> &#123;&#125;<br>  <span class="hljs-attr">policyTypes:</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-string">Ingress</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-string">Egress</span><br><br><span class="hljs-meta">---</span><br><span class="hljs-comment"># 允许特定流量</span><br><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">networking.k8s.io/v1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">NetworkPolicy</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">allow-web-to-api</span><br>  <span class="hljs-attr">namespace:</span> <span class="hljs-string">production</span><br><span class="hljs-attr">spec:</span><br>  <span class="hljs-attr">podSelector:</span><br>    <span class="hljs-attr">matchLabels:</span><br>      <span class="hljs-attr">app:</span> <span class="hljs-string">api-server</span><br>  <span class="hljs-attr">policyTypes:</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-string">Ingress</span><br>  <span class="hljs-attr">ingress:</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-attr">from:</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-attr">podSelector:</span><br>            <span class="hljs-attr">matchLabels:</span><br>              <span class="hljs-attr">app:</span> <span class="hljs-string">web-frontend</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-attr">namespaceSelector:</span><br>            <span class="hljs-attr">matchLabels:</span><br>              <span class="hljs-attr">name:</span> <span class="hljs-string">monitoring</span><br>      <span class="hljs-attr">ports:</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-attr">protocol:</span> <span class="hljs-string">TCP</span><br>          <span class="hljs-attr">port:</span> <span class="hljs-number">8080</span><br></code></pre></td></tr></table></figure>
+<pre class="mermaid">graph LR
+    subgraph "production namespace"
+        WEB[Web Frontend&lt;br&gt;port 80] --&gt;|allowed| API[API Server&lt;br&gt;port 8080]
+        API --&gt;|allowed| DB[(PostgreSQL&lt;br&gt;port 5432)]
+        WEB -.-&gt;|denied| DB
+    end
+
+    subgraph "monitoring namespace"
+        PROM[Prometheus] --&gt;|allowed| API
+    end
+
+    EXTERNAL[External] -.-&gt;|denied| API
+    EXTERNAL -.-&gt;|denied| DB</pre>
+<h2 id="密钥管理">密钥管理</h2>
+<h3 id="kubernetes-secrets最佳实践">Kubernetes Secrets最佳实践</h3>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># 不要这样做 - Secret明文存在etcd中</span><br><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">v1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">Secret</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">db-credentials</span><br><span class="hljs-attr">type:</span> <span class="hljs-string">Opaque</span><br><span class="hljs-attr">data:</span><br>  <span class="hljs-attr">username:</span> <span class="hljs-string">YWRtaW4=</span>      <span class="hljs-comment"># base64, 不是加密</span><br>  <span class="hljs-attr">password:</span> <span class="hljs-string">cGFzc3dvcmQ=</span><br></code></pre></td></tr></table></figure>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># 推荐: 使用External Secrets Operator</span><br><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">external-secrets.io/v1beta1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">ExternalSecret</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">db-credentials</span><br><span class="hljs-attr">spec:</span><br>  <span class="hljs-attr">refreshInterval:</span> <span class="hljs-string">1h</span><br>  <span class="hljs-attr">secretStoreRef:</span><br>    <span class="hljs-attr">name:</span> <span class="hljs-string">vault-backend</span><br>    <span class="hljs-attr">kind:</span> <span class="hljs-string">ClusterSecretStore</span><br>  <span class="hljs-attr">target:</span><br>    <span class="hljs-attr">name:</span> <span class="hljs-string">db-credentials</span><br>    <span class="hljs-attr">creationPolicy:</span> <span class="hljs-string">Owner</span><br>  <span class="hljs-attr">data:</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-attr">secretKey:</span> <span class="hljs-string">username</span><br>      <span class="hljs-attr">remoteRef:</span><br>        <span class="hljs-attr">key:</span> <span class="hljs-string">production/database</span><br>        <span class="hljs-attr">property:</span> <span class="hljs-string">username</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-attr">secretKey:</span> <span class="hljs-string">password</span><br>      <span class="hljs-attr">remoteRef:</span><br>        <span class="hljs-attr">key:</span> <span class="hljs-string">production/database</span><br>        <span class="hljs-attr">property:</span> <span class="hljs-string">password</span><br></code></pre></td></tr></table></figure>
+<h3 id="密钥管理方案对比">密钥管理方案对比</h3>
+<pre class="mermaid">graph TB
+    subgraph "密钥管理方案"
+        direction LR
+        K8S[K8s Secrets&lt;br&gt;Base64编码&lt;br&gt;不安全] --&gt; ESO[External Secrets&lt;br&gt;Operator&lt;br&gt;推荐]
+        ESO --&gt; VAULT[HashiCorp Vault]
+        ESO --&gt; AWS_SM[AWS Secrets Manager]
+        ESO --&gt; GCP_SM[GCP Secret Manager]
+        ESO --&gt; AZ_KV[Azure Key Vault]
+    end
+
+    subgraph "加密增强"
+        ETCD_ENC[etcd加密&lt;br&gt;EncryptionConfiguration]
+        SEALED[Sealed Secrets&lt;br&gt;加密后可提交Git]
+        SOPS[Mozilla SOPS&lt;br&gt;文件级加密]
+    end</pre>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># Sealed Secrets - 可以安全地提交到Git</span><br><span class="hljs-comment"># 使用kubeseal加密</span><br><span class="hljs-comment"># kubeseal --format=yaml &lt; secret.yaml &gt; sealed-secret.yaml</span><br><br><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">bitnami.com/v1alpha1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">SealedSecret</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">db-credentials</span><br>  <span class="hljs-attr">namespace:</span> <span class="hljs-string">production</span><br><span class="hljs-attr">spec:</span><br>  <span class="hljs-attr">encryptedData:</span><br>    <span class="hljs-attr">username:</span> <span class="hljs-string">AgBy3i4OJSWK+...</span>  <span class="hljs-comment"># 只有集群中的controller能解密</span><br>    <span class="hljs-attr">password:</span> <span class="hljs-string">AgCtr8p2E1xyL+...</span><br></code></pre></td></tr></table></figure>
+<h2 id="供应链安全">供应链安全</h2>
+<h3 id="镜像签名cosign">镜像签名（Cosign）</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 生成密钥对</span><br>cosign generate-key-pair<br><br><span class="hljs-comment"># 签名镜像</span><br>cosign sign --key cosign.key myregistry.io/myapp:v1.0.0<br><br><span class="hljs-comment"># 验证签名</span><br>cosign verify --key cosign.pub myregistry.io/myapp:v1.0.0<br><br><span class="hljs-comment"># 使用keyless签名（通过OIDC身份）</span><br>cosign sign myregistry.io/myapp:v1.0.0<br><span class="hljs-comment"># 自动通过Sigstore的Fulcio获取短期证书</span><br></code></pre></td></tr></table></figure>
+<h3 id="sbomsoftware-bill-of-materials">SBOM（Software Bill of
+Materials）</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 使用Syft生成SBOM</span><br>syft myapp:latest -o spdx-json &gt; sbom.json<br><br><span class="hljs-comment"># 使用Trivy扫描SBOM中的漏洞</span><br>trivy sbom sbom.json<br><br><span class="hljs-comment"># 将SBOM附加到镜像（使用cosign）</span><br>cosign attach sbom --sbom sbom.json myregistry.io/myapp:v1.0.0<br></code></pre></td></tr></table></figure>
+<h3 id="准入控制admission-control">准入控制（Admission Control）</h3>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># Kyverno策略 - 只允许签名的镜像</span><br><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">kyverno.io/v1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">ClusterPolicy</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">verify-image-signature</span><br><span class="hljs-attr">spec:</span><br>  <span class="hljs-attr">validationFailureAction:</span> <span class="hljs-string">Enforce</span><br>  <span class="hljs-attr">background:</span> <span class="hljs-literal">false</span><br>  <span class="hljs-attr">rules:</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">verify-cosign-signature</span><br>      <span class="hljs-attr">match:</span><br>        <span class="hljs-attr">any:</span><br>          <span class="hljs-bullet">-</span> <span class="hljs-attr">resources:</span><br>              <span class="hljs-attr">kinds:</span><br>                <span class="hljs-bullet">-</span> <span class="hljs-string">Pod</span><br>      <span class="hljs-attr">verifyImages:</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-attr">imageReferences:</span><br>            <span class="hljs-bullet">-</span> <span class="hljs-string">&quot;myregistry.io/*&quot;</span><br>          <span class="hljs-attr">attestors:</span><br>            <span class="hljs-bullet">-</span> <span class="hljs-attr">count:</span> <span class="hljs-number">1</span><br>              <span class="hljs-attr">entries:</span><br>                <span class="hljs-bullet">-</span> <span class="hljs-attr">keys:</span><br>                    <span class="hljs-attr">publicKeys:</span> <span class="hljs-string">|-</span><br><span class="hljs-string">                      -----BEGIN PUBLIC KEY-----</span><br><span class="hljs-string">                      MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE...</span><br><span class="hljs-string">                      -----END PUBLIC KEY-----</span><br></code></pre></td></tr></table></figure>
+<pre class="mermaid">sequenceDiagram
+    participant Dev as Developer
+    participant CI as CI/CD
+    participant REG as Registry
+    participant K8S as Kubernetes
+    participant ADM as Admission Controller
+
+    Dev-&gt;&gt;CI: Push code
+    CI-&gt;&gt;CI: Build image
+    CI-&gt;&gt;CI: Scan vulnerabilities (Trivy)
+    CI-&gt;&gt;CI: Generate SBOM (Syft)
+    CI-&gt;&gt;REG: Push image
+    CI-&gt;&gt;REG: Sign image (Cosign)
+    CI-&gt;&gt;REG: Attach SBOM
+
+    K8S-&gt;&gt;ADM: Pod creation request
+    ADM-&gt;&gt;REG: Verify signature
+    ADM-&gt;&gt;REG: Check vulnerability scan
+    alt Verified &amp; Clean
+        ADM-&gt;&gt;K8S: Allow
+    else Not verified or Vulnerable
+        ADM-&gt;&gt;K8S: Deny
+    end</pre>
+<h2 id="安全扫描工具对比">安全扫描工具对比</h2>
+<table>
+<thead>
+<tr class="header">
+<th>工具</th>
+<th>类型</th>
+<th>特点</th>
+<th>适用场景</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Trivy</td>
+<td>漏洞扫描</td>
+<td>全面、快速、易用</td>
+<td>CI/CD集成</td>
+</tr>
+<tr class="even">
+<td>Snyk</td>
+<td>漏洞扫描</td>
+<td>商业支持、修复建议</td>
+<td>企业使用</td>
+</tr>
+<tr class="odd">
+<td>Falco</td>
+<td>运行时安全</td>
+<td>系统调用监控</td>
+<td>K8s运行时</td>
+</tr>
+<tr class="even">
+<td>Kyverno</td>
+<td>准入控制</td>
+<td>K8s原生策略</td>
+<td>策略即代码</td>
+</tr>
+<tr class="odd">
+<td>Cosign</td>
+<td>镜像签名</td>
+<td>Sigstore生态</td>
+<td>供应链安全</td>
+</tr>
+<tr class="even">
+<td>Syft</td>
+<td>SBOM生成</td>
+<td>多格式支持</td>
+<td>合规审计</td>
+</tr>
+</tbody>
+</table>
+<h2 id="总结">总结</h2>
+<p>容器安全需要贯穿整个生命周期：</p>
+<ol type="1">
+<li><strong>构建阶段</strong>：使用最小基础镜像、非root用户、多阶段构建，集成漏洞扫描</li>
+<li><strong>分发阶段</strong>：镜像签名（Cosign）、SBOM生成、准入控制</li>
+<li><strong>运行阶段</strong>：Pod安全标准（restricted）、网络策略（默认拒绝）、运行时监控（Falco）</li>
+<li><strong>密钥管理</strong>：使用External Secrets Operator +
+Vault，不在代码中硬编码密钥</li>
+<li><strong>供应链安全</strong>：签名验证、SBOM、准入策略形成完整的信任链</li>
+</ol>
+<p>容器安全不是单一工具能解决的，需要构建一个覆盖全生命周期的安全工具链和流程。</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2025-07-13</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">2.6k 字 · 7 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/css-modern-layout/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">现代CSS布局：Grid与Flexbox高级技巧</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/deno-vs-nodejs/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Deno vs Node.js：运行时之争</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%B9%E5%99%A8%E5%AE%89%E5%85%A8%E5%85%A8%E6%99%AF"><span class="toc-text">容器安全全景</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%95%9C%E5%83%8F%E5%AE%89%E5%85%A8"><span class="toc-text">镜像安全</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%89%E5%85%A8%E7%9A%84dockerfile"><span class="toc-text">安全的Dockerfile</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#dockerfile%E5%AE%89%E5%85%A8%E6%A3%80%E6%9F%A5%E6%B8%85%E5%8D%95"><span class="toc-text">Dockerfile安全检查清单</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%95%9C%E5%83%8F%E6%89%AB%E6%8F%8F%E5%B7%A5%E5%85%B7"><span class="toc-text">镜像扫描工具</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%BF%90%E8%A1%8C%E6%97%B6%E5%AE%89%E5%85%A8"><span class="toc-text">运行时安全</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#falco%E8%A7%84%E5%88%99"><span class="toc-text">Falco规则</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BF%90%E8%A1%8C%E6%97%B6%E5%AE%89%E5%85%A8%E7%AD%96%E7%95%A5"><span class="toc-text">运行时安全策略</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#kubernetes-pod%E5%AE%89%E5%85%A8"><span class="toc-text">Kubernetes Pod安全</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#pod-security-standards-pss"><span class="toc-text">Pod Security Standards (PSS)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%BD%91%E7%BB%9C%E7%AD%96%E7%95%A5"><span class="toc-text">网络策略</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AF%86%E9%92%A5%E7%AE%A1%E7%90%86"><span class="toc-text">密钥管理</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#kubernetes-secrets%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5"><span class="toc-text">Kubernetes Secrets最佳实践</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AF%86%E9%92%A5%E7%AE%A1%E7%90%86%E6%96%B9%E6%A1%88%E5%AF%B9%E6%AF%94"><span class="toc-text">密钥管理方案对比</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BE%9B%E5%BA%94%E9%93%BE%E5%AE%89%E5%85%A8"><span class="toc-text">供应链安全</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%95%9C%E5%83%8F%E7%AD%BE%E5%90%8Dcosign"><span class="toc-text">镜像签名（Cosign）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#sbomsoftware-bill-of-materials"><span class="toc-text">SBOM（Software Bill of
+Materials）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%87%86%E5%85%A5%E6%8E%A7%E5%88%B6admission-control"><span class="toc-text">准入控制（Admission Control）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%89%E5%85%A8%E6%89%AB%E6%8F%8F%E5%B7%A5%E5%85%B7%E5%AF%B9%E6%AF%94"><span class="toc-text">安全扫描工具对比</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kubernetes网络模型与CNI插件详解 · zt&#39;s Blog</title>
+  <meta name="description" content="全面解析Kubernetes网络模型，深入讲解Pod网络、Service网络、Ingress以及Calico/Flannel/Cilium等CNI插件。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/kubernetes-networking/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Kubernetes网络模型与CNI插件详解">
+  <meta property="og:description" content="全面解析Kubernetes网络模型，深入讲解Pod网络、Service网络、Ingress以及Calico/Flannel/Cilium等CNI插件。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/kubernetes-networking/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2024-04-30T16:00:00.000Z">
+  <meta property="article:modified_time" content="2024-04-30T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Kubernetes网络模型与CNI插件详解">
+  <meta name="twitter:description" content="全面解析Kubernetes网络模型，深入讲解Pod网络、Service网络、Ingress以及Calico/Flannel/Cilium等CNI插件。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Kubernetes网络模型与CNI插件详解","description":"全面解析Kubernetes网络模型，深入讲解Pod网络、Service网络、Ingress以及Calico/Flannel/Cilium等CNI插件。","datePublished":"2024-04-30T16:00:00.000Z","dateModified":"2024-04-30T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/kubernetes-networking/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"DevOps","item":"https://withesse.co/categories/DevOps/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:45">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/DevOps/">DevOps</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/networking/"><span class="hash">#</span>networking</a><a class="tag" href="/tags/kubernetes/"><span class="hash">#</span>kubernetes</a><a class="tag" href="/tags/cni/"><span class="hash">#</span>cni</a>
+        
+      </div>
+
+      <h1>Kubernetes网络模型与CNI插件详解</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2024.05.01</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 7 min</span>
+        </span>
+        <span class="wc"><span class="num">2.7k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#kubernetes%E7%BD%91%E7%BB%9C%E6%A8%A1%E5%9E%8B%E5%9F%BA%E6%9C%AC%E5%8E%9F%E5%88%99"><span class="toc-text">Kubernetes网络模型基本原则</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#pod%E7%BD%91%E7%BB%9C"><span class="toc-text">Pod网络</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#pod%E5%86%85%E9%83%A8%E7%BD%91%E7%BB%9C"><span class="toc-text">Pod内部网络</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#pod%E9%97%B4%E7%BD%91%E7%BB%9C%E5%90%8C%E8%8A%82%E7%82%B9"><span class="toc-text">Pod间网络（同节点）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#pod%E9%97%B4%E7%BD%91%E7%BB%9C%E8%B7%A8%E8%8A%82%E7%82%B9"><span class="toc-text">Pod间网络（跨节点）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#service%E7%BD%91%E7%BB%9C"><span class="toc-text">Service网络</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#service%E7%B1%BB%E5%9E%8B"><span class="toc-text">Service类型</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#service%E5%8F%91%E7%8E%B0%E6%9C%BA%E5%88%B6"><span class="toc-text">Service发现机制</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#endpointslice"><span class="toc-text">EndpointSlice</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#ingress"><span class="toc-text">Ingress</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#gateway-apiingress%E7%9A%84%E7%BB%A7%E4%BB%BB%E8%80%85"><span class="toc-text">Gateway API（Ingress的继任者）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#cni%E6%8F%92%E4%BB%B6%E8%AF%A6%E8%A7%A3"><span class="toc-text">CNI插件详解</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#calico"><span class="toc-text">Calico</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#flannel"><span class="toc-text">Flannel</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#cilium"><span class="toc-text">Cilium</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#cni%E6%8F%92%E4%BB%B6%E5%AF%B9%E6%AF%94"><span class="toc-text">CNI插件对比</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#network-policy"><span class="toc-text">Network Policy</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%95%85%E9%9A%9C%E6%8E%92%E6%9F%A5"><span class="toc-text">故障排查</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="前言">前言</h2>
+<p>网络是Kubernetes中最复杂的子系统之一。Kubernetes定义了一套简洁而强大的网络模型，而具体实现则委托给CNI插件。本文将从Pod网络、Service网络、Ingress到CNI插件逐层剖析。</p>
+<h2 id="kubernetes网络模型基本原则">Kubernetes网络模型基本原则</h2>
+<p>Kubernetes网络模型建立在三个基本原则之上：</p>
+<ol type="1">
+<li>每个Pod拥有独立的IP地址</li>
+<li>所有Pod之间可以直接通信，无需NAT</li>
+<li>节点上的Agent（如kubelet）可以与该节点上的所有Pod通信</li>
+</ol>
+<pre class="mermaid">graph TB
+    subgraph Cluster["Kubernetes Cluster"]
+        subgraph Node1["Node 1"]
+            P1["Pod A&lt;br&gt;10.244.1.2"]
+            P2["Pod B&lt;br&gt;10.244.1.3"]
+        end
+        subgraph Node2["Node 2"]
+            P3["Pod C&lt;br&gt;10.244.2.2"]
+            P4["Pod D&lt;br&gt;10.244.2.3"]
+        end
+        SVC["Service&lt;br&gt;10.96.0.100"]
+    end
+
+    External["External Client"] --&gt; SVC
+    P1 &lt;--&gt;|"直接路由&lt;br&gt;无NAT"| P3
+    P2 &lt;--&gt;|"直接路由&lt;br&gt;无NAT"| P4
+    SVC --&gt; P1
+    SVC --&gt; P3</pre>
+<h2 id="pod网络">Pod网络</h2>
+<h3 id="pod内部网络">Pod内部网络</h3>
+<p>同一Pod内的容器共享Network
+Namespace，因此可以通过<code>localhost</code>互相通信。这是通过<code>pause</code>容器（又称infra容器）实现的。</p>
+<pre class="mermaid">graph TB
+    subgraph Pod["Pod (10.244.1.2)"]
+        Pause["pause容器&lt;br&gt;持有Network Namespace"]
+        App["应用容器&lt;br&gt;localhost:8080"]
+        Sidecar["Sidecar容器&lt;br&gt;localhost:9090"]
+    end
+
+    Pause -.-&gt; |"共享网络命名空间"| App
+    Pause -.-&gt; |"共享网络命名空间"| Sidecar
+    App &lt;-.-&gt; |"localhost通信"| Sidecar</pre>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 查看Pod的pause容器</span><br>crictl ps | grep &lt;pod-id&gt;<br><span class="hljs-comment"># 输出中会看到一个k8s.gcr.io/pause容器</span><br><br><span class="hljs-comment"># 进入容器查看网络命名空间</span><br>crictl inspect &lt;container-id&gt; | jq <span class="hljs-string">&#x27;.info.runtimeSpec.linux.namespaces&#x27;</span><br></code></pre></td></tr></table></figure>
+<h3 id="pod间网络同节点">Pod间网络（同节点）</h3>
+<p>同一节点上的Pod通过虚拟网桥（如cbr0或cni0）直接通信：</p>
+<pre class="mermaid">graph TB
+    subgraph Node["Node 1"]
+        P1["Pod A&lt;br&gt;veth1 - 10.244.1.2"]
+        P2["Pod B&lt;br&gt;veth2 - 10.244.1.3"]
+        Bridge["cni0 / cbr0&lt;br&gt;10.244.1.1"]
+        ETH["eth0&lt;br&gt;192.168.1.10"]
+    end
+
+    P1 --&gt; |veth pair| Bridge
+    P2 --&gt; |veth pair| Bridge
+    Bridge --&gt; ETH
+
+    style Bridge fill:#FF9800,color:#fff</pre>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 在节点上查看网桥</span><br>brctl show<br><span class="hljs-comment"># bridge name    bridge id          STP enabled    interfaces</span><br><span class="hljs-comment"># cni0           8000.1234567890ab  no             veth1234</span><br><span class="hljs-comment">#                                                  veth5678</span><br><br><span class="hljs-comment"># 查看veth pair</span><br>ip <span class="hljs-built_in">link</span> show <span class="hljs-built_in">type</span> veth<br><br><span class="hljs-comment"># 查看路由表</span><br>ip route<br><span class="hljs-comment"># 10.244.1.0/24 dev cni0 proto kernel scope link src 10.244.1.1</span><br></code></pre></td></tr></table></figure>
+<h3 id="pod间网络跨节点">Pod间网络（跨节点）</h3>
+<p>跨节点的Pod通信需要CNI插件来实现，通常采用Overlay（封装）或Underlay（路由）方案：</p>
+<pre class="mermaid">graph TB
+    subgraph Node1["Node 1 (192.168.1.10)"]
+        PA["Pod A&lt;br&gt;10.244.1.2"]
+        BR1["cni0"]
+        ETH1["eth0"]
+    end
+
+    subgraph Node2["Node 2 (192.168.1.11)"]
+        PB["Pod B&lt;br&gt;10.244.2.2"]
+        BR2["cni0"]
+        ETH2["eth0"]
+    end
+
+    PA --&gt; BR1
+    BR1 --&gt; ETH1
+    ETH1 &lt;--&gt;|"VXLAN隧道&lt;br&gt;或BGP路由"| ETH2
+    ETH2 --&gt; BR2
+    BR2 --&gt; PB</pre>
+<h2 id="service网络">Service网络</h2>
+<p>Service为一组Pod提供稳定的访问入口和负载均衡。</p>
+<h3 id="service类型">Service类型</h3>
+<pre class="mermaid">graph LR
+    subgraph Types["Service类型"]
+        CIP["ClusterIP&lt;br&gt;集群内部访问"]
+        NP["NodePort&lt;br&gt;节点端口暴露"]
+        LB["LoadBalancer&lt;br&gt;云负载均衡"]
+        EI["ExternalName&lt;br&gt;CNAME映射"]
+    end
+
+    CIP --&gt; |"默认"| Internal["集群内部流量"]
+    NP --&gt; |"30000-32767"| NodeAccess["节点IP:端口"]
+    LB --&gt; |"云厂商LB"| ExtLB["外部负载均衡"]
+    EI --&gt; |"DNS CNAME"| ExtDNS["外部DNS"]</pre>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># ClusterIP Service</span><br><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">v1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">Service</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">web-service</span><br><span class="hljs-attr">spec:</span><br>  <span class="hljs-attr">type:</span> <span class="hljs-string">ClusterIP</span><br>  <span class="hljs-attr">selector:</span><br>    <span class="hljs-attr">app:</span> <span class="hljs-string">web</span><br>  <span class="hljs-attr">ports:</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-attr">port:</span> <span class="hljs-number">80</span><br>      <span class="hljs-attr">targetPort:</span> <span class="hljs-number">8080</span><br>      <span class="hljs-attr">protocol:</span> <span class="hljs-string">TCP</span><br><br><span class="hljs-meta">---</span><br><span class="hljs-comment"># NodePort Service</span><br><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">v1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">Service</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">web-nodeport</span><br><span class="hljs-attr">spec:</span><br>  <span class="hljs-attr">type:</span> <span class="hljs-string">NodePort</span><br>  <span class="hljs-attr">selector:</span><br>    <span class="hljs-attr">app:</span> <span class="hljs-string">web</span><br>  <span class="hljs-attr">ports:</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-attr">port:</span> <span class="hljs-number">80</span><br>      <span class="hljs-attr">targetPort:</span> <span class="hljs-number">8080</span><br>      <span class="hljs-attr">nodePort:</span> <span class="hljs-number">30080</span><br><br><span class="hljs-meta">---</span><br><span class="hljs-comment"># LoadBalancer Service</span><br><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">v1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">Service</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">web-lb</span><br>  <span class="hljs-attr">annotations:</span><br>    <span class="hljs-attr">service.beta.kubernetes.io/aws-load-balancer-type:</span> <span class="hljs-string">nlb</span><br><span class="hljs-attr">spec:</span><br>  <span class="hljs-attr">type:</span> <span class="hljs-string">LoadBalancer</span><br>  <span class="hljs-attr">selector:</span><br>    <span class="hljs-attr">app:</span> <span class="hljs-string">web</span><br>  <span class="hljs-attr">ports:</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-attr">port:</span> <span class="hljs-number">80</span><br>      <span class="hljs-attr">targetPort:</span> <span class="hljs-number">8080</span><br></code></pre></td></tr></table></figure>
+<h3 id="service发现机制">Service发现机制</h3>
+<p>Kubernetes提供两种Service发现方式：</p>
+<p><strong>1. 环境变量</strong>：kubelet在创建Pod时注入Service信息</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># Pod内可以看到的环境变量</span><br><span class="hljs-built_in">env</span> | grep WEB_SERVICE<br><span class="hljs-comment"># WEB_SERVICE_SERVICE_HOST=10.96.0.100</span><br><span class="hljs-comment"># WEB_SERVICE_SERVICE_PORT=80</span><br></code></pre></td></tr></table></figure>
+<p><strong>2. DNS（推荐）</strong>：CoreDNS为每个Service创建DNS记录</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># Service DNS格式: &lt;service-name&gt;.&lt;namespace&gt;.svc.cluster.local</span><br>nslookup web-service.default.svc.cluster.local<br><br><span class="hljs-comment"># Headless Service (clusterIP: None) 返回Pod IP列表</span><br><span class="hljs-comment"># 适用于StatefulSet等有状态服务</span><br>nslookup mysql.default.svc.cluster.local<br><span class="hljs-comment"># Server:    10.96.0.10</span><br><span class="hljs-comment"># Address:   10.96.0.10#53</span><br><span class="hljs-comment"># Name:      mysql-0.mysql.default.svc.cluster.local</span><br><span class="hljs-comment"># Address:   10.244.1.5</span><br><span class="hljs-comment"># Name:      mysql-1.mysql.default.svc.cluster.local</span><br><span class="hljs-comment"># Address:   10.244.2.3</span><br></code></pre></td></tr></table></figure>
+<h3 id="endpointslice">EndpointSlice</h3>
+<p>Kubernetes
+1.21+默认使用EndpointSlice替代Endpoints，提供更好的可扩展性：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">discovery.k8s.io/v1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">EndpointSlice</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">web-service-abc</span><br>  <span class="hljs-attr">labels:</span><br>    <span class="hljs-attr">kubernetes.io/service-name:</span> <span class="hljs-string">web-service</span><br><span class="hljs-attr">addressType:</span> <span class="hljs-string">IPv4</span><br><span class="hljs-attr">ports:</span><br>  <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">http</span><br>    <span class="hljs-attr">port:</span> <span class="hljs-number">8080</span><br>    <span class="hljs-attr">protocol:</span> <span class="hljs-string">TCP</span><br><span class="hljs-attr">endpoints:</span><br>  <span class="hljs-bullet">-</span> <span class="hljs-attr">addresses:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">&quot;10.244.1.5&quot;</span><br>    <span class="hljs-attr">conditions:</span><br>      <span class="hljs-attr">ready:</span> <span class="hljs-literal">true</span><br>    <span class="hljs-attr">nodeName:</span> <span class="hljs-string">node-1</span><br>  <span class="hljs-bullet">-</span> <span class="hljs-attr">addresses:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">&quot;10.244.2.3&quot;</span><br>    <span class="hljs-attr">conditions:</span><br>      <span class="hljs-attr">ready:</span> <span class="hljs-literal">true</span><br>    <span class="hljs-attr">nodeName:</span> <span class="hljs-string">node-2</span><br></code></pre></td></tr></table></figure>
+<h2 id="ingress">Ingress</h2>
+<p>Ingress提供HTTP/HTTPS层的路由规则，将外部请求路由到内部Service：</p>
+<pre class="mermaid">graph LR
+    Client["客户端"] --&gt; LB["Load Balancer"]
+    LB --&gt; IC["Ingress Controller"]
+
+    IC --&gt; |"api.example.com"| SVC1["API Service"]
+    IC --&gt; |"web.example.com"| SVC2["Web Service"]
+    IC --&gt; |"*.example.com/admin"| SVC3["Admin Service"]
+
+    SVC1 --&gt; P1["Pod"]
+    SVC1 --&gt; P2["Pod"]
+    SVC2 --&gt; P3["Pod"]
+    SVC3 --&gt; P4["Pod"]</pre>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">networking.k8s.io/v1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">Ingress</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">app-ingress</span><br>  <span class="hljs-attr">annotations:</span><br>    <span class="hljs-attr">nginx.ingress.kubernetes.io/ssl-redirect:</span> <span class="hljs-string">&quot;true&quot;</span><br>    <span class="hljs-attr">nginx.ingress.kubernetes.io/rate-limit:</span> <span class="hljs-string">&quot;100&quot;</span><br>    <span class="hljs-attr">cert-manager.io/cluster-issuer:</span> <span class="hljs-string">letsencrypt-prod</span><br><span class="hljs-attr">spec:</span><br>  <span class="hljs-attr">ingressClassName:</span> <span class="hljs-string">nginx</span><br>  <span class="hljs-attr">tls:</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-attr">hosts:</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-string">api.example.com</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-string">web.example.com</span><br>      <span class="hljs-attr">secretName:</span> <span class="hljs-string">tls-secret</span><br>  <span class="hljs-attr">rules:</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-attr">host:</span> <span class="hljs-string">api.example.com</span><br>      <span class="hljs-attr">http:</span><br>        <span class="hljs-attr">paths:</span><br>          <span class="hljs-bullet">-</span> <span class="hljs-attr">path:</span> <span class="hljs-string">/v1</span><br>            <span class="hljs-attr">pathType:</span> <span class="hljs-string">Prefix</span><br>            <span class="hljs-attr">backend:</span><br>              <span class="hljs-attr">service:</span><br>                <span class="hljs-attr">name:</span> <span class="hljs-string">api-v1</span><br>                <span class="hljs-attr">port:</span><br>                  <span class="hljs-attr">number:</span> <span class="hljs-number">80</span><br>          <span class="hljs-bullet">-</span> <span class="hljs-attr">path:</span> <span class="hljs-string">/v2</span><br>            <span class="hljs-attr">pathType:</span> <span class="hljs-string">Prefix</span><br>            <span class="hljs-attr">backend:</span><br>              <span class="hljs-attr">service:</span><br>                <span class="hljs-attr">name:</span> <span class="hljs-string">api-v2</span><br>                <span class="hljs-attr">port:</span><br>                  <span class="hljs-attr">number:</span> <span class="hljs-number">80</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-attr">host:</span> <span class="hljs-string">web.example.com</span><br>      <span class="hljs-attr">http:</span><br>        <span class="hljs-attr">paths:</span><br>          <span class="hljs-bullet">-</span> <span class="hljs-attr">path:</span> <span class="hljs-string">/</span><br>            <span class="hljs-attr">pathType:</span> <span class="hljs-string">Prefix</span><br>            <span class="hljs-attr">backend:</span><br>              <span class="hljs-attr">service:</span><br>                <span class="hljs-attr">name:</span> <span class="hljs-string">web-frontend</span><br>                <span class="hljs-attr">port:</span><br>                  <span class="hljs-attr">number:</span> <span class="hljs-number">80</span><br></code></pre></td></tr></table></figure>
+<h3 id="gateway-apiingress的继任者">Gateway API（Ingress的继任者）</h3>
+<p>Kubernetes Gateway
+API是新一代的入口流量管理标准，提供更丰富的功能：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># Gateway 定义</span><br><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">gateway.networking.k8s.io/v1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">Gateway</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">main-gateway</span><br><span class="hljs-attr">spec:</span><br>  <span class="hljs-attr">gatewayClassName:</span> <span class="hljs-string">istio</span><br>  <span class="hljs-attr">listeners:</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">https</span><br>      <span class="hljs-attr">port:</span> <span class="hljs-number">443</span><br>      <span class="hljs-attr">protocol:</span> <span class="hljs-string">HTTPS</span><br>      <span class="hljs-attr">tls:</span><br>        <span class="hljs-attr">mode:</span> <span class="hljs-string">Terminate</span><br>        <span class="hljs-attr">certificateRefs:</span><br>          <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">tls-secret</span><br><span class="hljs-meta">---</span><br><span class="hljs-comment"># HTTPRoute 定义</span><br><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">gateway.networking.k8s.io/v1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">HTTPRoute</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">api-route</span><br><span class="hljs-attr">spec:</span><br>  <span class="hljs-attr">parentRefs:</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">main-gateway</span><br>  <span class="hljs-attr">hostnames:</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-string">api.example.com</span><br>  <span class="hljs-attr">rules:</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-attr">matches:</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-attr">path:</span><br>            <span class="hljs-attr">type:</span> <span class="hljs-string">PathPrefix</span><br>            <span class="hljs-attr">value:</span> <span class="hljs-string">/v1</span><br>      <span class="hljs-attr">backendRefs:</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">api-v1</span><br>          <span class="hljs-attr">port:</span> <span class="hljs-number">80</span><br>          <span class="hljs-attr">weight:</span> <span class="hljs-number">90</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">api-v2</span><br>          <span class="hljs-attr">port:</span> <span class="hljs-number">80</span><br>          <span class="hljs-attr">weight:</span> <span class="hljs-number">10</span>  <span class="hljs-comment"># 金丝雀发布：10%流量到v2</span><br></code></pre></td></tr></table></figure>
+<h2 id="cni插件详解">CNI插件详解</h2>
+<h3 id="calico">Calico</h3>
+<p>Calico使用BGP协议实现三层路由，支持高性能的无封装网络：</p>
+<pre class="mermaid">graph TB
+    subgraph Node1["Node 1"]
+        PA["Pod A&lt;br&gt;10.244.1.2"]
+        BIRD1["BIRD&lt;br&gt;BGP Agent"]
+        FW1["Felix&lt;br&gt;iptables/eBPF"]
+    end
+
+    subgraph Node2["Node 2"]
+        PB["Pod B&lt;br&gt;10.244.2.2"]
+        BIRD2["BIRD&lt;br&gt;BGP Agent"]
+        FW2["Felix&lt;br&gt;iptables/eBPF"]
+    end
+
+    BIRD1 &lt;--&gt;|"BGP Peering"| BIRD2
+    PA --&gt; FW1 --&gt; BIRD1
+    BIRD2 --&gt; FW2 --&gt; PB</pre>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># Calico IPPool配置</span><br><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">crd.projectcalico.org/v1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">IPPool</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">default-pool</span><br><span class="hljs-attr">spec:</span><br>  <span class="hljs-attr">cidr:</span> <span class="hljs-number">10.244</span><span class="hljs-number">.0</span><span class="hljs-number">.0</span><span class="hljs-string">/16</span><br>  <span class="hljs-attr">encapsulation:</span> <span class="hljs-string">None</span>          <span class="hljs-comment"># 无封装，纯BGP路由</span><br>  <span class="hljs-attr">natOutgoing:</span> <span class="hljs-literal">true</span><br>  <span class="hljs-attr">nodeSelector:</span> <span class="hljs-string">all()</span><br><br><span class="hljs-meta">---</span><br><span class="hljs-comment"># Calico Network Policy（比K8s原生策略更强大）</span><br><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">crd.projectcalico.org/v1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">NetworkPolicy</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">allow-api-only</span><br>  <span class="hljs-attr">namespace:</span> <span class="hljs-string">production</span><br><span class="hljs-attr">spec:</span><br>  <span class="hljs-attr">selector:</span> <span class="hljs-string">app</span> <span class="hljs-string">==</span> <span class="hljs-string">&#x27;database&#x27;</span><br>  <span class="hljs-attr">types:</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-string">Ingress</span><br>  <span class="hljs-attr">ingress:</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-attr">action:</span> <span class="hljs-string">Allow</span><br>      <span class="hljs-attr">protocol:</span> <span class="hljs-string">TCP</span><br>      <span class="hljs-attr">source:</span><br>        <span class="hljs-attr">selector:</span> <span class="hljs-string">app</span> <span class="hljs-string">==</span> <span class="hljs-string">&#x27;api-server&#x27;</span><br>      <span class="hljs-attr">destination:</span><br>        <span class="hljs-attr">ports:</span><br>          <span class="hljs-bullet">-</span> <span class="hljs-number">5432</span><br></code></pre></td></tr></table></figure>
+<h3 id="flannel">Flannel</h3>
+<p>Flannel是最简单的CNI插件，适合小型集群和学习环境：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># Flannel配置</span><br>&#123;<br>  <span class="hljs-attr">&quot;Network&quot;:</span> <span class="hljs-string">&quot;10.244.0.0/16&quot;</span>,<br>  <span class="hljs-attr">&quot;SubnetLen&quot;:</span> <span class="hljs-number">24</span>,<br>  <span class="hljs-attr">&quot;SubnetMin&quot;:</span> <span class="hljs-string">&quot;10.244.1.0&quot;</span>,<br>  <span class="hljs-attr">&quot;SubnetMax&quot;:</span> <span class="hljs-string">&quot;10.244.254.0&quot;</span>,<br>  <span class="hljs-attr">&quot;Backend&quot;:</span> &#123;<br>    <span class="hljs-attr">&quot;Type&quot;:</span> <span class="hljs-string">&quot;vxlan&quot;</span>,<br>    <span class="hljs-attr">&quot;VNI&quot;:</span> <span class="hljs-number">1</span>,<br>    <span class="hljs-attr">&quot;DirectRouting&quot;:</span> <span class="hljs-literal">true</span><br>  &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="cilium">Cilium</h3>
+<p>Cilium基于eBPF技术，提供高性能网络和安全能力：</p>
+<pre class="mermaid">graph TB
+    subgraph CiliumArch["Cilium架构"]
+        Agent["Cilium Agent"]
+        Operator["Cilium Operator"]
+        Hubble["Hubble&lt;br&gt;可观测性"]
+
+        subgraph DataPlane["eBPF数据平面"]
+            TC["TC Hook&lt;br&gt;流量控制"]
+            XDP["XDP Hook&lt;br&gt;高速路径"]
+            Socket["Socket Hook&lt;br&gt;L7策略"]
+        end
+    end
+
+    Agent --&gt; TC
+    Agent --&gt; XDP
+    Agent --&gt; Socket
+    Hubble --&gt; Agent
+    Operator --&gt; Agent</pre>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># Cilium Network Policy - L7级别策略</span><br><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">cilium.io/v2</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">CiliumNetworkPolicy</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">api-l7-policy</span><br>  <span class="hljs-attr">namespace:</span> <span class="hljs-string">default</span><br><span class="hljs-attr">spec:</span><br>  <span class="hljs-attr">endpointSelector:</span><br>    <span class="hljs-attr">matchLabels:</span><br>      <span class="hljs-attr">app:</span> <span class="hljs-string">api-server</span><br>  <span class="hljs-attr">ingress:</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-attr">fromEndpoints:</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-attr">matchLabels:</span><br>            <span class="hljs-attr">app:</span> <span class="hljs-string">frontend</span><br>      <span class="hljs-attr">toPorts:</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-attr">ports:</span><br>            <span class="hljs-bullet">-</span> <span class="hljs-attr">port:</span> <span class="hljs-string">&quot;8080&quot;</span><br>              <span class="hljs-attr">protocol:</span> <span class="hljs-string">TCP</span><br>          <span class="hljs-attr">rules:</span><br>            <span class="hljs-attr">http:</span><br>              <span class="hljs-bullet">-</span> <span class="hljs-attr">method:</span> <span class="hljs-string">&quot;GET&quot;</span><br>                <span class="hljs-attr">path:</span> <span class="hljs-string">&quot;/api/v1/.*&quot;</span><br>              <span class="hljs-bullet">-</span> <span class="hljs-attr">method:</span> <span class="hljs-string">&quot;POST&quot;</span><br>                <span class="hljs-attr">path:</span> <span class="hljs-string">&quot;/api/v1/users&quot;</span><br>                <span class="hljs-attr">headers:</span><br>                  <span class="hljs-bullet">-</span> <span class="hljs-string">&#x27;Content-Type: application/json&#x27;</span><br></code></pre></td></tr></table></figure>
+<h3 id="cni插件对比">CNI插件对比</h3>
+<table>
+<thead>
+<tr class="header">
+<th>特性</th>
+<th>Calico</th>
+<th>Flannel</th>
+<th>Cilium</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>网络模式</td>
+<td>BGP/VXLAN/IPIP</td>
+<td>VXLAN/Host-GW</td>
+<td>eBPF/VXLAN</td>
+</tr>
+<tr class="even">
+<td>Network Policy</td>
+<td>完整支持</td>
+<td>不支持</td>
+<td>L3-L7全支持</td>
+</tr>
+<tr class="odd">
+<td>性能</td>
+<td>高</td>
+<td>中</td>
+<td>很高</td>
+</tr>
+<tr class="even">
+<td>加密</td>
+<td>WireGuard</td>
+<td>不支持</td>
+<td>WireGuard/IPsec</td>
+</tr>
+<tr class="odd">
+<td>可观测性</td>
+<td>基本</td>
+<td>无</td>
+<td>Hubble</td>
+</tr>
+<tr class="even">
+<td>复杂度</td>
+<td>中</td>
+<td>低</td>
+<td>高</td>
+</tr>
+<tr class="odd">
+<td>适用场景</td>
+<td>大规模生产</td>
+<td>学习/小集群</td>
+<td>高性能/安全要求高</td>
+</tr>
+</tbody>
+</table>
+<h2 id="network-policy">Network Policy</h2>
+<p>Network
+Policy是Kubernetes原生的网络安全策略，用于控制Pod间的流量：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># 默认拒绝所有入站流量</span><br><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">networking.k8s.io/v1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">NetworkPolicy</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">default-deny-ingress</span><br>  <span class="hljs-attr">namespace:</span> <span class="hljs-string">production</span><br><span class="hljs-attr">spec:</span><br>  <span class="hljs-attr">podSelector:</span> &#123;&#125;<br>  <span class="hljs-attr">policyTypes:</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-string">Ingress</span><br><br><span class="hljs-meta">---</span><br><span class="hljs-comment"># 允许前端访问后端的特定端口</span><br><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">networking.k8s.io/v1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">NetworkPolicy</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">allow-frontend-to-backend</span><br>  <span class="hljs-attr">namespace:</span> <span class="hljs-string">production</span><br><span class="hljs-attr">spec:</span><br>  <span class="hljs-attr">podSelector:</span><br>    <span class="hljs-attr">matchLabels:</span><br>      <span class="hljs-attr">tier:</span> <span class="hljs-string">backend</span><br>  <span class="hljs-attr">policyTypes:</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-string">Ingress</span><br>  <span class="hljs-attr">ingress:</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-attr">from:</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-attr">podSelector:</span><br>            <span class="hljs-attr">matchLabels:</span><br>              <span class="hljs-attr">tier:</span> <span class="hljs-string">frontend</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-attr">namespaceSelector:</span><br>            <span class="hljs-attr">matchLabels:</span><br>              <span class="hljs-attr">env:</span> <span class="hljs-string">production</span><br>      <span class="hljs-attr">ports:</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-attr">protocol:</span> <span class="hljs-string">TCP</span><br>          <span class="hljs-attr">port:</span> <span class="hljs-number">8080</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-attr">protocol:</span> <span class="hljs-string">TCP</span><br>          <span class="hljs-attr">port:</span> <span class="hljs-number">8443</span><br><br><span class="hljs-meta">---</span><br><span class="hljs-comment"># 限制出站流量 - 仅允许访问特定外部IP</span><br><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">networking.k8s.io/v1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">NetworkPolicy</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">restrict-egress</span><br>  <span class="hljs-attr">namespace:</span> <span class="hljs-string">production</span><br><span class="hljs-attr">spec:</span><br>  <span class="hljs-attr">podSelector:</span><br>    <span class="hljs-attr">matchLabels:</span><br>      <span class="hljs-attr">app:</span> <span class="hljs-string">restricted-app</span><br>  <span class="hljs-attr">policyTypes:</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-string">Egress</span><br>  <span class="hljs-attr">egress:</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-attr">to:</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-attr">ipBlock:</span><br>            <span class="hljs-attr">cidr:</span> <span class="hljs-number">10.0</span><span class="hljs-number">.0</span><span class="hljs-number">.0</span><span class="hljs-string">/8</span><br>      <span class="hljs-attr">ports:</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-attr">protocol:</span> <span class="hljs-string">TCP</span><br>          <span class="hljs-attr">port:</span> <span class="hljs-number">5432</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-attr">to:</span>  <span class="hljs-comment"># 允许DNS查询</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-attr">namespaceSelector:</span> &#123;&#125;<br>          <span class="hljs-attr">podSelector:</span><br>            <span class="hljs-attr">matchLabels:</span><br>              <span class="hljs-attr">k8s-app:</span> <span class="hljs-string">kube-dns</span><br>      <span class="hljs-attr">ports:</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-attr">protocol:</span> <span class="hljs-string">UDP</span><br>          <span class="hljs-attr">port:</span> <span class="hljs-number">53</span><br></code></pre></td></tr></table></figure>
+<pre class="mermaid">graph LR
+    subgraph Allowed["允许的流量"]
+        FE["Frontend Pod"] --&gt;|":8080"| BE["Backend Pod"]
+        BE --&gt;|":5432"| DB["Database Pod"]
+    end
+
+    subgraph Denied["拒绝的流量"]
+        FE -.-&gt;|"X"| DB
+        External["External"] -.-&gt;|"X"| BE
+    end
+
+    style Denied fill:#ffebee
+    style Allowed fill:#e8f5e9</pre>
+<h2 id="故障排查">故障排查</h2>
+<p>常见网络问题的排查方法：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 1. 检查Pod网络连通性</span><br>kubectl <span class="hljs-built_in">exec</span> -it debug-pod -- ping 10.244.2.3<br>kubectl <span class="hljs-built_in">exec</span> -it debug-pod -- curl -v http://web-service:80<br><br><span class="hljs-comment"># 2. 检查DNS</span><br>kubectl <span class="hljs-built_in">exec</span> -it debug-pod -- nslookup kubernetes.default<br>kubectl <span class="hljs-built_in">exec</span> -it debug-pod -- <span class="hljs-built_in">cat</span> /etc/resolv.conf<br><br><span class="hljs-comment"># 3. 检查Service Endpoints</span><br>kubectl get endpoints web-service<br>kubectl get endpointslices -l kubernetes.io/service-name=web-service<br><br><span class="hljs-comment"># 4. 检查kube-proxy规则</span><br><span class="hljs-comment"># iptables模式</span><br>iptables -t nat -L KUBE-SERVICES -n | grep web-service<br><span class="hljs-comment"># IPVS模式</span><br>ipvsadm -Ln | grep 10.96.0.100<br><br><span class="hljs-comment"># 5. 抓包分析</span><br>kubectl debug node/node-1 -it --image=nicolaka/netshoot -- tcpdump -i any -nn port 8080<br><br><span class="hljs-comment"># 6. 检查CNI插件状态</span><br>kubectl get pods -n kube-system -l k8s-app=calico-node<br>calicoctl node status<br></code></pre></td></tr></table></figure>
+<h2 id="总结">总结</h2>
+<p>Kubernetes网络模型通过分层抽象（Pod网络 -&gt; Service网络 -&gt;
+Ingress），将复杂的网络问题分解为可管理的层次。选择CNI插件时需要考虑集群规模、性能要求、安全需求和运维复杂度。对于生产环境，Calico和Cilium是最常见的选择，前者成熟稳定，后者基于eBPF技术代表了未来方向。</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2024-05-01</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">2.7k 字 · 7 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/kubernetes-resource-management/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Kubernetes资源管理与调度策略</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/system-design-chat-system/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">系统设计实战：即时通讯系统架构</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#kubernetes%E7%BD%91%E7%BB%9C%E6%A8%A1%E5%9E%8B%E5%9F%BA%E6%9C%AC%E5%8E%9F%E5%88%99"><span class="toc-text">Kubernetes网络模型基本原则</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#pod%E7%BD%91%E7%BB%9C"><span class="toc-text">Pod网络</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#pod%E5%86%85%E9%83%A8%E7%BD%91%E7%BB%9C"><span class="toc-text">Pod内部网络</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#pod%E9%97%B4%E7%BD%91%E7%BB%9C%E5%90%8C%E8%8A%82%E7%82%B9"><span class="toc-text">Pod间网络（同节点）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#pod%E9%97%B4%E7%BD%91%E7%BB%9C%E8%B7%A8%E8%8A%82%E7%82%B9"><span class="toc-text">Pod间网络（跨节点）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#service%E7%BD%91%E7%BB%9C"><span class="toc-text">Service网络</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#service%E7%B1%BB%E5%9E%8B"><span class="toc-text">Service类型</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#service%E5%8F%91%E7%8E%B0%E6%9C%BA%E5%88%B6"><span class="toc-text">Service发现机制</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#endpointslice"><span class="toc-text">EndpointSlice</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#ingress"><span class="toc-text">Ingress</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#gateway-apiingress%E7%9A%84%E7%BB%A7%E4%BB%BB%E8%80%85"><span class="toc-text">Gateway API（Ingress的继任者）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#cni%E6%8F%92%E4%BB%B6%E8%AF%A6%E8%A7%A3"><span class="toc-text">CNI插件详解</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#calico"><span class="toc-text">Calico</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#flannel"><span class="toc-text">Flannel</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#cilium"><span class="toc-text">Cilium</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#cni%E6%8F%92%E4%BB%B6%E5%AF%B9%E6%AF%94"><span class="toc-text">CNI插件对比</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#network-policy"><span class="toc-text">Network Policy</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%95%85%E9%9A%9C%E6%8E%92%E6%9F%A5"><span class="toc-text">故障排查</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

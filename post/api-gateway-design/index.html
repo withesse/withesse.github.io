@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>API网关设计与实现：Kong/APISIX对比 · zt&#39;s Blog</title>
+  <meta name="description" content="全面解析API网关的核心职责与设计原则，深入对比Kong与Apache APISIX的架构、性能与插件生态，含实战配置与自定义插件开发。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/api-gateway-design/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="API网关设计与实现：Kong/APISIX对比">
+  <meta property="og:description" content="全面解析API网关的核心职责与设计原则，深入对比Kong与Apache APISIX的架构、性能与插件生态，含实战配置与自定义插件开发。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/api-gateway-design/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2023-12-19T16:00:00.000Z">
+  <meta property="article:modified_time" content="2023-12-19T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="API网关设计与实现：Kong/APISIX对比">
+  <meta name="twitter:description" content="全面解析API网关的核心职责与设计原则，深入对比Kong与Apache APISIX的架构、性能与插件生态，含实战配置与自定义插件开发。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"API网关设计与实现：Kong/APISIX对比","description":"全面解析API网关的核心职责与设计原则，深入对比Kong与Apache APISIX的架构、性能与插件生态，含实战配置与自定义插件开发。","datePublished":"2023-12-19T16:00:00.000Z","dateModified":"2023-12-19T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/api-gateway-design/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Architecture","item":"https://withesse.co/categories/Architecture/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:152">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Architecture/">Architecture</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/api-gateway/"><span class="hash">#</span>api-gateway</a><a class="tag" href="/tags/kong/"><span class="hash">#</span>kong</a><a class="tag" href="/tags/apisix/"><span class="hash">#</span>apisix</a>
+        
+      </div>
+
+      <h1>API网关设计与实现：Kong/APISIX对比</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2023.12.20</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 7 min</span>
+        </span>
+        <span class="wc"><span class="num">2.7k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#api-%E7%BD%91%E5%85%B3%E7%9A%84%E6%A0%B8%E5%BF%83%E8%81%8C%E8%B4%A3"><span class="toc-text">API 网关的核心职责</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%AF%B7%E6%B1%82%E8%B7%AF%E7%94%B1"><span class="toc-text">请求路由</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%AE%A4%E8%AF%81%E4%B8%8E%E6%8E%88%E6%9D%83"><span class="toc-text">认证与授权</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%99%90%E6%B5%81%E4%B8%8E%E7%86%94%E6%96%AD"><span class="toc-text">限流与熔断</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#kong-%E6%9E%B6%E6%9E%84%E8%A7%A3%E6%9E%90"><span class="toc-text">Kong 架构解析</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%95%B4%E4%BD%93%E6%9E%B6%E6%9E%84"><span class="toc-text">整体架构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#kong-%E6%A0%B8%E5%BF%83%E6%A6%82%E5%BF%B5"><span class="toc-text">Kong 核心概念</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#kong-%E6%8F%92%E4%BB%B6%E5%BC%80%E5%8F%91"><span class="toc-text">Kong 插件开发</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#apache-apisix-%E6%9E%B6%E6%9E%84%E8%A7%A3%E6%9E%90"><span class="toc-text">Apache APISIX 架构解析</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%95%B4%E4%BD%93%E6%9E%B6%E6%9E%84-1"><span class="toc-text">整体架构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#apisix-%E6%A0%B8%E5%BF%83%E9%85%8D%E7%BD%AE"><span class="toc-text">APISIX 核心配置</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#apisix-%E6%8F%92%E4%BB%B6%E5%BC%80%E5%8F%91"><span class="toc-text">APISIX 插件开发</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#kong-vs-apisix-%E6%B7%B1%E5%BA%A6%E5%AF%B9%E6%AF%94"><span class="toc-text">Kong vs APISIX 深度对比</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%9E%B6%E6%9E%84%E5%AF%B9%E6%AF%94"><span class="toc-text">架构对比</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%80%A7%E8%83%BD%E5%AF%B9%E6%AF%94"><span class="toc-text">性能对比</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%83%A8%E7%BD%B2%E5%AF%B9%E6%AF%94"><span class="toc-text">部署对比</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%80%89%E5%9E%8B%E5%BB%BA%E8%AE%AE"><span class="toc-text">选型建议</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%94%9F%E4%BA%A7%E7%8E%AF%E5%A2%83%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5"><span class="toc-text">生产环境最佳实践</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%AB%98%E5%8F%AF%E7%94%A8%E9%83%A8%E7%BD%B2"><span class="toc-text">高可用部署</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%B3%E9%94%AE%E9%85%8D%E7%BD%AE%E5%BB%BA%E8%AE%AE"><span class="toc-text">关键配置建议</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="前言">前言</h2>
+<p>API
+网关是微服务架构中的核心基础设施组件，它作为系统的统一入口，承担路由转发、认证授权、限流熔断、协议转换等横切关注点。选择合适的
+API 网关对系统的稳定性、性能和可维护性至关重要。本文将深入分析 API
+网关的设计原则，并对比两个最流行的开源 API 网关——Kong 和 Apache
+APISIX。</p>
+<h2 id="api-网关的核心职责">API 网关的核心职责</h2>
+<pre class="mermaid">graph TB
+    Client[客户端] --&gt; Gateway[API Gateway]
+
+    subgraph Gateway功能
+        Gateway --&gt; Auth[认证授权]
+        Gateway --&gt; Route[路由转发]
+        Gateway --&gt; RateLimit[限流]
+        Gateway --&gt; CB[熔断]
+        Gateway --&gt; Transform[协议转换]
+        Gateway --&gt; Log[日志/监控]
+        Gateway --&gt; Cache[响应缓存]
+        Gateway --&gt; CORS[跨域处理]
+    end
+
+    Auth --&gt; Services[后端服务集群]
+    Route --&gt; Services
+    RateLimit --&gt; Services
+    CB --&gt; Services</pre>
+<h3 id="请求路由">请求路由</h3>
+<p>网关根据请求的 URL、Header、Method
+等信息将请求路由到对应的后端服务。</p>
+<pre class="mermaid">sequenceDiagram
+    participant C as 客户端
+    participant G as API Gateway
+    participant US as 用户服务
+    participant OS as 订单服务
+    participant PS as 商品服务
+
+    C-&gt;&gt;G: GET /api/v1/users/123
+    G-&gt;&gt;G: 路由匹配: /api/v1/users/* → user-service
+    G-&gt;&gt;US: GET /users/123
+    US--&gt;&gt;G: 200 OK
+    G--&gt;&gt;C: 200 OK
+
+    C-&gt;&gt;G: POST /api/v1/orders
+    G-&gt;&gt;G: 路由匹配: /api/v1/orders → order-service
+    G-&gt;&gt;OS: POST /orders
+    OS--&gt;&gt;G: 201 Created
+    G--&gt;&gt;C: 201 Created</pre>
+<h3 id="认证与授权">认证与授权</h3>
+<p>网关集中处理认证逻辑，后端服务无需重复实现。</p>
+<figure class="highlight lua"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><code class="hljs lua"><span class="hljs-comment">-- Kong/APISIX 自定义认证插件示例 (Lua)</span><br><span class="hljs-keyword">local</span> _M = &#123;&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">function</span> <span class="hljs-title">_M.access</span><span class="hljs-params">(conf)</span></span><br>    <span class="hljs-keyword">local</span> token = kong.request.get_header(<span class="hljs-string">&quot;Authorization&quot;</span>)<br>    <span class="hljs-keyword">if</span> <span class="hljs-keyword">not</span> token <span class="hljs-keyword">then</span><br>        <span class="hljs-keyword">return</span> kong.response.<span class="hljs-built_in">exit</span>(<span class="hljs-number">401</span>, &#123; message = <span class="hljs-string">&quot;Missing token&quot;</span> &#125;)<br>    <span class="hljs-keyword">end</span><br><br>    <span class="hljs-comment">-- 去掉 Bearer 前缀</span><br>    token = token:<span class="hljs-built_in">gsub</span>(<span class="hljs-string">&quot;^Bearer%s+&quot;</span>, <span class="hljs-string">&quot;&quot;</span>)<br><br>    <span class="hljs-comment">-- 验证 JWT</span><br>    <span class="hljs-keyword">local</span> jwt_obj = jwt:verify(conf.secret, token)<br>    <span class="hljs-keyword">if</span> <span class="hljs-keyword">not</span> jwt_obj.verified <span class="hljs-keyword">then</span><br>        <span class="hljs-keyword">return</span> kong.response.<span class="hljs-built_in">exit</span>(<span class="hljs-number">401</span>, &#123; message = <span class="hljs-string">&quot;Invalid token&quot;</span> &#125;)<br>    <span class="hljs-keyword">end</span><br><br>    <span class="hljs-comment">-- 检查权限</span><br>    <span class="hljs-keyword">local</span> claims = jwt_obj.payload<br>    <span class="hljs-keyword">if</span> <span class="hljs-keyword">not</span> has_permission(claims.role, kong.request.get_path()) <span class="hljs-keyword">then</span><br>        <span class="hljs-keyword">return</span> kong.response.<span class="hljs-built_in">exit</span>(<span class="hljs-number">403</span>, &#123; message = <span class="hljs-string">&quot;Forbidden&quot;</span> &#125;)<br>    <span class="hljs-keyword">end</span><br><br>    <span class="hljs-comment">-- 将用户信息传递给后端服务</span><br>    kong.service.request.set_header(<span class="hljs-string">&quot;X-User-Id&quot;</span>, claims.<span class="hljs-built_in">sub</span>)<br>    kong.service.request.set_header(<span class="hljs-string">&quot;X-User-Role&quot;</span>, claims.role)<br><span class="hljs-keyword">end</span><br><br><span class="hljs-keyword">return</span> _M<br></code></pre></td></tr></table></figure>
+<h3 id="限流与熔断">限流与熔断</h3>
+<p>保护后端服务免受流量冲击。</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># Kong 限流配置</span><br><span class="hljs-attr">plugins:</span><br>  <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">rate-limiting</span><br>    <span class="hljs-attr">config:</span><br>      <span class="hljs-attr">minute:</span> <span class="hljs-number">100</span><br>      <span class="hljs-attr">hour:</span> <span class="hljs-number">10000</span><br>      <span class="hljs-attr">policy:</span> <span class="hljs-string">redis</span><br>      <span class="hljs-attr">redis_host:</span> <span class="hljs-string">redis</span><br>      <span class="hljs-attr">redis_port:</span> <span class="hljs-number">6379</span><br><br>  <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">circuit-breaker</span><br>    <span class="hljs-attr">config:</span><br>      <span class="hljs-attr">error_threshold:</span> <span class="hljs-number">50</span>   <span class="hljs-comment"># 错误率阈值 50%</span><br>      <span class="hljs-attr">window_size:</span> <span class="hljs-number">10</span>        <span class="hljs-comment"># 检测窗口 10 秒</span><br>      <span class="hljs-attr">half_open_timeout:</span> <span class="hljs-number">60</span>  <span class="hljs-comment"># 半开状态等待 60 秒</span><br></code></pre></td></tr></table></figure>
+<h2 id="kong-架构解析">Kong 架构解析</h2>
+<h3 id="整体架构">整体架构</h3>
+<p>Kong 基于 OpenResty（Nginx + Lua）构建，具有高性能和可扩展性。</p>
+<pre class="mermaid">graph TB
+    subgraph Kong Node 1
+        Nginx1[Nginx/OpenResty] --&gt; LuaPlugins1[Lua Plugins]
+        LuaPlugins1 --&gt; PDK1[Plugin Development Kit]
+    end
+
+    subgraph Kong Node 2
+        Nginx2[Nginx/OpenResty] --&gt; LuaPlugins2[Lua Plugins]
+        LuaPlugins2 --&gt; PDK2[Plugin Development Kit]
+    end
+
+    subgraph Control Plane
+        AdminAPI[Admin API :8001]
+        Manager[Kong Manager UI]
+    end
+
+    PostgreSQL[(PostgreSQL)] --&gt; Kong1[Kong Node 1]
+    PostgreSQL --&gt; Kong2[Kong Node 2]
+    AdminAPI --&gt; PostgreSQL
+
+    Client[客户端] --&gt; LB[Load Balancer]
+    LB --&gt; Nginx1
+    LB --&gt; Nginx2</pre>
+<h3 id="kong-核心概念">Kong 核心概念</h3>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># Kong 配置示例 - 声明式配置 (kong.yml)</span><br><span class="hljs-attr">_format_version:</span> <span class="hljs-string">&quot;3.0&quot;</span><br><br><span class="hljs-attr">services:</span><br>  <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">user-service</span><br>    <span class="hljs-attr">url:</span> <span class="hljs-string">http://user-upstream:8080</span><br>    <span class="hljs-attr">routes:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">user-route</span><br>        <span class="hljs-attr">paths:</span><br>          <span class="hljs-bullet">-</span> <span class="hljs-string">/api/v1/users</span><br>        <span class="hljs-attr">methods:</span><br>          <span class="hljs-bullet">-</span> <span class="hljs-string">GET</span><br>          <span class="hljs-bullet">-</span> <span class="hljs-string">POST</span><br>          <span class="hljs-bullet">-</span> <span class="hljs-string">PUT</span><br>        <span class="hljs-attr">strip_path:</span> <span class="hljs-literal">true</span><br>    <span class="hljs-attr">plugins:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">key-auth</span><br>        <span class="hljs-attr">config:</span><br>          <span class="hljs-attr">key_names:</span><br>            <span class="hljs-bullet">-</span> <span class="hljs-string">apikey</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">rate-limiting</span><br>        <span class="hljs-attr">config:</span><br>          <span class="hljs-attr">minute:</span> <span class="hljs-number">60</span><br>          <span class="hljs-attr">policy:</span> <span class="hljs-string">local</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">cors</span><br>        <span class="hljs-attr">config:</span><br>          <span class="hljs-attr">origins:</span><br>            <span class="hljs-bullet">-</span> <span class="hljs-string">&quot;https://example.com&quot;</span><br>          <span class="hljs-attr">methods:</span><br>            <span class="hljs-bullet">-</span> <span class="hljs-string">GET</span><br>            <span class="hljs-bullet">-</span> <span class="hljs-string">POST</span><br>          <span class="hljs-attr">headers:</span><br>            <span class="hljs-bullet">-</span> <span class="hljs-string">Content-Type</span><br>            <span class="hljs-bullet">-</span> <span class="hljs-string">Authorization</span><br>          <span class="hljs-attr">max_age:</span> <span class="hljs-number">3600</span><br><br>  <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">order-service</span><br>    <span class="hljs-attr">url:</span> <span class="hljs-string">http://order-upstream:8080</span><br>    <span class="hljs-attr">connect_timeout:</span> <span class="hljs-number">5000</span><br>    <span class="hljs-attr">read_timeout:</span> <span class="hljs-number">30000</span><br>    <span class="hljs-attr">write_timeout:</span> <span class="hljs-number">30000</span><br>    <span class="hljs-attr">routes:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">order-route</span><br>        <span class="hljs-attr">paths:</span><br>          <span class="hljs-bullet">-</span> <span class="hljs-string">/api/v1/orders</span><br>        <span class="hljs-attr">methods:</span><br>          <span class="hljs-bullet">-</span> <span class="hljs-string">GET</span><br>          <span class="hljs-bullet">-</span> <span class="hljs-string">POST</span><br><br><span class="hljs-attr">upstreams:</span><br>  <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">user-upstream</span><br>    <span class="hljs-attr">algorithm:</span> <span class="hljs-string">round-robin</span><br>    <span class="hljs-attr">healthchecks:</span><br>      <span class="hljs-attr">active:</span><br>        <span class="hljs-attr">healthy:</span><br>          <span class="hljs-attr">interval:</span> <span class="hljs-number">5</span><br>          <span class="hljs-attr">successes:</span> <span class="hljs-number">3</span><br>        <span class="hljs-attr">unhealthy:</span><br>          <span class="hljs-attr">interval:</span> <span class="hljs-number">5</span><br>          <span class="hljs-attr">http_failures:</span> <span class="hljs-number">3</span><br>    <span class="hljs-attr">targets:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">target:</span> <span class="hljs-string">user-1:8080</span><br>        <span class="hljs-attr">weight:</span> <span class="hljs-number">100</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">target:</span> <span class="hljs-string">user-2:8080</span><br>        <span class="hljs-attr">weight:</span> <span class="hljs-number">100</span><br></code></pre></td></tr></table></figure>
+<h3 id="kong-插件开发">Kong 插件开发</h3>
+<figure class="highlight lua"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br></pre></td><td class="code"><pre><code class="hljs lua"><span class="hljs-comment">-- 自定义插件: request-transformer-advanced</span><br><span class="hljs-keyword">local</span> plugin = &#123;<br>    PRIORITY = <span class="hljs-number">1000</span>,<br>    VERSION = <span class="hljs-string">&quot;1.0.0&quot;</span>,<br>&#125;<br><br><span class="hljs-keyword">local</span> schema = &#123;<br>    name = <span class="hljs-string">&quot;custom-header-injector&quot;</span>,<br>    fields = &#123;<br>        &#123; <span class="hljs-built_in">config</span> = &#123;<br>            <span class="hljs-built_in">type</span> = <span class="hljs-string">&quot;record&quot;</span>,<br>            fields = &#123;<br>                &#123; request_id_header = &#123; <span class="hljs-built_in">type</span> = <span class="hljs-string">&quot;string&quot;</span>, default = <span class="hljs-string">&quot;X-Request-ID&quot;</span> &#125; &#125;,<br>                &#123; add_timestamp = &#123; <span class="hljs-built_in">type</span> = <span class="hljs-string">&quot;boolean&quot;</span>, default = <span class="hljs-literal">true</span> &#125; &#125;,<br>            &#125;,<br>        &#125;&#125;,<br>    &#125;,<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">function</span> <span class="hljs-title">plugin:access</span><span class="hljs-params">(conf)</span></span><br>    <span class="hljs-comment">-- 注入请求 ID</span><br>    <span class="hljs-keyword">local</span> request_id = kong.request.get_header(conf.request_id_header)<br>    <span class="hljs-keyword">if</span> <span class="hljs-keyword">not</span> request_id <span class="hljs-keyword">then</span><br>        request_id = utils.uuid()<br>        kong.service.request.set_header(conf.request_id_header, request_id)<br>    <span class="hljs-keyword">end</span><br><br>    <span class="hljs-comment">-- 注入时间戳</span><br>    <span class="hljs-keyword">if</span> conf.add_timestamp <span class="hljs-keyword">then</span><br>        kong.service.request.set_header(<span class="hljs-string">&quot;X-Request-Time&quot;</span>, ngx.now())<br>    <span class="hljs-keyword">end</span><br><br>    <span class="hljs-comment">-- 记录请求开始时间</span><br>    kong.ctx.plugin.start_time = ngx.now()<br><span class="hljs-keyword">end</span><br><br><span class="hljs-function"><span class="hljs-keyword">function</span> <span class="hljs-title">plugin:header_filter</span><span class="hljs-params">(conf)</span></span><br>    <span class="hljs-comment">-- 响应中也加入请求 ID</span><br>    <span class="hljs-keyword">local</span> request_id = kong.request.get_header(conf.request_id_header)<br>    kong.response.set_header(conf.request_id_header, request_id)<br><span class="hljs-keyword">end</span><br><br><span class="hljs-function"><span class="hljs-keyword">function</span> <span class="hljs-title">plugin:log</span><span class="hljs-params">(conf)</span></span><br>    <span class="hljs-comment">-- 计算请求耗时</span><br>    <span class="hljs-keyword">local</span> latency = ngx.now() - kong.ctx.plugin.start_time<br>    kong.<span class="hljs-built_in">log</span>.info(<span class="hljs-string">&quot;Request latency: &quot;</span>, latency, <span class="hljs-string">&quot;s&quot;</span>)<br><span class="hljs-keyword">end</span><br><br><span class="hljs-keyword">return</span> plugin<br></code></pre></td></tr></table></figure>
+<h2 id="apache-apisix-架构解析">Apache APISIX 架构解析</h2>
+<h3 id="整体架构-1">整体架构</h3>
+<p>APISIX 同样基于 OpenResty，但使用 etcd
+作为配置中心，实现了无单点故障的全动态配置。</p>
+<pre class="mermaid">graph TB
+    subgraph APISIX Cluster
+        DP1[Data Plane 1&lt;br/&gt;APISIX Node]
+        DP2[Data Plane 2&lt;br/&gt;APISIX Node]
+    end
+
+    subgraph Control Plane
+        Dashboard[APISIX Dashboard]
+        AdminAPI[Admin API]
+    end
+
+    etcd[(etcd Cluster)] &lt;--&gt;|Watch配置变更| DP1
+    etcd &lt;--&gt;|Watch配置变更| DP2
+    AdminAPI --&gt;|写入配置| etcd
+    Dashboard --&gt; AdminAPI
+
+    Client[客户端] --&gt; LB[Load Balancer]
+    LB --&gt; DP1
+    LB --&gt; DP2
+
+    DP1 --&gt; Upstream1[上游服务]
+    DP2 --&gt; Upstream1</pre>
+<h3 id="apisix-核心配置">APISIX 核心配置</h3>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># APISIX 路由配置</span><br><span class="hljs-attr">routes:</span><br>  <span class="hljs-bullet">-</span> <span class="hljs-attr">id:</span> <span class="hljs-number">1</span><br>    <span class="hljs-attr">uri:</span> <span class="hljs-string">/api/v1/users/*</span><br>    <span class="hljs-attr">name:</span> <span class="hljs-string">user-route</span><br>    <span class="hljs-attr">methods:</span> [<span class="hljs-string">&quot;GET&quot;</span>, <span class="hljs-string">&quot;POST&quot;</span>, <span class="hljs-string">&quot;PUT&quot;</span>]<br>    <span class="hljs-attr">upstream_id:</span> <span class="hljs-number">1</span><br>    <span class="hljs-attr">plugins:</span><br>      <span class="hljs-attr">jwt-auth:</span> &#123;&#125;<br>      <span class="hljs-attr">limit-count:</span><br>        <span class="hljs-attr">count:</span> <span class="hljs-number">100</span><br>        <span class="hljs-attr">time_window:</span> <span class="hljs-number">60</span><br>        <span class="hljs-attr">rejected_code:</span> <span class="hljs-number">429</span><br>        <span class="hljs-attr">key:</span> <span class="hljs-string">remote_addr</span><br>      <span class="hljs-attr">proxy-rewrite:</span><br>        <span class="hljs-attr">regex_uri:</span> [<span class="hljs-string">&quot;^/api/v1/users/(.*)&quot;</span>, <span class="hljs-string">&quot;/$1&quot;</span>]<br><br>  <span class="hljs-bullet">-</span> <span class="hljs-attr">id:</span> <span class="hljs-number">2</span><br>    <span class="hljs-attr">uri:</span> <span class="hljs-string">/api/v1/orders/*</span><br>    <span class="hljs-attr">name:</span> <span class="hljs-string">order-route</span><br>    <span class="hljs-attr">upstream_id:</span> <span class="hljs-number">2</span><br>    <span class="hljs-attr">plugins:</span><br>      <span class="hljs-attr">jwt-auth:</span> &#123;&#125;<br>      <span class="hljs-attr">limit-req:</span><br>        <span class="hljs-attr">rate:</span> <span class="hljs-number">50</span><br>        <span class="hljs-attr">burst:</span> <span class="hljs-number">100</span><br>        <span class="hljs-attr">key:</span> <span class="hljs-string">consumer_name</span><br><br><span class="hljs-attr">upstreams:</span><br>  <span class="hljs-bullet">-</span> <span class="hljs-attr">id:</span> <span class="hljs-number">1</span><br>    <span class="hljs-attr">name:</span> <span class="hljs-string">user-upstream</span><br>    <span class="hljs-attr">type:</span> <span class="hljs-string">roundrobin</span><br>    <span class="hljs-attr">nodes:</span><br>      <span class="hljs-attr">&quot;user-1:8080&quot;:</span> <span class="hljs-number">1</span><br>      <span class="hljs-attr">&quot;user-2:8080&quot;:</span> <span class="hljs-number">1</span><br>    <span class="hljs-attr">checks:</span><br>      <span class="hljs-attr">active:</span><br>        <span class="hljs-attr">type:</span> <span class="hljs-string">http</span><br>        <span class="hljs-attr">http_path:</span> <span class="hljs-string">/health</span><br>        <span class="hljs-attr">healthy:</span><br>          <span class="hljs-attr">interval:</span> <span class="hljs-number">2</span><br>          <span class="hljs-attr">successes:</span> <span class="hljs-number">2</span><br>        <span class="hljs-attr">unhealthy:</span><br>          <span class="hljs-attr">interval:</span> <span class="hljs-number">1</span><br>          <span class="hljs-attr">http_failures:</span> <span class="hljs-number">3</span><br>    <span class="hljs-attr">timeout:</span><br>      <span class="hljs-attr">connect:</span> <span class="hljs-number">3</span><br>      <span class="hljs-attr">send:</span> <span class="hljs-number">5</span><br>      <span class="hljs-attr">read:</span> <span class="hljs-number">10</span><br>    <span class="hljs-attr">retry_timeout:</span> <span class="hljs-number">5</span><br>    <span class="hljs-attr">retries:</span> <span class="hljs-number">3</span><br></code></pre></td></tr></table></figure>
+<h3 id="apisix-插件开发">APISIX 插件开发</h3>
+<figure class="highlight lua"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br></pre></td><td class="code"><pre><code class="hljs lua"><span class="hljs-comment">-- APISIX 自定义插件示例</span><br><span class="hljs-keyword">local</span> core = <span class="hljs-built_in">require</span>(<span class="hljs-string">&quot;apisix.core&quot;</span>)<br><span class="hljs-keyword">local</span> plugin_name = <span class="hljs-string">&quot;custom-auth&quot;</span><br><br><span class="hljs-keyword">local</span> schema = &#123;<br>    <span class="hljs-built_in">type</span> = <span class="hljs-string">&quot;object&quot;</span>,<br>    properties = &#123;<br>        header_name = &#123; <span class="hljs-built_in">type</span> = <span class="hljs-string">&quot;string&quot;</span>, default = <span class="hljs-string">&quot;X-API-Key&quot;</span> &#125;,<br>        auth_service_url = &#123; <span class="hljs-built_in">type</span> = <span class="hljs-string">&quot;string&quot;</span> &#125;,<br>        cache_ttl = &#123; <span class="hljs-built_in">type</span> = <span class="hljs-string">&quot;integer&quot;</span>, default = <span class="hljs-number">300</span> &#125;,<br>    &#125;,<br>    required = &#123; <span class="hljs-string">&quot;auth_service_url&quot;</span> &#125;,<br>&#125;<br><br><span class="hljs-keyword">local</span> _M = &#123;<br>    version = <span class="hljs-number">0.1</span>,<br>    priority = <span class="hljs-number">2600</span>,<br>    name = plugin_name,<br>    schema = schema,<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">function</span> <span class="hljs-title">_M.check_schema</span><span class="hljs-params">(conf)</span></span><br>    <span class="hljs-keyword">return</span> core.schema.check(schema, conf)<br><span class="hljs-keyword">end</span><br><br><span class="hljs-function"><span class="hljs-keyword">function</span> <span class="hljs-title">_M.rewrite</span><span class="hljs-params">(conf, ctx)</span></span><br>    <span class="hljs-keyword">local</span> api_key = core.request.header(ctx, conf.header_name)<br>    <span class="hljs-keyword">if</span> <span class="hljs-keyword">not</span> api_key <span class="hljs-keyword">then</span><br>        <span class="hljs-keyword">return</span> <span class="hljs-number">401</span>, &#123; <span class="hljs-built_in">error</span> = <span class="hljs-string">&quot;Missing API key&quot;</span> &#125;<br>    <span class="hljs-keyword">end</span><br><br>    <span class="hljs-comment">-- 先检查缓存</span><br>    <span class="hljs-keyword">local</span> cache_key = <span class="hljs-string">&quot;auth:&quot;</span> .. api_key<br>    <span class="hljs-keyword">local</span> cached = core.lrucache.global(cache_key, <span class="hljs-literal">nil</span>, <span class="hljs-function"><span class="hljs-keyword">function</span><span class="hljs-params">()</span></span><br>        <span class="hljs-comment">-- 调用认证服务验证</span><br>        <span class="hljs-keyword">local</span> httpc = <span class="hljs-built_in">require</span>(<span class="hljs-string">&quot;resty.http&quot;</span>).new()<br>        <span class="hljs-keyword">local</span> res, err = httpc:request_uri(conf.auth_service_url, &#123;<br>            method = <span class="hljs-string">&quot;POST&quot;</span>,<br>            body = core.json.encode(&#123; api_key = api_key &#125;),<br>            headers = &#123; [<span class="hljs-string">&quot;Content-Type&quot;</span>] = <span class="hljs-string">&quot;application/json&quot;</span> &#125;,<br>        &#125;)<br><br>        <span class="hljs-keyword">if</span> <span class="hljs-keyword">not</span> res <span class="hljs-keyword">or</span> res.<span class="hljs-built_in">status</span> ~= <span class="hljs-number">200</span> <span class="hljs-keyword">then</span><br>            <span class="hljs-keyword">return</span> <span class="hljs-literal">nil</span><br>        <span class="hljs-keyword">end</span><br><br>        <span class="hljs-keyword">return</span> core.json.decode(res.body)<br>    <span class="hljs-keyword">end</span>, conf.cache_ttl)<br><br>    <span class="hljs-keyword">if</span> <span class="hljs-keyword">not</span> cached <span class="hljs-keyword">then</span><br>        <span class="hljs-keyword">return</span> <span class="hljs-number">403</span>, &#123; <span class="hljs-built_in">error</span> = <span class="hljs-string">&quot;Invalid API key&quot;</span> &#125;<br>    <span class="hljs-keyword">end</span><br><br>    <span class="hljs-comment">-- 将认证信息注入请求头</span><br>    core.request.set_header(ctx, <span class="hljs-string">&quot;X-User-Id&quot;</span>, cached.user_id)<br>    core.request.set_header(ctx, <span class="hljs-string">&quot;X-User-Role&quot;</span>, cached.role)<br><span class="hljs-keyword">end</span><br><br><span class="hljs-keyword">return</span> _M<br></code></pre></td></tr></table></figure>
+<h2 id="kong-vs-apisix-深度对比">Kong vs APISIX 深度对比</h2>
+<h3 id="架构对比">架构对比</h3>
+<table>
+<thead>
+<tr class="header">
+<th>维度</th>
+<th>Kong</th>
+<th>APISIX</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>底层框架</td>
+<td>OpenResty (Nginx + LuaJIT)</td>
+<td>OpenResty (Nginx + LuaJIT)</td>
+</tr>
+<tr class="even">
+<td>配置存储</td>
+<td>PostgreSQL / Cassandra</td>
+<td>etcd</td>
+</tr>
+<tr class="odd">
+<td>配置生效 式</td>
+<td>轮询 DB / DB-less</td>
+<td>etcd Watch 实时推送</td>
+</tr>
+<tr class="even">
+<td>控制平面</td>
+<td>Kong Manager / Konga</td>
+<td>APISIX Dashboard</td>
+</tr>
+<tr class="odd">
+<td>集群模式</td>
+<td>需要数据库</td>
+<td>etcd + 无状态节点</td>
+</tr>
+<tr class="even">
+<td>插件语言</td>
+<td>Lua, Go, Python, JS</td>
+<td>Lua, Java, Go, Python, Wasm</td>
+</tr>
+<tr class="odd">
+<td>开源协议</td>
+<td>Apache 2.0 (部分 Enterprise)</td>
+<td>Apache 2.0 (全功能)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="性能对比">性能对比</h3>
+<pre class="mermaid">graph LR
+    subgraph 性能基准测试 (wrk, 1000并发)
+        direction TB
+        A["APISIX&lt;br/&gt;QPS: ~28,000&lt;br/&gt;延迟 P99: 3ms"]
+        B["Kong&lt;br/&gt;QPS: ~18,000&lt;br/&gt;延迟 P99: 8ms"]
+        C["Spring Cloud Gateway&lt;br/&gt;QPS: ~12,000&lt;br/&gt;延迟 P99: 15ms"]
+    end</pre>
+<p>APISIX 在性能上优于 Kong，主要原因： 1. <strong>etcd
+Watch</strong>：配置变更实时推送，无需轮询数据库 2.
+<strong>全动态路由</strong>：路由变更无需 reload Nginx worker 3.
+<strong>高效缓存</strong>：基于 radixtree 的路由匹配</p>
+<h3 id="部署对比">部署对比</h3>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># Kong Docker Compose</span><br><span class="hljs-attr">version:</span> <span class="hljs-string">&quot;3&quot;</span><br><span class="hljs-attr">services:</span><br>  <span class="hljs-attr">kong-database:</span><br>    <span class="hljs-attr">image:</span> <span class="hljs-string">postgres:15</span><br>    <span class="hljs-attr">environment:</span><br>      <span class="hljs-attr">POSTGRES_DB:</span> <span class="hljs-string">kong</span><br>      <span class="hljs-attr">POSTGRES_USER:</span> <span class="hljs-string">kong</span><br>      <span class="hljs-attr">POSTGRES_PASSWORD:</span> <span class="hljs-string">kongpass</span><br><br>  <span class="hljs-attr">kong-migrations:</span><br>    <span class="hljs-attr">image:</span> <span class="hljs-string">kong:3.5</span><br>    <span class="hljs-attr">command:</span> <span class="hljs-string">kong</span> <span class="hljs-string">migrations</span> <span class="hljs-string">bootstrap</span><br>    <span class="hljs-attr">depends_on:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">kong-database</span><br>    <span class="hljs-attr">environment:</span><br>      <span class="hljs-attr">KONG_DATABASE:</span> <span class="hljs-string">postgres</span><br>      <span class="hljs-attr">KONG_PG_HOST:</span> <span class="hljs-string">kong-database</span><br><br>  <span class="hljs-attr">kong:</span><br>    <span class="hljs-attr">image:</span> <span class="hljs-string">kong:3.5</span><br>    <span class="hljs-attr">depends_on:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">kong-database</span><br>    <span class="hljs-attr">environment:</span><br>      <span class="hljs-attr">KONG_DATABASE:</span> <span class="hljs-string">postgres</span><br>      <span class="hljs-attr">KONG_PG_HOST:</span> <span class="hljs-string">kong-database</span><br>      <span class="hljs-attr">KONG_PROXY_LISTEN:</span> <span class="hljs-string">&quot;0.0.0.0:8000&quot;</span><br>      <span class="hljs-attr">KONG_ADMIN_LISTEN:</span> <span class="hljs-string">&quot;0.0.0.0:8001&quot;</span><br>    <span class="hljs-attr">ports:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">&quot;8000:8000&quot;</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">&quot;8001:8001&quot;</span><br></code></pre></td></tr></table></figure>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># APISIX Docker Compose</span><br><span class="hljs-attr">version:</span> <span class="hljs-string">&quot;3&quot;</span><br><span class="hljs-attr">services:</span><br>  <span class="hljs-attr">etcd:</span><br>    <span class="hljs-attr">image:</span> <span class="hljs-string">bitnami/etcd:3.5</span><br>    <span class="hljs-attr">environment:</span><br>      <span class="hljs-attr">ALLOW_NONE_AUTHENTICATION:</span> <span class="hljs-string">&quot;yes&quot;</span><br>      <span class="hljs-attr">ETCD_ADVERTISE_CLIENT_URLS:</span> <span class="hljs-string">&quot;http://etcd:2379&quot;</span><br><br>  <span class="hljs-attr">apisix:</span><br>    <span class="hljs-attr">image:</span> <span class="hljs-string">apache/apisix:3.8.0</span><br>    <span class="hljs-attr">depends_on:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">etcd</span><br>    <span class="hljs-attr">volumes:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">./apisix_conf/config.yaml:/usr/local/apisix/conf/config.yaml:ro</span><br>    <span class="hljs-attr">ports:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">&quot;9080:9080&quot;</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">&quot;9443:9443&quot;</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">&quot;9180:9180&quot;</span><br><br>  <span class="hljs-attr">apisix-dashboard:</span><br>    <span class="hljs-attr">image:</span> <span class="hljs-string">apache/apisix-dashboard:3.0</span><br>    <span class="hljs-attr">depends_on:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">etcd</span><br>    <span class="hljs-attr">ports:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">&quot;9000:9000&quot;</span><br></code></pre></td></tr></table></figure>
+<h3 id="选型建议">选型建议</h3>
+<pre class="mermaid">graph TD
+    Start[选择API网关] --&gt; Q1{需要企业级支持?}
+    Q1 --&gt;|是| Q2{预算充足?}
+    Q2 --&gt;|是| Kong[Kong Enterprise]
+    Q2 --&gt;|否| APISIX[Apache APISIX]
+
+    Q1 --&gt;|否| Q3{性能优先?}
+    Q3 --&gt;|是| APISIX
+    Q3 --&gt;|否| Q4{生态和社区成熟度?}
+    Q4 --&gt;|优先| Kong[Kong OSS]
+    Q4 --&gt;|次要| APISIX</pre>
+<p><strong>选择 Kong 的场景</strong>： - 需要成熟的企业级支持 - 团队已有
+Kong 使用经验 - 需要丰富的第三方插件生态</p>
+<p><strong>选择 APISIX 的场景</strong>： - 追求极致性能 -
+需要全动态配置能力 - 已有 etcd 基础设施（如 Kubernetes 环境） -
+预算有限，需要全功能开源版本</p>
+<h2 id="生产环境最佳实践">生产环境最佳实践</h2>
+<h3 id="高可用部署">高可用部署</h3>
+<pre class="mermaid">graph TB
+    DNS[DNS] --&gt; CDN[CDN / WAF]
+    CDN --&gt; LB1[L4 负载均衡]
+    CDN --&gt; LB2[L4 负载均衡]
+
+    LB1 --&gt; GW1[Gateway Node 1]
+    LB1 --&gt; GW2[Gateway Node 2]
+    LB2 --&gt; GW1
+    LB2 --&gt; GW2
+
+    GW1 --&gt; Services[服务集群]
+    GW2 --&gt; Services
+
+    subgraph 配置中心
+        ETCD1[etcd 1]
+        ETCD2[etcd 2]
+        ETCD3[etcd 3]
+    end
+
+    GW1 &lt;--&gt; ETCD1
+    GW2 &lt;--&gt; ETCD2</pre>
+<h3 id="关键配置建议">关键配置建议</h3>
+<ol type="1">
+<li><strong>超时设置</strong>：根据后端服务的实际响应时间设置合理超时</li>
+<li><strong>健康检查</strong>：启用主动健康检查，及时摘除异常节点</li>
+<li><strong>限流策略</strong>：按用户/IP/API 维度设置差异化限流</li>
+<li><strong>日志级别</strong>：生产环境使用 warn
+级别，避免日志打满磁盘</li>
+<li><strong>证书管理</strong>：使用自动化证书管理（如 Let’s Encrypt +
+ACME 插件）</li>
+</ol>
+<h2 id="总结">总结</h2>
+<p>API 网关是微服务架构的流量入口和安全屏障。Kong 和 APISIX
+都是优秀的选择，Kong 凭借先发优势拥有更成熟的生态，APISIX
+则以更优的性能和全动态配置能力后来居上。在实际选型时，应综合考虑团队能力、基础设施现状、性能需求和预算等因素。无论选择哪个，都要确保高可用部署、合理的限流策略和完善的可观测性配置。</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2023-12-20</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">2.7k 字 · 7 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/prometheus-monitoring/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Prometheus监控体系：从部署到告警</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/cqrs-event-sourcing/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">CQRS与事件溯源架构实践</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#api-%E7%BD%91%E5%85%B3%E7%9A%84%E6%A0%B8%E5%BF%83%E8%81%8C%E8%B4%A3"><span class="toc-text">API 网关的核心职责</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%AF%B7%E6%B1%82%E8%B7%AF%E7%94%B1"><span class="toc-text">请求路由</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%AE%A4%E8%AF%81%E4%B8%8E%E6%8E%88%E6%9D%83"><span class="toc-text">认证与授权</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%99%90%E6%B5%81%E4%B8%8E%E7%86%94%E6%96%AD"><span class="toc-text">限流与熔断</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#kong-%E6%9E%B6%E6%9E%84%E8%A7%A3%E6%9E%90"><span class="toc-text">Kong 架构解析</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%95%B4%E4%BD%93%E6%9E%B6%E6%9E%84"><span class="toc-text">整体架构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#kong-%E6%A0%B8%E5%BF%83%E6%A6%82%E5%BF%B5"><span class="toc-text">Kong 核心概念</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#kong-%E6%8F%92%E4%BB%B6%E5%BC%80%E5%8F%91"><span class="toc-text">Kong 插件开发</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#apache-apisix-%E6%9E%B6%E6%9E%84%E8%A7%A3%E6%9E%90"><span class="toc-text">Apache APISIX 架构解析</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%95%B4%E4%BD%93%E6%9E%B6%E6%9E%84-1"><span class="toc-text">整体架构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#apisix-%E6%A0%B8%E5%BF%83%E9%85%8D%E7%BD%AE"><span class="toc-text">APISIX 核心配置</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#apisix-%E6%8F%92%E4%BB%B6%E5%BC%80%E5%8F%91"><span class="toc-text">APISIX 插件开发</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#kong-vs-apisix-%E6%B7%B1%E5%BA%A6%E5%AF%B9%E6%AF%94"><span class="toc-text">Kong vs APISIX 深度对比</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%9E%B6%E6%9E%84%E5%AF%B9%E6%AF%94"><span class="toc-text">架构对比</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%80%A7%E8%83%BD%E5%AF%B9%E6%AF%94"><span class="toc-text">性能对比</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%83%A8%E7%BD%B2%E5%AF%B9%E6%AF%94"><span class="toc-text">部署对比</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%80%89%E5%9E%8B%E5%BB%BA%E8%AE%AE"><span class="toc-text">选型建议</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%94%9F%E4%BA%A7%E7%8E%AF%E5%A2%83%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5"><span class="toc-text">生产环境最佳实践</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%AB%98%E5%8F%AF%E7%94%A8%E9%83%A8%E7%BD%B2"><span class="toc-text">高可用部署</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%B3%E9%94%AE%E9%85%8D%E7%BD%AE%E5%BB%BA%E8%AE%AE"><span class="toc-text">关键配置建议</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

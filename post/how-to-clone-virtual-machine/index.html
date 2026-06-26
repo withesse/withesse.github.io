@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>使用PowerShell批量克隆VMware Workstation虚拟机 · zt&#39;s Blog</title>
+  <meta name="description" content="介绍如何使用PowerShell脚本和YAML配置文件克隆和配置VMware虚拟机。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/how-to-clone-virtual-machine/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="使用PowerShell批量克隆VMware Workstation虚拟机">
+  <meta property="og:description" content="介绍如何使用PowerShell脚本和YAML配置文件克隆和配置VMware虚拟机。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/how-to-clone-virtual-machine/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2020-05-23T11:00:00.000Z">
+  <meta property="article:modified_time" content="2020-05-23T11:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="使用PowerShell批量克隆VMware Workstation虚拟机">
+  <meta name="twitter:description" content="介绍如何使用PowerShell脚本和YAML配置文件克隆和配置VMware虚拟机。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"使用PowerShell批量克隆VMware Workstation虚拟机","description":"介绍如何使用PowerShell脚本和YAML配置文件克隆和配置VMware虚拟机。","datePublished":"2020-05-23T11:00:00.000Z","dateModified":"2020-05-23T11:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/how-to-clone-virtual-machine/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Tools","item":"https://withesse.co/categories/Tools/"},{"@type":"ListItem","position":2,"name":"PowerShell","item":"https://withesse.co/categories/Tools/PowerShell/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:90">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Tools/">Tools</a><span class="catsep">/</span><a class="catlink" href="/categories/Tools/PowerShell/">PowerShell</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/powershell/"><span class="hash">#</span>powershell</a><a class="tag" href="/tags/vmware/"><span class="hash">#</span>vmware</a>
+        
+      </div>
+
+      <h1>使用PowerShell批量克隆VMware Workstation虚拟机</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2020.05.23</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 4 min</span>
+        </span>
+        <span class="wc"><span class="num">1.6k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#yaml%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6"><span class="toc-text">YAML配置文件</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#powershell%E8%84%9A%E6%9C%AC"><span class="toc-text">PowerShell脚本</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%A6%82%E4%BD%95%E4%BD%BF%E7%94%A8"><span class="toc-text">如何使用</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8F%82%E8%80%83%E8%B5%84%E6%96%99"><span class="toc-text">参考资料</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <!-- # 使用PowerShell批量克隆VMware Workstation虚拟机 -->
+<p>本文将介绍如何使用PowerShell脚本和YAML配置文件克隆和配置VMware虚拟机。</p>
+<p>在开始之前，请确保：</p>
+<ul>
+<li>安装VMware Workstation；</li>
+<li>有一个配置好的虚拟机，用作克隆源；</li>
+<li>安装PowerShell。</li>
+</ul>
+<h2 id="yaml配置文件">YAML配置文件</h2>
+<p>首先，需要一个YAML配置文件来定义虚拟机克隆的参数。配置文件（<code>vmware-deploy.yaml</code>）包含虚拟机组的名称、存储目录、克隆源信息，以及每个虚拟机的名称、hostname、网络和hosts设置。</p>
+<p>以下是YAML配置示例：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-attr">version:</span> <span class="hljs-string">&#x27;0.1&#x27;</span><br><br><span class="hljs-attr">description:</span> <span class="hljs-string">Example</span> <span class="hljs-string">configuration</span> <span class="hljs-string">for</span> <span class="hljs-string">clone</span> <span class="hljs-string">VMware</span> <span class="hljs-string">virtual</span> <span class="hljs-string">machines(ubuntu).</span><br><br><span class="hljs-comment"># </span><br><span class="hljs-attr">vmGroup:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">example</span><br>  <span class="hljs-attr">directory:</span> <span class="hljs-string">C:\ProgramsData\VMware\Virtual</span> <span class="hljs-string">Machines\example</span><br>  <span class="hljs-attr">cloneVMSource:</span><br>    <span class="hljs-attr">name:</span> <span class="hljs-string">Ubuntu22.04.3-dev-000</span><br>    <span class="hljs-attr">directory:</span> <span class="hljs-string">C:\ProgramsData\VMware\Virtual</span> <span class="hljs-string">Machines\basic</span><br>  <span class="hljs-attr">instances:</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Ubuntu22.04.3-example-01</span><br>      <span class="hljs-attr">hostname:</span> <span class="hljs-string">example01</span><br>      <span class="hljs-attr">ip :</span> <span class="hljs-number">192.168</span><span class="hljs-number">.226</span><span class="hljs-number">.221</span><span class="hljs-string">/24</span><br>      <span class="hljs-attr">gateway:</span> <span class="hljs-number">192.168</span><span class="hljs-number">.226</span><span class="hljs-number">.2</span><br>      <span class="hljs-attr">dns:</span> <span class="hljs-number">192.168</span><span class="hljs-number">.226</span><span class="hljs-number">.2</span><span class="hljs-string">,1.1.1.1</span><br>      <span class="hljs-attr">hostEntries:</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-string">&#x27;#The following lines are used for vm_group example&#x27;</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-number">192.168</span><span class="hljs-number">.226</span><span class="hljs-number">.221</span> <span class="hljs-string">example01</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-number">192.168</span><span class="hljs-number">.226</span><span class="hljs-number">.222</span> <span class="hljs-string">example02</span>       <br>        <span class="hljs-bullet">-</span> <span class="hljs-number">192.168</span><span class="hljs-number">.226</span><span class="hljs-number">.223</span> <span class="hljs-string">example03</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Ubuntu22.04.3-example-02</span><br>      <span class="hljs-attr">hostname:</span> <span class="hljs-string">example02</span><br>      <span class="hljs-attr">ip :</span> <span class="hljs-number">192.168</span><span class="hljs-number">.226</span><span class="hljs-number">.222</span><span class="hljs-string">/24</span><br>      <span class="hljs-attr">gateway:</span> <span class="hljs-number">192.168</span><span class="hljs-number">.226</span><span class="hljs-number">.2</span><br>      <span class="hljs-attr">dns:</span> <span class="hljs-number">192.168</span><span class="hljs-number">.226</span><span class="hljs-number">.2</span><span class="hljs-string">,1.1.1.1</span><br>      <span class="hljs-attr">hostEntries:</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-string">&#x27;#The following lines are used for vm_group example&#x27;</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-number">192.168</span><span class="hljs-number">.226</span><span class="hljs-number">.221</span> <span class="hljs-string">example01</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-number">192.168</span><span class="hljs-number">.226</span><span class="hljs-number">.222</span> <span class="hljs-string">example02</span>       <br>        <span class="hljs-bullet">-</span> <span class="hljs-number">192.168</span><span class="hljs-number">.226</span><span class="hljs-number">.223</span> <span class="hljs-string">example03</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Ubuntu22.04.3-example-03</span><br>      <span class="hljs-attr">hostname:</span> <span class="hljs-string">example03</span>  <br>      <span class="hljs-attr">ip :</span> <span class="hljs-number">192.168</span><span class="hljs-number">.226</span><span class="hljs-number">.223</span><span class="hljs-string">/24</span><br>      <span class="hljs-attr">gateway:</span> <span class="hljs-number">192.168</span><span class="hljs-number">.226</span><span class="hljs-number">.2</span><br>      <span class="hljs-attr">dns:</span> <span class="hljs-number">192.168</span><span class="hljs-number">.226</span><span class="hljs-number">.2</span><span class="hljs-string">,1.1.1.1</span><br>      <span class="hljs-attr">hostEntries:</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-string">&#x27;#The following lines are used for vm_group example&#x27;</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-number">192.168</span><span class="hljs-number">.226</span><span class="hljs-number">.221</span> <span class="hljs-string">example01</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-number">192.168</span><span class="hljs-number">.226</span><span class="hljs-number">.222</span> <span class="hljs-string">example02</span>       <br>        <span class="hljs-bullet">-</span> <span class="hljs-number">192.168</span><span class="hljs-number">.226</span><span class="hljs-number">.223</span> <span class="hljs-string">example03</span><br><br></code></pre></td></tr></table></figure>
+<h2 id="powershell脚本">PowerShell脚本</h2>
+<p>vmware-tools.ps1接收YAML文件作为输入，执行以下功能：</p>
+<ul>
+<li>克隆虚拟机；</li>
+<li>设置hostname、网络和hosts文件；</li>
+<li>虚拟机启动、停止和暂停功能。</li>
+</ul>
+<figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br><span class="line">113</span><br><span class="line">114</span><br><span class="line">115</span><br><span class="line">116</span><br><span class="line">117</span><br><span class="line">118</span><br><span class="line">119</span><br><span class="line">120</span><br><span class="line">121</span><br><span class="line">122</span><br><span class="line">123</span><br><span class="line">124</span><br><span class="line">125</span><br><span class="line">126</span><br><span class="line">127</span><br><span class="line">128</span><br><span class="line">129</span><br><span class="line">130</span><br><span class="line">131</span><br><span class="line">132</span><br><span class="line">133</span><br><span class="line">134</span><br><span class="line">135</span><br><span class="line">136</span><br><span class="line">137</span><br><span class="line">138</span><br><span class="line">139</span><br><span class="line">140</span><br><span class="line">141</span><br><span class="line">142</span><br><span class="line">143</span><br><span class="line">144</span><br><span class="line">145</span><br><span class="line">146</span><br><span class="line">147</span><br><span class="line">148</span><br><span class="line">149</span><br><span class="line">150</span><br><span class="line">151</span><br><span class="line">152</span><br><span class="line">153</span><br><span class="line">154</span><br><span class="line">155</span><br><span class="line">156</span><br><span class="line">157</span><br><span class="line">158</span><br><span class="line">159</span><br><span class="line">160</span><br><span class="line">161</span><br><span class="line">162</span><br><span class="line">163</span><br><span class="line">164</span><br><span class="line">165</span><br><span class="line">166</span><br><span class="line">167</span><br><span class="line">168</span><br><span class="line">169</span><br><span class="line">170</span><br><span class="line">171</span><br><span class="line">172</span><br><span class="line">173</span><br><span class="line">174</span><br><span class="line">175</span><br><span class="line">176</span><br><span class="line">177</span><br><span class="line">178</span><br><span class="line">179</span><br><span class="line">180</span><br><span class="line">181</span><br><span class="line">182</span><br><span class="line">183</span><br><span class="line">184</span><br><span class="line">185</span><br><span class="line">186</span><br><span class="line">187</span><br><span class="line">188</span><br><span class="line">189</span><br><span class="line">190</span><br><span class="line">191</span><br><span class="line">192</span><br><span class="line">193</span><br><span class="line">194</span><br><span class="line">195</span><br><span class="line">196</span><br><span class="line">197</span><br><span class="line">198</span><br><span class="line">199</span><br><span class="line">200</span><br><span class="line">201</span><br><span class="line">202</span><br></pre></td><td class="code"><pre><code class="hljs powershell"><span class="hljs-keyword">param</span> (<br>    [<span class="hljs-built_in">string</span>]<span class="hljs-variable">$command</span>=<span class="hljs-string">&quot;deploy&quot;</span>,<br>    [<span class="hljs-built_in">string</span>]<span class="hljs-variable">$file</span>=<span class="hljs-string">&quot;./vmware-deploy.yaml&quot;</span>,<br>    [<span class="hljs-built_in">string</span>]<span class="hljs-variable">$vmrunPath</span>= <span class="hljs-string">&quot;C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe&quot;</span>,<br>    [<span class="hljs-built_in">string</span>]<span class="hljs-variable">$username</span> = <span class="hljs-string">&quot;root&quot;</span>,<br>    [<span class="hljs-built_in">string</span>]<span class="hljs-variable">$password</span> = <span class="hljs-string">&quot;Abc@12345&quot;</span><br>)<br><br><span class="hljs-variable">$module</span> = <span class="hljs-built_in">Get-Module</span> <span class="hljs-literal">-ListAvailable</span> <span class="hljs-literal">-Name</span> powershell<span class="hljs-literal">-yaml</span><br><span class="hljs-keyword">if</span> (<span class="hljs-operator">-not</span> <span class="hljs-variable">$module</span>) &#123;<br>    <span class="hljs-keyword">try</span> &#123;<br>        <span class="hljs-built_in">Install-Module</span> <span class="hljs-literal">-Name</span> powershell<span class="hljs-literal">-yaml</span> <span class="hljs-literal">-Scope</span> CurrentUser <span class="hljs-literal">-Force</span> <span class="hljs-literal">-ErrorAction</span> Stop<br>    &#125; <span class="hljs-keyword">catch</span> &#123;<br>        <span class="hljs-built_in">Write-Error</span> <span class="hljs-string">&quot;Failed to install the powershell-yaml module. Please check.&quot;</span><br>        <span class="hljs-keyword">return</span><br>    &#125;<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">function</span> <span class="hljs-title">GetVmxPath</span></span> &#123;<br>    <span class="hljs-keyword">param</span> (<br>        [<span class="hljs-type">ValidateNotNullOrEmpty</span>()]<br>        [<span class="hljs-built_in">string</span>]<span class="hljs-variable">$directory</span>, <br>        [<span class="hljs-type">ValidateNotNullOrEmpty</span>()]<br>        [<span class="hljs-built_in">string</span>]<span class="hljs-variable">$name</span><br>    )<br>    <span class="hljs-keyword">return</span> <span class="hljs-built_in">Join-Path</span> <span class="hljs-variable">$directory</span> <span class="hljs-variable">$name</span> (<span class="hljs-variable">$name</span> + <span class="hljs-string">&quot;.vmx&quot;</span>)<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">function</span> <span class="hljs-title">CheckAllVMsForDeploy</span></span> &#123;<br>    <span class="hljs-keyword">param</span> (<br>        [<span class="hljs-built_in">array</span>]<span class="hljs-variable">$instances</span>,<br>        [<span class="hljs-built_in">string</span>]<span class="hljs-variable">$sourceLocation</span>,<br>        [<span class="hljs-built_in">string</span>]<span class="hljs-variable">$targetLocation</span><br>    )<br>    <span class="hljs-variable">$sourceVmx</span> = GetVmxPath <span class="hljs-literal">-directory</span> <span class="hljs-variable">$sourceLocation</span> <span class="hljs-literal">-name</span> <span class="hljs-variable">$config</span>.vmGroup.cloneVMSource.name<br>    <span class="hljs-keyword">if</span> (<span class="hljs-operator">-not</span> (<span class="hljs-built_in">Test-Path</span> <span class="hljs-variable">$sourceVmx</span>)) &#123;<br>        <span class="hljs-built_in">Write-Error</span> <span class="hljs-string">&quot;The source virtual machine does not exist: <span class="hljs-variable">$sourceVmx</span>&quot;</span><br>        <span class="hljs-keyword">return</span> <span class="hljs-variable">$false</span><br>    &#125;<br>    <span class="hljs-keyword">foreach</span> (<span class="hljs-variable">$instance</span> <span class="hljs-keyword">in</span> <span class="hljs-variable">$instances</span>) &#123;<br>        <span class="hljs-variable">$destVmx</span> = GetVmxPath <span class="hljs-literal">-directory</span> <span class="hljs-variable">$targetLocation</span> <span class="hljs-literal">-name</span> <span class="hljs-variable">$instance</span>.name<br>        <span class="hljs-keyword">if</span> (<span class="hljs-built_in">Test-Path</span> <span class="hljs-variable">$destVmx</span>) &#123;<br>            <span class="hljs-built_in">Write-Error</span> <span class="hljs-string">&quot;The target virtual machine already exists: <span class="hljs-variable">$destVmx</span>&quot;</span><br>            <span class="hljs-keyword">return</span> <span class="hljs-variable">$false</span><br>        &#125;<br>    &#125;<br>    <span class="hljs-keyword">return</span> <span class="hljs-variable">$true</span><br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">function</span> <span class="hljs-title">CheckAllVMs</span></span> &#123;<br>    <span class="hljs-keyword">param</span> (<br>        [<span class="hljs-built_in">array</span>]<span class="hljs-variable">$instances</span>,<br>        [<span class="hljs-built_in">string</span>]<span class="hljs-variable">$targetLocation</span><br>    )<br>    <span class="hljs-keyword">foreach</span> (<span class="hljs-variable">$instance</span> <span class="hljs-keyword">in</span> <span class="hljs-variable">$instances</span>) &#123;<br>        <span class="hljs-variable">$destVmx</span> = GetVmxPath <span class="hljs-literal">-directory</span> <span class="hljs-variable">$targetLocation</span> <span class="hljs-literal">-name</span> <span class="hljs-variable">$instance</span>.name<br>        <span class="hljs-keyword">if</span> (<span class="hljs-operator">-not</span> (<span class="hljs-built_in">Test-Path</span> <span class="hljs-variable">$destVmx</span>)) &#123;<br>            <span class="hljs-built_in">Write-Error</span> <span class="hljs-string">&quot;The target virtual machine does not exists.: <span class="hljs-variable">$destVmx</span>&quot;</span><br>            <span class="hljs-keyword">return</span> <span class="hljs-variable">$false</span><br>        &#125;<br>    &#125;<br>    <span class="hljs-keyword">return</span> <span class="hljs-variable">$true</span><br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">function</span> <span class="hljs-title">CheckVMStartedStatus</span></span>&#123;<br>    <span class="hljs-keyword">param</span> (<br>    [<span class="hljs-built_in">string</span>]<span class="hljs-variable">$vmxPath</span> ,<br>    [<span class="hljs-built_in">int</span>]<span class="hljs-variable">$maxChecks</span> = <span class="hljs-number">5</span> <br>)<br>    <span class="hljs-variable">$checkCount</span> = <span class="hljs-number">0</span><br>    <span class="hljs-keyword">do</span> &#123;<br>        <span class="hljs-variable">$runningVMs</span> = &amp; <span class="hljs-variable">$vmrunPath</span> list<br>        <span class="hljs-variable">$vmStarted</span> = <span class="hljs-variable">$runningVMs</span> <span class="hljs-operator">-match</span> [<span class="hljs-type">regex</span>]::Escape(<span class="hljs-variable">$vmxPath</span>)<br>        <span class="hljs-variable">$checkCount</span>++<br>        <span class="hljs-keyword">if</span> (<span class="hljs-operator">-not</span> <span class="hljs-variable">$vmStarted</span>) &#123;<br>            <span class="hljs-built_in">Write-Host</span> <span class="hljs-string">&quot;Waiting for the virtual machine to start... (<span class="hljs-variable">$checkCount</span>/<span class="hljs-variable">$maxChecks</span>)&quot;</span><br>            <span class="hljs-built_in">Start-Sleep</span> <span class="hljs-literal">-Seconds</span> <span class="hljs-number">5</span> <br>        &#125;<br>    &#125; <span class="hljs-keyword">while</span> (<span class="hljs-operator">-not</span> <span class="hljs-variable">$vmStarted</span> <span class="hljs-operator">-and</span> <span class="hljs-variable">$checkCount</span> <span class="hljs-operator">-lt</span> <span class="hljs-variable">$maxChecks</span>)<br>    <span class="hljs-keyword">if</span>(<span class="hljs-operator">-not</span> <span class="hljs-variable">$vmStarted</span>)&#123;<br>        <span class="hljs-built_in">Write-Error</span> <span class="hljs-string">&quot;Virtual machine failed to start：<span class="hljs-variable">$vmxPath</span>&quot;</span><br>    &#125;<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">function</span> <span class="hljs-title">DeployVMs</span></span>&#123;<br>    <span class="hljs-keyword">param</span>(<br>        [<span class="hljs-type">Parameter</span>(<span class="hljs-type">Mandatory</span>=<span class="hljs-variable">$true</span>)]<br>        [<span class="hljs-type">object</span>]<span class="hljs-variable">$config</span><br>    )<br>    <span class="hljs-variable">$sourceLocation</span> = <span class="hljs-variable">$config</span>.vmGroup.cloneVMSource.directory<br>    <span class="hljs-variable">$targetLocation</span> = <span class="hljs-variable">$config</span>.vmGroup.directory<br>    <span class="hljs-keyword">if</span> (CheckAllVMsForDeploy <span class="hljs-literal">-instances</span> <span class="hljs-variable">$config</span>.vmGroup.instances <span class="hljs-literal">-sourceLocation</span> <span class="hljs-variable">$sourceLocation</span> <span class="hljs-literal">-targetLocation</span> <span class="hljs-variable">$targetLocation</span>) &#123;<br>        <span class="hljs-keyword">foreach</span> (<span class="hljs-variable">$instance</span> <span class="hljs-keyword">in</span> <span class="hljs-variable">$config</span>.vmGroup.instances) &#123;<br>            <span class="hljs-variable">$cloneFolderPath</span> = <span class="hljs-built_in">Join-Path</span> <span class="hljs-variable">$targetLocation</span> <span class="hljs-variable">$instance</span>.name<br>            <span class="hljs-variable">$sourceVmx</span> = GetVmxPath <span class="hljs-literal">-directory</span> <span class="hljs-variable">$sourceLocation</span> <span class="hljs-literal">-name</span> <span class="hljs-variable">$config</span>.vmGroup.cloneVMSource.name<br>            <span class="hljs-variable">$destVmx</span> = GetVmxPath <span class="hljs-literal">-directory</span> <span class="hljs-variable">$targetLocation</span> <span class="hljs-literal">-name</span> <span class="hljs-variable">$instance</span>.name<br>            <span class="hljs-keyword">if</span> (<span class="hljs-operator">-not</span> (<span class="hljs-built_in">Test-Path</span> <span class="hljs-variable">$cloneFolderPath</span>)) &#123;<br>                <span class="hljs-built_in">New-Item</span> <span class="hljs-literal">-Path</span> <span class="hljs-variable">$cloneFolderPath</span> <span class="hljs-literal">-ItemType</span> Directory<br>            &#125;<br>            <span class="hljs-built_in">Write-Host</span> <span class="hljs-string">&quot;Clone virtual machine: <span class="hljs-variable">$</span>(<span class="hljs-variable">$instance</span>.name)&quot;</span><br>            &amp; <span class="hljs-variable">$vmrunPath</span> clone <span class="hljs-variable">$sourceVmx</span> <span class="hljs-variable">$destVmx</span> full <span class="hljs-literal">-cloneName</span>=<span class="hljs-string">&quot;<span class="hljs-variable">$</span>(<span class="hljs-variable">$instance</span>.name)&quot;</span><br>            <span class="hljs-built_in">Write-Host</span> <span class="hljs-string">&quot;Start virtual machine: <span class="hljs-variable">$</span>(<span class="hljs-variable">$instance</span>.name)&quot;</span><br>            &amp; <span class="hljs-variable">$vmrunPath</span> <span class="hljs-built_in">start</span> <span class="hljs-variable">$destVmx</span><br>            CheckVMStartedStatus <span class="hljs-literal">-vmxPath</span> <span class="hljs-variable">$destVmx</span><br>            <span class="hljs-built_in">Write-Host</span> <span class="hljs-string">&quot;Modify the virtual machine&#x27;s hostname: <span class="hljs-variable">$</span>(<span class="hljs-variable">$instance</span>.name)&quot;</span><br>            &amp; <span class="hljs-variable">$vmrunPath</span> <span class="hljs-literal">-T</span> ws <span class="hljs-literal">-gu</span> <span class="hljs-variable">$username</span> <span class="hljs-literal">-gp</span> <span class="hljs-variable">$password</span> runScriptInGuest <span class="hljs-variable">$destVmx</span> <span class="hljs-string">&quot;&quot;</span> <span class="hljs-string">&quot;echo &#x27;<span class="hljs-variable">$</span>(<span class="hljs-variable">$instance</span>.hostname)&#x27; | tee /etc/hostname  &amp;&amp; hostname -F /etc/hostname&quot;</span><br>            <span class="hljs-variable">$netplanConfig</span> = <span class="hljs-string">@&quot;</span><br><span class="hljs-string">network:</span><br><span class="hljs-string">  version: 2</span><br><span class="hljs-string">  ethernets:</span><br><span class="hljs-string">    ens33:</span><br><span class="hljs-string">      dhcp4: no</span><br><span class="hljs-string">      addresses: [<span class="hljs-variable">$</span>(<span class="hljs-variable">$instance</span>.ip)]</span><br><span class="hljs-string">      routes:</span><br><span class="hljs-string">        - to: default</span><br><span class="hljs-string">          via: <span class="hljs-variable">$</span>(<span class="hljs-variable">$instance</span>.gateway)</span><br><span class="hljs-string">      nameservers:</span><br><span class="hljs-string">          addresses: [<span class="hljs-variable">$</span>(<span class="hljs-variable">$instance</span>.dns)]</span><br><span class="hljs-string">&quot;@</span><br>            <span class="hljs-built_in">Write-Host</span> <span class="hljs-string">&quot;Modify the virtual machine&#x27;s network settings: <span class="hljs-variable">$</span>(<span class="hljs-variable">$instance</span>.name)&quot;</span><br>            &amp; <span class="hljs-variable">$vmrunPath</span> <span class="hljs-literal">-T</span> ws <span class="hljs-literal">-gu</span> <span class="hljs-variable">$username</span> <span class="hljs-literal">-gp</span> <span class="hljs-variable">$password</span>  runScriptInGuest <span class="hljs-variable">$destVmx</span> <span class="hljs-string">&quot;&quot;</span> <span class="hljs-string">&quot;echo &#x27;<span class="hljs-variable">$netplanConfig</span>&#x27; |  tee /etc/netplan/00-installer-config.yaml&quot;</span><br>            &amp; <span class="hljs-variable">$vmrunPath</span> <span class="hljs-literal">-T</span> ws <span class="hljs-literal">-gu</span> <span class="hljs-variable">$username</span> <span class="hljs-literal">-gp</span> <span class="hljs-variable">$password</span>  runScriptInGuest <span class="hljs-variable">$destVmx</span> <span class="hljs-string">&quot;&quot;</span> <span class="hljs-string">&quot;netplan apply&quot;</span><br>            <span class="hljs-built_in">Write-Host</span> <span class="hljs-string">&quot;Modify the virtual machine&#x27;s hosts: <span class="hljs-variable">$</span>(<span class="hljs-variable">$instance</span>.name)&quot;</span><br>            <span class="hljs-keyword">foreach</span> (<span class="hljs-variable">$hostEntry</span> <span class="hljs-keyword">in</span> <span class="hljs-variable">$instance</span>.hostEntries) &#123;<br>                &amp; <span class="hljs-variable">$vmrunPath</span> <span class="hljs-literal">-T</span> ws <span class="hljs-literal">-gu</span> <span class="hljs-variable">$username</span> <span class="hljs-literal">-gp</span> <span class="hljs-variable">$password</span>  runScriptInGuest <span class="hljs-variable">$destVmx</span> <span class="hljs-string">&quot;&quot;</span> <span class="hljs-string">&quot;echo &#x27;<span class="hljs-variable">$hostEntry</span>&#x27; | tee -a /etc/hosts&quot;</span><br>            &#125;        <br>        <span class="hljs-comment"># Write-Host &quot;重启虚拟机: $($instance.name)&quot;</span><br>        <span class="hljs-comment"># &amp; $vmrunPath -T ws -gu $username -gp $password  runScriptInGuest $destVmx &quot;&quot; &quot;systemctl reboot&quot;</span><br>        &#125;<br>        <span class="hljs-built_in">Write-Host</span> <span class="hljs-string">&quot;The virtual machine group clone is complete.&quot;</span><br>    &#125; <span class="hljs-keyword">else</span> &#123;<br>        <span class="hljs-built_in">Write-Error</span> <span class="hljs-string">&quot;The Deploy process has stopped due to a failed existence check.&quot;</span><br>    &#125;<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">function</span> <span class="hljs-title">StartVMs</span></span> &#123;<br>    <span class="hljs-keyword">param</span>(<br>        [<span class="hljs-type">Parameter</span>(<span class="hljs-type">Mandatory</span>=<span class="hljs-variable">$true</span>)]<br>        [<span class="hljs-type">object</span>]<span class="hljs-variable">$config</span><br>    )<br>    <span class="hljs-variable">$targetLocation</span> = <span class="hljs-variable">$config</span>.vmGroup.directory<br>    <span class="hljs-keyword">if</span> (CheckAllVMs <span class="hljs-literal">-instances</span> <span class="hljs-variable">$config</span>.vmGroup.instances <span class="hljs-literal">-targetLocation</span> <span class="hljs-variable">$targetLocation</span>) &#123;<br>        <span class="hljs-keyword">foreach</span> (<span class="hljs-variable">$instance</span> <span class="hljs-keyword">in</span> <span class="hljs-variable">$config</span>.vmGroup.instances) &#123;<br>            <span class="hljs-variable">$destVmx</span> = GetVmxPath <span class="hljs-literal">-directory</span> <span class="hljs-variable">$targetLocation</span> <span class="hljs-literal">-name</span> <span class="hljs-variable">$instance</span>.name<br>            <span class="hljs-built_in">Write-Host</span> <span class="hljs-string">&quot;Start the virtual machine: <span class="hljs-variable">$</span>(<span class="hljs-variable">$instance</span>.name)&quot;</span><br>            &amp; <span class="hljs-variable">$vmrunPath</span> <span class="hljs-built_in">start</span> <span class="hljs-variable">$destVmx</span><br>        &#125;<br>        <span class="hljs-built_in">Write-Host</span> <span class="hljs-string">&quot;The virtual machine group has been successfully started&quot;</span><br>    &#125; <span class="hljs-keyword">else</span> &#123;<br>        <span class="hljs-built_in">Write-Error</span> <span class="hljs-string">&quot;The Start process has stopped due to a failed existence check.&quot;</span><br>    &#125;<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">function</span> <span class="hljs-title">StopVMs</span></span> &#123;<br>    <span class="hljs-keyword">param</span>(<br>        [<span class="hljs-type">Parameter</span>(<span class="hljs-type">Mandatory</span>=<span class="hljs-variable">$true</span>)]<br>        [<span class="hljs-type">object</span>]<span class="hljs-variable">$config</span><br>    )<br>    <span class="hljs-variable">$targetLocation</span> = <span class="hljs-variable">$config</span>.vmGroup.directory<br>    <span class="hljs-keyword">if</span> (CheckAllVMs <span class="hljs-literal">-instances</span> <span class="hljs-variable">$config</span>.vmGroup.instances <span class="hljs-literal">-targetLocation</span> <span class="hljs-variable">$targetLocation</span>) &#123;<br>        <span class="hljs-keyword">foreach</span> (<span class="hljs-variable">$instance</span> <span class="hljs-keyword">in</span> <span class="hljs-variable">$config</span>.vmGroup.instances) &#123;<br>            <span class="hljs-variable">$destVmx</span> = GetVmxPath <span class="hljs-literal">-directory</span> <span class="hljs-variable">$targetLocation</span> <span class="hljs-literal">-name</span> <span class="hljs-variable">$instance</span>.name<br>            <span class="hljs-built_in">Write-Host</span> <span class="hljs-string">&quot;Stop the virtual machine: <span class="hljs-variable">$</span>(<span class="hljs-variable">$instance</span>.name)&quot;</span><br>            &amp; <span class="hljs-variable">$vmrunPath</span> stop <span class="hljs-variable">$destVmx</span><br>        &#125;<br>        <span class="hljs-built_in">Write-Host</span> <span class="hljs-string">&quot;The virtual machine group has been successfully stopped&quot;</span><br>    &#125; <span class="hljs-keyword">else</span> &#123;<br>        <span class="hljs-built_in">Write-Error</span> <span class="hljs-string">&quot;The Stop process has stopped due to a failed existence check.&quot;</span><br>    &#125;<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">function</span> <span class="hljs-title">SuspendVMs</span></span>&#123;<br>    <span class="hljs-keyword">param</span>(<br>        [<span class="hljs-type">Parameter</span>(<span class="hljs-type">Mandatory</span>=<span class="hljs-variable">$true</span>)]<br>        [<span class="hljs-type">object</span>]<span class="hljs-variable">$config</span><br>    )<br>    <span class="hljs-variable">$targetLocation</span> = <span class="hljs-variable">$config</span>.vmGroup.directory<br>    <span class="hljs-keyword">if</span> (CheckAllVMs <span class="hljs-literal">-instances</span> <span class="hljs-variable">$config</span>.vmGroup.instances <span class="hljs-literal">-targetLocation</span> <span class="hljs-variable">$targetLocation</span>) &#123;<br>        <span class="hljs-keyword">foreach</span> (<span class="hljs-variable">$instance</span> <span class="hljs-keyword">in</span> <span class="hljs-variable">$config</span>.vmGroup.instances) &#123;<br>            <span class="hljs-variable">$destVmx</span> = GetVmxPath <span class="hljs-literal">-directory</span> <span class="hljs-variable">$targetLocation</span> <span class="hljs-literal">-name</span> <span class="hljs-variable">$instance</span>.name<br>            <span class="hljs-built_in">Write-Host</span> <span class="hljs-string">&quot;Suspend the virtual machine: <span class="hljs-variable">$</span>(<span class="hljs-variable">$instance</span>.name)&quot;</span><br>            &amp; <span class="hljs-variable">$vmrunPath</span> suspend <span class="hljs-variable">$destVmx</span><br>        &#125;<br>        <span class="hljs-built_in">Write-Host</span> <span class="hljs-string">&quot;The virtual machine group has been successfully suspende.&quot;</span><br>    &#125; <span class="hljs-keyword">else</span> &#123;<br>        <span class="hljs-built_in">Write-Error</span> <span class="hljs-string">&quot;The Suspend process has stopped due to a failed existence check.&quot;</span><br>    &#125;<br>&#125;<br><br><span class="hljs-keyword">try</span> &#123;<br>    <span class="hljs-comment"># Read YAML configuration file</span><br>    <span class="hljs-variable">$configData</span> = <span class="hljs-built_in">Get-Content</span> <span class="hljs-variable">$file</span> <span class="hljs-literal">-Raw</span> | <span class="hljs-built_in">ConvertFrom-Yaml</span><br>    <span class="hljs-keyword">switch</span> (<span class="hljs-variable">$command</span>) &#123;<br>        <span class="hljs-string">&quot;deploy&quot;</span> &#123; DeployVMs <span class="hljs-literal">-config</span> <span class="hljs-variable">$configData</span> &#125;<br>        <span class="hljs-string">&quot;start&quot;</span> &#123; StartVMs <span class="hljs-literal">-config</span> <span class="hljs-variable">$configData</span> &#125;<br>        <span class="hljs-string">&quot;stop&quot;</span> &#123; StopVMs <span class="hljs-literal">-config</span> <span class="hljs-variable">$configData</span> &#125;<br>        <span class="hljs-string">&quot;suspend&quot;</span> &#123; SuspendVMs <span class="hljs-literal">-config</span> <span class="hljs-variable">$configData</span> &#125;<br>        default &#123; <span class="hljs-built_in">Write-Host</span> <span class="hljs-string">&quot;Unknown command: <span class="hljs-variable">$command</span>&quot;</span> &#125;<br>    &#125;<br>&#125; <span class="hljs-keyword">catch</span> &#123;<br>    <span class="hljs-built_in">Write-Error</span> <span class="hljs-string">&quot;An error occurred: <span class="hljs-variable">$_</span>&quot;</span><br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="如何使用">如何使用</h2>
+<figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><code class="hljs powershell"><span class="hljs-comment"># depoly</span><br>.\vmware<span class="hljs-literal">-tools</span>.ps1<br>or<br>.\vmware<span class="hljs-literal">-tools</span>.ps1 <span class="hljs-operator">-file</span> <span class="hljs-string">&quot;./vmware-deploy-another.yaml&quot;</span><br><br><span class="hljs-comment">#start</span><br>.\vmware<span class="hljs-literal">-tools</span>.ps1 <span class="hljs-built_in">start</span><br><br><span class="hljs-comment">#stop</span><br>.\vmware<span class="hljs-literal">-tools</span>.ps1 stop<br><br><span class="hljs-comment">#suspend</span><br>.\vmware<span class="hljs-literal">-tools</span>.ps1 suspend<br></code></pre></td></tr></table></figure>
+<p>在使用之前，请根据你自己的需求调整。</p>
+<h2 id="参考资料">参考资料</h2>
+<ul>
+<li><a
+target="_blank" rel="noopener" href="https://docs.vmware.com/en/VMware-Workstation-Pro/17/com.vmware.ws.using.doc/GUID-A28FA25B-5529-4D95-9F7B-4CFBB8DF2AA7.html">Using
+the vmrun Command to Control Virtual Machines</a></li>
+</ul>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2020-05-23</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">1.6k 字 · 4 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/powershell-command-cheatsheet/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">使用PowerShell批量克隆VMware Workstation虚拟机</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/virtualization-and-containerization/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">虚拟化与容器化详解</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#yaml%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6"><span class="toc-text">YAML配置文件</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#powershell%E8%84%9A%E6%9C%AC"><span class="toc-text">PowerShell脚本</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%A6%82%E4%BD%95%E4%BD%BF%E7%94%A8"><span class="toc-text">如何使用</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8F%82%E8%80%83%E8%B5%84%E6%96%99"><span class="toc-text">参考资料</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

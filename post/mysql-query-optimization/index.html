@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MySQL查询优化：执行计划分析与SQL重写 · zt&#39;s Blog</title>
+  <meta name="description" content="全面讲解MySQL查询执行过程、EXPLAIN执行计划分析方法，以及JOIN优化、子查询优化、分页优化等实战SQL重写技巧。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/mysql-query-optimization/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="MySQL查询优化：执行计划分析与SQL重写">
+  <meta property="og:description" content="全面讲解MySQL查询执行过程、EXPLAIN执行计划分析方法，以及JOIN优化、子查询优化、分页优化等实战SQL重写技巧。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/mysql-query-optimization/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2024-11-26T16:00:00.000Z">
+  <meta property="article:modified_time" content="2024-11-26T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="MySQL查询优化：执行计划分析与SQL重写">
+  <meta name="twitter:description" content="全面讲解MySQL查询执行过程、EXPLAIN执行计划分析方法，以及JOIN优化、子查询优化、分页优化等实战SQL重写技巧。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"MySQL查询优化：执行计划分析与SQL重写","description":"全面讲解MySQL查询执行过程、EXPLAIN执行计划分析方法，以及JOIN优化、子查询优化、分页优化等实战SQL重写技巧。","datePublished":"2024-11-26T16:00:00.000Z","dateModified":"2024-11-26T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/mysql-query-optimization/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Database","item":"https://withesse.co/categories/Database/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:330">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Database/">Database</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/mysql/"><span class="hash">#</span>mysql</a><a class="tag" href="/tags/optimization/"><span class="hash">#</span>optimization</a><a class="tag" href="/tags/query/"><span class="hash">#</span>query</a><a class="tag" href="/tags/explain/"><span class="hash">#</span>explain</a>
+        
+      </div>
+
+      <h1>MySQL查询优化：执行计划分析与SQL重写</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2024.11.27</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 9 min</span>
+        </span>
+        <span class="wc"><span class="num">3.6k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#mysql-%E6%9F%A5%E8%AF%A2%E6%89%A7%E8%A1%8C%E8%BF%87%E7%A8%8B"><span class="toc-text">MySQL 查询执行过程</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BC%98%E5%8C%96%E5%99%A8%E7%9A%84%E5%B7%A5%E4%BD%9C"><span class="toc-text">优化器的工作</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#explain-%E8%AF%A6%E7%BB%86%E8%A7%A3%E8%AF%BB"><span class="toc-text">EXPLAIN 详细解读</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#explain-%E5%90%84%E5%88%97%E5%AE%8C%E6%95%B4%E8%AF%B4%E6%98%8E"><span class="toc-text">EXPLAIN 各列完整说明</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#explain-formatjsontree"><span class="toc-text">EXPLAIN FORMAT&#x3D;JSON&#x2F;TREE</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BC%98%E5%8C%96%E5%99%A8-hints"><span class="toc-text">优化器 Hints</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#sql-%E9%87%8D%E5%86%99%E4%BC%98%E5%8C%96%E6%8A%80%E5%B7%A7"><span class="toc-text">SQL 重写优化技巧</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#join-%E4%BC%98%E5%8C%96"><span class="toc-text">JOIN 优化</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#nested-loop-join-%E5%8E%9F%E7%90%86"><span class="toc-text">Nested Loop Join 原理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AD%90%E6%9F%A5%E8%AF%A2%E4%BC%98%E5%8C%96"><span class="toc-text">子查询优化</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%88%86%E9%A1%B5%E6%9F%A5%E8%AF%A2%E4%BC%98%E5%8C%96"><span class="toc-text">分页查询优化</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#count-%E4%BC%98%E5%8C%96"><span class="toc-text">COUNT 优化</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#group-by-%E4%B8%8E-order-by-%E4%BC%98%E5%8C%96"><span class="toc-text">GROUP BY 与 ORDER BY 优化</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#or-%E6%9D%A1%E4%BB%B6%E4%BC%98%E5%8C%96"><span class="toc-text">OR 条件优化</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E6%88%98%E6%85%A2%E6%9F%A5%E8%AF%A2%E5%88%86%E6%9E%90%E6%B5%81%E7%A8%8B"><span class="toc-text">实战：慢查询分析流程</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%9E%E9%99%85%E6%A1%88%E4%BE%8B"><span class="toc-text">实际案例</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="引言">引言</h2>
+<p>SQL查询优化是数据库性能调优中最常见也是最有效的手段。一条写法不当的SQL可能导致全表扫描、临时表排序等性能问题，而通过分析执行计划并合理重写，往往能获得数倍甚至数百倍的性能提升。本文将系统讲解MySQL查询的执行过程、EXPLAIN分析方法，以及各类SQL优化技巧。</p>
+<h2 id="mysql-查询执行过程">MySQL 查询执行过程</h2>
+<p>一条SQL从客户端发送到返回结果，经历以下阶段：</p>
+<pre class="mermaid">flowchart TD
+    A[客户端发送SQL] --&gt; B[连接器&lt;br/&gt;权限验证]
+    B --&gt; C{查询缓存&lt;br/&gt;MySQL 8.0已移除}
+    C --&gt;|命中| D[直接返回结果]
+    C --&gt;|未命中| E[解析器&lt;br/&gt;词法分析 + 语法分析]
+    E --&gt; F[预处理器&lt;br/&gt;语义检查 + 权限验证]
+    F --&gt; G[优化器&lt;br/&gt;生成执行计划]
+    G --&gt; H[执行器&lt;br/&gt;调用存储引擎接口]
+    H --&gt; I[存储引擎&lt;br/&gt;InnoDB]
+    I --&gt; J[返回结果]</pre>
+<h3 id="优化器的工作">优化器的工作</h3>
+<p>MySQL优化器负责选择最优的执行计划，其决策包括：</p>
+<ol type="1">
+<li><strong>选择使用哪个索引</strong>（或不使用索引）</li>
+<li><strong>多表JOIN时的连接顺序</strong></li>
+<li><strong>子查询的执行策略</strong>（物化、转换为JOIN等）</li>
+<li><strong>是否使用临时表和排序</strong></li>
+</ol>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 查看优化器的选择过程（MySQL 8.0+）</span><br><span class="hljs-keyword">SET</span> optimizer_trace <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;enabled=on&#x27;</span>;<br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> orders <span class="hljs-keyword">WHERE</span> user_id <span class="hljs-operator">=</span> <span class="hljs-number">1</span> <span class="hljs-keyword">AND</span> status <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;paid&#x27;</span>;<br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> information_schema.optimizer_trace\G<br><span class="hljs-keyword">SET</span> optimizer_trace <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;enabled=off&#x27;</span>;<br></code></pre></td></tr></table></figure>
+<h2 id="explain-详细解读">EXPLAIN 详细解读</h2>
+<h3 id="explain-各列完整说明">EXPLAIN 各列完整说明</h3>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs sql">EXPLAIN <span class="hljs-keyword">SELECT</span> o.<span class="hljs-operator">*</span>, u.name<br><span class="hljs-keyword">FROM</span> orders o<br><span class="hljs-keyword">JOIN</span> users u <span class="hljs-keyword">ON</span> o.user_id <span class="hljs-operator">=</span> u.id<br><span class="hljs-keyword">WHERE</span> o.status <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;paid&#x27;</span> <span class="hljs-keyword">AND</span> o.created_at <span class="hljs-operator">&gt;</span> <span class="hljs-string">&#x27;2025-01-01&#x27;</span><br><span class="hljs-keyword">ORDER</span> <span class="hljs-keyword">BY</span> o.created_at <span class="hljs-keyword">DESC</span><br>LIMIT <span class="hljs-number">20</span>;<br></code></pre></td></tr></table></figure>
+<h4 id="id-列">id 列</h4>
+<p>id表示查询中SELECT的序号，用来标识查询的执行顺序。</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- id相同: 从上到下执行</span><br>EXPLAIN <span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> orders o <span class="hljs-keyword">JOIN</span> users u <span class="hljs-keyword">ON</span> o.user_id <span class="hljs-operator">=</span> u.id;<br><span class="hljs-comment">-- 两行id都是1，先执行上面的表（驱动表）</span><br><br><span class="hljs-comment">-- id不同: 数字大的先执行</span><br>EXPLAIN <span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> orders <span class="hljs-keyword">WHERE</span> user_id <span class="hljs-keyword">IN</span> (<span class="hljs-keyword">SELECT</span> id <span class="hljs-keyword">FROM</span> users <span class="hljs-keyword">WHERE</span> vip_level <span class="hljs-operator">=</span> <span class="hljs-number">3</span>);<br><span class="hljs-comment">-- 子查询id=2先执行，外层id=1后执行</span><br></code></pre></td></tr></table></figure>
+<h4 id="select_type-列">select_type 列</h4>
+<table>
+<thead>
+<tr class="header">
+<th>值</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>SIMPLE</td>
+<td>简单查询（无子查询或UNION）</td>
+</tr>
+<tr class="even">
+<td>PRIMARY</td>
+<td>最外层查询</td>
+</tr>
+<tr class="odd">
+<td>SUBQUERY</td>
+<td>SELECT子句中的子查询</td>
+</tr>
+<tr class="even">
+<td>DERIVED</td>
+<td>FROM子句中的子查询（派生表）</td>
+</tr>
+<tr class="odd">
+<td>UNION</td>
+<td>UNION中的第二个及后续查询</td>
+</tr>
+<tr class="even">
+<td>MATERIALIZED</td>
+<td>被物化的子查询</td>
+</tr>
+</tbody>
+</table>
+<h4 id="type-列访问类型">type 列（访问类型）</h4>
+<p>这是EXPLAIN中最重要的字段，从优到劣排列：</p>
+<pre class="mermaid">graph LR
+    A[system] --&gt; B[const] --&gt; C[eq_ref] --&gt; D[ref] --&gt; E[range] --&gt; F[index] --&gt; G[ALL]
+    style A fill:#4caf50,color:#fff
+    style B fill:#4caf50,color:#fff
+    style C fill:#8bc34a,color:#fff
+    style D fill:#8bc34a,color:#fff
+    style E fill:#ffeb3b,color:#333
+    style F fill:#ff9800,color:#fff
+    style G fill:#f44336,color:#fff</pre>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- system: 表只有一行记录</span><br>EXPLAIN <span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> (<span class="hljs-keyword">SELECT</span> <span class="hljs-number">1</span>) t;<br><br><span class="hljs-comment">-- const: 通过主键或唯一索引的等值查询，结果最多一行</span><br>EXPLAIN <span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> users <span class="hljs-keyword">WHERE</span> id <span class="hljs-operator">=</span> <span class="hljs-number">1</span>;<br><br><span class="hljs-comment">-- eq_ref: JOIN时对被驱动表使用主键或唯一索引</span><br>EXPLAIN <span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> orders o <span class="hljs-keyword">JOIN</span> users u <span class="hljs-keyword">ON</span> o.user_id <span class="hljs-operator">=</span> u.id;<br><br><span class="hljs-comment">-- ref: 使用非唯一索引的等值查询</span><br>EXPLAIN <span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> orders <span class="hljs-keyword">WHERE</span> user_id <span class="hljs-operator">=</span> <span class="hljs-number">1</span>;<br><br><span class="hljs-comment">-- range: 范围扫描</span><br>EXPLAIN <span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> orders <span class="hljs-keyword">WHERE</span> created_at <span class="hljs-keyword">BETWEEN</span> <span class="hljs-string">&#x27;2025-01-01&#x27;</span> <span class="hljs-keyword">AND</span> <span class="hljs-string">&#x27;2025-03-01&#x27;</span>;<br>EXPLAIN <span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> orders <span class="hljs-keyword">WHERE</span> id <span class="hljs-keyword">IN</span> (<span class="hljs-number">1</span>, <span class="hljs-number">2</span>, <span class="hljs-number">3</span>);<br><br><span class="hljs-comment">-- index: 全索引扫描（比ALL好，但仍然扫描整个索引）</span><br>EXPLAIN <span class="hljs-keyword">SELECT</span> <span class="hljs-built_in">COUNT</span>(<span class="hljs-operator">*</span>) <span class="hljs-keyword">FROM</span> orders;<br><br><span class="hljs-comment">-- ALL: 全表扫描（最差，应该尽量避免）</span><br>EXPLAIN <span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> orders <span class="hljs-keyword">WHERE</span> description <span class="hljs-keyword">LIKE</span> <span class="hljs-string">&#x27;%keyword%&#x27;</span>;<br></code></pre></td></tr></table></figure>
+<h4 id="key_len-计算规则">key_len 计算规则</h4>
+<p><code>key_len</code>表示使用的索引长度（字节），可以用来判断联合索引用了几个列：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 字符类型: 字符数 * 字符集字节数 + (是否可NULL ? 1 : 0) + (变长类型 ? 2 : 0)</span><br><span class="hljs-comment">-- int: 4 + (是否可NULL ? 1 : 0)</span><br><span class="hljs-comment">-- bigint: 8 + (是否可NULL ? 1 : 0)</span><br><span class="hljs-comment">-- datetime: 5 + (是否可NULL ? 1 : 0)</span><br><span class="hljs-comment">-- varchar(50) utf8mb4: 50 * 4 + 2 + (是否可NULL ? 1 : 0) = 203</span><br><br><span class="hljs-comment">-- 联合索引 idx(user_id INT NOT NULL, status VARCHAR(20) NOT NULL, created_at DATETIME)</span><br><span class="hljs-comment">-- 只用了 user_id: key_len = 4</span><br><span class="hljs-comment">-- 用了 user_id + status: key_len = 4 + (20*4+2) = 86</span><br><span class="hljs-comment">-- 用了全部三列: key_len = 4 + 82 + 6 = 92</span><br></code></pre></td></tr></table></figure>
+<h4 id="extra-列">Extra 列</h4>
+<table>
+<thead>
+<tr class="header">
+<th>值</th>
+<th>含义</th>
+<th>优化建议</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Using index</td>
+<td>覆盖索引</td>
+<td>性能好</td>
+</tr>
+<tr class="even">
+<td>Using where</td>
+<td>Server层过滤</td>
+<td>检查是否可以下推到引擎层</td>
+</tr>
+<tr class="odd">
+<td>Using index condition</td>
+<td>索引下推ICP</td>
+<td>较好</td>
+</tr>
+<tr class="even">
+<td>Using temporary</td>
+<td>使用临时表</td>
+<td>需要优化</td>
+</tr>
+<tr class="odd">
+<td>Using filesort</td>
+<td>额外排序</td>
+<td>需要优化</td>
+</tr>
+<tr class="even">
+<td>Using join buffer</td>
+<td>JOIN使用了缓冲区</td>
+<td>被驱动表无索引</td>
+</tr>
+</tbody>
+</table>
+<h3 id="explain-formatjsontree">EXPLAIN FORMAT=JSON/TREE</h3>
+<p>MySQL 8.0提供了更详细的执行计划输出：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- JSON格式，包含成本估算</span><br>EXPLAIN FORMAT<span class="hljs-operator">=</span>JSON<br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> orders <span class="hljs-keyword">WHERE</span> user_id <span class="hljs-operator">=</span> <span class="hljs-number">1</span> <span class="hljs-keyword">AND</span> status <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;paid&#x27;</span>\G<br><br><span class="hljs-comment">-- TREE格式，更直观的层次结构（MySQL 8.0.16+）</span><br>EXPLAIN FORMAT<span class="hljs-operator">=</span>TREE<br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> orders o<br><span class="hljs-keyword">JOIN</span> users u <span class="hljs-keyword">ON</span> o.user_id <span class="hljs-operator">=</span> u.id<br><span class="hljs-keyword">WHERE</span> o.status <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;paid&#x27;</span>\G<br><br><span class="hljs-comment">-- 实际执行并输出统计信息（MySQL 8.0.18+）</span><br>EXPLAIN ANALYZE<br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> orders <span class="hljs-keyword">WHERE</span> user_id <span class="hljs-operator">=</span> <span class="hljs-number">1</span> <span class="hljs-keyword">AND</span> status <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;paid&#x27;</span>\G<br></code></pre></td></tr></table></figure>
+<p><code>EXPLAIN ANALYZE</code>的输出示例：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><code class="hljs plaintext">-&gt; Filter: (orders.status = &#x27;paid&#x27;)  (cost=2.50 rows=5) (actual time=0.035..0.042 rows=3 loops=1)<br>    -&gt; Index lookup on orders using idx_user_id (user_id=1)  (cost=2.50 rows=10) (actual time=0.030..0.036 rows=10 loops=1)<br></code></pre></td></tr></table></figure>
+<h2 id="优化器-hints">优化器 Hints</h2>
+<p>当优化器的选择不是最优时，可以通过Hint引导优化器：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 强制使用某个索引</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> orders FORCE INDEX (idx_user_status)<br><span class="hljs-keyword">WHERE</span> user_id <span class="hljs-operator">=</span> <span class="hljs-number">1</span> <span class="hljs-keyword">AND</span> status <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;paid&#x27;</span>;<br><br><span class="hljs-comment">-- 忽略某个索引</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> orders IGNORE INDEX (idx_status)<br><span class="hljs-keyword">WHERE</span> status <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;paid&#x27;</span>;<br><br><span class="hljs-comment">-- MySQL 8.0 Optimizer Hints（更细粒度）</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-comment">/*+ INDEX(o idx_user_status) */</span> o.<span class="hljs-operator">*</span><br><span class="hljs-keyword">FROM</span> orders o<br><span class="hljs-keyword">WHERE</span> o.user_id <span class="hljs-operator">=</span> <span class="hljs-number">1</span> <span class="hljs-keyword">AND</span> o.status <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;paid&#x27;</span>;<br><br><span class="hljs-comment">-- 控制JOIN顺序</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-comment">/*+ JOIN_ORDER(u, o) */</span> o.<span class="hljs-operator">*</span>, u.name<br><span class="hljs-keyword">FROM</span> orders o <span class="hljs-keyword">JOIN</span> users u <span class="hljs-keyword">ON</span> o.user_id <span class="hljs-operator">=</span> u.id;<br><br><span class="hljs-comment">-- 禁用合并派生表</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-comment">/*+ NO_MERGE(derived) */</span> <span class="hljs-operator">*</span><br><span class="hljs-keyword">FROM</span> (<span class="hljs-keyword">SELECT</span> user_id, <span class="hljs-built_in">COUNT</span>(<span class="hljs-operator">*</span>) <span class="hljs-keyword">AS</span> cnt <span class="hljs-keyword">FROM</span> orders <span class="hljs-keyword">GROUP</span> <span class="hljs-keyword">BY</span> user_id) derived<br><span class="hljs-keyword">WHERE</span> cnt <span class="hljs-operator">&gt;</span> <span class="hljs-number">10</span>;<br><br><span class="hljs-comment">-- 设置查询超时（毫秒）</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-comment">/*+ MAX_EXECUTION_TIME(5000) */</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> orders <span class="hljs-keyword">WHERE</span> status <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;paid&#x27;</span>;<br></code></pre></td></tr></table></figure>
+<h2 id="sql-重写优化技巧">SQL 重写优化技巧</h2>
+<h3 id="join-优化">JOIN 优化</h3>
+<pre class="mermaid">flowchart TD
+    A[JOIN优化] --&gt; B[小表驱动大表]
+    A --&gt; C[被驱动表JOIN列建索引]
+    A --&gt; D[避免过多表JOIN]
+    A --&gt; E[选择合适的JOIN类型]
+
+    B --&gt; B1["驱动表: 过滤后结果集小的表"]
+    C --&gt; C1["确保 ON 条件列有索引"]
+    D --&gt; D1["单次查询不超过3-4张表"]
+    E --&gt; E1["INNER JOIN 让优化器选择驱动表&lt;br/&gt;LEFT JOIN 左表为驱动表"]</pre>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 不良写法: 大表驱动小表</span><br><span class="hljs-keyword">SELECT</span> o.<span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> orders o<br><span class="hljs-keyword">LEFT</span> <span class="hljs-keyword">JOIN</span> (<span class="hljs-keyword">SELECT</span> id <span class="hljs-keyword">FROM</span> users <span class="hljs-keyword">WHERE</span> vip_level <span class="hljs-operator">=</span> <span class="hljs-number">3</span>) u <span class="hljs-keyword">ON</span> o.user_id <span class="hljs-operator">=</span> u.id<br><span class="hljs-keyword">WHERE</span> u.id <span class="hljs-keyword">IS</span> <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span>;<br><br><span class="hljs-comment">-- 优化写法: 小表驱动大表</span><br><span class="hljs-keyword">SELECT</span> o.<span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> orders o<br><span class="hljs-keyword">INNER</span> <span class="hljs-keyword">JOIN</span> users u <span class="hljs-keyword">ON</span> o.user_id <span class="hljs-operator">=</span> u.id<br><span class="hljs-keyword">WHERE</span> u.vip_level <span class="hljs-operator">=</span> <span class="hljs-number">3</span>;<br><span class="hljs-comment">-- 优化器会自动选择 users（小结果集）作为驱动表</span><br><br><span class="hljs-comment">-- 进一步优化: 如果只需要检查存在性</span><br><span class="hljs-keyword">SELECT</span> o.<span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> orders o<br><span class="hljs-keyword">WHERE</span> <span class="hljs-keyword">EXISTS</span> (<span class="hljs-keyword">SELECT</span> <span class="hljs-number">1</span> <span class="hljs-keyword">FROM</span> users u <span class="hljs-keyword">WHERE</span> u.id <span class="hljs-operator">=</span> o.user_id <span class="hljs-keyword">AND</span> u.vip_level <span class="hljs-operator">=</span> <span class="hljs-number">3</span>);<br></code></pre></td></tr></table></figure>
+<h3 id="nested-loop-join-原理">Nested Loop Join 原理</h3>
+<p>MySQL使用Nested Loop Join算法执行JOIN：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs plaintext">for (row in 驱动表) &#123;<br>    for (row in 被驱动表 where 匹配条件) &#123;<br>        输出结果<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 被驱动表无索引时使用 Block Nested Loop Join（MySQL 8.0.18之前）</span><br><span class="hljs-comment">-- MySQL 8.0.18+ 使用 Hash Join</span><br><br><span class="hljs-comment">-- Hash Join (MySQL 8.0.18+)</span><br>EXPLAIN FORMAT<span class="hljs-operator">=</span>TREE<br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> orders o <span class="hljs-keyword">JOIN</span> users u <span class="hljs-keyword">ON</span> o.user_id <span class="hljs-operator">=</span> u.id;<br><span class="hljs-comment">-- -&gt; Hash join (u.id = o.user_id)</span><br><span class="hljs-comment">--     -&gt; Table scan on o</span><br><span class="hljs-comment">--     -&gt; Hash</span><br><span class="hljs-comment">--         -&gt; Table scan on u</span><br></code></pre></td></tr></table></figure>
+<h3 id="子查询优化">子查询优化</h3>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 低效: 相关子查询（每行都执行一次子查询）</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span><br><span class="hljs-keyword">FROM</span> orders o<br><span class="hljs-keyword">WHERE</span> o.amount <span class="hljs-operator">&gt;</span> (<span class="hljs-keyword">SELECT</span> <span class="hljs-built_in">AVG</span>(amount) <span class="hljs-keyword">FROM</span> orders <span class="hljs-keyword">WHERE</span> user_id <span class="hljs-operator">=</span> o.user_id);<br><br><span class="hljs-comment">-- 优化: 转为JOIN</span><br><span class="hljs-keyword">SELECT</span> o.<span class="hljs-operator">*</span><br><span class="hljs-keyword">FROM</span> orders o<br><span class="hljs-keyword">INNER</span> <span class="hljs-keyword">JOIN</span> (<br>    <span class="hljs-keyword">SELECT</span> user_id, <span class="hljs-built_in">AVG</span>(amount) <span class="hljs-keyword">AS</span> avg_amount<br>    <span class="hljs-keyword">FROM</span> orders<br>    <span class="hljs-keyword">GROUP</span> <span class="hljs-keyword">BY</span> user_id<br>) t <span class="hljs-keyword">ON</span> o.user_id <span class="hljs-operator">=</span> t.user_id <span class="hljs-keyword">AND</span> o.amount <span class="hljs-operator">&gt;</span> t.avg_amount;<br><br><span class="hljs-comment">-- IN子查询优化</span><br><span class="hljs-comment">-- MySQL优化器通常会自动将 IN 子查询转为 semi-join</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> orders <span class="hljs-keyword">WHERE</span> user_id <span class="hljs-keyword">IN</span> (<span class="hljs-keyword">SELECT</span> id <span class="hljs-keyword">FROM</span> users <span class="hljs-keyword">WHERE</span> vip_level <span class="hljs-operator">=</span> <span class="hljs-number">3</span>);<br><span class="hljs-comment">-- 等价于</span><br><span class="hljs-keyword">SELECT</span> o.<span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> orders o SEMI <span class="hljs-keyword">JOIN</span> users u <span class="hljs-keyword">ON</span> o.user_id <span class="hljs-operator">=</span> u.id <span class="hljs-keyword">WHERE</span> u.vip_level <span class="hljs-operator">=</span> <span class="hljs-number">3</span>;<br><br><span class="hljs-comment">-- NOT IN 的陷阱: 如果子查询结果包含NULL，整个NOT IN返回空</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> orders <span class="hljs-keyword">WHERE</span> user_id <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">IN</span> (<span class="hljs-keyword">SELECT</span> manager_id <span class="hljs-keyword">FROM</span> departments);<br><span class="hljs-comment">-- 如果 manager_id 有NULL值，结果为空！</span><br><span class="hljs-comment">-- 改用 NOT EXISTS</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> orders o<br><span class="hljs-keyword">WHERE</span> <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">EXISTS</span> (<span class="hljs-keyword">SELECT</span> <span class="hljs-number">1</span> <span class="hljs-keyword">FROM</span> departments d <span class="hljs-keyword">WHERE</span> d.manager_id <span class="hljs-operator">=</span> o.user_id);<br></code></pre></td></tr></table></figure>
+<h3 id="分页查询优化">分页查询优化</h3>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 慢查询: 深分页</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> orders <span class="hljs-keyword">ORDER</span> <span class="hljs-keyword">BY</span> created_at <span class="hljs-keyword">DESC</span> LIMIT <span class="hljs-number">500000</span>, <span class="hljs-number">20</span>;<br><span class="hljs-comment">-- 实际扫描 500020 行</span><br><br><span class="hljs-comment">-- 优化方案1: 延迟关联（deferred join）</span><br><span class="hljs-keyword">SELECT</span> o.<span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> orders o<br><span class="hljs-keyword">INNER</span> <span class="hljs-keyword">JOIN</span> (<br>    <span class="hljs-keyword">SELECT</span> id <span class="hljs-keyword">FROM</span> orders <span class="hljs-keyword">ORDER</span> <span class="hljs-keyword">BY</span> created_at <span class="hljs-keyword">DESC</span> LIMIT <span class="hljs-number">500000</span>, <span class="hljs-number">20</span><br>) t <span class="hljs-keyword">ON</span> o.id <span class="hljs-operator">=</span> t.id;<br><span class="hljs-comment">-- 子查询使用覆盖索引，只扫描索引不回表</span><br><br><span class="hljs-comment">-- 优化方案2: 游标分页（keyset pagination）</span><br><span class="hljs-comment">-- 前端传递上一页最后一条记录的标识</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> orders<br><span class="hljs-keyword">WHERE</span> created_at <span class="hljs-operator">&lt;</span> <span class="hljs-string">&#x27;2025-03-15 10:30:00&#x27;</span><br>    <span class="hljs-keyword">OR</span> (created_at <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;2025-03-15 10:30:00&#x27;</span> <span class="hljs-keyword">AND</span> id <span class="hljs-operator">&lt;</span> <span class="hljs-number">12345</span>)<br><span class="hljs-keyword">ORDER</span> <span class="hljs-keyword">BY</span> created_at <span class="hljs-keyword">DESC</span>, id <span class="hljs-keyword">DESC</span><br>LIMIT <span class="hljs-number">20</span>;<br><br><span class="hljs-comment">-- 优化方案3: 业务层面限制（不允许跳页）</span><br><span class="hljs-comment">-- 只提供&quot;上一页&quot;和&quot;下一页&quot;按钮</span><br></code></pre></td></tr></table></figure>
+<pre class="mermaid">sequenceDiagram
+    participant App as 应用层
+    participant DB as MySQL
+
+    Note over App, DB: 传统分页 LIMIT offset, size
+    App-&gt;&gt;DB: SELECT * FROM orders LIMIT 500000, 20
+    DB-&gt;&gt;DB: 扫描500020行,丢弃前500000行
+    DB-&gt;&gt;App: 返回20行
+
+    Note over App, DB: 游标分页 Keyset Pagination
+    App-&gt;&gt;DB: SELECT * FROM orders WHERE id &lt; 12345 LIMIT 20
+    DB-&gt;&gt;DB: 通过索引直接定位,扫描20行
+    DB-&gt;&gt;App: 返回20行</pre>
+<h3 id="count-优化">COUNT 优化</h3>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- COUNT(*) vs COUNT(1) vs COUNT(column)</span><br><span class="hljs-comment">-- COUNT(*) 和 COUNT(1) 完全等价，MySQL会自动优化</span><br><span class="hljs-comment">-- COUNT(column) 会排除 NULL 值</span><br><br><span class="hljs-comment">-- 精确计数的优化</span><br><span class="hljs-comment">-- 方案1: 使用覆盖索引</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-built_in">COUNT</span>(<span class="hljs-operator">*</span>) <span class="hljs-keyword">FROM</span> orders <span class="hljs-keyword">WHERE</span> status <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;paid&#x27;</span>;<br><span class="hljs-comment">-- 确保 status 有索引</span><br><br><span class="hljs-comment">-- 方案2: 近似计数（适用于不需要精确值的场景）</span><br><span class="hljs-keyword">SHOW</span> <span class="hljs-keyword">TABLE</span> STATUS <span class="hljs-keyword">LIKE</span> <span class="hljs-string">&#x27;orders&#x27;</span>;  <span class="hljs-comment">-- Rows 列是近似值</span><br><br><span class="hljs-comment">-- 方案3: 维护计数表（适用于频繁统计的场景）</span><br><span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">TABLE</span> order_counts (<br>    status <span class="hljs-type">VARCHAR</span>(<span class="hljs-number">20</span>) <span class="hljs-keyword">PRIMARY</span> KEY,<br>    cnt <span class="hljs-type">BIGINT</span> <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span> <span class="hljs-keyword">DEFAULT</span> <span class="hljs-number">0</span><br>);<br><span class="hljs-comment">-- 每次INSERT/UPDATE/DELETE orders时同步更新计数表</span><br></code></pre></td></tr></table></figure>
+<h3 id="group-by-与-order-by-优化">GROUP BY 与 ORDER BY 优化</h3>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- Using filesort 优化</span><br><span class="hljs-comment">-- 确保 GROUP BY / ORDER BY 使用的列与索引顺序一致</span><br><br><span class="hljs-comment">-- 索引: idx_user_status(user_id, status)</span><br><span class="hljs-comment">-- 可以利用索引排序</span><br><span class="hljs-keyword">SELECT</span> user_id, status, <span class="hljs-built_in">COUNT</span>(<span class="hljs-operator">*</span>) <span class="hljs-keyword">FROM</span> orders<br><span class="hljs-keyword">WHERE</span> user_id <span class="hljs-keyword">IN</span> (<span class="hljs-number">1</span>, <span class="hljs-number">2</span>, <span class="hljs-number">3</span>)<br><span class="hljs-keyword">GROUP</span> <span class="hljs-keyword">BY</span> user_id, status;<br><br><span class="hljs-comment">-- 不能利用索引排序（顺序不匹配）</span><br><span class="hljs-keyword">SELECT</span> user_id, status, <span class="hljs-built_in">COUNT</span>(<span class="hljs-operator">*</span>) <span class="hljs-keyword">FROM</span> orders<br><span class="hljs-keyword">WHERE</span> user_id <span class="hljs-keyword">IN</span> (<span class="hljs-number">1</span>, <span class="hljs-number">2</span>, <span class="hljs-number">3</span>)<br><span class="hljs-keyword">GROUP</span> <span class="hljs-keyword">BY</span> status, user_id;<br><br><span class="hljs-comment">-- Using temporary 优化</span><br><span class="hljs-comment">-- GROUP BY 和 ORDER BY 的列不同时，会产生临时表</span><br><span class="hljs-keyword">SELECT</span> user_id, <span class="hljs-built_in">COUNT</span>(<span class="hljs-operator">*</span>) <span class="hljs-keyword">AS</span> cnt <span class="hljs-keyword">FROM</span> orders<br><span class="hljs-keyword">GROUP</span> <span class="hljs-keyword">BY</span> user_id<br><span class="hljs-keyword">ORDER</span> <span class="hljs-keyword">BY</span> cnt <span class="hljs-keyword">DESC</span><br>LIMIT <span class="hljs-number">10</span>;<br><span class="hljs-comment">-- 优化: 使用派生表</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> (<br>    <span class="hljs-keyword">SELECT</span> user_id, <span class="hljs-built_in">COUNT</span>(<span class="hljs-operator">*</span>) <span class="hljs-keyword">AS</span> cnt <span class="hljs-keyword">FROM</span> orders <span class="hljs-keyword">GROUP</span> <span class="hljs-keyword">BY</span> user_id<br>) t <span class="hljs-keyword">ORDER</span> <span class="hljs-keyword">BY</span> cnt <span class="hljs-keyword">DESC</span> LIMIT <span class="hljs-number">10</span>;<br></code></pre></td></tr></table></figure>
+<h3 id="or-条件优化">OR 条件优化</h3>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- OR 可能导致索引失效</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> orders <span class="hljs-keyword">WHERE</span> user_id <span class="hljs-operator">=</span> <span class="hljs-number">1</span> <span class="hljs-keyword">OR</span> status <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;paid&#x27;</span>;<br><span class="hljs-comment">-- 如果 user_id 和 status 分别有索引，MySQL可能用 Index Merge</span><br><span class="hljs-comment">-- 但效率不如联合索引</span><br><br><span class="hljs-comment">-- 优化方案1: UNION ALL 替代 OR</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> orders <span class="hljs-keyword">WHERE</span> user_id <span class="hljs-operator">=</span> <span class="hljs-number">1</span><br><span class="hljs-keyword">UNION</span> <span class="hljs-keyword">ALL</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> orders <span class="hljs-keyword">WHERE</span> status <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;paid&#x27;</span> <span class="hljs-keyword">AND</span> user_id <span class="hljs-operator">!=</span> <span class="hljs-number">1</span>;<br><br><span class="hljs-comment">-- 优化方案2: 设计合理的联合索引</span><br><span class="hljs-keyword">ALTER</span> <span class="hljs-keyword">TABLE</span> orders <span class="hljs-keyword">ADD</span> INDEX idx_user_status(user_id, status);<br></code></pre></td></tr></table></figure>
+<h2 id="实战慢查询分析流程">实战：慢查询分析流程</h2>
+<pre class="mermaid">flowchart TD
+    A[发现慢查询] --&gt; B[慢查询日志/监控告警]
+    B --&gt; C[EXPLAIN 分析执行计划]
+    C --&gt; D{type 是 ALL?}
+    D --&gt;|是| E[添加合适的索引]
+    D --&gt;|否| F{Extra 有 filesort/temporary?}
+    F --&gt;|是| G[优化 ORDER BY/GROUP BY]
+    F --&gt;|否| H{rows 行数过大?}
+    H --&gt;|是| I[检查索引选择性&lt;br/&gt;考虑SQL重写]
+    H --&gt;|否| J{key_len 合理?}
+    J --&gt;|否| K[检查联合索引使用情况]
+    J --&gt;|是| L[检查是否回表过多]
+    L --&gt; M{覆盖索引可行?}
+    M --&gt;|是| N[调整索引覆盖查询列]
+    M --&gt;|否| O[考虑业务层优化&lt;br/&gt;缓存/异步/分页]
+    E --&gt; P[验证优化效果]
+    G --&gt; P
+    I --&gt; P
+    K --&gt; P
+    N --&gt; P
+    O --&gt; P</pre>
+<h3 id="实际案例">实际案例</h3>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 原始慢查询（执行时间 3.2s）</span><br><span class="hljs-keyword">SELECT</span> o.id, o.order_no, o.amount, o.created_at, u.name, u.phone<br><span class="hljs-keyword">FROM</span> orders o<br><span class="hljs-keyword">LEFT</span> <span class="hljs-keyword">JOIN</span> users u <span class="hljs-keyword">ON</span> o.user_id <span class="hljs-operator">=</span> u.id<br><span class="hljs-keyword">WHERE</span> o.created_at <span class="hljs-operator">&gt;=</span> <span class="hljs-string">&#x27;2025-01-01&#x27;</span><br>    <span class="hljs-keyword">AND</span> o.status <span class="hljs-keyword">IN</span> (<span class="hljs-string">&#x27;paid&#x27;</span>, <span class="hljs-string">&#x27;shipped&#x27;</span>)<br><span class="hljs-keyword">ORDER</span> <span class="hljs-keyword">BY</span> o.amount <span class="hljs-keyword">DESC</span><br>LIMIT <span class="hljs-number">20</span>;<br><br><span class="hljs-comment">-- 第一步: EXPLAIN分析</span><br><span class="hljs-comment">-- type=ALL, Using where; Using temporary; Using filesort</span><br><span class="hljs-comment">-- 问题: 无合适索引，全表扫描 + 临时表 + 文件排序</span><br><br><span class="hljs-comment">-- 第二步: 创建索引</span><br><span class="hljs-keyword">ALTER</span> <span class="hljs-keyword">TABLE</span> orders <span class="hljs-keyword">ADD</span> INDEX idx_status_created(status, created_at);<br><br><span class="hljs-comment">-- 第三步: 重新EXPLAIN</span><br><span class="hljs-comment">-- type=range, key=idx_status_created</span><br><span class="hljs-comment">-- 但仍有 Using filesort（ORDER BY amount 不在索引中）</span><br><br><span class="hljs-comment">-- 第四步: 进一步优化</span><br><span class="hljs-comment">-- 方案A: 如果 status 的值固定，可以拆分查询</span><br><span class="hljs-keyword">SELECT</span> o.id, o.order_no, o.amount, o.created_at, u.name, u.phone<br><span class="hljs-keyword">FROM</span> orders o<br><span class="hljs-keyword">JOIN</span> users u <span class="hljs-keyword">ON</span> o.user_id <span class="hljs-operator">=</span> u.id<br><span class="hljs-keyword">WHERE</span> o.status <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;paid&#x27;</span> <span class="hljs-keyword">AND</span> o.created_at <span class="hljs-operator">&gt;=</span> <span class="hljs-string">&#x27;2025-01-01&#x27;</span><br><span class="hljs-keyword">UNION</span> <span class="hljs-keyword">ALL</span><br><span class="hljs-keyword">SELECT</span> o.id, o.order_no, o.amount, o.created_at, u.name, u.phone<br><span class="hljs-keyword">FROM</span> orders o<br><span class="hljs-keyword">JOIN</span> users u <span class="hljs-keyword">ON</span> o.user_id <span class="hljs-operator">=</span> u.id<br><span class="hljs-keyword">WHERE</span> o.status <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;shipped&#x27;</span> <span class="hljs-keyword">AND</span> o.created_at <span class="hljs-operator">&gt;=</span> <span class="hljs-string">&#x27;2025-01-01&#x27;</span><br><span class="hljs-keyword">ORDER</span> <span class="hljs-keyword">BY</span> amount <span class="hljs-keyword">DESC</span> LIMIT <span class="hljs-number">20</span>;<br><br><span class="hljs-comment">-- 方案B: 使用延迟关联减少回表和排序数据量</span><br><span class="hljs-keyword">SELECT</span> o.id, o.order_no, o.amount, o.created_at, u.name, u.phone<br><span class="hljs-keyword">FROM</span> orders o<br><span class="hljs-keyword">JOIN</span> users u <span class="hljs-keyword">ON</span> o.user_id <span class="hljs-operator">=</span> u.id<br><span class="hljs-keyword">JOIN</span> (<br>    <span class="hljs-keyword">SELECT</span> id <span class="hljs-keyword">FROM</span> orders<br>    <span class="hljs-keyword">WHERE</span> status <span class="hljs-keyword">IN</span> (<span class="hljs-string">&#x27;paid&#x27;</span>, <span class="hljs-string">&#x27;shipped&#x27;</span>) <span class="hljs-keyword">AND</span> created_at <span class="hljs-operator">&gt;=</span> <span class="hljs-string">&#x27;2025-01-01&#x27;</span><br>    <span class="hljs-keyword">ORDER</span> <span class="hljs-keyword">BY</span> amount <span class="hljs-keyword">DESC</span> LIMIT <span class="hljs-number">20</span><br>) t <span class="hljs-keyword">ON</span> o.id <span class="hljs-operator">=</span> t.id;<br><span class="hljs-comment">-- 子查询在索引内完成过滤，只对20行做JOIN和回表</span><br></code></pre></td></tr></table></figure>
+<h2 id="总结">总结</h2>
+<p>MySQL查询优化是一个从分析到验证的闭环过程：</p>
+<ul>
+<li><strong>EXPLAIN是诊断利器</strong>：重点关注type、key、rows、Extra四个字段</li>
+<li><strong>索引是优化基础</strong>：合理的索引设计可以解决90%的慢查询问题</li>
+<li><strong>SQL重写是进阶手段</strong>：JOIN优化、子查询转换、分页优化等技巧需要根据具体场景选择</li>
+<li><strong>优化器Hints是最后手段</strong>：当优化器判断不准确时，通过Hint引导执行计划</li>
+<li><strong>EXPLAIN ANALYZE</strong>（MySQL
+8.0.18+）提供了实际执行统计，是验证优化效果的最佳工具</li>
+<li>不要忽视<strong>业务层面的优化</strong>：缓存、异步处理、合理分页等同样重要</li>
+</ul>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2024-11-27</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">3.6k 字 · 9 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/java-classloader/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Java类加载机制与自定义ClassLoader</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/java-gc-tuning/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">JVM垃圾回收器选择与调优实战</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#mysql-%E6%9F%A5%E8%AF%A2%E6%89%A7%E8%A1%8C%E8%BF%87%E7%A8%8B"><span class="toc-text">MySQL 查询执行过程</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BC%98%E5%8C%96%E5%99%A8%E7%9A%84%E5%B7%A5%E4%BD%9C"><span class="toc-text">优化器的工作</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#explain-%E8%AF%A6%E7%BB%86%E8%A7%A3%E8%AF%BB"><span class="toc-text">EXPLAIN 详细解读</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#explain-%E5%90%84%E5%88%97%E5%AE%8C%E6%95%B4%E8%AF%B4%E6%98%8E"><span class="toc-text">EXPLAIN 各列完整说明</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#explain-formatjsontree"><span class="toc-text">EXPLAIN FORMAT&#x3D;JSON&#x2F;TREE</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BC%98%E5%8C%96%E5%99%A8-hints"><span class="toc-text">优化器 Hints</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#sql-%E9%87%8D%E5%86%99%E4%BC%98%E5%8C%96%E6%8A%80%E5%B7%A7"><span class="toc-text">SQL 重写优化技巧</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#join-%E4%BC%98%E5%8C%96"><span class="toc-text">JOIN 优化</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#nested-loop-join-%E5%8E%9F%E7%90%86"><span class="toc-text">Nested Loop Join 原理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AD%90%E6%9F%A5%E8%AF%A2%E4%BC%98%E5%8C%96"><span class="toc-text">子查询优化</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%88%86%E9%A1%B5%E6%9F%A5%E8%AF%A2%E4%BC%98%E5%8C%96"><span class="toc-text">分页查询优化</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#count-%E4%BC%98%E5%8C%96"><span class="toc-text">COUNT 优化</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#group-by-%E4%B8%8E-order-by-%E4%BC%98%E5%8C%96"><span class="toc-text">GROUP BY 与 ORDER BY 优化</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#or-%E6%9D%A1%E4%BB%B6%E4%BC%98%E5%8C%96"><span class="toc-text">OR 条件优化</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E6%88%98%E6%85%A2%E6%9F%A5%E8%AF%A2%E5%88%86%E6%9E%90%E6%B5%81%E7%A8%8B"><span class="toc-text">实战：慢查询分析流程</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%9E%E9%99%85%E6%A1%88%E4%BE%8B"><span class="toc-text">实际案例</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

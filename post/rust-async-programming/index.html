@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rust异步编程：从Future到Tokio · zt&#39;s Blog</title>
+  <meta name="description" content="深入解析Rust异步编程模型，涵盖Future trait、async/await语法、Pin机制、Tokio运行时、任务调度和异步错误处理。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/rust-async-programming/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Rust异步编程：从Future到Tokio">
+  <meta property="og:description" content="深入解析Rust异步编程模型，涵盖Future trait、async/await语法、Pin机制、Tokio运行时、任务调度和异步错误处理。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/rust-async-programming/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2025-08-05T16:00:00.000Z">
+  <meta property="article:modified_time" content="2025-08-05T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Rust异步编程：从Future到Tokio">
+  <meta name="twitter:description" content="深入解析Rust异步编程模型，涵盖Future trait、async/await语法、Pin机制、Tokio运行时、任务调度和异步错误处理。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Rust异步编程：从Future到Tokio","description":"深入解析Rust异步编程模型，涵盖Future trait、async/await语法、Pin机制、Tokio运行时、任务调度和异步错误处理。","datePublished":"2025-08-05T16:00:00.000Z","dateModified":"2025-08-05T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/rust-async-programming/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Rust","item":"https://withesse.co/categories/Rust/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:18">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Rust/">Rust</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/async/"><span class="hash">#</span>async</a><a class="tag" href="/tags/rust/"><span class="hash">#</span>rust</a><a class="tag" href="/tags/tokio/"><span class="hash">#</span>tokio</a><a class="tag" href="/tags/future/"><span class="hash">#</span>future</a>
+        
+      </div>
+
+      <h1>Rust异步编程：从Future到Tokio</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2025.08.06</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          <span class="row gap8" style="align-items:center"><span class="lang-dot" style="background:#DEA584"></span>Rust</span>
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 8 min</span>
+        </span>
+        <span class="wc"><span class="num">3.0k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%82%E6%AD%A5%E7%BC%96%E7%A8%8B%E6%A8%A1%E5%9E%8B%E5%AF%B9%E6%AF%94"><span class="toc-text">异步编程模型对比</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#future-trait"><span class="toc-text">Future Trait</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%89%8B%E5%8A%A8%E5%AE%9E%E7%8E%B0future"><span class="toc-text">手动实现Future</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#asyncawait"><span class="toc-text">async&#x2F;await</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#async%E5%9D%97"><span class="toc-text">async块</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#async%E7%8A%B6%E6%80%81%E6%9C%BA"><span class="toc-text">async状态机</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#pin"><span class="toc-text">Pin</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#tokio%E8%BF%90%E8%A1%8C%E6%97%B6"><span class="toc-text">Tokio运行时</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BB%BB%E5%8A%A1%E8%B0%83%E5%BA%A6task-spawning"><span class="toc-text">任务调度（Task Spawning）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#channels"><span class="toc-text">Channels</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#select%E5%AE%8F"><span class="toc-text">select!宏</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%82%E6%AD%A5%E9%94%99%E8%AF%AF%E5%A4%84%E7%90%86"><span class="toc-text">异步错误处理</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E6%88%98%E7%A4%BA%E4%BE%8B%E5%B9%B6%E5%8F%91http%E7%88%AC%E8%99%AB"><span class="toc-text">实战示例：并发HTTP爬虫</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%B8%B8%E8%A7%81%E9%99%B7%E9%98%B1"><span class="toc-text">常见陷阱</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="前言">前言</h2>
+<p>Rust的异步编程模型基于零成本抽象的Future
+trait。与Go的goroutine和Node.js的事件循环不同，Rust的async/await在编译期转换为状态机，没有运行时开销。本文将从Future
+trait开始，深入到Tokio运行时的使用实践。</p>
+<h2 id="异步编程模型对比">异步编程模型对比</h2>
+<pre class="mermaid">graph TB
+    subgraph "Go: Goroutine"
+        GR[goroutine&lt;br&gt;轻量级线程] --&gt; GRT[Go Runtime&lt;br&gt;调度器]
+        GRT --&gt; OS1[OS Threads]
+    end
+
+    subgraph "Node.js: Event Loop"
+        CB[Callbacks/Promises] --&gt; EL[Event Loop&lt;br&gt;单线程]
+        EL --&gt; LIBUV[libuv&lt;br&gt;线程池]
+    end
+
+    subgraph "Rust: Future + Executor"
+        FUT[Future&lt;br&gt;状态机] --&gt; EXEC[Executor&lt;br&gt;如Tokio]
+        EXEC --&gt; OS2[OS Threads&lt;br&gt;多线程运行时]
+    end</pre>
+<p>Rust的async模型特点： -
+<strong>零成本抽象</strong>：async函数编译为状态机，无堆分配 -
+<strong>惰性求值</strong>：Future不poll就不执行 -
+<strong>无运行时依赖</strong>：核心语言不包含运行时，用户选择（Tokio/async-std）</p>
+<h2 id="future-trait">Future Trait</h2>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><code class="hljs rust"><span class="hljs-comment">// Future trait定义</span><br><span class="hljs-keyword">pub</span> <span class="hljs-keyword">trait</span> <span class="hljs-title class_">Future</span> &#123;<br>    <span class="hljs-keyword">type</span> <span class="hljs-title class_">Output</span>;<br><br>    <span class="hljs-keyword">fn</span> <span class="hljs-title function_">poll</span>(<span class="hljs-keyword">self</span>: Pin&lt;&amp;<span class="hljs-keyword">mut</span> <span class="hljs-keyword">Self</span>&gt;, cx: &amp;<span class="hljs-keyword">mut</span> Context&lt;<span class="hljs-symbol">&#x27;_</span>&gt;) <span class="hljs-punctuation">-&gt;</span> Poll&lt;<span class="hljs-keyword">Self</span>::Output&gt;;<br>&#125;<br><br><span class="hljs-keyword">pub</span> <span class="hljs-keyword">enum</span> <span class="hljs-title class_">Poll</span>&lt;T&gt; &#123;<br>    <span class="hljs-title function_ invoke__">Ready</span>(T),    <span class="hljs-comment">// 完成，返回结果</span><br>    Pending,     <span class="hljs-comment">// 未完成，稍后再试</span><br>&#125;<br></code></pre></td></tr></table></figure>
+<pre class="mermaid">sequenceDiagram
+    participant E as Executor
+    participant F as Future
+    participant W as Waker
+
+    E-&gt;&gt;F: poll()
+    F--&gt;&gt;E: Poll::Pending
+    Note over F: 注册Waker，等待I/O
+
+    Note over F: I/O完成
+    F-&gt;&gt;W: wake()
+    W-&gt;&gt;E: 通知Future就绪
+
+    E-&gt;&gt;F: poll()
+    F--&gt;&gt;E: Poll::Ready(value)</pre>
+<h3 id="手动实现future">手动实现Future</h3>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br></pre></td><td class="code"><pre><code class="hljs rust"><span class="hljs-keyword">use</span> std::future::Future;<br><span class="hljs-keyword">use</span> std::pin::Pin;<br><span class="hljs-keyword">use</span> std::task::&#123;Context, Poll&#125;;<br><span class="hljs-keyword">use</span> std::time::&#123;Duration, Instant&#125;;<br><br><span class="hljs-comment">// 自定义计时器Future</span><br><span class="hljs-keyword">struct</span> <span class="hljs-title class_">Delay</span> &#123;<br>    when: Instant,<br>&#125;<br><br><span class="hljs-keyword">impl</span> <span class="hljs-title class_">Delay</span> &#123;<br>    <span class="hljs-keyword">fn</span> <span class="hljs-title function_">new</span>(duration: Duration) <span class="hljs-punctuation">-&gt;</span> <span class="hljs-keyword">Self</span> &#123;<br>        Delay &#123;<br>            when: Instant::<span class="hljs-title function_ invoke__">now</span>() + duration,<br>        &#125;<br>    &#125;<br>&#125;<br><br><span class="hljs-keyword">impl</span> <span class="hljs-title class_">Future</span> <span class="hljs-keyword">for</span> <span class="hljs-title class_">Delay</span> &#123;<br>    <span class="hljs-keyword">type</span> <span class="hljs-title class_">Output</span> = ();<br><br>    <span class="hljs-keyword">fn</span> <span class="hljs-title function_">poll</span>(<span class="hljs-keyword">self</span>: Pin&lt;&amp;<span class="hljs-keyword">mut</span> <span class="hljs-keyword">Self</span>&gt;, cx: &amp;<span class="hljs-keyword">mut</span> Context&lt;<span class="hljs-symbol">&#x27;_</span>&gt;) <span class="hljs-punctuation">-&gt;</span> Poll&lt;()&gt; &#123;<br>        <span class="hljs-keyword">if</span> Instant::<span class="hljs-title function_ invoke__">now</span>() &gt;= <span class="hljs-keyword">self</span>.when &#123;<br>            Poll::<span class="hljs-title function_ invoke__">Ready</span>(())<br>        &#125; <span class="hljs-keyword">else</span> &#123;<br>            <span class="hljs-comment">// 注册waker，当时间到时唤醒</span><br>            <span class="hljs-keyword">let</span> <span class="hljs-variable">waker</span> = cx.<span class="hljs-title function_ invoke__">waker</span>().<span class="hljs-title function_ invoke__">clone</span>();<br>            <span class="hljs-keyword">let</span> <span class="hljs-variable">when</span> = <span class="hljs-keyword">self</span>.when;<br>            std::thread::<span class="hljs-title function_ invoke__">spawn</span>(<span class="hljs-keyword">move</span> || &#123;<br>                <span class="hljs-keyword">let</span> <span class="hljs-variable">now</span> = Instant::<span class="hljs-title function_ invoke__">now</span>();<br>                <span class="hljs-keyword">if</span> now &lt; when &#123;<br>                    std::thread::<span class="hljs-title function_ invoke__">sleep</span>(when - now);<br>                &#125;<br>                waker.<span class="hljs-title function_ invoke__">wake</span>();<br>            &#125;);<br>            Poll::Pending<br>        &#125;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="asyncawait">async/await</h2>
+<p><code>async fn</code>返回一个实现了<code>Future</code>的匿名类型。<code>await</code>暂停执行直到Future完成。</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><code class="hljs rust"><span class="hljs-comment">// async函数</span><br><span class="hljs-keyword">async</span> <span class="hljs-keyword">fn</span> <span class="hljs-title function_">fetch_data</span>(url: &amp;<span class="hljs-type">str</span>) <span class="hljs-punctuation">-&gt;</span> <span class="hljs-type">Result</span>&lt;<span class="hljs-type">String</span>, reqwest::Error&gt; &#123;<br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">response</span> = reqwest::<span class="hljs-title function_ invoke__">get</span>(url).<span class="hljs-keyword">await</span>?;<br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">body</span> = response.<span class="hljs-title function_ invoke__">text</span>().<span class="hljs-keyword">await</span>?;<br>    <span class="hljs-title function_ invoke__">Ok</span>(body)<br>&#125;<br><br><span class="hljs-comment">// 等价于（编译器生成的状态机，简化）</span><br><span class="hljs-comment">// fn fetch_data(url: &amp;str) -&gt; impl Future&lt;Output = Result&lt;String, reqwest::Error&gt;&gt; &#123;</span><br><span class="hljs-comment">//     // 状态机，包含每个await点的状态</span><br><span class="hljs-comment">// &#125;</span><br></code></pre></td></tr></table></figure>
+<h3 id="async块">async块</h3>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs rust"><span class="hljs-comment">// async块创建匿名Future</span><br><span class="hljs-keyword">let</span> <span class="hljs-variable">future</span> = <span class="hljs-keyword">async</span> &#123;<br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">data</span> = <span class="hljs-title function_ invoke__">fetch_data</span>(<span class="hljs-string">&quot;https://example.com&quot;</span>).<span class="hljs-keyword">await</span>?;<br>    <span class="hljs-title function_ invoke__">process</span>(data).<span class="hljs-keyword">await</span>?;<br>    Ok::&lt;(), anyhow::Error&gt;(())<br>&#125;;<br></code></pre></td></tr></table></figure>
+<h3 id="async状态机">async状态机</h3>
+<pre class="mermaid">stateDiagram-v2
+    [*] --&gt; State0: 初始状态
+    State0 --&gt; State1: await fetch_data()
+    State1 --&gt; State2: await process()
+    State2 --&gt; [*]: 完成
+
+    note right of State0: 局部变量存储在状态中
+    note right of State1: 跨await点的变量保存在状态机中</pre>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br></pre></td><td class="code"><pre><code class="hljs rust"><span class="hljs-comment">// 编译器将async函数转换为状态机（概念示意）</span><br><span class="hljs-keyword">enum</span> <span class="hljs-title class_">FetchAndProcess</span> &#123;<br>    State0 &#123; url: <span class="hljs-type">String</span> &#125;,<br>    State1 &#123; fetch_future: FetchFuture, url: <span class="hljs-type">String</span> &#125;,<br>    State2 &#123; process_future: ProcessFuture &#125;,<br>    Complete,<br>&#125;<br><br><span class="hljs-keyword">impl</span> <span class="hljs-title class_">Future</span> <span class="hljs-keyword">for</span> <span class="hljs-title class_">FetchAndProcess</span> &#123;<br>    <span class="hljs-keyword">type</span> <span class="hljs-title class_">Output</span> = <span class="hljs-type">Result</span>&lt;(), Error&gt;;<br><br>    <span class="hljs-keyword">fn</span> <span class="hljs-title function_">poll</span>(<span class="hljs-keyword">self</span>: Pin&lt;&amp;<span class="hljs-keyword">mut</span> <span class="hljs-keyword">Self</span>&gt;, cx: &amp;<span class="hljs-keyword">mut</span> Context&lt;<span class="hljs-symbol">&#x27;_</span>&gt;) <span class="hljs-punctuation">-&gt;</span> Poll&lt;<span class="hljs-keyword">Self</span>::Output&gt; &#123;<br>        <span class="hljs-keyword">loop</span> &#123;<br>            <span class="hljs-keyword">match</span> <span class="hljs-keyword">self</span>.state &#123;<br>                State0 &#123; <span class="hljs-keyword">ref</span> url &#125; =&gt; &#123;<br>                    <span class="hljs-keyword">let</span> <span class="hljs-variable">fetch_future</span> = <span class="hljs-title function_ invoke__">fetch_data</span>(url);<br>                    <span class="hljs-keyword">self</span>.state = State1 &#123; fetch_future, url: url.<span class="hljs-title function_ invoke__">clone</span>() &#125;;<br>                &#125;<br>                State1 &#123; <span class="hljs-keyword">ref</span> <span class="hljs-keyword">mut</span> fetch_future, .. &#125; =&gt; &#123;<br>                    <span class="hljs-keyword">match</span> Pin::<span class="hljs-title function_ invoke__">new</span>(fetch_future).<span class="hljs-title function_ invoke__">poll</span>(cx) &#123;<br>                        Poll::<span class="hljs-title function_ invoke__">Ready</span>(data) =&gt; &#123;<br>                            <span class="hljs-keyword">let</span> <span class="hljs-variable">process_future</span> = <span class="hljs-title function_ invoke__">process</span>(data);<br>                            <span class="hljs-keyword">self</span>.state = State2 &#123; process_future &#125;;<br>                        &#125;<br>                        Poll::Pending =&gt; <span class="hljs-keyword">return</span> Poll::Pending,<br>                    &#125;<br>                &#125;<br>                State2 &#123; <span class="hljs-keyword">ref</span> <span class="hljs-keyword">mut</span> process_future &#125; =&gt; &#123;<br>                    <span class="hljs-keyword">match</span> Pin::<span class="hljs-title function_ invoke__">new</span>(process_future).<span class="hljs-title function_ invoke__">poll</span>(cx) &#123;<br>                        Poll::<span class="hljs-title function_ invoke__">Ready</span>(result) =&gt; &#123;<br>                            <span class="hljs-keyword">self</span>.state = Complete;<br>                            <span class="hljs-keyword">return</span> Poll::<span class="hljs-title function_ invoke__">Ready</span>(result);<br>                        &#125;<br>                        Poll::Pending =&gt; <span class="hljs-keyword">return</span> Poll::Pending,<br>                    &#125;<br>                &#125;<br>                Complete =&gt; <span class="hljs-built_in">panic!</span>(<span class="hljs-string">&quot;polled after completion&quot;</span>),<br>            &#125;<br>        &#125;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="pin">Pin</h2>
+<p>Pin确保值在内存中的位置不会改变，这对自引用的Future（跨await点持有引用）至关重要。</p>
+<pre class="mermaid">graph TB
+    subgraph "自引用结构问题"
+        S1[Future State] --&gt; |field: data| D1[String data]
+        S1 --&gt; |field: ref_to_data| REF1[&amp;data]
+        REF1 -.-&gt;|指向| D1
+
+        NOTE1[如果Future被移动&lt;br&gt;ref_to_data变成悬垂引用]
+    end
+
+    subgraph "Pin的保证"
+        PIN[Pin&lt;&amp;mut Future&gt;] --&gt; S2[Future State]
+        S2 --&gt; D2[String data]
+        S2 --&gt; REF2[&amp;data]
+        REF2 -.-&gt;|安全指向| D2
+
+        NOTE2[Pin保证Future不会被移动&lt;br&gt;自引用始终有效]
+    end</pre>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><code class="hljs rust"><span class="hljs-keyword">use</span> std::pin::Pin;<br><br><span class="hljs-comment">// Pin的基本使用</span><br><span class="hljs-keyword">let</span> <span class="hljs-keyword">mut </span><span class="hljs-variable">future</span> = <span class="hljs-type">Box</span>::<span class="hljs-title function_ invoke__">pin</span>(<span class="hljs-keyword">async</span> &#123;<br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">data</span> = <span class="hljs-type">String</span>::<span class="hljs-title function_ invoke__">from</span>(<span class="hljs-string">&quot;hello&quot;</span>);<br>    <span class="hljs-comment">// data的引用跨越了await点</span><br>    <span class="hljs-title function_ invoke__">some_async_fn</span>(&amp;data).<span class="hljs-keyword">await</span>;<br>    <span class="hljs-built_in">println!</span>(<span class="hljs-string">&quot;&#123;&#125;&quot;</span>, data);<br>&#125;);<br><br><span class="hljs-comment">// 大多数情况下，你不需要直接操作Pin</span><br><span class="hljs-comment">// async/await和tokio::spawn会自动处理</span><br></code></pre></td></tr></table></figure>
+<h2 id="tokio运行时">Tokio运行时</h2>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br></pre></td><td class="code"><pre><code class="hljs rust"><span class="hljs-comment">// Cargo.toml</span><br><span class="hljs-comment">// [dependencies]</span><br><span class="hljs-comment">// tokio = &#123; version = &quot;1&quot;, features = [&quot;full&quot;] &#125;</span><br><br><span class="hljs-comment">// 多线程运行时（默认）</span><br><span class="hljs-meta">#[tokio::main]</span><br><span class="hljs-keyword">async</span> <span class="hljs-keyword">fn</span> <span class="hljs-title function_">main</span>() &#123;<br>    <span class="hljs-built_in">println!</span>(<span class="hljs-string">&quot;Hello from Tokio!&quot;</span>);<br>&#125;<br><br><span class="hljs-comment">// 等价于</span><br><span class="hljs-keyword">fn</span> <span class="hljs-title function_">main</span>() &#123;<br>    tokio::runtime::Builder::<span class="hljs-title function_ invoke__">new_multi_thread</span>()<br>        .<span class="hljs-title function_ invoke__">enable_all</span>()<br>        .<span class="hljs-title function_ invoke__">build</span>()<br>        .<span class="hljs-title function_ invoke__">unwrap</span>()<br>        .<span class="hljs-title function_ invoke__">block_on</span>(<span class="hljs-keyword">async</span> &#123;<br>            <span class="hljs-built_in">println!</span>(<span class="hljs-string">&quot;Hello from Tokio!&quot;</span>);<br>        &#125;);<br>&#125;<br><br><span class="hljs-comment">// 单线程运行时（适合不需要多线程的场景）</span><br><span class="hljs-meta">#[tokio::main(flavor = <span class="hljs-string">&quot;current_thread&quot;</span>)]</span><br><span class="hljs-keyword">async</span> <span class="hljs-keyword">fn</span> <span class="hljs-title function_">main</span>() &#123;<br>    <span class="hljs-built_in">println!</span>(<span class="hljs-string">&quot;Single-threaded Tokio!&quot;</span>);<br>&#125;<br><br><span class="hljs-comment">// 自定义运行时配置</span><br><span class="hljs-keyword">fn</span> <span class="hljs-title function_">main</span>() &#123;<br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">runtime</span> = tokio::runtime::Builder::<span class="hljs-title function_ invoke__">new_multi_thread</span>()<br>        .<span class="hljs-title function_ invoke__">worker_threads</span>(<span class="hljs-number">4</span>)           <span class="hljs-comment">// 工作线程数</span><br>        .<span class="hljs-title function_ invoke__">max_blocking_threads</span>(<span class="hljs-number">128</span>)   <span class="hljs-comment">// 最大阻塞线程数</span><br>        .<span class="hljs-title function_ invoke__">enable_io</span>()                 <span class="hljs-comment">// 启用I/O</span><br>        .<span class="hljs-title function_ invoke__">enable_time</span>()               <span class="hljs-comment">// 启用定时器</span><br>        .<span class="hljs-title function_ invoke__">thread_name</span>(<span class="hljs-string">&quot;my-worker&quot;</span>)    <span class="hljs-comment">// 线程名称</span><br>        .<span class="hljs-title function_ invoke__">build</span>()<br>        .<span class="hljs-title function_ invoke__">unwrap</span>();<br><br>    runtime.<span class="hljs-title function_ invoke__">block_on</span>(<span class="hljs-keyword">async</span> &#123;<br>        <span class="hljs-comment">// 异步代码</span><br>    &#125;);<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="任务调度task-spawning">任务调度（Task Spawning）</h3>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><code class="hljs rust"><span class="hljs-keyword">use</span> tokio::task;<br><br><span class="hljs-meta">#[tokio::main]</span><br><span class="hljs-keyword">async</span> <span class="hljs-keyword">fn</span> <span class="hljs-title function_">main</span>() &#123;<br>    <span class="hljs-comment">// spawn: 创建新任务（类似goroutine）</span><br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">handle</span> = tokio::<span class="hljs-title function_ invoke__">spawn</span>(<span class="hljs-keyword">async</span> &#123;<br>        <span class="hljs-comment">// 在Tokio线程池中执行</span><br>        <span class="hljs-title function_ invoke__">expensive_computation</span>().<span class="hljs-keyword">await</span><br>    &#125;);<br><br>    <span class="hljs-comment">// 等待任务完成</span><br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">result</span> = handle.<span class="hljs-keyword">await</span>.<span class="hljs-title function_ invoke__">unwrap</span>();<br><br>    <span class="hljs-comment">// 并发执行多个任务</span><br>    <span class="hljs-keyword">let</span> (r1, r2, r3) = tokio::join!(<br>        <span class="hljs-title function_ invoke__">fetch_url</span>(<span class="hljs-string">&quot;https://api1.example.com&quot;</span>),<br>        <span class="hljs-title function_ invoke__">fetch_url</span>(<span class="hljs-string">&quot;https://api2.example.com&quot;</span>),<br>        <span class="hljs-title function_ invoke__">fetch_url</span>(<span class="hljs-string">&quot;https://api3.example.com&quot;</span>),<br>    );<br><br>    <span class="hljs-comment">// spawn_blocking: 在专用线程上运行阻塞代码</span><br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">result</span> = task::<span class="hljs-title function_ invoke__">spawn_blocking</span>(|| &#123;<br>        <span class="hljs-comment">// 阻塞操作，不会阻塞Tokio运行时</span><br>        std::thread::<span class="hljs-title function_ invoke__">sleep</span>(Duration::<span class="hljs-title function_ invoke__">from_secs</span>(<span class="hljs-number">1</span>));<br>        <span class="hljs-title function_ invoke__">heavy_cpu_work</span>()<br>    &#125;).<span class="hljs-keyword">await</span>.<span class="hljs-title function_ invoke__">unwrap</span>();<br>&#125;<br></code></pre></td></tr></table></figure>
+<pre class="mermaid">graph TB
+    subgraph "Tokio Multi-Thread Runtime"
+        SCHEDULER[Scheduler] --&gt; W1[Worker Thread 1]
+        SCHEDULER --&gt; W2[Worker Thread 2]
+        SCHEDULER --&gt; W3[Worker Thread 3]
+        SCHEDULER --&gt; W4[Worker Thread 4]
+
+        W1 --&gt; T1[Task A]
+        W1 --&gt; T2[Task B]
+        W2 --&gt; T3[Task C]
+        W3 --&gt; T4[Task D]
+        W4 --&gt; T5[Task E]
+
+        BP[Blocking Pool] --&gt; BT1[Blocking Thread]
+        BP --&gt; BT2[Blocking Thread]
+    end
+
+    style BP fill:#f57c00,color:#fff</pre>
+<h3 id="channels">Channels</h3>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br></pre></td><td class="code"><pre><code class="hljs rust"><span class="hljs-keyword">use</span> tokio::sync::&#123;mpsc, oneshot, broadcast, watch&#125;;<br><br><span class="hljs-meta">#[tokio::main]</span><br><span class="hljs-keyword">async</span> <span class="hljs-keyword">fn</span> <span class="hljs-title function_">main</span>() &#123;<br>    <span class="hljs-comment">// mpsc: 多生产者，单消费者</span><br>    <span class="hljs-keyword">let</span> (tx, <span class="hljs-keyword">mut</span> rx) = mpsc::channel::&lt;<span class="hljs-type">String</span>&gt;(<span class="hljs-number">32</span>); <span class="hljs-comment">// 缓冲区大小32</span><br><br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">tx2</span> = tx.<span class="hljs-title function_ invoke__">clone</span>(); <span class="hljs-comment">// 克隆发送端</span><br><br>    tokio::<span class="hljs-title function_ invoke__">spawn</span>(<span class="hljs-keyword">async</span> <span class="hljs-keyword">move</span> &#123;<br>        tx.<span class="hljs-title function_ invoke__">send</span>(<span class="hljs-string">&quot;Hello from task 1&quot;</span>.<span class="hljs-title function_ invoke__">to_string</span>()).<span class="hljs-keyword">await</span>.<span class="hljs-title function_ invoke__">unwrap</span>();<br>    &#125;);<br><br>    tokio::<span class="hljs-title function_ invoke__">spawn</span>(<span class="hljs-keyword">async</span> <span class="hljs-keyword">move</span> &#123;<br>        tx2.<span class="hljs-title function_ invoke__">send</span>(<span class="hljs-string">&quot;Hello from task 2&quot;</span>.<span class="hljs-title function_ invoke__">to_string</span>()).<span class="hljs-keyword">await</span>.<span class="hljs-title function_ invoke__">unwrap</span>();<br>    &#125;);<br><br>    <span class="hljs-keyword">while</span> <span class="hljs-keyword">let</span> <span class="hljs-variable">Some</span>(msg) = rx.<span class="hljs-title function_ invoke__">recv</span>().<span class="hljs-keyword">await</span> &#123;<br>        <span class="hljs-built_in">println!</span>(<span class="hljs-string">&quot;Received: &#123;&#125;&quot;</span>, msg);<br>    &#125;<br><br>    <span class="hljs-comment">// oneshot: 单次发送</span><br>    <span class="hljs-keyword">let</span> (tx, rx) = oneshot::channel::&lt;<span class="hljs-type">i32</span>&gt;();<br>    tokio::<span class="hljs-title function_ invoke__">spawn</span>(<span class="hljs-keyword">async</span> <span class="hljs-keyword">move</span> &#123;<br>        tx.<span class="hljs-title function_ invoke__">send</span>(<span class="hljs-number">42</span>).<span class="hljs-title function_ invoke__">unwrap</span>();<br>    &#125;);<br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">value</span> = rx.<span class="hljs-keyword">await</span>.<span class="hljs-title function_ invoke__">unwrap</span>();<br><br>    <span class="hljs-comment">// broadcast: 多生产者，多消费者</span><br>    <span class="hljs-keyword">let</span> (tx, _) = broadcast::channel::&lt;<span class="hljs-type">String</span>&gt;(<span class="hljs-number">16</span>);<br>    <span class="hljs-keyword">let</span> <span class="hljs-keyword">mut </span><span class="hljs-variable">rx1</span> = tx.<span class="hljs-title function_ invoke__">subscribe</span>();<br>    <span class="hljs-keyword">let</span> <span class="hljs-keyword">mut </span><span class="hljs-variable">rx2</span> = tx.<span class="hljs-title function_ invoke__">subscribe</span>();<br><br>    tx.<span class="hljs-title function_ invoke__">send</span>(<span class="hljs-string">&quot;broadcast message&quot;</span>.<span class="hljs-title function_ invoke__">to_string</span>()).<span class="hljs-title function_ invoke__">unwrap</span>();<br><br>    <span class="hljs-comment">// watch: 单生产者，多消费者，只保留最新值</span><br>    <span class="hljs-keyword">let</span> (tx, <span class="hljs-keyword">mut</span> rx) = watch::<span class="hljs-title function_ invoke__">channel</span>(<span class="hljs-string">&quot;initial&quot;</span>.<span class="hljs-title function_ invoke__">to_string</span>());<br>    tx.<span class="hljs-title function_ invoke__">send</span>(<span class="hljs-string">&quot;updated&quot;</span>.<span class="hljs-title function_ invoke__">to_string</span>()).<span class="hljs-title function_ invoke__">unwrap</span>();<br>    <span class="hljs-built_in">println!</span>(<span class="hljs-string">&quot;Current: &#123;&#125;&quot;</span>, *rx.<span class="hljs-title function_ invoke__">borrow</span>());<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="select宏">select!宏</h3>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><code class="hljs rust"><span class="hljs-keyword">use</span> tokio::time::&#123;sleep, Duration&#125;;<br><span class="hljs-keyword">use</span> tokio::sync::mpsc;<br><br><span class="hljs-meta">#[tokio::main]</span><br><span class="hljs-keyword">async</span> <span class="hljs-keyword">fn</span> <span class="hljs-title function_">main</span>() &#123;<br>    <span class="hljs-keyword">let</span> (tx, <span class="hljs-keyword">mut</span> rx) = mpsc::channel::&lt;<span class="hljs-type">String</span>&gt;(<span class="hljs-number">32</span>);<br><br>    <span class="hljs-comment">// select!: 等待多个Future，第一个完成的获胜</span><br>    tokio::<span class="hljs-built_in">select!</span> &#123;<br>        msg = rx.<span class="hljs-title function_ invoke__">recv</span>() =&gt; &#123;<br>            <span class="hljs-keyword">match</span> msg &#123;<br>                <span class="hljs-title function_ invoke__">Some</span>(m) =&gt; <span class="hljs-built_in">println!</span>(<span class="hljs-string">&quot;Received: &#123;&#125;&quot;</span>, m),<br>                <span class="hljs-literal">None</span> =&gt; <span class="hljs-built_in">println!</span>(<span class="hljs-string">&quot;Channel closed&quot;</span>),<br>            &#125;<br>        &#125;<br>        _ = <span class="hljs-title function_ invoke__">sleep</span>(Duration::<span class="hljs-title function_ invoke__">from_secs</span>(<span class="hljs-number">5</span>)) =&gt; &#123;<br>            <span class="hljs-built_in">println!</span>(<span class="hljs-string">&quot;Timeout!&quot;</span>);<br>        &#125;<br>    &#125;<br><br>    <span class="hljs-comment">// 循环中使用select</span><br>    <span class="hljs-keyword">loop</span> &#123;<br>        tokio::<span class="hljs-built_in">select!</span> &#123;<br>            <span class="hljs-title function_ invoke__">Some</span>(msg) = rx.<span class="hljs-title function_ invoke__">recv</span>() =&gt; &#123;<br>                <span class="hljs-built_in">println!</span>(<span class="hljs-string">&quot;Got: &#123;&#125;&quot;</span>, msg);<br>            &#125;<br>            _ = <span class="hljs-title function_ invoke__">sleep</span>(Duration::<span class="hljs-title function_ invoke__">from_secs</span>(<span class="hljs-number">1</span>)) =&gt; &#123;<br>                <span class="hljs-built_in">println!</span>(<span class="hljs-string">&quot;Tick&quot;</span>);<br>            &#125;<br>            <span class="hljs-comment">// biased; // 添加biased使select按顺序检查，而非随机</span><br>        &#125;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="异步错误处理">异步错误处理</h2>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br></pre></td><td class="code"><pre><code class="hljs rust"><span class="hljs-keyword">use</span> anyhow::&#123;Context, <span class="hljs-type">Result</span>&#125;;<br><span class="hljs-keyword">use</span> thiserror::Error;<br><br><span class="hljs-comment">// 自定义错误类型</span><br><span class="hljs-meta">#[derive(Error, Debug)]</span><br><span class="hljs-keyword">enum</span> <span class="hljs-title class_">AppError</span> &#123;<br>    <span class="hljs-meta">#[error(<span class="hljs-string">&quot;HTTP request failed: &#123;0&#125;&quot;</span>)]</span><br>    <span class="hljs-title function_ invoke__">HttpError</span>(<span class="hljs-meta">#[from]</span> reqwest::Error),<br><br>    <span class="hljs-meta">#[error(<span class="hljs-string">&quot;JSON parse failed: &#123;0&#125;&quot;</span>)]</span><br>    <span class="hljs-title function_ invoke__">ParseError</span>(<span class="hljs-meta">#[from]</span> serde_json::Error),<br><br>    <span class="hljs-meta">#[error(<span class="hljs-string">&quot;Database error: &#123;0&#125;&quot;</span>)]</span><br>    <span class="hljs-title function_ invoke__">DbError</span>(<span class="hljs-meta">#[from]</span> sqlx::Error),<br><br>    <span class="hljs-meta">#[error(<span class="hljs-string">&quot;Not found: &#123;0&#125;&quot;</span>)]</span><br>    <span class="hljs-title function_ invoke__">NotFound</span>(<span class="hljs-type">String</span>),<br>&#125;<br><br><span class="hljs-comment">// 使用?操作符传播错误</span><br><span class="hljs-keyword">async</span> <span class="hljs-keyword">fn</span> <span class="hljs-title function_">fetch_user</span>(id: <span class="hljs-type">u64</span>) <span class="hljs-punctuation">-&gt;</span> <span class="hljs-type">Result</span>&lt;User, AppError&gt; &#123;<br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">url</span> = <span class="hljs-built_in">format!</span>(<span class="hljs-string">&quot;https://api.example.com/users/&#123;&#125;&quot;</span>, id);<br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">response</span> = reqwest::<span class="hljs-title function_ invoke__">get</span>(&amp;url).<span class="hljs-keyword">await</span>?; <span class="hljs-comment">// HttpError</span><br><br>    <span class="hljs-keyword">if</span> response.<span class="hljs-title function_ invoke__">status</span>() == <span class="hljs-number">404</span> &#123;<br>        <span class="hljs-keyword">return</span> <span class="hljs-title function_ invoke__">Err</span>(AppError::<span class="hljs-title function_ invoke__">NotFound</span>(<span class="hljs-built_in">format!</span>(<span class="hljs-string">&quot;User &#123;&#125;&quot;</span>, id)));<br>    &#125;<br><br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">user</span>: User = response.<span class="hljs-title function_ invoke__">json</span>().<span class="hljs-keyword">await</span>?; <span class="hljs-comment">// HttpError or ParseError</span><br>    <span class="hljs-title function_ invoke__">Ok</span>(user)<br>&#125;<br><br><span class="hljs-comment">// 使用anyhow简化错误处理</span><br><span class="hljs-keyword">async</span> <span class="hljs-keyword">fn</span> <span class="hljs-title function_">process</span>() <span class="hljs-punctuation">-&gt;</span> anyhow::<span class="hljs-type">Result</span>&lt;()&gt; &#123;<br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">user</span> = <span class="hljs-title function_ invoke__">fetch_user</span>(<span class="hljs-number">1</span>).<span class="hljs-keyword">await</span><br>        .<span class="hljs-title function_ invoke__">context</span>(<span class="hljs-string">&quot;Failed to fetch user&quot;</span>)?;<br><br>    <span class="hljs-title function_ invoke__">save_to_db</span>(&amp;user).<span class="hljs-keyword">await</span><br>        .<span class="hljs-title function_ invoke__">context</span>(<span class="hljs-string">&quot;Failed to save user to database&quot;</span>)?;<br><br>    <span class="hljs-title function_ invoke__">Ok</span>(())<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="实战示例并发http爬虫">实战示例：并发HTTP爬虫</h2>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br></pre></td><td class="code"><pre><code class="hljs rust"><span class="hljs-keyword">use</span> tokio::sync::Semaphore;<br><span class="hljs-keyword">use</span> std::sync::Arc;<br><br><span class="hljs-meta">#[tokio::main]</span><br><span class="hljs-keyword">async</span> <span class="hljs-keyword">fn</span> <span class="hljs-title function_">main</span>() <span class="hljs-punctuation">-&gt;</span> anyhow::<span class="hljs-type">Result</span>&lt;()&gt; &#123;<br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">urls</span> = <span class="hljs-built_in">vec!</span>[<br>        <span class="hljs-string">&quot;https://example.com/page1&quot;</span>,<br>        <span class="hljs-string">&quot;https://example.com/page2&quot;</span>,<br>        <span class="hljs-string">&quot;https://example.com/page3&quot;</span>,<br>        <span class="hljs-comment">// ... 更多URL</span><br>    ];<br><br>    <span class="hljs-comment">// 使用信号量限制并发数</span><br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">semaphore</span> = Arc::<span class="hljs-title function_ invoke__">new</span>(Semaphore::<span class="hljs-title function_ invoke__">new</span>(<span class="hljs-number">10</span>)); <span class="hljs-comment">// 最多10个并发请求</span><br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">client</span> = reqwest::Client::<span class="hljs-title function_ invoke__">new</span>();<br><br>    <span class="hljs-keyword">let</span> <span class="hljs-keyword">mut </span><span class="hljs-variable">handles</span> = <span class="hljs-type">Vec</span>::<span class="hljs-title function_ invoke__">new</span>();<br><br>    <span class="hljs-keyword">for</span> <span class="hljs-variable">url</span> <span class="hljs-keyword">in</span> urls &#123;<br>        <span class="hljs-keyword">let</span> <span class="hljs-variable">sem</span> = semaphore.<span class="hljs-title function_ invoke__">clone</span>();<br>        <span class="hljs-keyword">let</span> <span class="hljs-variable">client</span> = client.<span class="hljs-title function_ invoke__">clone</span>();<br>        <span class="hljs-keyword">let</span> <span class="hljs-variable">url</span> = url.<span class="hljs-title function_ invoke__">to_string</span>();<br><br>        <span class="hljs-keyword">let</span> <span class="hljs-variable">handle</span> = tokio::<span class="hljs-title function_ invoke__">spawn</span>(<span class="hljs-keyword">async</span> <span class="hljs-keyword">move</span> &#123;<br>            <span class="hljs-keyword">let</span> <span class="hljs-variable">_permit</span> = sem.<span class="hljs-title function_ invoke__">acquire</span>().<span class="hljs-keyword">await</span>.<span class="hljs-title function_ invoke__">unwrap</span>(); <span class="hljs-comment">// 获取许可</span><br>            <span class="hljs-comment">// 许可在_permit被drop时自动释放</span><br><br>            <span class="hljs-keyword">match</span> client.<span class="hljs-title function_ invoke__">get</span>(&amp;url).<span class="hljs-title function_ invoke__">send</span>().<span class="hljs-keyword">await</span> &#123;<br>                <span class="hljs-title function_ invoke__">Ok</span>(resp) =&gt; &#123;<br>                    <span class="hljs-keyword">let</span> <span class="hljs-variable">status</span> = resp.<span class="hljs-title function_ invoke__">status</span>();<br>                    <span class="hljs-keyword">let</span> <span class="hljs-variable">body</span> = resp.<span class="hljs-title function_ invoke__">text</span>().<span class="hljs-keyword">await</span>.<span class="hljs-title function_ invoke__">unwrap_or_default</span>();<br>                    <span class="hljs-built_in">println!</span>(<span class="hljs-string">&quot;&#123;&#125;: &#123;&#125; (&#123;&#125; bytes)&quot;</span>, url, status, body.<span class="hljs-title function_ invoke__">len</span>());<br>                    <span class="hljs-title function_ invoke__">Ok</span>((url, body))<br>                &#125;<br>                <span class="hljs-title function_ invoke__">Err</span>(e) =&gt; &#123;<br>                    <span class="hljs-built_in">eprintln!</span>(<span class="hljs-string">&quot;Failed &#123;&#125;: &#123;&#125;&quot;</span>, url, e);<br>                    <span class="hljs-title function_ invoke__">Err</span>(e)<br>                &#125;<br>            &#125;<br>        &#125;);<br><br>        handles.<span class="hljs-title function_ invoke__">push</span>(handle);<br>    &#125;<br><br>    <span class="hljs-comment">// 收集所有结果</span><br>    <span class="hljs-keyword">let</span> <span class="hljs-keyword">mut </span><span class="hljs-variable">results</span> = <span class="hljs-type">Vec</span>::<span class="hljs-title function_ invoke__">new</span>();<br>    <span class="hljs-keyword">for</span> <span class="hljs-variable">handle</span> <span class="hljs-keyword">in</span> handles &#123;<br>        <span class="hljs-keyword">if</span> <span class="hljs-keyword">let</span> <span class="hljs-variable">Ok</span>(<span class="hljs-title function_ invoke__">Ok</span>(result)) = handle.<span class="hljs-keyword">await</span> &#123;<br>            results.<span class="hljs-title function_ invoke__">push</span>(result);<br>        &#125;<br>    &#125;<br><br>    <span class="hljs-built_in">println!</span>(<span class="hljs-string">&quot;Successfully fetched &#123;&#125; pages&quot;</span>, results.<span class="hljs-title function_ invoke__">len</span>());<br>    <span class="hljs-title function_ invoke__">Ok</span>(())<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="常见陷阱">常见陷阱</h2>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></td><td class="code"><pre><code class="hljs rust"><span class="hljs-comment">// 1. 在async中使用标准库的阻塞操作</span><br><span class="hljs-comment">// 错误：会阻塞Tokio工作线程</span><br><span class="hljs-keyword">async</span> <span class="hljs-keyword">fn</span> <span class="hljs-title function_">bad</span>() &#123;<br>    std::thread::<span class="hljs-title function_ invoke__">sleep</span>(Duration::<span class="hljs-title function_ invoke__">from_secs</span>(<span class="hljs-number">1</span>)); <span class="hljs-comment">// 阻塞！</span><br>    std::fs::<span class="hljs-title function_ invoke__">read_to_string</span>(<span class="hljs-string">&quot;file.txt&quot;</span>);         <span class="hljs-comment">// 阻塞！</span><br>&#125;<br><br><span class="hljs-comment">// 正确：使用Tokio的异步版本</span><br><span class="hljs-keyword">async</span> <span class="hljs-keyword">fn</span> <span class="hljs-title function_">good</span>() &#123;<br>    tokio::time::<span class="hljs-title function_ invoke__">sleep</span>(Duration::<span class="hljs-title function_ invoke__">from_secs</span>(<span class="hljs-number">1</span>)).<span class="hljs-keyword">await</span>;<br>    tokio::fs::<span class="hljs-title function_ invoke__">read_to_string</span>(<span class="hljs-string">&quot;file.txt&quot;</span>).<span class="hljs-keyword">await</span>;<br>&#125;<br><br><span class="hljs-comment">// 2. 跨await点持有Mutex</span><br><span class="hljs-comment">// 错误：标准Mutex在await点持有可能导致死锁</span><br><span class="hljs-keyword">async</span> <span class="hljs-keyword">fn</span> <span class="hljs-title function_">bad_mutex</span>() &#123;<br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">data</span> = std::sync::Mutex::<span class="hljs-title function_ invoke__">new</span>(<span class="hljs-built_in">vec!</span>[]);<br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">guard</span> = data.<span class="hljs-title function_ invoke__">lock</span>().<span class="hljs-title function_ invoke__">unwrap</span>();<br>    <span class="hljs-title function_ invoke__">some_async_fn</span>().<span class="hljs-keyword">await</span>; <span class="hljs-comment">// 持有锁跨越await！</span><br>    guard.<span class="hljs-title function_ invoke__">push</span>(<span class="hljs-number">1</span>);<br>&#125;<br><br><span class="hljs-comment">// 正确：使用tokio::sync::Mutex或缩小锁范围</span><br><span class="hljs-keyword">async</span> <span class="hljs-keyword">fn</span> <span class="hljs-title function_">good_mutex</span>() &#123;<br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">data</span> = tokio::sync::Mutex::<span class="hljs-title function_ invoke__">new</span>(<span class="hljs-built_in">vec!</span>[]);<br>    &#123;<br>        <span class="hljs-keyword">let</span> <span class="hljs-keyword">mut </span><span class="hljs-variable">guard</span> = data.<span class="hljs-title function_ invoke__">lock</span>().<span class="hljs-keyword">await</span>;<br>        guard.<span class="hljs-title function_ invoke__">push</span>(<span class="hljs-number">1</span>);<br>    &#125; <span class="hljs-comment">// 锁在await之前释放</span><br>    <span class="hljs-title function_ invoke__">some_async_fn</span>().<span class="hljs-keyword">await</span>;<br>&#125;<br><br><span class="hljs-comment">// 3. 忘记.await</span><br><span class="hljs-keyword">async</span> <span class="hljs-keyword">fn</span> <span class="hljs-title function_">forgotten_await</span>() &#123;<br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">future</span> = <span class="hljs-title function_ invoke__">fetch_data</span>(); <span class="hljs-comment">// 这只是创建了Future，并没有执行！</span><br>    <span class="hljs-comment">// 需要: let result = fetch_data().await;</span><br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="总结">总结</h2>
+<p>Rust异步编程的核心要点：</p>
+<ol type="1">
+<li><strong>Future是惰性的</strong>：必须被poll（通过await或运行时）才会执行</li>
+<li><strong>async/await是语法糖</strong>：编译器将async函数转换为状态机</li>
+<li><strong>Pin保证内存安全</strong>：防止自引用的Future被移动</li>
+<li><strong>Tokio是最流行的运行时</strong>：提供多线程调度器、I/O和定时器</li>
+<li><strong>select!用于多路复用</strong>：等待多个Future中的第一个完成</li>
+<li><strong>channel用于任务间通信</strong>：mpsc、oneshot、broadcast、watch各有用途</li>
+<li><strong>避免阻塞操作</strong>：在async上下文中使用tokio的异步API或spawn_blocking</li>
+</ol>
+<p>Rust的异步模型虽然学习曲线较陡，但它提供了极致的性能和安全保证，非常适合构建高性能网络服务。</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2025-08-06</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">3.0k 字 · 8 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/rust-wasm-development/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Rust WebAssembly开发实战</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/langchain-practical-guide/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">LangChain实战：构建AI应用链</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%82%E6%AD%A5%E7%BC%96%E7%A8%8B%E6%A8%A1%E5%9E%8B%E5%AF%B9%E6%AF%94"><span class="toc-text">异步编程模型对比</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#future-trait"><span class="toc-text">Future Trait</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%89%8B%E5%8A%A8%E5%AE%9E%E7%8E%B0future"><span class="toc-text">手动实现Future</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#asyncawait"><span class="toc-text">async&#x2F;await</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#async%E5%9D%97"><span class="toc-text">async块</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#async%E7%8A%B6%E6%80%81%E6%9C%BA"><span class="toc-text">async状态机</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#pin"><span class="toc-text">Pin</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#tokio%E8%BF%90%E8%A1%8C%E6%97%B6"><span class="toc-text">Tokio运行时</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BB%BB%E5%8A%A1%E8%B0%83%E5%BA%A6task-spawning"><span class="toc-text">任务调度（Task Spawning）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#channels"><span class="toc-text">Channels</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#select%E5%AE%8F"><span class="toc-text">select!宏</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%82%E6%AD%A5%E9%94%99%E8%AF%AF%E5%A4%84%E7%90%86"><span class="toc-text">异步错误处理</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E6%88%98%E7%A4%BA%E4%BE%8B%E5%B9%B6%E5%8F%91http%E7%88%AC%E8%99%AB"><span class="toc-text">实战示例：并发HTTP爬虫</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%B8%B8%E8%A7%81%E9%99%B7%E9%98%B1"><span class="toc-text">常见陷阱</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

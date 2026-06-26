@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>eBPF技术解析与可观测性应用 · zt&#39;s Blog</title>
+  <meta name="description" content="深入解析eBPF技术架构，涵盖验证器、Maps、程序类型，以及在可观测性、安全监控领域的实际应用。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/ebpf-observability/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="eBPF技术解析与可观测性应用">
+  <meta property="og:description" content="深入解析eBPF技术架构，涵盖验证器、Maps、程序类型，以及在可观测性、安全监控领域的实际应用。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/ebpf-observability/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2024-08-20T16:00:00.000Z">
+  <meta property="article:modified_time" content="2024-08-20T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="eBPF技术解析与可观测性应用">
+  <meta name="twitter:description" content="深入解析eBPF技术架构，涵盖验证器、Maps、程序类型，以及在可观测性、安全监控领域的实际应用。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"eBPF技术解析与可观测性应用","description":"深入解析eBPF技术架构，涵盖验证器、Maps、程序类型，以及在可观测性、安全监控领域的实际应用。","datePublished":"2024-08-20T16:00:00.000Z","dateModified":"2024-08-20T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/ebpf-observability/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"DevOps","item":"https://withesse.co/categories/DevOps/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:45">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/DevOps/">DevOps</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/ebpf/"><span class="hash">#</span>ebpf</a><a class="tag" href="/tags/observability/"><span class="hash">#</span>observability</a><a class="tag" href="/tags/linux/"><span class="hash">#</span>linux</a><a class="tag" href="/tags/networking/"><span class="hash">#</span>networking</a>
+        
+      </div>
+
+      <h1>eBPF技术解析与可观测性应用</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2024.08.21</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 9 min</span>
+        </span>
+        <span class="wc"><span class="num">3.6k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#ebpf%E6%9E%B6%E6%9E%84"><span class="toc-text">eBPF架构</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%B7%A5%E4%BD%9C%E6%B5%81%E7%A8%8B"><span class="toc-text">工作流程</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%AA%8C%E8%AF%81%E5%99%A8verifier"><span class="toc-text">验证器（Verifier）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#ebpf-maps"><span class="toc-text">eBPF Maps</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#ebpf%E7%A8%8B%E5%BA%8F%E7%B1%BB%E5%9E%8B"><span class="toc-text">eBPF程序类型</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#kprobe---%E5%86%85%E6%A0%B8%E5%87%BD%E6%95%B0%E8%B7%9F%E8%B8%AA"><span class="toc-text">kprobe - 内核函数跟踪</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#xdp---%E9%AB%98%E9%80%9F%E7%BD%91%E7%BB%9C%E6%95%B0%E6%8D%AE%E5%A4%84%E7%90%86"><span class="toc-text">XDP - 高速网络数据处理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#tracepoint---%E5%86%85%E6%A0%B8%E8%B7%9F%E8%B8%AA%E7%82%B9"><span class="toc-text">tracepoint - 内核跟踪点</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#bcc%E5%B7%A5%E5%85%B7%E9%9B%86"><span class="toc-text">BCC工具集</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#bpftrace"><span class="toc-text">bpftrace</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BD%91%E7%BB%9C%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7"><span class="toc-text">网络可观测性</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#cilium"><span class="toc-text">Cilium</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#cilium-l7%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7"><span class="toc-text">Cilium L7可观测性</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%89%E5%85%A8%E7%9B%91%E6%8E%A7"><span class="toc-text">安全监控</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#falco"><span class="toc-text">Falco</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#pixie"><span class="toc-text">Pixie</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BD%BF%E7%94%A8go%E5%BC%80%E5%8F%91ebpf%E7%A8%8B%E5%BA%8F"><span class="toc-text">使用Go开发eBPF程序</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#ebpf%E7%94%9F%E6%80%81%E5%85%A8%E6%99%AF"><span class="toc-text">eBPF生态全景</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="前言">前言</h2>
+<p>eBPF（extended Berkeley Packet
+Filter）是Linux内核中的革命性技术，它允许在内核空间安全地运行沙箱化程序，无需修改内核源码或加载内核模块。eBPF正在重塑可观测性、网络和安全领域。本文将深入解析eBPF的架构原理和实际应用。</p>
+<h2 id="ebpf架构">eBPF架构</h2>
+<pre class="mermaid">graph TB
+    subgraph UserSpace["用户空间"]
+        App["eBPF程序&lt;br&gt;(C/Go/Rust)"]
+        Loader["加载器&lt;br&gt;(libbpf/cilium/ebpf)"]
+        Reader["数据读取&lt;br&gt;(Map/Perf/Ring Buffer)"]
+    end
+
+    subgraph Kernel["内核空间"]
+        Verifier["验证器&lt;br&gt;(Verifier)"]
+        JIT["JIT编译器"]
+        VM["eBPF虚拟机"]
+
+        subgraph HookPoints["挂载点"]
+            KP["kprobe/kretprobe&lt;br&gt;内核函数"]
+            TP["tracepoint&lt;br&gt;内核跟踪点"]
+            XDP["XDP&lt;br&gt;网络数据包"]
+            TC["TC&lt;br&gt;流量控制"]
+            Socket["Socket Filter"]
+            LSM["LSM&lt;br&gt;安全模块"]
+            Sched["Scheduler"]
+        end
+
+        Maps["eBPF Maps&lt;br&gt;(键值存储)"]
+    end
+
+    App --&gt; |"编译"| Loader
+    Loader --&gt; |"加载"| Verifier
+    Verifier --&gt; |"验证通过"| JIT
+    JIT --&gt; VM
+    VM --&gt; HookPoints
+    VM &lt;--&gt; Maps
+    Maps &lt;--&gt; Reader
+
+    style Verifier fill:#f44336,color:#fff
+    style JIT fill:#4CAF50,color:#fff</pre>
+<h3 id="工作流程">工作流程</h3>
+<pre class="mermaid">sequenceDiagram
+    participant Dev as 开发者
+    participant Clang as Clang/LLVM
+    participant Loader as 加载器
+    participant Verifier as 验证器
+    participant JIT as JIT编译器
+    participant Hook as 挂载点
+
+    Dev-&gt;&gt;Clang: 编写eBPF C程序
+    Clang-&gt;&gt;Clang: 编译为BPF字节码
+    Clang--&gt;&gt;Loader: .o文件（ELF格式）
+    Loader-&gt;&gt;Verifier: bpf()系统调用加载
+    Verifier-&gt;&gt;Verifier: 安全性验证
+    alt 验证失败
+        Verifier--&gt;&gt;Loader: 拒绝加载 + 错误信息
+    else 验证通过
+        Verifier-&gt;&gt;JIT: 传递字节码
+        JIT-&gt;&gt;JIT: 编译为本机指令
+        JIT-&gt;&gt;Hook: 挂载到内核钩子点
+        Note over Hook: 每次事件触发时执行
+    end</pre>
+<h2 id="验证器verifier">验证器（Verifier）</h2>
+<p>验证器是eBPF安全性的核心保障，确保程序不会崩溃内核：</p>
+<pre class="mermaid">graph TB
+    subgraph Checks["验证器检查项"]
+        DAG["DAG检查&lt;br&gt;无循环/无不可达代码"]
+        Bounds["边界检查&lt;br&gt;内存访问合法性"]
+        Stack["栈大小检查&lt;br&gt;最大512字节"]
+        Insn["指令数检查&lt;br&gt;最大100万条"]
+        Helper["辅助函数检查&lt;br&gt;只能调用允许的函数"]
+        Type["类型检查&lt;br&gt;指针类型安全"]
+    end</pre>
+<p>验证器确保的安全保证：</p>
+<ol type="1">
+<li><strong>程序一定终止</strong>：不允许无界循环（有界循环在5.3+支持）</li>
+<li><strong>内存访全</strong>：所有内存访问经过边界检查</li>
+<li><strong>资源有限</strong>：栈最大512字节，指令数有上限</li>
+<li><strong>权限控制</strong>：不同程序类型有不同的辅助函数权限</li>
+</ol>
+<h2 id="ebpf-maps">eBPF Maps</h2>
+<p>Maps是eBPF程序与用户空间之间通信的核心数据结构：</p>
+<pre class="mermaid">graph LR
+    subgraph MapTypes["常用Map类型"]
+        Hash["BPF_MAP_TYPE_HASH&lt;br&gt;哈希表"]
+        Array["BPF_MAP_TYPE_ARRAY&lt;br&gt;数组"]
+        Perf["BPF_MAP_TYPE_PERF_EVENT_ARRAY&lt;br&gt;Perf事件"]
+        Ring["BPF_MAP_TYPE_RINGBUF&lt;br&gt;环形缓冲区"]
+        LRU["BPF_MAP_TYPE_LRU_HASH&lt;br&gt;LRU哈希表"]
+        LPM["BPF_MAP_TYPE_LPM_TRIE&lt;br&gt;最长前缀匹配"]
+        PerCPU["BPF_MAP_TYPE_PERCPU_HASH&lt;br&gt;每CPU哈希表"]
+    end</pre>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-comment">// eBPF Map定义示例</span><br><span class="hljs-class"><span class="hljs-keyword">struct</span> &#123;</span><br>    __uint(type, BPF_MAP_TYPE_HASH);<br>    __uint(max_entries, <span class="hljs-number">10240</span>);<br>    __type(key, u32);           <span class="hljs-comment">// PID作为key</span><br>    __type(value, u64);         <span class="hljs-comment">// 计数器作为value</span><br>&#125; syscall_count <span class="hljs-title function_">SEC</span><span class="hljs-params">(<span class="hljs-string">&quot;.maps&quot;</span>)</span>;<br><br><span class="hljs-comment">// Per-CPU Map（无锁高性能）</span><br><span class="hljs-class"><span class="hljs-keyword">struct</span> &#123;</span><br>    __uint(type, BPF_MAP_TYPE_PERCPU_HASH);<br>    __uint(max_entries, <span class="hljs-number">10240</span>);<br>    __type(key, <span class="hljs-keyword">struct</span> event_key);<br>    __type(value, u64);<br>&#125; event_counter <span class="hljs-title function_">SEC</span><span class="hljs-params">(<span class="hljs-string">&quot;.maps&quot;</span>)</span>;<br><br><span class="hljs-comment">// Ring Buffer（推荐的事件传输方式）</span><br><span class="hljs-class"><span class="hljs-keyword">struct</span> &#123;</span><br>    __uint(type, BPF_MAP_TYPE_RINGBUF);<br>    __uint(max_entries, <span class="hljs-number">256</span> * <span class="hljs-number">1024</span>);  <span class="hljs-comment">// 256KB</span><br>&#125; events <span class="hljs-title function_">SEC</span><span class="hljs-params">(<span class="hljs-string">&quot;.maps&quot;</span>)</span>;<br></code></pre></td></tr></table></figure>
+<h2 id="ebpf程序类型">eBPF程序类型</h2>
+<h3 id="kprobe---内核函数跟踪">kprobe - 内核函数跟踪</h3>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-comment">// 跟踪进程创建</span><br><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&lt;vmlinux.h&gt;</span></span><br><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&lt;bpf/bpf_helpers.h&gt;</span></span><br><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&lt;bpf/bpf_tracing.h&gt;</span></span><br><br><span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">event</span> &#123;</span><br>    u32 pid;<br>    u32 ppid;<br>    u32 uid;<br>    <span class="hljs-type">char</span> comm[<span class="hljs-number">16</span>];<br>    <span class="hljs-type">char</span> filename[<span class="hljs-number">256</span>];<br>&#125;;<br><br><span class="hljs-class"><span class="hljs-keyword">struct</span> &#123;</span><br>    __uint(type, BPF_MAP_TYPE_RINGBUF);<br>    __uint(max_entries, <span class="hljs-number">256</span> * <span class="hljs-number">1024</span>);<br>&#125; events <span class="hljs-title function_">SEC</span><span class="hljs-params">(<span class="hljs-string">&quot;.maps&quot;</span>)</span>;<br><br>SEC(<span class="hljs-string">&quot;kprobe/sys_execve&quot;</span>)<br><span class="hljs-type">int</span> <span class="hljs-title function_">trace_execve</span><span class="hljs-params">(<span class="hljs-keyword">struct</span> pt_regs *ctx)</span><br>&#123;<br>    <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">event</span> *<span class="hljs-title">e</span>;</span><br>    <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">task_struct</span> *<span class="hljs-title">task</span>;</span><br><br>    e = bpf_ringbuf_reserve(&amp;events, <span class="hljs-keyword">sizeof</span>(*e), <span class="hljs-number">0</span>);<br>    <span class="hljs-keyword">if</span> (!e)<br>        <span class="hljs-keyword">return</span> <span class="hljs-number">0</span>;<br><br>    task = (<span class="hljs-keyword">struct</span> task_struct *)bpf_get_current_task();<br><br>    e-&gt;pid = bpf_get_current_pid_tgid() &gt;&gt; <span class="hljs-number">32</span>;<br>    e-&gt;ppid = BPF_CORE_READ(task, real_parent, tgid);<br>    e-&gt;uid = bpf_get_current_uid_gid() &amp; <span class="hljs-number">0xFFFFFFFF</span>;<br>    bpf_get_current_comm(&amp;e-&gt;comm, <span class="hljs-keyword">sizeof</span>(e-&gt;comm));<br>    bpf_probe_read_user_str(&amp;e-&gt;filename, <span class="hljs-keyword">sizeof</span>(e-&gt;filename),<br>                            (<span class="hljs-type">void</span> *)PT_REGS_PARM1(ctx));<br><br>    bpf_ringbuf_submit(e, <span class="hljs-number">0</span>);<br>    <span class="hljs-keyword">return</span> <span class="hljs-number">0</span>;<br>&#125;<br><br><span class="hljs-type">char</span> LICENSE[] SEC(<span class="hljs-string">&quot;license&quot;</span>) = <span class="hljs-string">&quot;GPL&quot;</span>;<br></code></pre></td></tr></table></figure>
+<h3 id="xdp---高速网络数据处理">XDP - 高速网络数据处理</h3>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-comment">// XDP程序：简单的DDoS防护</span><br><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&lt;linux/bpf.h&gt;</span></span><br><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&lt;linux/if_ether.h&gt;</span></span><br><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&lt;linux/ip.h&gt;</span></span><br><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&lt;linux/tcp.h&gt;</span></span><br><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&lt;bpf/bpf_helpers.h&gt;</span></span><br><br><span class="hljs-comment">// 记录每个IP的请求计数</span><br><span class="hljs-class"><span class="hljs-keyword">struct</span> &#123;</span><br>    __uint(type, BPF_MAP_TYPE_LRU_HASH);<br>    __uint(max_entries, <span class="hljs-number">100000</span>);<br>    __type(key, __u32);    <span class="hljs-comment">// IP地址</span><br>    __type(value, __u64);  <span class="hljs-comment">// 计数</span><br>&#125; ip_counter <span class="hljs-title function_">SEC</span><span class="hljs-params">(<span class="hljs-string">&quot;.maps&quot;</span>)</span>;<br><br><span class="hljs-comment">// IP黑名单</span><br><span class="hljs-class"><span class="hljs-keyword">struct</span> &#123;</span><br>    __uint(type, BPF_MAP_TYPE_HASH);<br>    __uint(max_entries, <span class="hljs-number">10000</span>);<br>    __type(key, __u32);<br>    __type(value, __u8);<br>&#125; blacklist <span class="hljs-title function_">SEC</span><span class="hljs-params">(<span class="hljs-string">&quot;.maps&quot;</span>)</span>;<br><br><span class="hljs-meta">#<span class="hljs-keyword">define</span> RATE_LIMIT 1000  <span class="hljs-comment">// 每秒最大请求数</span></span><br><br>SEC(<span class="hljs-string">&quot;xdp&quot;</span>)<br><span class="hljs-type">int</span> <span class="hljs-title function_">xdp_firewall</span><span class="hljs-params">(<span class="hljs-keyword">struct</span> xdp_md *ctx)</span><br>&#123;<br>    <span class="hljs-type">void</span> *data = (<span class="hljs-type">void</span> *)(<span class="hljs-type">long</span>)ctx-&gt;data;<br>    <span class="hljs-type">void</span> *data_end = (<span class="hljs-type">void</span> *)(<span class="hljs-type">long</span>)ctx-&gt;data_end;<br><br>    <span class="hljs-comment">// 解析以太网头</span><br>    <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">ethhdr</span> *<span class="hljs-title">eth</span> =</span> data;<br>    <span class="hljs-keyword">if</span> ((<span class="hljs-type">void</span> *)(eth + <span class="hljs-number">1</span>) &gt; data_end)<br>        <span class="hljs-keyword">return</span> XDP_PASS;<br><br>    <span class="hljs-keyword">if</span> (eth-&gt;h_proto != __constant_htons(ETH_P_IP))<br>        <span class="hljs-keyword">return</span> XDP_PASS;<br><br>    <span class="hljs-comment">// 解析IP头</span><br>    <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">iphdr</span> *<span class="hljs-title">ip</span> =</span> (<span class="hljs-type">void</span> *)(eth + <span class="hljs-number">1</span>);<br>    <span class="hljs-keyword">if</span> ((<span class="hljs-type">void</span> *)(ip + <span class="hljs-number">1</span>) &gt; data_end)<br>        <span class="hljs-keyword">return</span> XDP_PASS;<br><br>    __u32 src_ip = ip-&gt;saddr;<br><br>    <span class="hljs-comment">// 检查黑名单</span><br>    <span class="hljs-keyword">if</span> (bpf_map_lookup_elem(&amp;blacklist, &amp;src_ip))<br>        <span class="hljs-keyword">return</span> XDP_DROP;<br><br>    <span class="hljs-comment">// 速率限制</span><br>    __u64 *count = bpf_map_lookup_elem(&amp;ip_counter, &amp;src_ip);<br>    <span class="hljs-keyword">if</span> (count) &#123;<br>        __sync_fetch_and_add(count, <span class="hljs-number">1</span>);<br>        <span class="hljs-keyword">if</span> (*count &gt; RATE_LIMIT)<br>            <span class="hljs-keyword">return</span> XDP_DROP;<br>    &#125; <span class="hljs-keyword">else</span> &#123;<br>        __u64 init_val = <span class="hljs-number">1</span>;<br>        bpf_map_update_elem(&amp;ip_counter, &amp;src_ip, &amp;init_val, BPF_ANY);<br>    &#125;<br><br>    <span class="hljs-keyword">return</span> XDP_PASS;<br>&#125;<br><br><span class="hljs-type">char</span> LICENSE[] SEC(<span class="hljs-string">&quot;license&quot;</span>) = <span class="hljs-string">&quot;GPL&quot;</span>;<br></code></pre></td></tr></table></figure>
+<pre class="mermaid">graph LR
+    NIC["网卡"] --&gt; XDP["XDP程序"]
+    XDP --&gt; |"XDP_PASS"| Stack["网络协议栈"]
+    XDP --&gt; |"XDP_DROP"| Drop["丢弃"]
+    XDP --&gt; |"XDP_TX"| TX["原网卡发回"]
+    XDP --&gt; |"XDP_REDIRECT"| Redirect["转发到其他网卡"]
+
+    style XDP fill:#FF9800,color:#fff
+    style Drop fill:#f44336,color:#fff</pre>
+<h3 id="tracepoint---内核跟踪点">tracepoint - 内核跟踪点</h3>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-comment">// 跟踪TCP连接事件</span><br>SEC(<span class="hljs-string">&quot;tracepoint/sock/inet_sock_set_state&quot;</span>)<br><span class="hljs-type">int</span> <span class="hljs-title function_">trace_tcp_state</span><span class="hljs-params">(<span class="hljs-keyword">struct</span> trace_event_raw_inet_sock_set_state *ctx)</span><br>&#123;<br>    <span class="hljs-keyword">if</span> (ctx-&gt;protocol != IPPROTO_TCP)<br>        <span class="hljs-keyword">return</span> <span class="hljs-number">0</span>;<br><br>    <span class="hljs-comment">// 只关注连接建立</span><br>    <span class="hljs-keyword">if</span> (ctx-&gt;newstate != TCP_ESTABLISHED)<br>        <span class="hljs-keyword">return</span> <span class="hljs-number">0</span>;<br><br>    <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">event</span> *<span class="hljs-title">e</span>;</span><br>    e = bpf_ringbuf_reserve(&amp;events, <span class="hljs-keyword">sizeof</span>(*e), <span class="hljs-number">0</span>);<br>    <span class="hljs-keyword">if</span> (!e)<br>        <span class="hljs-keyword">return</span> <span class="hljs-number">0</span>;<br><br>    e-&gt;pid = bpf_get_current_pid_tgid() &gt;&gt; <span class="hljs-number">32</span>;<br>    e-&gt;saddr = ctx-&gt;saddr;<br>    e-&gt;daddr = ctx-&gt;daddr;<br>    e-&gt;sport = ctx-&gt;sport;<br>    e-&gt;dport = ctx-&gt;dport;<br>    bpf_get_current_comm(&amp;e-&gt;comm, <span class="hljs-keyword">sizeof</span>(e-&gt;comm));<br><br>    bpf_ringbuf_submit(e, <span class="hljs-number">0</span>);<br>    <span class="hljs-keyword">return</span> <span class="hljs-number">0</span>;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="bcc工具集">BCC工具集</h2>
+<p>BCC（BPF Compiler Collection）提供了大量开箱即用的eBPF工具：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 跟踪文件打开操作</span><br>opensnoop<br><br><span class="hljs-comment"># 跟踪磁盘I/O延迟</span><br>biolatency<br><br><span class="hljs-comment"># 跟踪TCP连接</span><br>tcpconnect<br>tcplife<br><br><span class="hljs-comment"># 跟踪DNS查询</span><br>gethostlatency<br><br><span class="hljs-comment"># 跟踪内存分配</span><br>memleak<br><br><span class="hljs-comment"># 跟踪文件系统延迟</span><br>ext4slower 1  <span class="hljs-comment"># 显示超过1ms的ext4操作</span><br>xfsslower 1<br><br><span class="hljs-comment"># 函数延迟分析</span><br>funclatency <span class="hljs-string">&#x27;vfs_read&#x27;</span><br><br><span class="hljs-comment"># CPU缓存命中分析</span><br>llcstat<br><br><span class="hljs-comment"># 跟踪TCP重传</span><br>tcpretrans<br></code></pre></td></tr></table></figure>
+<pre class="mermaid">graph TB
+    subgraph BCCTools["BCC工具分类"]
+        subgraph CPU["CPU分析"]
+            execsnoop["execsnoop&lt;br&gt;新进程跟踪"]
+            runqlat["runqlat&lt;br&gt;调度延迟"]
+            profile["profile&lt;br&gt;CPU采样"]
+            cpudist["cpudist&lt;br&gt;CPU分布"]
+        end
+
+        subgraph IO["I/O分析"]
+            biolatency["biolatency&lt;br&gt;块I/O延迟"]
+            biotop["biotop&lt;br&gt;块I/O top"]
+            filetop["filetop&lt;br&gt;文件I/O top"]
+            cachestat["cachestat&lt;br&gt;缓存命中"]
+        end
+
+        subgraph Network["网络分析"]
+            tcpconnect["tcpconnect&lt;br&gt;TCP连接"]
+            tcplife["tcplife&lt;br&gt;TCP生命周期"]
+            tcpretrans["tcpretrans&lt;br&gt;TCP重传"]
+            tcpdrop["tcpdrop&lt;br&gt;TCP丢包"]
+        end
+    end</pre>
+<h2 id="bpftrace">bpftrace</h2>
+<p>bpftrace是高级的eBPF跟踪语言，类似awk：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 统计系统调用频率</span><br>bpftrace -e <span class="hljs-string">&#x27;tracepoint:raw_syscalls:sys_enter &#123; @[comm] = count(); &#125;&#x27;</span><br><br><span class="hljs-comment"># 跟踪进程的read延迟分布（直方图）</span><br>bpftrace -e <span class="hljs-string">&#x27;</span><br><span class="hljs-string">    kprobe:vfs_read &#123; @start[tid] = nsecs; &#125;</span><br><span class="hljs-string">    kretprobe:vfs_read /@start[tid]/ &#123;</span><br><span class="hljs-string">        @usecs = hist((nsecs - @start[tid]) / 1000);</span><br><span class="hljs-string">        delete(@start[tid]);</span><br><span class="hljs-string">    &#125;</span><br><span class="hljs-string">&#x27;</span><br><br><span class="hljs-comment"># 跟踪TCP连接建立</span><br>bpftrace -e <span class="hljs-string">&#x27;</span><br><span class="hljs-string">    kprobe:tcp_connect &#123;</span><br><span class="hljs-string">        printf(&quot;%-6d %-16s TCP connect\n&quot;, pid, comm);</span><br><span class="hljs-string">    &#125;</span><br><span class="hljs-string">&#x27;</span><br><br><span class="hljs-comment"># 分析文件系统写延迟</span><br>bpftrace -e <span class="hljs-string">&#x27;</span><br><span class="hljs-string">    kprobe:vfs_write &#123;</span><br><span class="hljs-string">        @start[tid] = nsecs;</span><br><span class="hljs-string">    &#125;</span><br><span class="hljs-string">    kretprobe:vfs_write /@start[tid]/ &#123;</span><br><span class="hljs-string">        $dur = (nsecs - @start[tid]) / 1000;</span><br><span class="hljs-string">        if ($dur &gt; 1000) &#123;</span><br><span class="hljs-string">            printf(&quot;%-6d %-16s slow write: %d us\n&quot;, pid, comm, $dur);</span><br><span class="hljs-string">        &#125;</span><br><span class="hljs-string">        @write_latency_us = hist($dur);</span><br><span class="hljs-string">        delete(@start[tid]);</span><br><span class="hljs-string">    &#125;</span><br><span class="hljs-string">&#x27;</span><br><br><span class="hljs-comment"># 跟踪页错误</span><br>bpftrace -e <span class="hljs-string">&#x27;</span><br><span class="hljs-string">    software:page-faults:1 &#123;</span><br><span class="hljs-string">        @[comm, kstack] = count();</span><br><span class="hljs-string">    &#125;</span><br><span class="hljs-string">&#x27;</span><br><br><span class="hljs-comment"># 统计每个CPU的中断</span><br>bpftrace -e <span class="hljs-string">&#x27;</span><br><span class="hljs-string">    hardirq:irq_handler_entry &#123;</span><br><span class="hljs-string">        @[str(args-&gt;name)] = count();</span><br><span class="hljs-string">    &#125;</span><br><span class="hljs-string">&#x27;</span><br></code></pre></td></tr></table></figure>
+<h2 id="网络可观测性">网络可观测性</h2>
+<h3 id="cilium">Cilium</h3>
+<p>Cilium是基于eBPF的容器网络和安全方案：</p>
+<pre class="mermaid">graph TB
+    subgraph Cilium["Cilium架构"]
+        Agent["Cilium Agent"]
+        Operator["Cilium Operator"]
+        Hubble["Hubble&lt;br&gt;网络可观测性"]
+
+        subgraph DataPlane["eBPF数据平面"]
+            XDP["XDP&lt;br&gt;L3/L4负载均衡"]
+            TC["TC&lt;br&gt;Pod网络策略"]
+            Socket["cgroup/socket&lt;br&gt;L7策略"]
+            Connect["cgroup/connect&lt;br&gt;透明代理"]
+        end
+    end
+
+    subgraph HubbleUI["Hubble可观测性"]
+        FlowLog["网络流日志"]
+        ServiceMap["服务拓扑图"]
+        Metrics["Prometheus指标"]
+    end
+
+    Agent --&gt; DataPlane
+    Agent --&gt; Hubble
+    Hubble --&gt; FlowLog
+    Hubble --&gt; ServiceMap
+    Hubble --&gt; Metrics</pre>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 查看Hubble网络流</span><br>hubble observe --namespace production<br><br><span class="hljs-comment"># 查看特定Pod的流量</span><br>hubble observe --pod production/api-server --protocol TCP<br><br><span class="hljs-comment"># 查看HTTP流</span><br>hubble observe --http-status-code 500<br><br><span class="hljs-comment"># 查看DNS查询</span><br>hubble observe --protocol DNS<br><br><span class="hljs-comment"># 查看丢弃的流量</span><br>hubble observe --verdict DROPPED<br><br><span class="hljs-comment"># 查看服务拓扑</span><br>hubble observe --to-service production/api-server<br></code></pre></td></tr></table></figure>
+<h3 id="cilium-l7可观测性">Cilium L7可观测性</h3>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">cilium.io/v2</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">CiliumNetworkPolicy</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">l7-visibility</span><br>  <span class="hljs-attr">namespace:</span> <span class="hljs-string">production</span><br><span class="hljs-attr">spec:</span><br>  <span class="hljs-attr">endpointSelector:</span><br>    <span class="hljs-attr">matchLabels:</span><br>      <span class="hljs-attr">app:</span> <span class="hljs-string">api-server</span><br>  <span class="hljs-attr">egress:</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-attr">toEndpoints:</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-attr">matchLabels:</span><br>            <span class="hljs-attr">app:</span> <span class="hljs-string">database</span><br>      <span class="hljs-attr">toPorts:</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-attr">ports:</span><br>            <span class="hljs-bullet">-</span> <span class="hljs-attr">port:</span> <span class="hljs-string">&quot;5432&quot;</span><br>              <span class="hljs-attr">protocol:</span> <span class="hljs-string">TCP</span><br>          <span class="hljs-attr">rules:</span><br>            <span class="hljs-attr">l7proto:</span> <span class="hljs-string">postgres</span><br>            <span class="hljs-attr">l7:</span><br>              <span class="hljs-bullet">-</span> <span class="hljs-attr">action:</span> <span class="hljs-string">&quot;log&quot;</span><br>  <span class="hljs-attr">ingress:</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-attr">fromEndpoints:</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-attr">matchLabels:</span><br>            <span class="hljs-attr">app:</span> <span class="hljs-string">frontend</span><br>      <span class="hljs-attr">toPorts:</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-attr">ports:</span><br>            <span class="hljs-bullet">-</span> <span class="hljs-attr">port:</span> <span class="hljs-string">&quot;8080&quot;</span><br>              <span class="hljs-attr">protocol:</span> <span class="hljs-string">TCP</span><br>          <span class="hljs-attr">rules:</span><br>            <span class="hljs-attr">http:</span><br>              <span class="hljs-bullet">-</span> <span class="hljs-attr">method:</span> <span class="hljs-string">&quot;GET&quot;</span><br>              <span class="hljs-bullet">-</span> <span class="hljs-attr">method:</span> <span class="hljs-string">&quot;POST&quot;</span><br></code></pre></td></tr></table></figure>
+<h2 id="安全监控">安全监控</h2>
+<h3 id="falco">Falco</h3>
+<p>Falco使用eBPF（或内核模块）实现运行时安全检测：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># Falco规则示例</span><br><span class="hljs-bullet">-</span> <span class="hljs-attr">rule:</span> <span class="hljs-string">Terminal</span> <span class="hljs-string">Shell</span> <span class="hljs-string">in</span> <span class="hljs-string">Container</span><br>  <span class="hljs-attr">desc:</span> <span class="hljs-string">检测在容器内打开的终端shell</span><br>  <span class="hljs-attr">condition:</span> <span class="hljs-string">&gt;</span><br><span class="hljs-string">    spawned_process and container</span><br><span class="hljs-string">    and shell_procs</span><br><span class="hljs-string">    and proc.tty != 0</span><br><span class="hljs-string">    and container_entrypoint</span><br><span class="hljs-string"></span>  <span class="hljs-attr">output:</span> <span class="hljs-string">&gt;</span><br><span class="hljs-string">    Shell spawned in container</span><br><span class="hljs-string">    (user=%user.name container=%container.name</span><br><span class="hljs-string">    shell=%proc.name pid=%proc.pid)</span><br><span class="hljs-string"></span>  <span class="hljs-attr">priority:</span> <span class="hljs-string">WARNING</span><br>  <span class="hljs-attr">tags:</span> [<span class="hljs-string">container</span>, <span class="hljs-string">shell</span>]<br><br><span class="hljs-bullet">-</span> <span class="hljs-attr">rule:</span> <span class="hljs-string">Suspicious</span> <span class="hljs-string">Network</span> <span class="hljs-string">Connection</span><br>  <span class="hljs-attr">desc:</span> <span class="hljs-string">检测可疑的出站网络连接</span><br>  <span class="hljs-attr">condition:</span> <span class="hljs-string">&gt;</span><br><span class="hljs-string">    outbound and container</span><br><span class="hljs-string">    and fd.l4proto=tcp</span><br><span class="hljs-string">    and not allowed_outbound</span><br><span class="hljs-string"></span>  <span class="hljs-attr">output:</span> <span class="hljs-string">&gt;</span><br><span class="hljs-string">    Suspicious outbound connection</span><br><span class="hljs-string">    (command=%proc.cmdline connection=%fd.name</span><br><span class="hljs-string">    container=%container.name)</span><br><span class="hljs-string"></span>  <span class="hljs-attr">priority:</span> <span class="hljs-string">NOTICE</span><br>  <span class="hljs-attr">tags:</span> [<span class="hljs-string">network</span>, <span class="hljs-string">container</span>]<br><br><span class="hljs-bullet">-</span> <span class="hljs-attr">rule:</span> <span class="hljs-string">Read</span> <span class="hljs-string">Sensitive</span> <span class="hljs-string">File</span><br>  <span class="hljs-attr">desc:</span> <span class="hljs-string">检测读取敏感文件</span><br>  <span class="hljs-attr">condition:</span> <span class="hljs-string">&gt;</span><br><span class="hljs-string">    open_read and container</span><br><span class="hljs-string">    and sensitive_files</span><br><span class="hljs-string">    and not proc.name in (allowed_sensitive_readers)</span><br><span class="hljs-string"></span>  <span class="hljs-attr">output:</span> <span class="hljs-string">&gt;</span><br><span class="hljs-string">    Sensitive file read in container</span><br><span class="hljs-string">    (file=%fd.name command=%proc.cmdline</span><br><span class="hljs-string">    container=%container.name)</span><br><span class="hljs-string"></span>  <span class="hljs-attr">priority:</span> <span class="hljs-string">WARNING</span><br>  <span class="hljs-attr">tags:</span> [<span class="hljs-string">filesystem</span>, <span class="hljs-string">container</span>]<br></code></pre></td></tr></table></figure>
+<pre class="mermaid">graph TB
+    subgraph Falco["Falco架构"]
+        eBPF["eBPF探针&lt;br&gt;(内核事件采集)"]
+        Engine["规则引擎&lt;br&gt;(条件匹配)"]
+        Output["输出通道"]
+    end
+
+    Kernel["Linux内核&lt;br&gt;系统调用"] --&gt; eBPF
+    eBPF --&gt; Engine
+    Engine --&gt; |"匹配"| Output
+
+    Output --&gt; Stdout["标准输出"]
+    Output --&gt; Syslog["Syslog"]
+    Output --&gt; Slack["Slack"]
+    Output --&gt; Falcosidekick["Falcosidekick"]
+
+    Falcosidekick --&gt; Loki["Loki"]
+    Falcosidekick --&gt; ES["Elasticsearch"]
+    Falcosidekick --&gt; Webhook["Webhook"]</pre>
+<h3 id="pixie">Pixie</h3>
+<p>Pixie是基于eBPF的Kubernetes自动可观测性平台：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 安装Pixie</span><br>px deploy<br><br><span class="hljs-comment"># 查看HTTP请求</span><br>px run px/http_data<br><br><span class="hljs-comment"># 查看服务拓扑</span><br>px run px/service_stats<br><br><span class="hljs-comment"># 查看DNS查询</span><br>px run px/dns_data<br><br><span class="hljs-comment"># 跟踪MySQL查询</span><br>px run px/mysql_data<br><br><span class="hljs-comment"># 自定义PxL脚本</span><br>px run -f my_script.pxl<br></code></pre></td></tr></table></figure>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-comment"># PxL脚本示例 - 查看HTTP延迟分布</span><br><span class="hljs-keyword">import</span> px<br><br><span class="hljs-comment"># 获取HTTP追踪数据</span><br>df = px.DataFrame(table=<span class="hljs-string">&#x27;http_events&#x27;</span>, start_time=<span class="hljs-string">&#x27;-5m&#x27;</span>)<br><br><span class="hljs-comment"># 过滤生产环境</span><br>df = df[df.ctx[<span class="hljs-string">&#x27;namespace&#x27;</span>] == <span class="hljs-string">&#x27;production&#x27;</span>]<br><br><span class="hljs-comment"># 计算延迟统计</span><br>df.latency_ms = df.resp_latency_ns / <span class="hljs-number">1e6</span><br><br>stats = df.groupby([<span class="hljs-string">&#x27;req_path&#x27;</span>, <span class="hljs-string">&#x27;resp_status&#x27;</span>]).agg(<br>    count=(<span class="hljs-string">&#x27;latency_ms&#x27;</span>, px.count),<br>    p50=(<span class="hljs-string">&#x27;latency_ms&#x27;</span>, px.quantiles, <span class="hljs-number">0.5</span>),<br>    p99=(<span class="hljs-string">&#x27;latency_ms&#x27;</span>, px.quantiles, <span class="hljs-number">0.99</span>),<br>    error_rate=(<span class="hljs-string">&#x27;resp_status&#x27;</span>, <span class="hljs-keyword">lambda</span> x: px.count(x &gt;= <span class="hljs-number">400</span>) / px.count(x)),<br>)<br><br>px.display(stats, <span class="hljs-string">&#x27;HTTP Stats&#x27;</span>)<br></code></pre></td></tr></table></figure>
+<h2 id="使用go开发ebpf程序">使用Go开发eBPF程序</h2>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-comment">// 使用cilium/ebpf库</span><br><span class="hljs-keyword">package</span> main<br><br><span class="hljs-keyword">import</span> (<br>    <span class="hljs-string">&quot;bytes&quot;</span><br>    <span class="hljs-string">&quot;encoding/binary&quot;</span><br>    <span class="hljs-string">&quot;fmt&quot;</span><br>    <span class="hljs-string">&quot;log&quot;</span><br>    <span class="hljs-string">&quot;os&quot;</span><br>    <span class="hljs-string">&quot;os/signal&quot;</span><br><br>    <span class="hljs-string">&quot;github.com/cilium/ebpf&quot;</span><br>    <span class="hljs-string">&quot;github.com/cilium/ebpf/link&quot;</span><br>    <span class="hljs-string">&quot;github.com/cilium/ebpf/ringbuf&quot;</span><br>)<br><br><span class="hljs-comment">//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc clang bpf trace.bpf.c</span><br><br><span class="hljs-keyword">type</span> Event <span class="hljs-keyword">struct</span> &#123;<br>    PID      <span class="hljs-type">uint32</span><br>    PPID     <span class="hljs-type">uint32</span><br>    UID      <span class="hljs-type">uint32</span><br>    Comm     [<span class="hljs-number">16</span>]<span class="hljs-type">byte</span><br>    Filename [<span class="hljs-number">256</span>]<span class="hljs-type">byte</span><br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">main</span><span class="hljs-params">()</span></span> &#123;<br>    <span class="hljs-comment">// 加载eBPF程序</span><br>    objs := bpfObjects&#123;&#125;<br>    <span class="hljs-keyword">if</span> err := loadBpfObjects(&amp;objs, <span class="hljs-literal">nil</span>); err != <span class="hljs-literal">nil</span> &#123;<br>        log.Fatalf(<span class="hljs-string">&quot;loading objects: %v&quot;</span>, err)<br>    &#125;<br>    <span class="hljs-keyword">defer</span> objs.Close()<br><br>    <span class="hljs-comment">// 挂载到kprobe</span><br>    kp, err := link.Kprobe(<span class="hljs-string">&quot;sys_execve&quot;</span>, objs.TraceExecve, <span class="hljs-literal">nil</span>)<br>    <span class="hljs-keyword">if</span> err != <span class="hljs-literal">nil</span> &#123;<br>        log.Fatalf(<span class="hljs-string">&quot;opening kprobe: %v&quot;</span>, err)<br>    &#125;<br>    <span class="hljs-keyword">defer</span> kp.Close()<br><br>    <span class="hljs-comment">// 读取Ring Buffer事件</span><br>    rd, err := ringbuf.NewReader(objs.Events)<br>    <span class="hljs-keyword">if</span> err != <span class="hljs-literal">nil</span> &#123;<br>        log.Fatalf(<span class="hljs-string">&quot;opening ringbuf reader: %v&quot;</span>, err)<br>    &#125;<br>    <span class="hljs-keyword">defer</span> rd.Close()<br><br>    sig := <span class="hljs-built_in">make</span>(<span class="hljs-keyword">chan</span> os.Signal, <span class="hljs-number">1</span>)<br>    signal.Notify(sig, os.Interrupt)<br>    <span class="hljs-keyword">go</span> <span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">()</span></span> &#123;<br>        &lt;-sig<br>        rd.Close()<br>    &#125;()<br><br>    fmt.Printf(<span class="hljs-string">&quot;%-8s %-8s %-16s %s\n&quot;</span>, <span class="hljs-string">&quot;PID&quot;</span>, <span class="hljs-string">&quot;PPID&quot;</span>, <span class="hljs-string">&quot;COMM&quot;</span>, <span class="hljs-string">&quot;FILENAME&quot;</span>)<br>    <span class="hljs-keyword">for</span> &#123;<br>        record, err := rd.Read()<br>        <span class="hljs-keyword">if</span> err != <span class="hljs-literal">nil</span> &#123;<br>            <span class="hljs-keyword">return</span><br>        &#125;<br><br>        <span class="hljs-keyword">var</span> event Event<br>        <span class="hljs-keyword">if</span> err := binary.Read(bytes.NewReader(record.RawSample), binary.LittleEndian, &amp;event); err != <span class="hljs-literal">nil</span> &#123;<br>            <span class="hljs-keyword">continue</span><br>        &#125;<br><br>        comm := <span class="hljs-type">string</span>(bytes.TrimRight(event.Comm[:], <span class="hljs-string">&quot;\x00&quot;</span>))<br>        filename := <span class="hljs-type">string</span>(bytes.TrimRight(event.Filename[:], <span class="hljs-string">&quot;\x00&quot;</span>))<br>        fmt.Printf(<span class="hljs-string">&quot;%-8d %-8d %-16s %s\n&quot;</span>, event.PID, event.PPID, comm, filename)<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="ebpf生态全景">eBPF生态全景</h2>
+<pre class="mermaid">graph TB
+    subgraph Ecosystem["eBPF生态"]
+        subgraph Networking["网络"]
+            Cilium2["Cilium&lt;br&gt;CNI + Service Mesh"]
+            Katran["Katran&lt;br&gt;L4负载均衡"]
+            Cloudflare["Cloudflare&lt;br&gt;DDoS防护"]
+        end
+
+        subgraph Observability["可观测性"]
+            Pixie2["Pixie&lt;br&gt;自动可观测性"]
+            Hubble2["Hubble&lt;br&gt;网络可观测性"]
+            Parca["Parca&lt;br&gt;持续剖析"]
+            Pyroscope["Pyroscope&lt;br&gt;持续剖析"]
+        end
+
+        subgraph Security["安全"]
+            Falco2["Falco&lt;br&gt;运行时安全"]
+            Tetragon["Tetragon&lt;br&gt;安全可观测性"]
+            Tracee["Tracee&lt;br&gt;安全跟踪"]
+        end
+
+        subgraph Tools["开发工具"]
+            BCC2["BCC&lt;br&gt;工具集"]
+            bpftrace2["bpftrace&lt;br&gt;跟踪语言"]
+            libbpf2["libbpf&lt;br&gt;C库"]
+            ciliumebpf["cilium/ebpf&lt;br&gt;Go库"]
+            aya["Aya&lt;br&gt;Rust库"]
+        end
+    end</pre>
+<h2 id="总结">总结</h2>
+<p>eBPF技术的核心价值：</p>
+<ol type="1">
+<li><strong>安全性</strong>：验证器确保程序不会崩溃内核，可在生产环境安全使用</li>
+<li><strong>高性能</strong>：在内核空间运行，JIT编译为原生指令，避免内核-用户空间切换</li>
+<li><strong>可编程</strong>：无需修改内核或加载模块，动态注入观测和控制逻辑</li>
+<li><strong>广泛应用</strong>：网络（Cilium）、安全（Falco/Tetragon）、可观测性（Pixie/Hubble）</li>
+</ol>
+<p>eBPF正在成为Linux内核的”JavaScript”——一个可编程的扩展平台。随着工具生态的成熟，eBPF将成为每个DevOps工程师必备的技能。从BCC工具和bpftrace入门，逐步深入到使用Go/Rust开发自定义eBPF程序，是推荐的学习路径。</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2024-08-21</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">3.6k 字 · 9 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/grafana-observability/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Grafana可观测性平台搭建指南</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/linux-performance-tuning/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Linux性能调优：从内核参数到应用优化</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#ebpf%E6%9E%B6%E6%9E%84"><span class="toc-text">eBPF架构</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%B7%A5%E4%BD%9C%E6%B5%81%E7%A8%8B"><span class="toc-text">工作流程</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%AA%8C%E8%AF%81%E5%99%A8verifier"><span class="toc-text">验证器（Verifier）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#ebpf-maps"><span class="toc-text">eBPF Maps</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#ebpf%E7%A8%8B%E5%BA%8F%E7%B1%BB%E5%9E%8B"><span class="toc-text">eBPF程序类型</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#kprobe---%E5%86%85%E6%A0%B8%E5%87%BD%E6%95%B0%E8%B7%9F%E8%B8%AA"><span class="toc-text">kprobe - 内核函数跟踪</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#xdp---%E9%AB%98%E9%80%9F%E7%BD%91%E7%BB%9C%E6%95%B0%E6%8D%AE%E5%A4%84%E7%90%86"><span class="toc-text">XDP - 高速网络数据处理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#tracepoint---%E5%86%85%E6%A0%B8%E8%B7%9F%E8%B8%AA%E7%82%B9"><span class="toc-text">tracepoint - 内核跟踪点</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#bcc%E5%B7%A5%E5%85%B7%E9%9B%86"><span class="toc-text">BCC工具集</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#bpftrace"><span class="toc-text">bpftrace</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BD%91%E7%BB%9C%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7"><span class="toc-text">网络可观测性</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#cilium"><span class="toc-text">Cilium</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#cilium-l7%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7"><span class="toc-text">Cilium L7可观测性</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%89%E5%85%A8%E7%9B%91%E6%8E%A7"><span class="toc-text">安全监控</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#falco"><span class="toc-text">Falco</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#pixie"><span class="toc-text">Pixie</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BD%BF%E7%94%A8go%E5%BC%80%E5%8F%91ebpf%E7%A8%8B%E5%BA%8F"><span class="toc-text">使用Go开发eBPF程序</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#ebpf%E7%94%9F%E6%80%81%E5%85%A8%E6%99%AF"><span class="toc-text">eBPF生态全景</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

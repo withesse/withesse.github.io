@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Web安全攻防：XSS/CSRF/SQL注入防护 · zt&#39;s Blog</title>
+  <meta name="description" content="全面解析Web安全常见攻击类型（XSS、CSRF、SQL注入、SSRF、点击劫持），深入分析攻击原理和防护策略。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/web-security-defense/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Web安全攻防：XSS/CSRF/SQL注入防护">
+  <meta property="og:description" content="全面解析Web安全常见攻击类型（XSS、CSRF、SQL注入、SSRF、点击劫持），深入分析攻击原理和防护策略。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/web-security-defense/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2025-06-28T16:00:00.000Z">
+  <meta property="article:modified_time" content="2025-06-28T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Web安全攻防：XSS/CSRF/SQL注入防护">
+  <meta name="twitter:description" content="全面解析Web安全常见攻击类型（XSS、CSRF、SQL注入、SSRF、点击劫持），深入分析攻击原理和防护策略。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Web安全攻防：XSS/CSRF/SQL注入防护","description":"全面解析Web安全常见攻击类型（XSS、CSRF、SQL注入、SSRF、点击劫持），深入分析攻击原理和防护策略。","datePublished":"2025-06-28T16:00:00.000Z","dateModified":"2025-06-28T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/web-security-defense/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Security","item":"https://withesse.co/categories/Security/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:350">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Security/">Security</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/web-security/"><span class="hash">#</span>web-security</a><a class="tag" href="/tags/xss/"><span class="hash">#</span>xss</a><a class="tag" href="/tags/csrf/"><span class="hash">#</span>csrf</a><a class="tag" href="/tags/sql-injection/"><span class="hash">#</span>sql-injection</a>
+        
+      </div>
+
+      <h1>Web安全攻防：XSS/CSRF/SQL注入防护</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2025.06.29</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 8 min</span>
+        </span>
+        <span class="wc"><span class="num">3.2k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%94%BB%E5%87%BB%E7%B1%BB%E5%9E%8B%E5%85%A8%E6%99%AF"><span class="toc-text">攻击类型全景</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#xss%E8%B7%A8%E7%AB%99%E8%84%9A%E6%9C%AC%E6%94%BB%E5%87%BB"><span class="toc-text">XSS（跨站脚本攻击）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%89%E7%A7%8Dxss%E7%B1%BB%E5%9E%8B"><span class="toc-text">三种XSS类型</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#xss%E6%94%BB%E5%87%BB%E7%A4%BA%E4%BE%8B"><span class="toc-text">XSS攻击示例</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#xss%E9%98%B2%E5%BE%A1%E7%AD%96%E7%95%A5"><span class="toc-text">XSS防御策略</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#csrf%E8%B7%A8%E7%AB%99%E8%AF%B7%E6%B1%82%E4%BC%AA%E9%80%A0"><span class="toc-text">CSRF（跨站请求伪造）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%94%BB%E5%87%BB%E5%8E%9F%E7%90%86"><span class="toc-text">攻击原理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#csrf%E9%98%B2%E5%BE%A1"><span class="toc-text">CSRF防御</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#sql%E6%B3%A8%E5%85%A5"><span class="toc-text">SQL注入</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%94%BB%E5%87%BB%E5%8E%9F%E7%90%86-1"><span class="toc-text">攻击原理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#sql%E6%B3%A8%E5%85%A5%E9%98%B2%E5%BE%A1"><span class="toc-text">SQL注入防御</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#ssrf%E6%9C%8D%E5%8A%A1%E7%AB%AF%E8%AF%B7%E6%B1%82%E4%BC%AA%E9%80%A0"><span class="toc-text">SSRF（服务端请求伪造）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#ssrf%E9%98%B2%E5%BE%A1"><span class="toc-text">SSRF防御</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%82%B9%E5%87%BB%E5%8A%AB%E6%8C%81clickjacking"><span class="toc-text">点击劫持（Clickjacking）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%98%B2%E5%BE%A1"><span class="toc-text">防御</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%89%E5%85%A8http%E5%A4%B4%E6%B1%87%E6%80%BB"><span class="toc-text">安全HTTP头汇总</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%89%E5%85%A8%E6%A3%80%E6%9F%A5%E6%B8%85%E5%8D%95"><span class="toc-text">安全检查清单</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="前言">前言</h2>
+<p>Web安全是每一位开发者都必须掌握的基础知识。无论技术栈如何变化，SQL注入、XSS、CSRF这些经典攻击方式始终是OWASP
+Top
+10的常客。本文将深入分析各种Web攻击的原理，并给出系统性的防御方案。</p>
+<h2 id="攻击类型全景">攻击类型全景</h2>
+<pre class="mermaid">mindmap
+  root((Web安全攻防))
+    注入类
+      XSS (跨站脚本)
+        反射型
+        存储型
+        DOM型
+      SQL注入
+      命令注入
+      LDAP注入
+    跨域类
+      CSRF (跨站请求伪造)
+      SSRF (服务端请求伪造)
+      CORS误配置
+    客户端
+      点击劫持
+      开放重定向
+      WebSocket劫持
+    认证与会话
+      Session固定
+      暴力破解
+      会话劫持</pre>
+<h2 id="xss跨站脚本攻击">XSS（跨站脚本攻击）</h2>
+<h3 id="三种xss类型">三种XSS类型</h3>
+<pre class="mermaid">graph TB
+    subgraph "反射型XSS"
+        A1[攻击者构造恶意URL] --&gt; A2[用户点击链接]
+        A2 --&gt; A3[服务端将参数&lt;br&gt;原样反射到页面]
+        A3 --&gt; A4[恶意脚本在&lt;br&gt;用户浏览器执行]
+    end
+
+    subgraph "存储型XSS"
+        B1[攻击者提交恶意内容] --&gt; B2[内容存入数据库]
+        B2 --&gt; B3[其他用户浏览页面]
+        B3 --&gt; B4[恶意脚本在&lt;br&gt;所有访问者浏览器执行]
+    end
+
+    subgraph "DOM型XSS"
+        C1[攻击者构造恶意URL] --&gt; C2[前端JS直接读取URL参数]
+        C2 --&gt; C3[不经过服务端&lt;br&gt;直接插入DOM]
+        C3 --&gt; C4[恶意脚本执行]
+    end</pre>
+<h3 id="xss攻击示例">XSS攻击示例</h3>
+<p>反射型XSS场景：搜索页面直接将用户的查询参数输出到HTML中，未做任何转义。攻击者构造包含脚本标签的URL，诱骗用户点击后脚本在用户浏览器中执行。</p>
+<p>存储型XSS场景：攻击者在评论区提交包含恶意事件处理器的HTML标签（如img的onerror属性），内容存入数据库后，所有浏览该页面的用户都会触发恶意代码，将Cookie等敏感信息发送到攻击者服务器。</p>
+<p>DOM型XSS场景：前端JavaScript直接从URL参数读取内容并写入DOM，不经过服务端处理。</p>
+<h3 id="xss防御策略">XSS防御策略</h3>
+<h4 id="输出编码最基本的防御">1. 输出编码（最基本的防御）</h4>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-comment">// HTML上下文 - HTML实体编码</span><br><span class="hljs-keyword">function</span> <span class="hljs-title function_">escapeHTML</span>(<span class="hljs-params">str</span>) &#123;<br>    <span class="hljs-keyword">const</span> map = &#123;<br>        <span class="hljs-string">&#x27;&amp;&#x27;</span>: <span class="hljs-string">&#x27;&amp;amp;&#x27;</span>,<br>        <span class="hljs-string">&#x27;&lt;&#x27;</span>: <span class="hljs-string">&#x27;&amp;lt;&#x27;</span>,<br>        <span class="hljs-string">&#x27;&gt;&#x27;</span>: <span class="hljs-string">&#x27;&amp;gt;&#x27;</span>,<br>        <span class="hljs-string">&#x27;&quot;&#x27;</span>: <span class="hljs-string">&#x27;&amp;quot;&#x27;</span>,<br>        <span class="hljs-string">&quot;&#x27;&quot;</span>: <span class="hljs-string">&#x27;&amp;#x27;&#x27;</span>,<br>    &#125;;<br>    <span class="hljs-keyword">return</span> str.<span class="hljs-title function_">replace</span>(<span class="hljs-regexp">/[&amp;&lt;&gt;&quot;&#x27;]/g</span>, <span class="hljs-function"><span class="hljs-params">c</span> =&gt;</span> map[c]);<br>&#125;<br><br><span class="hljs-comment">// JavaScript上下文 - JS编码</span><br><span class="hljs-keyword">function</span> <span class="hljs-title function_">escapeJS</span>(<span class="hljs-params">str</span>) &#123;<br>    <span class="hljs-keyword">return</span> str.<span class="hljs-title function_">replace</span>(<span class="hljs-regexp">/[\\&#x27;&quot;&lt;&gt;&amp;]/g</span>, <span class="hljs-function"><span class="hljs-params">c</span> =&gt;</span> &#123;<br>        <span class="hljs-keyword">return</span> <span class="hljs-string">&#x27;\\u&#x27;</span> + (<span class="hljs-string">&#x27;0000&#x27;</span> + c.<span class="hljs-title function_">charCodeAt</span>(<span class="hljs-number">0</span>).<span class="hljs-title function_">toString</span>(<span class="hljs-number">16</span>)).<span class="hljs-title function_">slice</span>(-<span class="hljs-number">4</span>);<br>    &#125;);<br>&#125;<br><br><span class="hljs-comment">// URL上下文 - URL编码</span><br><span class="hljs-keyword">function</span> <span class="hljs-title function_">escapeURL</span>(<span class="hljs-params">str</span>) &#123;<br>    <span class="hljs-keyword">return</span> <span class="hljs-built_in">encodeURIComponent</span>(str);<br>&#125;<br></code></pre></td></tr></table></figure>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-comment">// Go模板自动转义</span><br><span class="hljs-keyword">import</span> <span class="hljs-string">&quot;html/template&quot;</span><br><br>tmpl := template.Must(template.New(<span class="hljs-string">&quot;page&quot;</span>).Parse(<span class="hljs-string">`</span><br><span class="hljs-string">    &lt;h1&gt;&#123;&#123;.Title&#125;&#125;&lt;/h1&gt;</span><br><span class="hljs-string">    &lt;p&gt;&#123;&#123;.Content&#125;&#125;&lt;/p&gt;</span><br><span class="hljs-string">`</span>))<br><span class="hljs-comment">// &#123;&#123;.Title&#125;&#125; 和 &#123;&#123;.Content&#125;&#125; 自动HTML转义</span><br></code></pre></td></tr></table></figure>
+<h4 id="content-security-policycsp">2. Content Security
+Policy（CSP）</h4>
+<figure class="highlight nginx"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><code class="hljs nginx"><span class="hljs-comment"># Nginx CSP配置</span><br><span class="hljs-attribute">add_header</span> Content-Security-Policy <span class="hljs-string">&quot;</span><br><span class="hljs-string">    default-src &#x27;self&#x27;;</span><br><span class="hljs-string">    script-src &#x27;self&#x27; &#x27;nonce-<span class="hljs-variable">$&#123;request_id&#125;</span>&#x27; https://cdn.example.com;</span><br><span class="hljs-string">    style-src &#x27;self&#x27; &#x27;unsafe-inline&#x27;;</span><br><span class="hljs-string">    img-src &#x27;self&#x27; data: https:;</span><br><span class="hljs-string">    connect-src &#x27;self&#x27; https://api.example.com;</span><br><span class="hljs-string">    font-src &#x27;self&#x27; https://fonts.googleapis.com;</span><br><span class="hljs-string">    frame-ancestors &#x27;none&#x27;;</span><br><span class="hljs-string">    base-uri &#x27;self&#x27;;</span><br><span class="hljs-string">    form-action &#x27;self&#x27;;</span><br><span class="hljs-string">&quot;</span> always;<br></code></pre></td></tr></table></figure>
+<p>使用nonce机制时，只有携带正确nonce属性的脚本标签才能被浏览器执行，其他所有内联脚本都会被CSP阻止。</p>
+<h4 id="dom型xss防御">3. DOM型XSS防御</h4>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-comment">// 不安全: 直接使用DOM API插入未净化的HTML</span><br><span class="hljs-comment">// 永远不要将用户输入直接作为HTML插入DOM</span><br><br><span class="hljs-comment">// 安全: 使用textContent（自动转义）</span><br>element.<span class="hljs-property">textContent</span> = userInput;<br><br><span class="hljs-comment">// 安全: 使用DOMPurify清理必须渲染的HTML</span><br><span class="hljs-keyword">import</span> <span class="hljs-title class_">DOMPurify</span> <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;dompurify&#x27;</span>;<br><span class="hljs-keyword">const</span> cleanHTML = <span class="hljs-title class_">DOMPurify</span>.<span class="hljs-title function_">sanitize</span>(userInput);<br><br><span class="hljs-comment">// 安全: 使用Trusted Types API</span><br><span class="hljs-keyword">if</span> (<span class="hljs-variable language_">window</span>.<span class="hljs-property">trustedTypes</span>) &#123;<br>    <span class="hljs-keyword">const</span> policy = trustedTypes.<span class="hljs-title function_">createPolicy</span>(<span class="hljs-string">&#x27;default&#x27;</span>, &#123;<br>        <span class="hljs-attr">createHTML</span>: <span class="hljs-function">(<span class="hljs-params">input</span>) =&gt;</span> <span class="hljs-title class_">DOMPurify</span>.<span class="hljs-title function_">sanitize</span>(input),<br>    &#125;);<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="csrf跨站请求伪造">CSRF（跨站请求伪造）</h2>
+<h3 id="攻击原理">攻击原理</h3>
+<pre class="mermaid">sequenceDiagram
+    participant U as User Browser
+    participant Bank as bank.com
+    participant Evil as evil.com
+
+    U-&gt;&gt;Bank: 1. 登录银行网站
+    Bank-&gt;&gt;U: 2. 设置Session Cookie
+
+    U-&gt;&gt;Evil: 3. 访问恶意网站
+    Evil-&gt;&gt;U: 4. 返回包含隐藏表单的页面
+
+    Note over Evil: 恶意页面包含自动提交的表单&lt;br&gt;目标指向 bank.com/transfer&lt;br&gt;携带攻击者的收款信息
+
+    U-&gt;&gt;Bank: 5. 浏览器自动携带Cookie提交表单
+    Note over Bank: 6. 银行无法区分是用户操作还是CSRF
+
+    Bank-&gt;&gt;Bank: 7. 转账执行!</pre>
+<h3 id="csrf防御">CSRF防御</h3>
+<h4 id="samesite-cookie">1. SameSite Cookie</h4>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-comment"># 设置SameSite Cookie属性</span><br><span class="hljs-keyword">from</span> flask <span class="hljs-keyword">import</span> Flask, make_response<br><br>app = Flask(__name__)<br><br><span class="hljs-meta">@app.after_request</span><br><span class="hljs-keyword">def</span> <span class="hljs-title function_">set_cookie_policy</span>(<span class="hljs-params">response</span>):<br>    <span class="hljs-comment"># Strict: 完全禁止第三方Cookie</span><br>    <span class="hljs-comment"># Lax: 允许GET导航携带Cookie（默认值）</span><br>    <span class="hljs-comment"># None: 允许跨站（必须配合Secure）</span><br>    response.set_cookie(<br>        <span class="hljs-string">&#x27;session_id&#x27;</span>,<br>        value=<span class="hljs-string">&#x27;xxx&#x27;</span>,<br>        samesite=<span class="hljs-string">&#x27;Lax&#x27;</span>,     <span class="hljs-comment"># 推荐Lax</span><br>        secure=<span class="hljs-literal">True</span>,        <span class="hljs-comment"># HTTPS only</span><br>        httponly=<span class="hljs-literal">True</span>,       <span class="hljs-comment"># JS无法访问</span><br>        max_age=<span class="hljs-number">3600</span><br>    )<br>    <span class="hljs-keyword">return</span> response<br></code></pre></td></tr></table></figure>
+<h4 id="csrf-token">2. CSRF Token</h4>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-comment"># 服务端生成和验证CSRF Token</span><br><span class="hljs-keyword">import</span> secrets<br><span class="hljs-keyword">from</span> functools <span class="hljs-keyword">import</span> wraps<br><br><span class="hljs-keyword">def</span> <span class="hljs-title function_">generate_csrf_token</span>():<br>    token = secrets.token_hex(<span class="hljs-number">32</span>)<br>    session[<span class="hljs-string">&#x27;csrf_token&#x27;</span>] = token<br>    <span class="hljs-keyword">return</span> token<br><br><span class="hljs-keyword">def</span> <span class="hljs-title function_">csrf_protect</span>(<span class="hljs-params">f</span>):<br><span class="hljs-meta">    @wraps(<span class="hljs-params">f</span>)</span><br>    <span class="hljs-keyword">def</span> <span class="hljs-title function_">decorated</span>(<span class="hljs-params">*args, **kwargs</span>):<br>        <span class="hljs-keyword">if</span> request.method <span class="hljs-keyword">in</span> (<span class="hljs-string">&#x27;POST&#x27;</span>, <span class="hljs-string">&#x27;PUT&#x27;</span>, <span class="hljs-string">&#x27;DELETE&#x27;</span>, <span class="hljs-string">&#x27;PATCH&#x27;</span>):<br>            token = request.form.get(<span class="hljs-string">&#x27;csrf_token&#x27;</span>) <span class="hljs-keyword">or</span> \<br>                    request.headers.get(<span class="hljs-string">&#x27;X-CSRF-Token&#x27;</span>)<br>            <span class="hljs-keyword">if</span> <span class="hljs-keyword">not</span> token <span class="hljs-keyword">or</span> token != session.get(<span class="hljs-string">&#x27;csrf_token&#x27;</span>):<br>                abort(<span class="hljs-number">403</span>, <span class="hljs-string">&#x27;CSRF token validation failed&#x27;</span>)<br>        <span class="hljs-keyword">return</span> f(*args, **kwargs)<br>    <span class="hljs-keyword">return</span> decorated<br></code></pre></td></tr></table></figure>
+<figure class="highlight html"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><code class="hljs html"><span class="hljs-comment">&lt;!-- 表单中嵌入CSRF Token --&gt;</span><br><span class="hljs-tag">&lt;<span class="hljs-name">form</span> <span class="hljs-attr">method</span>=<span class="hljs-string">&quot;POST&quot;</span> <span class="hljs-attr">action</span>=<span class="hljs-string">&quot;/transfer&quot;</span>&gt;</span><br>    <span class="hljs-tag">&lt;<span class="hljs-name">input</span> <span class="hljs-attr">type</span>=<span class="hljs-string">&quot;hidden&quot;</span> <span class="hljs-attr">name</span>=<span class="hljs-string">&quot;csrf_token&quot;</span> <span class="hljs-attr">value</span>=<span class="hljs-string">&quot;&#123;&#123; csrf_token &#125;&#125;&quot;</span>&gt;</span><br>    <span class="hljs-tag">&lt;<span class="hljs-name">input</span> <span class="hljs-attr">name</span>=<span class="hljs-string">&quot;to&quot;</span> <span class="hljs-attr">placeholder</span>=<span class="hljs-string">&quot;收款人&quot;</span>&gt;</span><br>    <span class="hljs-tag">&lt;<span class="hljs-name">input</span> <span class="hljs-attr">name</span>=<span class="hljs-string">&quot;amount&quot;</span> <span class="hljs-attr">placeholder</span>=<span class="hljs-string">&quot;金额&quot;</span>&gt;</span><br>    <span class="hljs-tag">&lt;<span class="hljs-name">button</span> <span class="hljs-attr">type</span>=<span class="hljs-string">&quot;submit&quot;</span>&gt;</span>转账<span class="hljs-tag">&lt;/<span class="hljs-name">button</span>&gt;</span><br><span class="hljs-tag">&lt;/<span class="hljs-name">form</span>&gt;</span><br></code></pre></td></tr></table></figure>
+<h4 id="double-submit-cookie">3. Double Submit Cookie</h4>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-comment">// 前端: 从Cookie读取token并放入请求头</span><br><span class="hljs-keyword">function</span> <span class="hljs-title function_">getCookie</span>(<span class="hljs-params">name</span>) &#123;<br>    <span class="hljs-keyword">const</span> match = <span class="hljs-variable language_">document</span>.<span class="hljs-property">cookie</span>.<span class="hljs-title function_">match</span>(<span class="hljs-keyword">new</span> <span class="hljs-title class_">RegExp</span>(<span class="hljs-string">`<span class="hljs-subst">$&#123;name&#125;</span>=([^;]+)`</span>));<br>    <span class="hljs-keyword">return</span> match ? match[<span class="hljs-number">1</span>] : <span class="hljs-literal">null</span>;<br>&#125;<br><br><span class="hljs-title function_">fetch</span>(<span class="hljs-string">&#x27;/api/transfer&#x27;</span>, &#123;<br>    <span class="hljs-attr">method</span>: <span class="hljs-string">&#x27;POST&#x27;</span>,<br>    <span class="hljs-attr">headers</span>: &#123;<br>        <span class="hljs-string">&#x27;Content-Type&#x27;</span>: <span class="hljs-string">&#x27;application/json&#x27;</span>,<br>        <span class="hljs-string">&#x27;X-CSRF-Token&#x27;</span>: <span class="hljs-title function_">getCookie</span>(<span class="hljs-string">&#x27;csrf_token&#x27;</span>),<br>    &#125;,<br>    <span class="hljs-attr">body</span>: <span class="hljs-title class_">JSON</span>.<span class="hljs-title function_">stringify</span>(&#123; <span class="hljs-attr">to</span>: <span class="hljs-string">&#x27;user&#x27;</span>, <span class="hljs-attr">amount</span>: <span class="hljs-number">100</span> &#125;),<br>&#125;);<br></code></pre></td></tr></table></figure>
+<h2 id="sql注入">SQL注入</h2>
+<h3 id="攻击原理-1">攻击原理</h3>
+<pre class="mermaid">flowchart LR
+    INPUT["用户输入:&lt;br&gt;恶意SQL片段"] --&gt; QUERY["拼接后的SQL:&lt;br&gt;条件被篡改"]
+    QUERY --&gt; DB[(Database)]
+    DB --&gt; RESULT[返回非预期数据!]
+
+    style INPUT fill:#d32f2f,color:#fff
+    style RESULT fill:#d32f2f,color:#fff</pre>
+<p>当应用程序使用字符串拼接构建SQL查询时，攻击者可以通过在输入中嵌入SQL语法来修改查询的逻辑。例如在用户名字段输入
+<code>' OR '1'='1' --</code>
+会使WHERE条件永远为真，返回所有记录。更危险的是输入
+<code>'; DROP TABLE users; --</code> 可以直接删除数据表。</p>
+<h3 id="sql注入防御">SQL注入防御</h3>
+<h4 id="参数化查询最有效">1. 参数化查询（最有效）</h4>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-comment"># Python - 参数化查询</span><br><span class="hljs-keyword">import</span> psycopg2<br><br>conn = psycopg2.connect(dsn)<br>cursor = conn.cursor()<br><br><span class="hljs-comment"># 安全: 使用参数化查询</span><br>cursor.execute(<br>    <span class="hljs-string">&quot;SELECT * FROM users WHERE username = %s AND password = %s&quot;</span>,<br>    (username, password_hash)<br>)<br><br><span class="hljs-comment"># 安全: 使用命名参数</span><br>cursor.execute(<br>    <span class="hljs-string">&quot;SELECT * FROM users WHERE username = %(user)s&quot;</span>,<br>    &#123;<span class="hljs-string">&quot;user&quot;</span>: username&#125;<br>)<br></code></pre></td></tr></table></figure>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-comment">// Go - 参数化查询</span><br>db.QueryRow(<br>    <span class="hljs-string">&quot;SELECT id, name FROM users WHERE email = $1&quot;</span>,<br>    email,<br>)<br><br><span class="hljs-comment">// 预编译语句</span><br>stmt, _ := db.Prepare(<span class="hljs-string">&quot;INSERT INTO users (name, email) VALUES ($1, $2)&quot;</span>)<br>stmt.Exec(name, email)<br></code></pre></td></tr></table></figure>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">// Java - PreparedStatement</span><br><span class="hljs-type">PreparedStatement</span> <span class="hljs-variable">stmt</span> <span class="hljs-operator">=</span> conn.prepareStatement(<br>    <span class="hljs-string">&quot;SELECT * FROM users WHERE id = ? AND status = ?&quot;</span><br>);<br>stmt.setInt(<span class="hljs-number">1</span>, userId);<br>stmt.setString(<span class="hljs-number">2</span>, <span class="hljs-string">&quot;active&quot;</span>);<br><span class="hljs-type">ResultSet</span> <span class="hljs-variable">rs</span> <span class="hljs-operator">=</span> stmt.executeQuery();<br></code></pre></td></tr></table></figure>
+<h4 id="orm自带参数化">2. ORM（自带参数化）</h4>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-comment"># SQLAlchemy ORM</span><br><span class="hljs-keyword">from</span> sqlalchemy <span class="hljs-keyword">import</span> select, text<br><br><span class="hljs-comment"># 安全: ORM自动参数化</span><br>user = session.execute(<br>    select(User).where(User.username == username)<br>).scalar_one_or_none()<br><br><span class="hljs-comment"># 如果必须使用raw SQL，使用text()绑定参数</span><br>result = session.execute(<br>    text(<span class="hljs-string">&quot;SELECT * FROM users WHERE name = :name&quot;</span>),<br>    &#123;<span class="hljs-string">&quot;name&quot;</span>: username&#125;<br>)<br></code></pre></td></tr></table></figure>
+<h4 id="输入验证">3. 输入验证</h4>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-comment"># 白名单验证</span><br><span class="hljs-keyword">def</span> <span class="hljs-title function_">validate_sort_column</span>(<span class="hljs-params">column</span>):<br>    <span class="hljs-string">&quot;&quot;&quot;只允许预定义的排序列&quot;&quot;&quot;</span><br>    allowed = &#123;<span class="hljs-string">&#x27;id&#x27;</span>, <span class="hljs-string">&#x27;name&#x27;</span>, <span class="hljs-string">&#x27;created_at&#x27;</span>, <span class="hljs-string">&#x27;updated_at&#x27;</span>&#125;<br>    <span class="hljs-keyword">if</span> column <span class="hljs-keyword">not</span> <span class="hljs-keyword">in</span> allowed:<br>        <span class="hljs-keyword">raise</span> ValueError(<span class="hljs-string">f&quot;Invalid sort column: <span class="hljs-subst">&#123;column&#125;</span>&quot;</span>)<br>    <span class="hljs-keyword">return</span> column<br><br><span class="hljs-keyword">def</span> <span class="hljs-title function_">validate_order</span>(<span class="hljs-params">order</span>):<br>    <span class="hljs-string">&quot;&quot;&quot;只允许ASC/DESC&quot;&quot;&quot;</span><br>    <span class="hljs-keyword">if</span> order.upper() <span class="hljs-keyword">not</span> <span class="hljs-keyword">in</span> (<span class="hljs-string">&#x27;ASC&#x27;</span>, <span class="hljs-string">&#x27;DESC&#x27;</span>):<br>        <span class="hljs-keyword">raise</span> ValueError(<span class="hljs-string">f&quot;Invalid order: <span class="hljs-subst">&#123;order&#125;</span>&quot;</span>)<br>    <span class="hljs-keyword">return</span> order.upper()<br></code></pre></td></tr></table></figure>
+<h2 id="ssrf服务端请求伪造">SSRF（服务端请求伪造）</h2>
+<pre class="mermaid">sequenceDiagram
+    participant A as Attacker
+    participant S as Server
+    participant I as Internal Service&lt;br&gt;(169.254.169.254)
+
+    A-&gt;&gt;S: POST /api/fetch-url&lt;br&gt;url=http://169.254.169.254/latest/meta-data/
+
+    Note over S: 服务端发起请求&lt;br&gt;可以访问内网!
+
+    S-&gt;&gt;I: GET /latest/meta-data/
+    I-&gt;&gt;S: AWS IAM凭证
+    S-&gt;&gt;A: 返回内网数据</pre>
+<h3 id="ssrf防御">SSRF防御</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">import</span> ipaddress<br><span class="hljs-keyword">from</span> urllib.parse <span class="hljs-keyword">import</span> urlparse<br><span class="hljs-keyword">import</span> socket<br><br><span class="hljs-keyword">class</span> <span class="hljs-title class_">SSRFProtection</span>:<br>    <span class="hljs-comment"># 禁止访问的IP范围</span><br>    BLOCKED_RANGES = [<br>        ipaddress.ip_network(<span class="hljs-string">&#x27;10.0.0.0/8&#x27;</span>),<br>        ipaddress.ip_network(<span class="hljs-string">&#x27;172.16.0.0/12&#x27;</span>),<br>        ipaddress.ip_network(<span class="hljs-string">&#x27;192.168.0.0/16&#x27;</span>),<br>        ipaddress.ip_network(<span class="hljs-string">&#x27;127.0.0.0/8&#x27;</span>),<br>        ipaddress.ip_network(<span class="hljs-string">&#x27;169.254.0.0/16&#x27;</span>),  <span class="hljs-comment"># AWS metadata</span><br>        ipaddress.ip_network(<span class="hljs-string">&#x27;::1/128&#x27;</span>),<br>        ipaddress.ip_network(<span class="hljs-string">&#x27;fd00::/8&#x27;</span>),<br>    ]<br><br>    ALLOWED_SCHEMES = &#123;<span class="hljs-string">&#x27;http&#x27;</span>, <span class="hljs-string">&#x27;https&#x27;</span>&#125;<br><br><span class="hljs-meta">    @classmethod</span><br>    <span class="hljs-keyword">def</span> <span class="hljs-title function_">validate_url</span>(<span class="hljs-params">cls, url</span>):<br>        <span class="hljs-string">&quot;&quot;&quot;验证URL是否安全&quot;&quot;&quot;</span><br>        parsed = urlparse(url)<br><br>        <span class="hljs-comment"># 1. 协议白名单</span><br>        <span class="hljs-keyword">if</span> parsed.scheme <span class="hljs-keyword">not</span> <span class="hljs-keyword">in</span> cls.ALLOWED_SCHEMES:<br>            <span class="hljs-keyword">raise</span> ValueError(<span class="hljs-string">f&quot;Scheme not allowed: <span class="hljs-subst">&#123;parsed.scheme&#125;</span>&quot;</span>)<br><br>        <span class="hljs-comment"># 2. DNS解析并检查IP</span><br>        hostname = parsed.hostname<br>        <span class="hljs-keyword">try</span>:<br>            ip = ipaddress.ip_address(socket.gethostbyname(hostname))<br>        <span class="hljs-keyword">except</span> (socket.gaierror, ValueError):<br>            <span class="hljs-keyword">raise</span> ValueError(<span class="hljs-string">f&quot;Cannot resolve: <span class="hljs-subst">&#123;hostname&#125;</span>&quot;</span>)<br><br>        <span class="hljs-comment"># 3. 检查IP是否在禁止范围内</span><br>        <span class="hljs-keyword">for</span> network <span class="hljs-keyword">in</span> cls.BLOCKED_RANGES:<br>            <span class="hljs-keyword">if</span> ip <span class="hljs-keyword">in</span> network:<br>                <span class="hljs-keyword">raise</span> ValueError(<span class="hljs-string">f&quot;Access to internal IP blocked: <span class="hljs-subst">&#123;ip&#125;</span>&quot;</span>)<br><br>        <span class="hljs-comment"># 4. 端口白名单</span><br>        port = parsed.port <span class="hljs-keyword">or</span> (<span class="hljs-number">443</span> <span class="hljs-keyword">if</span> parsed.scheme == <span class="hljs-string">&#x27;https&#x27;</span> <span class="hljs-keyword">else</span> <span class="hljs-number">80</span>)<br>        <span class="hljs-keyword">if</span> port <span class="hljs-keyword">not</span> <span class="hljs-keyword">in</span> &#123;<span class="hljs-number">80</span>, <span class="hljs-number">443</span>&#125;:<br>            <span class="hljs-keyword">raise</span> ValueError(<span class="hljs-string">f&quot;Port not allowed: <span class="hljs-subst">&#123;port&#125;</span>&quot;</span>)<br><br>        <span class="hljs-keyword">return</span> url<br></code></pre></td></tr></table></figure>
+<h2 id="点击劫持clickjacking">点击劫持（Clickjacking）</h2>
+<p>攻击者将目标网站嵌入透明iframe中，诱骗用户点击看似正常的按钮，实际操作的是目标网站。</p>
+<pre class="mermaid">graph TB
+    subgraph "用户看到的"
+        FAKE[看似正常的页面&lt;br&gt;点击领取优惠券]
+    end
+
+    subgraph "实际结构"
+        VISIBLE[攻击者页面 - 可见层]
+        IFRAME[目标网站iframe - 透明层&lt;br&gt;opacity: 0&lt;br&gt;包含删除账户按钮]
+    end
+
+    FAKE --&gt; |用户点击| IFRAME
+    IFRAME --&gt; |实际操作| DELETE[删除账户!]</pre>
+<h3 id="防御">防御</h3>
+<figure class="highlight nginx"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><code class="hljs nginx"><span class="hljs-comment"># 方案1: X-Frame-Options</span><br><span class="hljs-attribute">add_header</span> X-Frame-Options <span class="hljs-string">&quot;DENY&quot;</span> always;<br><span class="hljs-comment"># DENY: 不允许任何嵌入</span><br><span class="hljs-comment"># SAMEORIGIN: 只允许同源嵌入</span><br><br><span class="hljs-comment"># 方案2: CSP frame-ancestors (更灵活，推荐)</span><br><span class="hljs-attribute">add_header</span> Content-Security-Policy <span class="hljs-string">&quot;frame-ancestors &#x27;none&#x27;&quot;</span> always;<br><span class="hljs-comment"># &#x27;none&#x27;: 不允许嵌入</span><br><span class="hljs-comment"># &#x27;self&#x27;: 只允许同源</span><br><span class="hljs-comment"># https://trusted.com: 指定允许的源</span><br></code></pre></td></tr></table></figure>
+<h2 id="安全http头汇总">安全HTTP头汇总</h2>
+<figure class="highlight nginx"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><code class="hljs nginx"><span class="hljs-comment"># Nginx安全头配置</span><br><span class="hljs-section">server</span> &#123;<br>    <span class="hljs-comment"># 防止XSS</span><br>    <span class="hljs-attribute">add_header</span> Content-Security-Policy <span class="hljs-string">&quot;default-src &#x27;self&#x27;; script-src &#x27;self&#x27;&quot;</span> always;<br>    <span class="hljs-attribute">add_header</span> X-Content-Type-Options <span class="hljs-string">&quot;nosniff&quot;</span> always;<br><br>    <span class="hljs-comment"># 防止点击劫持</span><br>    <span class="hljs-attribute">add_header</span> X-Frame-Options <span class="hljs-string">&quot;DENY&quot;</span> always;<br><br>    <span class="hljs-comment"># 强制HTTPS</span><br>    <span class="hljs-attribute">add_header</span> Strict-Transport-Security <span class="hljs-string">&quot;max-age=63072000; includeSubDomains; preload&quot;</span> always;<br><br>    <span class="hljs-comment"># 限制Referrer信息泄露</span><br>    <span class="hljs-attribute">add_header</span> Referrer-Policy <span class="hljs-string">&quot;strict-origin-when-cross-origin&quot;</span> always;<br><br>    <span class="hljs-comment"># 权限策略</span><br>    <span class="hljs-attribute">add_header</span> Permissions-Policy <span class="hljs-string">&quot;camera=(), microphone=(), geolocation=()&quot;</span> always;<br><br>    <span class="hljs-comment"># 跨域策略</span><br>    <span class="hljs-attribute">add_header</span> Cross-Origin-Opener-Policy <span class="hljs-string">&quot;same-origin&quot;</span> always;<br>    <span class="hljs-attribute">add_header</span> Cross-Origin-Embedder-Policy <span class="hljs-string">&quot;require-corp&quot;</span> always;<br>    <span class="hljs-attribute">add_header</span> Cross-Origin-Resource-Policy <span class="hljs-string">&quot;same-origin&quot;</span> always;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="安全检查清单">安全检查清单</h2>
+<pre class="mermaid">flowchart TB
+    subgraph "输入处理"
+        I1[参数化查询 防SQL注入]
+        I2[输入验证 白名单+长度限制]
+        I3[输出编码 上下文感知]
+    end
+
+    subgraph "认证授权"
+        A1[CSRF Token / SameSite Cookie]
+        A2[密码哈希 bcrypt/argon2]
+        A3[Session管理 HttpOnly/Secure]
+    end
+
+    subgraph "传输安全"
+        T1[全站HTTPS + HSTS]
+        T2[安全Cookie属性]
+        T3[CORS严格配置]
+    end
+
+    subgraph "防御纵深"
+        D1[CSP策略]
+        D2[安全HTTP头]
+        D3[WAF + 速率限制]
+        D4[日志与监控]
+    end</pre>
+<h2 id="总结">总结</h2>
+<p>Web安全防御的核心原则：</p>
+<ol type="1">
+<li><strong>永远不要信任用户输入</strong>：所有外部数据都必须验证和清理</li>
+<li><strong>使用参数化查询</strong>：这是防止SQL注入的最有效手段</li>
+<li><strong>输出编码要上下文感知</strong>：HTML、JS、URL、CSS各有不同的编码方式</li>
+<li><strong>CSP是XSS的强力防线</strong>：限制脚本来源，防止内联脚本执行</li>
+<li><strong>SameSite Cookie + CSRF Token</strong>：双重防御CSRF攻击</li>
+<li><strong>SSRF防御需要验证目标IP</strong>：DNS解析后检查是否为内网地址</li>
+<li><strong>纵深防御</strong>：安全头、WAF、日志监控层层保护</li>
+</ol>
+<p>安全不是一次性工作，需要持续的代码审计、依赖更新和渗透测试。</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2025-06-29</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">3.2k 字 · 8 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/micro-frontend-architecture/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">微前端架构方案对比与实践</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/nodejs-cluster-pm2/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Node.js集群与PM2进程管理</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%94%BB%E5%87%BB%E7%B1%BB%E5%9E%8B%E5%85%A8%E6%99%AF"><span class="toc-text">攻击类型全景</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#xss%E8%B7%A8%E7%AB%99%E8%84%9A%E6%9C%AC%E6%94%BB%E5%87%BB"><span class="toc-text">XSS（跨站脚本攻击）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%89%E7%A7%8Dxss%E7%B1%BB%E5%9E%8B"><span class="toc-text">三种XSS类型</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#xss%E6%94%BB%E5%87%BB%E7%A4%BA%E4%BE%8B"><span class="toc-text">XSS攻击示例</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#xss%E9%98%B2%E5%BE%A1%E7%AD%96%E7%95%A5"><span class="toc-text">XSS防御策略</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#csrf%E8%B7%A8%E7%AB%99%E8%AF%B7%E6%B1%82%E4%BC%AA%E9%80%A0"><span class="toc-text">CSRF（跨站请求伪造）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%94%BB%E5%87%BB%E5%8E%9F%E7%90%86"><span class="toc-text">攻击原理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#csrf%E9%98%B2%E5%BE%A1"><span class="toc-text">CSRF防御</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#sql%E6%B3%A8%E5%85%A5"><span class="toc-text">SQL注入</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%94%BB%E5%87%BB%E5%8E%9F%E7%90%86-1"><span class="toc-text">攻击原理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#sql%E6%B3%A8%E5%85%A5%E9%98%B2%E5%BE%A1"><span class="toc-text">SQL注入防御</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#ssrf%E6%9C%8D%E5%8A%A1%E7%AB%AF%E8%AF%B7%E6%B1%82%E4%BC%AA%E9%80%A0"><span class="toc-text">SSRF（服务端请求伪造）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#ssrf%E9%98%B2%E5%BE%A1"><span class="toc-text">SSRF防御</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%82%B9%E5%87%BB%E5%8A%AB%E6%8C%81clickjacking"><span class="toc-text">点击劫持（Clickjacking）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%98%B2%E5%BE%A1"><span class="toc-text">防御</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%89%E5%85%A8http%E5%A4%B4%E6%B1%87%E6%80%BB"><span class="toc-text">安全HTTP头汇总</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%89%E5%85%A8%E6%A3%80%E6%9F%A5%E6%B8%85%E5%8D%95"><span class="toc-text">安全检查清单</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

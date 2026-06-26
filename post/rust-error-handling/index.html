@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rust错误处理：Result/Option模式详解 · zt&#39;s Blog</title>
+  <meta name="description" content="深入解析Rust错误处理机制，涵盖Result/Option类型、?操作符、自定义错误、thiserror/anyhow库和错误处理最佳实践。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/rust-error-handling/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Rust错误处理：Result/Option模式详解">
+  <meta property="og:description" content="深入解析Rust错误处理机制，涵盖Result/Option类型、?操作符、自定义错误、thiserror/anyhow库和错误处理最佳实践。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/rust-error-handling/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2025-08-19T16:00:00.000Z">
+  <meta property="article:modified_time" content="2025-08-19T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Rust错误处理：Result/Option模式详解">
+  <meta name="twitter:description" content="深入解析Rust错误处理机制，涵盖Result/Option类型、?操作符、自定义错误、thiserror/anyhow库和错误处理最佳实践。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Rust错误处理：Result/Option模式详解","description":"深入解析Rust错误处理机制，涵盖Result/Option类型、?操作符、自定义错误、thiserror/anyhow库和错误处理最佳实践。","datePublished":"2025-08-19T16:00:00.000Z","dateModified":"2025-08-19T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/rust-error-handling/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Rust","item":"https://withesse.co/categories/Rust/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:18">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Rust/">Rust</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/rust/"><span class="hash">#</span>rust</a><a class="tag" href="/tags/error-handling/"><span class="hash">#</span>error-handling</a><a class="tag" href="/tags/result/"><span class="hash">#</span>result</a>
+        
+      </div>
+
+      <h1>Rust错误处理：Result/Option模式详解</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2025.08.20</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          <span class="row gap8" style="align-items:center"><span class="lang-dot" style="background:#DEA584"></span>Rust</span>
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 9 min</span>
+        </span>
+        <span class="wc"><span class="num">3.4k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%94%99%E8%AF%AF%E5%A4%84%E7%90%86%E5%93%B2%E5%AD%A6"><span class="toc-text">错误处理哲学</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#option%E7%B1%BB%E5%9E%8B"><span class="toc-text">Option类型</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9F%BA%E6%9C%AC%E4%BD%BF%E7%94%A8"><span class="toc-text">基本使用</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#option%E7%BB%84%E5%90%88%E5%99%A8"><span class="toc-text">Option组合器</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#result%E7%B1%BB%E5%9E%8B"><span class="toc-text">Result类型</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9F%BA%E6%9C%AC%E4%BD%BF%E7%94%A8-1"><span class="toc-text">基本使用</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%93%8D%E4%BD%9C%E7%AC%A6"><span class="toc-text">?操作符</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%93%8D%E4%BD%9C%E7%AC%A6%E7%9A%84from%E8%BD%AC%E6%8D%A2"><span class="toc-text">?操作符的From转换</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%87%AA%E5%AE%9A%E4%B9%89%E9%94%99%E8%AF%AF%E7%B1%BB%E5%9E%8B"><span class="toc-text">自定义错误类型</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%89%8B%E5%8A%A8%E5%AE%9E%E7%8E%B0"><span class="toc-text">手动实现</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BD%BF%E7%94%A8thiserror%E6%8E%A8%E8%8D%90%E7%94%A8%E4%BA%8E%E5%BA%93"><span class="toc-text">使用thiserror（推荐用于库）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BD%BF%E7%94%A8anyhow%E6%8E%A8%E8%8D%90%E7%94%A8%E4%BA%8E%E5%BA%94%E7%94%A8"><span class="toc-text">使用anyhow（推荐用于应用）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#thiserror-vs-anyhow"><span class="toc-text">thiserror vs anyhow</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%94%99%E8%AF%AF%E8%BD%AC%E6%8D%A2%E6%A8%A1%E5%BC%8F"><span class="toc-text">错误转换模式</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E6%88%98%E6%A8%A1%E5%BC%8F"><span class="toc-text">实战模式</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A8%A1%E5%BC%8F1%E9%94%99%E8%AF%AF%E5%88%86%E5%B1%82"><span class="toc-text">模式1：错误分层</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A8%A1%E5%BC%8F2%E6%94%B6%E9%9B%86%E5%A4%9A%E4%B8%AA%E9%94%99%E8%AF%AF"><span class="toc-text">模式2：收集多个错误</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A8%A1%E5%BC%8F3panic%E7%9A%84%E5%90%88%E7%90%86%E4%BD%BF%E7%94%A8"><span class="toc-text">模式3：panic的合理使用</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5%E6%80%BB%E7%BB%93"><span class="toc-text">最佳实践总结</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="前言">前言</h2>
+<p>Rust没有异常机制，而是使用<code>Result&lt;T, E&gt;</code>和<code>Option&lt;T&gt;</code>类型来处理可恢复错误和缺失值。这种设计强制开发者在编译期处理所有可能的错误路径，避免了运行时未捕获异常导致的崩溃。本文将系统性地介绍Rust错误处理的各种模式和最佳实践。</p>
+<h2 id="错误处理哲学">错误处理哲学</h2>
+<pre class="mermaid">graph TB
+    ERROR[Rust错误分类] --&gt; RECOV[可恢复错误&lt;br&gt;Result&amp;lt;T, E&amp;gt;]
+    ERROR --&gt; UNRECOV[不可恢复错误&lt;br&gt;panic!]
+
+    RECOV --&gt; FILE[文件未找到]
+    RECOV --&gt; NET[网络超时]
+    RECOV --&gt; PARSE[解析失败]
+
+    UNRECOV --&gt; BUG[程序Bug]
+    UNRECOV --&gt; ASSERT[断言失败]
+    UNRECOV --&gt; INDEX[数组越界]
+
+    style RECOV fill:#388e3c,color:#fff
+    style UNRECOV fill:#d32f2f,color:#fff</pre>
+<p>核心原则： -
+<strong>可恢复错误</strong>用<code>Result</code>，调用者决定如何处理 -
+<strong>不可恢复错误</strong>用<code>panic!</code>，表示程序Bug -
+<strong>缺失值</strong>用<code>Option</code>，表示值可能不存在</p>
+<h2 id="option类型">Option类型</h2>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs rust"><span class="hljs-comment">// Option定义</span><br><span class="hljs-keyword">enum</span> <span class="hljs-title class_">Option</span>&lt;T&gt; &#123;<br>    <span class="hljs-title function_ invoke__">Some</span>(T),    <span class="hljs-comment">// 有值</span><br>    <span class="hljs-literal">None</span>,       <span class="hljs-comment">// 无值</span><br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="基本使用">基本使用</h3>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><code class="hljs rust"><span class="hljs-keyword">fn</span> <span class="hljs-title function_">find_user</span>(id: <span class="hljs-type">u64</span>) <span class="hljs-punctuation">-&gt;</span> <span class="hljs-type">Option</span>&lt;User&gt; &#123;<br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">users</span> = <span class="hljs-title function_ invoke__">get_users</span>();<br>    users.<span class="hljs-title function_ invoke__">into_iter</span>().<span class="hljs-title function_ invoke__">find</span>(|u| u.id == id)<br>&#125;<br><br><span class="hljs-keyword">fn</span> <span class="hljs-title function_">main</span>() &#123;<br>    <span class="hljs-comment">// 1. match</span><br>    <span class="hljs-keyword">match</span> <span class="hljs-title function_ invoke__">find_user</span>(<span class="hljs-number">1</span>) &#123;<br>        <span class="hljs-title function_ invoke__">Some</span>(user) =&gt; <span class="hljs-built_in">println!</span>(<span class="hljs-string">&quot;Found: &#123;&#125;&quot;</span>, user.name),<br>        <span class="hljs-literal">None</span> =&gt; <span class="hljs-built_in">println!</span>(<span class="hljs-string">&quot;User not found&quot;</span>),<br>    &#125;<br><br>    <span class="hljs-comment">// 2. if let</span><br>    <span class="hljs-keyword">if</span> <span class="hljs-keyword">let</span> <span class="hljs-variable">Some</span>(user) = <span class="hljs-title function_ invoke__">find_user</span>(<span class="hljs-number">1</span>) &#123;<br>        <span class="hljs-built_in">println!</span>(<span class="hljs-string">&quot;Found: &#123;&#125;&quot;</span>, user.name);<br>    &#125;<br><br>    <span class="hljs-comment">// 3. unwrap (如果None则panic，仅用于确定有值或原型)</span><br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">user</span> = <span class="hljs-title function_ invoke__">find_user</span>(<span class="hljs-number">1</span>).<span class="hljs-title function_ invoke__">unwrap</span>();<br><br>    <span class="hljs-comment">// 4. expect (同unwrap，但有自定义消息)</span><br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">user</span> = <span class="hljs-title function_ invoke__">find_user</span>(<span class="hljs-number">1</span>).<span class="hljs-title function_ invoke__">expect</span>(<span class="hljs-string">&quot;User 1 must exist&quot;</span>);<br><br>    <span class="hljs-comment">// 5. unwrap_or (提供默认值)</span><br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">user</span> = <span class="hljs-title function_ invoke__">find_user</span>(<span class="hljs-number">1</span>).<span class="hljs-title function_ invoke__">unwrap_or</span>(User::<span class="hljs-title function_ invoke__">default</span>());<br><br>    <span class="hljs-comment">// 6. unwrap_or_else (惰性默认值)</span><br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">user</span> = <span class="hljs-title function_ invoke__">find_user</span>(<span class="hljs-number">1</span>).<span class="hljs-title function_ invoke__">unwrap_or_else</span>(|| <span class="hljs-title function_ invoke__">create_default_user</span>());<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="option组合器">Option组合器</h3>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><code class="hljs rust"><span class="hljs-comment">// map: 转换内部值</span><br><span class="hljs-keyword">let</span> <span class="hljs-variable">name</span>: <span class="hljs-type">Option</span>&lt;<span class="hljs-type">String</span>&gt; = <span class="hljs-title function_ invoke__">find_user</span>(<span class="hljs-number">1</span>).<span class="hljs-title function_ invoke__">map</span>(|u| u.name);<br><br><span class="hljs-comment">// and_then (flatmap): 链式操作</span><br><span class="hljs-keyword">let</span> <span class="hljs-variable">email</span>: <span class="hljs-type">Option</span>&lt;<span class="hljs-type">String</span>&gt; = <span class="hljs-title function_ invoke__">find_user</span>(<span class="hljs-number">1</span>)<br>    .<span class="hljs-title function_ invoke__">and_then</span>(|u| u.email);  <span class="hljs-comment">// email本身也是Option&lt;String&gt;</span><br><br><span class="hljs-comment">// or: 提供备选Option</span><br><span class="hljs-keyword">let</span> <span class="hljs-variable">user</span> = <span class="hljs-title function_ invoke__">find_user</span>(<span class="hljs-number">1</span>).<span class="hljs-title function_ invoke__">or</span>(<span class="hljs-title function_ invoke__">find_user</span>(<span class="hljs-number">2</span>));<br><br><span class="hljs-comment">// filter: 条件筛选</span><br><span class="hljs-keyword">let</span> <span class="hljs-variable">admin</span> = <span class="hljs-title function_ invoke__">find_user</span>(<span class="hljs-number">1</span>).<span class="hljs-title function_ invoke__">filter</span>(|u| u.is_admin);<br><br><span class="hljs-comment">// zip: 组合两个Option</span><br><span class="hljs-keyword">let</span> <span class="hljs-variable">pair</span>: <span class="hljs-type">Option</span>&lt;(User, Settings)&gt; = <span class="hljs-title function_ invoke__">find_user</span>(<span class="hljs-number">1</span>).<span class="hljs-title function_ invoke__">zip</span>(<span class="hljs-title function_ invoke__">find_settings</span>(<span class="hljs-number">1</span>));<br><br><span class="hljs-comment">// ? 操作符在返回Option的函数中使用</span><br><span class="hljs-keyword">fn</span> <span class="hljs-title function_">get_user_email</span>(id: <span class="hljs-type">u64</span>) <span class="hljs-punctuation">-&gt;</span> <span class="hljs-type">Option</span>&lt;<span class="hljs-type">String</span>&gt; &#123;<br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">user</span> = <span class="hljs-title function_ invoke__">find_user</span>(id)?;       <span class="hljs-comment">// None则提前返回</span><br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">profile</span> = user.<span class="hljs-title function_ invoke__">profile</span>()?;    <span class="hljs-comment">// None则提前返回</span><br>    <span class="hljs-title function_ invoke__">Some</span>(profile.email.<span class="hljs-title function_ invoke__">clone</span>())<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="result类型">Result类型</h2>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs rust"><span class="hljs-comment">// Result定义</span><br><span class="hljs-keyword">enum</span> <span class="hljs-title class_">Result</span>&lt;T, E&gt; &#123;<br>    <span class="hljs-title function_ invoke__">Ok</span>(T),     <span class="hljs-comment">// 成功</span><br>    <span class="hljs-title function_ invoke__">Err</span>(E),    <span class="hljs-comment">// 失败</span><br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="基本使用-1">基本使用</h3>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><code class="hljs rust"><span class="hljs-keyword">use</span> std::fs;<br><span class="hljs-keyword">use</span> std::io;<br><br><span class="hljs-keyword">fn</span> <span class="hljs-title function_">read_config</span>(path: &amp;<span class="hljs-type">str</span>) <span class="hljs-punctuation">-&gt;</span> <span class="hljs-type">Result</span>&lt;<span class="hljs-type">String</span>, io::Error&gt; &#123;<br>    fs::<span class="hljs-title function_ invoke__">read_to_string</span>(path)<br>&#125;<br><br><span class="hljs-keyword">fn</span> <span class="hljs-title function_">main</span>() &#123;<br>    <span class="hljs-comment">// 1. match</span><br>    <span class="hljs-keyword">match</span> <span class="hljs-title function_ invoke__">read_config</span>(<span class="hljs-string">&quot;config.toml&quot;</span>) &#123;<br>        <span class="hljs-title function_ invoke__">Ok</span>(content) =&gt; <span class="hljs-built_in">println!</span>(<span class="hljs-string">&quot;Config: &#123;&#125;&quot;</span>, content),<br>        <span class="hljs-title function_ invoke__">Err</span>(e) =&gt; <span class="hljs-built_in">eprintln!</span>(<span class="hljs-string">&quot;Error: &#123;&#125;&quot;</span>, e),<br>    &#125;<br><br>    <span class="hljs-comment">// 2. unwrap / expect</span><br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">config</span> = <span class="hljs-title function_ invoke__">read_config</span>(<span class="hljs-string">&quot;config.toml&quot;</span>).<span class="hljs-title function_ invoke__">unwrap</span>();<br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">config</span> = <span class="hljs-title function_ invoke__">read_config</span>(<span class="hljs-string">&quot;config.toml&quot;</span>).<span class="hljs-title function_ invoke__">expect</span>(<span class="hljs-string">&quot;Failed to read config&quot;</span>);<br><br>    <span class="hljs-comment">// 3. unwrap_or_else</span><br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">config</span> = <span class="hljs-title function_ invoke__">read_config</span>(<span class="hljs-string">&quot;config.toml&quot;</span>)<br>        .<span class="hljs-title function_ invoke__">unwrap_or_else</span>(|_| <span class="hljs-type">String</span>::<span class="hljs-title function_ invoke__">from</span>(<span class="hljs-string">&quot;default config&quot;</span>));<br><br>    <span class="hljs-comment">// 4. if let</span><br>    <span class="hljs-keyword">if</span> <span class="hljs-keyword">let</span> <span class="hljs-variable">Ok</span>(config) = <span class="hljs-title function_ invoke__">read_config</span>(<span class="hljs-string">&quot;config.toml&quot;</span>) &#123;<br>        <span class="hljs-title function_ invoke__">process_config</span>(&amp;config);<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="操作符">?操作符</h3>
+<p><code>?</code>是Rust错误处理的核心语法糖，自动传播错误。</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><code class="hljs rust"><span class="hljs-keyword">use</span> std::fs::File;<br><span class="hljs-keyword">use</span> std::io::&#123;<span class="hljs-keyword">self</span>, Read&#125;;<br><br><span class="hljs-comment">// 没有?操作符</span><br><span class="hljs-keyword">fn</span> <span class="hljs-title function_">read_file_verbose</span>(path: &amp;<span class="hljs-type">str</span>) <span class="hljs-punctuation">-&gt;</span> <span class="hljs-type">Result</span>&lt;<span class="hljs-type">String</span>, io::Error&gt; &#123;<br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">file</span> = <span class="hljs-keyword">match</span> File::<span class="hljs-title function_ invoke__">open</span>(path) &#123;<br>        <span class="hljs-title function_ invoke__">Ok</span>(f) =&gt; f,<br>        <span class="hljs-title function_ invoke__">Err</span>(e) =&gt; <span class="hljs-keyword">return</span> <span class="hljs-title function_ invoke__">Err</span>(e),<br>    &#125;;<br>    <span class="hljs-keyword">let</span> <span class="hljs-keyword">mut </span><span class="hljs-variable">contents</span> = <span class="hljs-type">String</span>::<span class="hljs-title function_ invoke__">new</span>();<br>    <span class="hljs-keyword">match</span> file.<span class="hljs-title function_ invoke__">read_to_string</span>(&amp;<span class="hljs-keyword">mut</span> contents) &#123;<br>        <span class="hljs-title function_ invoke__">Ok</span>(_) =&gt; <span class="hljs-title function_ invoke__">Ok</span>(contents),<br>        <span class="hljs-title function_ invoke__">Err</span>(e) =&gt; <span class="hljs-title function_ invoke__">Err</span>(e),<br>    &#125;<br>&#125;<br><br><span class="hljs-comment">// 使用?操作符</span><br><span class="hljs-keyword">fn</span> <span class="hljs-title function_">read_file</span>(path: &amp;<span class="hljs-type">str</span>) <span class="hljs-punctuation">-&gt;</span> <span class="hljs-type">Result</span>&lt;<span class="hljs-type">String</span>, io::Error&gt; &#123;<br>    <span class="hljs-keyword">let</span> <span class="hljs-keyword">mut </span><span class="hljs-variable">file</span> = File::<span class="hljs-title function_ invoke__">open</span>(path)?;  <span class="hljs-comment">// 错误自动return</span><br>    <span class="hljs-keyword">let</span> <span class="hljs-keyword">mut </span><span class="hljs-variable">contents</span> = <span class="hljs-type">String</span>::<span class="hljs-title function_ invoke__">new</span>();<br>    file.<span class="hljs-title function_ invoke__">read_to_string</span>(&amp;<span class="hljs-keyword">mut</span> contents)?;<br>    <span class="hljs-title function_ invoke__">Ok</span>(contents)<br>&#125;<br><br><span class="hljs-comment">// 更简洁</span><br><span class="hljs-keyword">fn</span> <span class="hljs-title function_">read_file_short</span>(path: &amp;<span class="hljs-type">str</span>) <span class="hljs-punctuation">-&gt;</span> <span class="hljs-type">Result</span>&lt;<span class="hljs-type">String</span>, io::Error&gt; &#123;<br>    std::fs::<span class="hljs-title function_ invoke__">read_to_string</span>(path)<br>&#125;<br></code></pre></td></tr></table></figure>
+<pre class="mermaid">flowchart TB
+    CALL["File::open(path)?"] --&gt; CHECK{Result?}
+    CHECK --&gt;|Ok(file)| CONTINUE[继续执行&lt;br&gt;得到file]
+    CHECK --&gt;|Err(e)| RETURN[自动return Err(e.into())]
+
+    style CONTINUE fill:#388e3c,color:#fff
+    style RETURN fill:#d32f2f,color:#fff</pre>
+<h3 id="操作符的from转换">?操作符的From转换</h3>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><code class="hljs rust"><span class="hljs-comment">// ?会自动调用From::from进行错误类型转换</span><br><span class="hljs-keyword">use</span> std::num::ParseIntError;<br><br><span class="hljs-meta">#[derive(Debug)]</span><br><span class="hljs-keyword">enum</span> <span class="hljs-title class_">AppError</span> &#123;<br>    <span class="hljs-title function_ invoke__">Io</span>(io::Error),<br>    <span class="hljs-title function_ invoke__">Parse</span>(ParseIntError),<br>&#125;<br><br><span class="hljs-keyword">impl</span> <span class="hljs-title class_">From</span>&lt;io::Error&gt; <span class="hljs-keyword">for</span> <span class="hljs-title class_">AppError</span> &#123;<br>    <span class="hljs-keyword">fn</span> <span class="hljs-title function_">from</span>(e: io::Error) <span class="hljs-punctuation">-&gt;</span> <span class="hljs-keyword">Self</span> &#123;<br>        AppError::<span class="hljs-title function_ invoke__">Io</span>(e)<br>    &#125;<br>&#125;<br><br><span class="hljs-keyword">impl</span> <span class="hljs-title class_">From</span>&lt;ParseIntError&gt; <span class="hljs-keyword">for</span> <span class="hljs-title class_">AppError</span> &#123;<br>    <span class="hljs-keyword">fn</span> <span class="hljs-title function_">from</span>(e: ParseIntError) <span class="hljs-punctuation">-&gt;</span> <span class="hljs-keyword">Self</span> &#123;<br>        AppError::<span class="hljs-title function_ invoke__">Parse</span>(e)<br>    &#125;<br>&#125;<br><br><span class="hljs-keyword">fn</span> <span class="hljs-title function_">read_and_parse</span>(path: &amp;<span class="hljs-type">str</span>) <span class="hljs-punctuation">-&gt;</span> <span class="hljs-type">Result</span>&lt;<span class="hljs-type">i32</span>, AppError&gt; &#123;<br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">content</span> = std::fs::<span class="hljs-title function_ invoke__">read_to_string</span>(path)?;  <span class="hljs-comment">// io::Error -&gt; AppError</span><br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">number</span>: <span class="hljs-type">i32</span> = content.<span class="hljs-title function_ invoke__">trim</span>().<span class="hljs-title function_ invoke__">parse</span>()?;       <span class="hljs-comment">// ParseIntError -&gt; AppError</span><br>    <span class="hljs-title function_ invoke__">Ok</span>(number)<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="自定义错误类型">自定义错误类型</h2>
+<h3 id="手动实现">手动实现</h3>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><code class="hljs rust"><span class="hljs-keyword">use</span> std::fmt;<br><span class="hljs-keyword">use</span> std::error::Error;<br><br><span class="hljs-meta">#[derive(Debug)]</span><br><span class="hljs-keyword">enum</span> <span class="hljs-title class_">ApiError</span> &#123;<br>    NotFound &#123; resource: <span class="hljs-type">String</span> &#125;,<br>    Unauthorized &#123; message: <span class="hljs-type">String</span> &#125;,<br>    Internal &#123; source: <span class="hljs-type">Box</span>&lt;<span class="hljs-keyword">dyn</span> Error + <span class="hljs-built_in">Send</span> + <span class="hljs-built_in">Sync</span>&gt; &#125;,<br>    Validation &#123; field: <span class="hljs-type">String</span>, message: <span class="hljs-type">String</span> &#125;,<br>&#125;<br><br><span class="hljs-keyword">impl</span> <span class="hljs-title class_">fmt</span>::Display <span class="hljs-keyword">for</span> <span class="hljs-title class_">ApiError</span> &#123;<br>    <span class="hljs-keyword">fn</span> <span class="hljs-title function_">fmt</span>(&amp;<span class="hljs-keyword">self</span>, f: &amp;<span class="hljs-keyword">mut</span> fmt::Formatter&lt;<span class="hljs-symbol">&#x27;_</span>&gt;) <span class="hljs-punctuation">-&gt;</span> fmt::<span class="hljs-type">Result</span> &#123;<br>        <span class="hljs-keyword">match</span> <span class="hljs-keyword">self</span> &#123;<br>            ApiError::NotFound &#123; resource &#125; =&gt;<br>                <span class="hljs-built_in">write!</span>(f, <span class="hljs-string">&quot;Resource not found: &#123;&#125;&quot;</span>, resource),<br>            ApiError::Unauthorized &#123; message &#125; =&gt;<br>                <span class="hljs-built_in">write!</span>(f, <span class="hljs-string">&quot;Unauthorized: &#123;&#125;&quot;</span>, message),<br>            ApiError::Internal &#123; source &#125; =&gt;<br>                <span class="hljs-built_in">write!</span>(f, <span class="hljs-string">&quot;Internal error: &#123;&#125;&quot;</span>, source),<br>            ApiError::Validation &#123; field, message &#125; =&gt;<br>                <span class="hljs-built_in">write!</span>(f, <span class="hljs-string">&quot;Validation error on &#x27;&#123;&#125;&#x27;: &#123;&#125;&quot;</span>, field, message),<br>        &#125;<br>    &#125;<br>&#125;<br><br><span class="hljs-keyword">impl</span> <span class="hljs-title class_">Error</span> <span class="hljs-keyword">for</span> <span class="hljs-title class_">ApiError</span> &#123;<br>    <span class="hljs-keyword">fn</span> <span class="hljs-title function_">source</span>(&amp;<span class="hljs-keyword">self</span>) <span class="hljs-punctuation">-&gt;</span> <span class="hljs-type">Option</span>&lt;&amp;(<span class="hljs-keyword">dyn</span> Error + <span class="hljs-symbol">&#x27;static</span>)&gt; &#123;<br>        <span class="hljs-keyword">match</span> <span class="hljs-keyword">self</span> &#123;<br>            ApiError::Internal &#123; source &#125; =&gt; <span class="hljs-title function_ invoke__">Some</span>(source.<span class="hljs-title function_ invoke__">as_ref</span>()),<br>            _ =&gt; <span class="hljs-literal">None</span>,<br>        &#125;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="使用thiserror推荐用于库">使用thiserror（推荐用于库）</h3>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br></pre></td><td class="code"><pre><code class="hljs rust"><span class="hljs-comment">// Cargo.toml: thiserror = &quot;2&quot;</span><br><br><span class="hljs-keyword">use</span> thiserror::Error;<br><br><span class="hljs-meta">#[derive(Error, Debug)]</span><br><span class="hljs-keyword">enum</span> <span class="hljs-title class_">ApiError</span> &#123;<br>    <span class="hljs-meta">#[error(<span class="hljs-string">&quot;Resource not found: &#123;resource&#125;&quot;</span>)]</span><br>    NotFound &#123; resource: <span class="hljs-type">String</span> &#125;,<br><br>    <span class="hljs-meta">#[error(<span class="hljs-string">&quot;Unauthorized: &#123;message&#125;&quot;</span>)]</span><br>    Unauthorized &#123; message: <span class="hljs-type">String</span> &#125;,<br><br>    <span class="hljs-meta">#[error(<span class="hljs-string">&quot;Internal error&quot;</span>)]</span><br>    Internal &#123;<br>        <span class="hljs-meta">#[source]</span>  <span class="hljs-comment">// 自动实现Error::source()</span><br>        source: <span class="hljs-type">Box</span>&lt;<span class="hljs-keyword">dyn</span> std::error::Error + <span class="hljs-built_in">Send</span> + <span class="hljs-built_in">Sync</span>&gt;,<br>    &#125;,<br><br>    <span class="hljs-meta">#[error(<span class="hljs-string">&quot;Validation error on &#x27;&#123;field&#125;&#x27;: &#123;message&#125;&quot;</span>)]</span><br>    Validation &#123; field: <span class="hljs-type">String</span>, message: <span class="hljs-type">String</span> &#125;,<br><br>    <span class="hljs-meta">#[error(<span class="hljs-string">&quot;IO error: &#123;0&#125;&quot;</span>)]</span><br>    <span class="hljs-title function_ invoke__">Io</span>(<span class="hljs-meta">#[from]</span> std::io::Error),  <span class="hljs-comment">// 自动实现From&lt;io::Error&gt;</span><br><br>    <span class="hljs-meta">#[error(<span class="hljs-string">&quot;JSON error: &#123;0&#125;&quot;</span>)]</span><br>    <span class="hljs-title function_ invoke__">Json</span>(<span class="hljs-meta">#[from]</span> serde_json::Error),<br><br>    <span class="hljs-meta">#[error(<span class="hljs-string">&quot;Database error: &#123;0&#125;&quot;</span>)]</span><br>    <span class="hljs-title function_ invoke__">Database</span>(<span class="hljs-meta">#[from]</span> sqlx::Error),<br>&#125;<br><br><span class="hljs-comment">// 使用</span><br><span class="hljs-keyword">fn</span> <span class="hljs-title function_">process_request</span>(req: Request) <span class="hljs-punctuation">-&gt;</span> <span class="hljs-type">Result</span>&lt;Response, ApiError&gt; &#123;<br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">data</span> = std::fs::<span class="hljs-title function_ invoke__">read_to_string</span>(&amp;req.path)?;  <span class="hljs-comment">// 自动转为ApiError::Io</span><br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">parsed</span>: Value = serde_json::<span class="hljs-title function_ invoke__">from_str</span>(&amp;data)?; <span class="hljs-comment">// 自动转为ApiError::Json</span><br><br>    <span class="hljs-keyword">if</span> parsed.<span class="hljs-title function_ invoke__">is_null</span>() &#123;<br>        <span class="hljs-keyword">return</span> <span class="hljs-title function_ invoke__">Err</span>(ApiError::NotFound &#123;<br>            resource: req.path.<span class="hljs-title function_ invoke__">clone</span>(),<br>        &#125;);<br>    &#125;<br><br>    <span class="hljs-title function_ invoke__">Ok</span>(Response::<span class="hljs-title function_ invoke__">new</span>(parsed))<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="使用anyhow推荐用于应用">使用anyhow（推荐用于应用）</h3>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br></pre></td><td class="code"><pre><code class="hljs rust"><span class="hljs-comment">// Cargo.toml: anyhow = &quot;1&quot;</span><br><br><span class="hljs-keyword">use</span> anyhow::&#123;anyhow, bail, Context, <span class="hljs-type">Result</span>&#125;;<br><br><span class="hljs-comment">// anyhow::Result&lt;T&gt; = Result&lt;T, anyhow::Error&gt;</span><br><br><span class="hljs-keyword">async</span> <span class="hljs-keyword">fn</span> <span class="hljs-title function_">fetch_and_process</span>(url: &amp;<span class="hljs-type">str</span>) <span class="hljs-punctuation">-&gt;</span> <span class="hljs-type">Result</span>&lt;Data&gt; &#123;<br>    <span class="hljs-comment">// context()添加上下文信息</span><br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">response</span> = reqwest::<span class="hljs-title function_ invoke__">get</span>(url).<span class="hljs-keyword">await</span><br>        .<span class="hljs-title function_ invoke__">context</span>(<span class="hljs-string">&quot;Failed to fetch data from API&quot;</span>)?;<br><br>    <span class="hljs-keyword">if</span> !response.<span class="hljs-title function_ invoke__">status</span>().<span class="hljs-title function_ invoke__">is_success</span>() &#123;<br>        <span class="hljs-comment">// bail!宏快速返回错误</span><br>        bail!(<span class="hljs-string">&quot;API returned status: &#123;&#125;&quot;</span>, response.<span class="hljs-title function_ invoke__">status</span>());<br>    &#125;<br><br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">data</span>: Data = response.<span class="hljs-title function_ invoke__">json</span>().<span class="hljs-keyword">await</span><br>        .<span class="hljs-title function_ invoke__">context</span>(<span class="hljs-string">&quot;Failed to parse response as JSON&quot;</span>)?;<br><br>    <span class="hljs-keyword">if</span> data.items.<span class="hljs-title function_ invoke__">is_empty</span>() &#123;<br>        <span class="hljs-comment">// anyhow!宏创建错误</span><br>        <span class="hljs-keyword">return</span> <span class="hljs-title function_ invoke__">Err</span>(anyhow!(<span class="hljs-string">&quot;No items found in response&quot;</span>));<br>    &#125;<br><br>    <span class="hljs-title function_ invoke__">Ok</span>(data)<br>&#125;<br><br><span class="hljs-comment">// main函数使用anyhow</span><br><span class="hljs-keyword">fn</span> <span class="hljs-title function_">main</span>() <span class="hljs-punctuation">-&gt;</span> <span class="hljs-type">Result</span>&lt;()&gt; &#123;<br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">config</span> = <span class="hljs-title function_ invoke__">read_config</span>(<span class="hljs-string">&quot;config.toml&quot;</span>)<br>        .<span class="hljs-title function_ invoke__">context</span>(<span class="hljs-string">&quot;Failed to read configuration&quot;</span>)?;<br><br>    <span class="hljs-title function_ invoke__">start_server</span>(&amp;config)<br>        .<span class="hljs-title function_ invoke__">context</span>(<span class="hljs-string">&quot;Failed to start server&quot;</span>)?;<br><br>    <span class="hljs-title function_ invoke__">Ok</span>(())<br>&#125;<br><br><span class="hljs-comment">// 输出的错误链：</span><br><span class="hljs-comment">// Error: Failed to start server</span><br><span class="hljs-comment">//</span><br><span class="hljs-comment">// Caused by:</span><br><span class="hljs-comment">//     0: Failed to bind to port 8080</span><br><span class="hljs-comment">//     1: Address already in use (os error 98)</span><br></code></pre></td></tr></table></figure>
+<h3 id="thiserror-vs-anyhow">thiserror vs anyhow</h3>
+<pre class="mermaid">graph TB
+    CHOOSE[选择错误处理库] --&gt; Q{你在写什么?}
+
+    Q --&gt;|库/框架| THISERROR[thiserror&lt;br&gt;定义精确的错误类型&lt;br&gt;调用者可以match]
+    Q --&gt;|应用程序| ANYHOW[anyhow&lt;br&gt;统一错误类型&lt;br&gt;快速开发]
+    Q --&gt;|两者兼有| BOTH[库用thiserror&lt;br&gt;应用用anyhow]
+
+    THISERROR --&gt; TE_PROS["优点:&lt;br&gt;- 类型安全&lt;br&gt;- 调用者可以模式匹配&lt;br&gt;- 编译时检查"]
+    ANYHOW --&gt; AE_PROS["优点:&lt;br&gt;- 简单快速&lt;br&gt;- 自动错误链&lt;br&gt;- context()信息丰富"]</pre>
+<h2 id="错误转换模式">错误转换模式</h2>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><code class="hljs rust"><span class="hljs-comment">// Option -&gt; Result</span><br><span class="hljs-keyword">let</span> <span class="hljs-variable">value</span>: <span class="hljs-type">Option</span>&lt;<span class="hljs-type">i32</span>&gt; = <span class="hljs-title function_ invoke__">Some</span>(<span class="hljs-number">42</span>);<br><span class="hljs-keyword">let</span> <span class="hljs-variable">result</span>: <span class="hljs-type">Result</span>&lt;<span class="hljs-type">i32</span>, &amp;<span class="hljs-type">str</span>&gt; = value.<span class="hljs-title function_ invoke__">ok_or</span>(<span class="hljs-string">&quot;value is None&quot;</span>);<br><br><span class="hljs-keyword">let</span> <span class="hljs-variable">value</span>: <span class="hljs-type">Option</span>&lt;<span class="hljs-type">i32</span>&gt; = <span class="hljs-literal">None</span>;<br><span class="hljs-keyword">let</span> <span class="hljs-variable">result</span>: <span class="hljs-type">Result</span>&lt;<span class="hljs-type">i32</span>, <span class="hljs-type">String</span>&gt; = value.<span class="hljs-title function_ invoke__">ok_or_else</span>(|| <span class="hljs-built_in">format!</span>(<span class="hljs-string">&quot;missing value&quot;</span>));<br><br><span class="hljs-comment">// Result -&gt; Option</span><br><span class="hljs-keyword">let</span> <span class="hljs-variable">result</span>: <span class="hljs-type">Result</span>&lt;<span class="hljs-type">i32</span>, <span class="hljs-type">String</span>&gt; = <span class="hljs-title function_ invoke__">Ok</span>(<span class="hljs-number">42</span>);<br><span class="hljs-keyword">let</span> <span class="hljs-variable">option</span>: <span class="hljs-type">Option</span>&lt;<span class="hljs-type">i32</span>&gt; = result.<span class="hljs-title function_ invoke__">ok</span>();  <span class="hljs-comment">// Some(42)</span><br><br><span class="hljs-keyword">let</span> <span class="hljs-variable">result</span>: <span class="hljs-type">Result</span>&lt;<span class="hljs-type">i32</span>, <span class="hljs-type">String</span>&gt; = <span class="hljs-title function_ invoke__">Err</span>(<span class="hljs-string">&quot;error&quot;</span>.<span class="hljs-title function_ invoke__">to_string</span>());<br><span class="hljs-keyword">let</span> <span class="hljs-variable">option</span>: <span class="hljs-type">Option</span>&lt;<span class="hljs-type">i32</span>&gt; = result.<span class="hljs-title function_ invoke__">ok</span>();  <span class="hljs-comment">// None</span><br><br><span class="hljs-comment">// Result映射</span><br><span class="hljs-keyword">let</span> <span class="hljs-variable">result</span>: <span class="hljs-type">Result</span>&lt;<span class="hljs-type">String</span>, io::Error&gt; = <span class="hljs-title function_ invoke__">Ok</span>(<span class="hljs-string">&quot;42&quot;</span>.<span class="hljs-title function_ invoke__">to_string</span>());<br><span class="hljs-keyword">let</span> <span class="hljs-variable">mapped</span>: <span class="hljs-type">Result</span>&lt;<span class="hljs-type">i32</span>, io::Error&gt; = result.<span class="hljs-title function_ invoke__">map</span>(|s| s.<span class="hljs-title function_ invoke__">parse</span>().<span class="hljs-title function_ invoke__">unwrap</span>());<br><br><span class="hljs-comment">// 错误映射</span><br><span class="hljs-keyword">let</span> <span class="hljs-variable">result</span>: <span class="hljs-type">Result</span>&lt;<span class="hljs-type">i32</span>, ParseIntError&gt; = <span class="hljs-string">&quot;42&quot;</span>.<span class="hljs-title function_ invoke__">parse</span>();<br><span class="hljs-keyword">let</span> <span class="hljs-variable">mapped</span>: <span class="hljs-type">Result</span>&lt;<span class="hljs-type">i32</span>, <span class="hljs-type">String</span>&gt; = result.<span class="hljs-title function_ invoke__">map_err</span>(|e| e.<span class="hljs-title function_ invoke__">to_string</span>());<br></code></pre></td></tr></table></figure>
+<h2 id="实战模式">实战模式</h2>
+<h3 id="模式1错误分层">模式1：错误分层</h3>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br></pre></td><td class="code"><pre><code class="hljs rust"><span class="hljs-comment">// 数据访问层错误</span><br><span class="hljs-meta">#[derive(Error, Debug)]</span><br><span class="hljs-keyword">enum</span> <span class="hljs-title class_">DbError</span> &#123;<br>    <span class="hljs-meta">#[error(<span class="hljs-string">&quot;Connection failed: &#123;0&#125;&quot;</span>)]</span><br>    <span class="hljs-title function_ invoke__">Connection</span>(<span class="hljs-meta">#[source]</span> sqlx::Error),<br><br>    <span class="hljs-meta">#[error(<span class="hljs-string">&quot;Query failed: &#123;0&#125;&quot;</span>)]</span><br>    <span class="hljs-title function_ invoke__">Query</span>(<span class="hljs-meta">#[source]</span> sqlx::Error),<br><br>    <span class="hljs-meta">#[error(<span class="hljs-string">&quot;Record not found: &#123;table&#125;.&#123;id&#125;&quot;</span>)]</span><br>    NotFound &#123; table: <span class="hljs-type">String</span>, id: <span class="hljs-type">String</span> &#125;,<br>&#125;<br><br><span class="hljs-comment">// 服务层错误（转换底层错误）</span><br><span class="hljs-meta">#[derive(Error, Debug)]</span><br><span class="hljs-keyword">enum</span> <span class="hljs-title class_">ServiceError</span> &#123;<br>    <span class="hljs-meta">#[error(<span class="hljs-string">&quot;User not found: &#123;0&#125;&quot;</span>)]</span><br>    <span class="hljs-title function_ invoke__">UserNotFound</span>(<span class="hljs-type">String</span>),<br><br>    <span class="hljs-meta">#[error(<span class="hljs-string">&quot;Permission denied&quot;</span>)]</span><br>    PermissionDenied,<br><br>    <span class="hljs-meta">#[error(<span class="hljs-string">&quot;Internal error&quot;</span>)]</span><br>    <span class="hljs-title function_ invoke__">Internal</span>(<span class="hljs-meta">#[from]</span> DbError),<br>&#125;<br><br><span class="hljs-comment">// API层错误（转换为HTTP响应）</span><br><span class="hljs-meta">#[derive(Error, Debug)]</span><br><span class="hljs-keyword">enum</span> <span class="hljs-title class_">ApiError</span> &#123;<br>    <span class="hljs-meta">#[error(<span class="hljs-string">&quot;&#123;0&#125;&quot;</span>)]</span><br>    <span class="hljs-title function_ invoke__">BadRequest</span>(<span class="hljs-type">String</span>),<br><br>    <span class="hljs-meta">#[error(<span class="hljs-string">&quot;&#123;0&#125;&quot;</span>)]</span><br>    <span class="hljs-title function_ invoke__">NotFound</span>(<span class="hljs-type">String</span>),<br><br>    <span class="hljs-meta">#[error(<span class="hljs-string">&quot;Forbidden&quot;</span>)]</span><br>    Forbidden,<br><br>    <span class="hljs-meta">#[error(<span class="hljs-string">&quot;Internal server error&quot;</span>)]</span><br>    <span class="hljs-title function_ invoke__">InternalError</span>(<span class="hljs-meta">#[source]</span> <span class="hljs-type">Box</span>&lt;<span class="hljs-keyword">dyn</span> Error + <span class="hljs-built_in">Send</span> + <span class="hljs-built_in">Sync</span>&gt;),<br>&#125;<br><br><span class="hljs-keyword">impl</span> <span class="hljs-title class_">From</span>&lt;ServiceError&gt; <span class="hljs-keyword">for</span> <span class="hljs-title class_">ApiError</span> &#123;<br>    <span class="hljs-keyword">fn</span> <span class="hljs-title function_">from</span>(e: ServiceError) <span class="hljs-punctuation">-&gt;</span> <span class="hljs-keyword">Self</span> &#123;<br>        <span class="hljs-keyword">match</span> e &#123;<br>            ServiceError::<span class="hljs-title function_ invoke__">UserNotFound</span>(msg) =&gt; ApiError::<span class="hljs-title function_ invoke__">NotFound</span>(msg),<br>            ServiceError::PermissionDenied =&gt; ApiError::Forbidden,<br>            ServiceError::<span class="hljs-title function_ invoke__">Internal</span>(e) =&gt; ApiError::<span class="hljs-title function_ invoke__">InternalError</span>(<span class="hljs-type">Box</span>::<span class="hljs-title function_ invoke__">new</span>(e)),<br>        &#125;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<pre class="mermaid">graph TB
+    API[API Layer&lt;br&gt;ApiError] --&gt; SERVICE[Service Layer&lt;br&gt;ServiceError]
+    SERVICE --&gt; DB[Data Layer&lt;br&gt;DbError]
+    DB --&gt; SQLX[sqlx::Error]
+
+    API --&gt; |HTTP 400/404/500| CLIENT[Client]
+
+    style API fill:#1976d2,color:#fff
+    style SERVICE fill:#388e3c,color:#fff
+    style DB fill:#f57c00,color:#fff</pre>
+<h3 id="模式2收集多个错误">模式2：收集多个错误</h3>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br></pre></td><td class="code"><pre><code class="hljs rust"><span class="hljs-keyword">fn</span> <span class="hljs-title function_">validate_user</span>(user: &amp;UserInput) <span class="hljs-punctuation">-&gt;</span> <span class="hljs-type">Result</span>&lt;(), <span class="hljs-type">Vec</span>&lt;<span class="hljs-type">String</span>&gt;&gt; &#123;<br>    <span class="hljs-keyword">let</span> <span class="hljs-keyword">mut </span><span class="hljs-variable">errors</span> = <span class="hljs-type">Vec</span>::<span class="hljs-title function_ invoke__">new</span>();<br><br>    <span class="hljs-keyword">if</span> user.name.<span class="hljs-title function_ invoke__">is_empty</span>() &#123;<br>        errors.<span class="hljs-title function_ invoke__">push</span>(<span class="hljs-string">&quot;Name is required&quot;</span>.<span class="hljs-title function_ invoke__">to_string</span>());<br>    &#125;<br>    <span class="hljs-keyword">if</span> user.email.<span class="hljs-title function_ invoke__">is_empty</span>() &#123;<br>        errors.<span class="hljs-title function_ invoke__">push</span>(<span class="hljs-string">&quot;Email is required&quot;</span>.<span class="hljs-title function_ invoke__">to_string</span>());<br>    &#125;<br>    <span class="hljs-keyword">if</span> user.age &lt; <span class="hljs-number">18</span> &#123;<br>        errors.<span class="hljs-title function_ invoke__">push</span>(<span class="hljs-string">&quot;Must be at least 18 years old&quot;</span>.<span class="hljs-title function_ invoke__">to_string</span>());<br>    &#125;<br><br>    <span class="hljs-keyword">if</span> errors.<span class="hljs-title function_ invoke__">is_empty</span>() &#123;<br>        <span class="hljs-title function_ invoke__">Ok</span>(())<br>    &#125; <span class="hljs-keyword">else</span> &#123;<br>        <span class="hljs-title function_ invoke__">Err</span>(errors)<br>    &#125;<br>&#125;<br><br><span class="hljs-comment">// 收集迭代器中的Result</span><br><span class="hljs-keyword">fn</span> <span class="hljs-title function_">parse_numbers</span>(inputs: &amp;[&amp;<span class="hljs-type">str</span>]) <span class="hljs-punctuation">-&gt;</span> <span class="hljs-type">Result</span>&lt;<span class="hljs-type">Vec</span>&lt;<span class="hljs-type">i32</span>&gt;, ParseIntError&gt; &#123;<br>    inputs.<span class="hljs-title function_ invoke__">iter</span>()<br>        .<span class="hljs-title function_ invoke__">map</span>(|s| s.parse::&lt;<span class="hljs-type">i32</span>&gt;())<br>        .<span class="hljs-title function_ invoke__">collect</span>() <span class="hljs-comment">// collect可以将Iterator&lt;Result&gt;转为Result&lt;Vec&gt;</span><br>&#125;<br><br><span class="hljs-comment">// 分离成功和失败</span><br><span class="hljs-keyword">fn</span> <span class="hljs-title function_">partition_results</span>(inputs: &amp;[&amp;<span class="hljs-type">str</span>]) <span class="hljs-punctuation">-&gt;</span> (<span class="hljs-type">Vec</span>&lt;<span class="hljs-type">i32</span>&gt;, <span class="hljs-type">Vec</span>&lt;<span class="hljs-type">String</span>&gt;) &#123;<br>    <span class="hljs-keyword">let</span> (oks, errs): (<span class="hljs-type">Vec</span>&lt;_&gt;, <span class="hljs-type">Vec</span>&lt;_&gt;) = inputs.<span class="hljs-title function_ invoke__">iter</span>()<br>        .<span class="hljs-title function_ invoke__">map</span>(|s| s.parse::&lt;<span class="hljs-type">i32</span>&gt;())<br>        .<span class="hljs-title function_ invoke__">partition</span>(<span class="hljs-type">Result</span>::is_ok);<br><br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">oks</span>: <span class="hljs-type">Vec</span>&lt;<span class="hljs-type">i32</span>&gt; = oks.<span class="hljs-title function_ invoke__">into_iter</span>().<span class="hljs-title function_ invoke__">map</span>(<span class="hljs-type">Result</span>::unwrap).<span class="hljs-title function_ invoke__">collect</span>();<br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">errs</span>: <span class="hljs-type">Vec</span>&lt;<span class="hljs-type">String</span>&gt; = errs.<span class="hljs-title function_ invoke__">into_iter</span>()<br>        .<span class="hljs-title function_ invoke__">map</span>(|e| e.<span class="hljs-title function_ invoke__">unwrap_err</span>().<span class="hljs-title function_ invoke__">to_string</span>())<br>        .<span class="hljs-title function_ invoke__">collect</span>();<br><br>    (oks, errs)<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="模式3panic的合理使用">模式3：panic的合理使用</h3>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><code class="hljs rust"><span class="hljs-comment">// 合理的panic场景</span><br><br><span class="hljs-comment">// 1. 不可能发生的情况（unreachable）</span><br><span class="hljs-keyword">fn</span> <span class="hljs-title function_">process</span>(value: &amp;Value) &#123;<br>    <span class="hljs-keyword">match</span> value &#123;<br>        Value::<span class="hljs-title function_ invoke__">Number</span>(n) =&gt; <span class="hljs-title function_ invoke__">handle_number</span>(n),<br>        Value::<span class="hljs-title function_ invoke__">String</span>(s) =&gt; <span class="hljs-title function_ invoke__">handle_string</span>(s),<br>        _ =&gt; <span class="hljs-built_in">unreachable!</span>(<span class="hljs-string">&quot;validate() ensures only Number and String&quot;</span>),<br>    &#125;<br>&#125;<br><br><span class="hljs-comment">// 2. 测试中</span><br><span class="hljs-meta">#[cfg(test)]</span><br><span class="hljs-keyword">mod</span> tests &#123;<br>    <span class="hljs-meta">#[test]</span><br>    <span class="hljs-keyword">fn</span> <span class="hljs-title function_">test_parse</span>() &#123;<br>        <span class="hljs-keyword">let</span> <span class="hljs-variable">result</span> = <span class="hljs-title function_ invoke__">parse</span>(<span class="hljs-string">&quot;valid input&quot;</span>).<span class="hljs-title function_ invoke__">unwrap</span>(); <span class="hljs-comment">// 测试中可以unwrap</span><br>        <span class="hljs-built_in">assert_eq!</span>(result, expected);<br>    &#125;<br>&#125;<br><br><span class="hljs-comment">// 3. 初始化（失败则无法继续）</span><br><span class="hljs-keyword">fn</span> <span class="hljs-title function_">main</span>() &#123;<br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">config</span> = Config::<span class="hljs-title function_ invoke__">load</span>().<span class="hljs-title function_ invoke__">expect</span>(<span class="hljs-string">&quot;Failed to load config - cannot start&quot;</span>);<br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">db</span> = Database::<span class="hljs-title function_ invoke__">connect</span>(&amp;config.db_url)<br>        .<span class="hljs-title function_ invoke__">expect</span>(<span class="hljs-string">&quot;Failed to connect to database - cannot start&quot;</span>);<br>&#125;<br><br><span class="hljs-comment">// 4. 使用assert!验证不变量</span><br><span class="hljs-keyword">fn</span> <span class="hljs-title function_">binary_search</span>(arr: &amp;[<span class="hljs-type">i32</span>], target: <span class="hljs-type">i32</span>) <span class="hljs-punctuation">-&gt;</span> <span class="hljs-type">Option</span>&lt;<span class="hljs-type">usize</span>&gt; &#123;<br>    <span class="hljs-built_in">assert!</span>(arr.<span class="hljs-title function_ invoke__">is_sorted</span>(), <span class="hljs-string">&quot;Array must be sorted for binary search&quot;</span>);<br>    <span class="hljs-comment">// ...</span><br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="最佳实践总结">最佳实践总结</h2>
+<pre class="mermaid">flowchart TB
+    START[如何处理错误?] --&gt; Q1{是程序Bug?}
+    Q1 --&gt;|是| PANIC["panic! / unreachable!&lt;br&gt;assert!"]
+    Q1 --&gt;|否| Q2{值可能不存在?}
+
+    Q2 --&gt;|是| OPTION["Option&amp;lt;T&amp;gt;"]
+    Q2 --&gt;|否| Q3{写库还是应用?}
+
+    Q3 --&gt;|库| THISERROR["thiserror&lt;br&gt;定义精确错误枚举"]
+    Q3 --&gt;|应用| ANYHOW["anyhow&lt;br&gt;统一错误 + context"]
+    Q3 --&gt;|两者| BOTH["库: thiserror&lt;br&gt;应用: anyhow"]</pre>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><code class="hljs rust"><span class="hljs-comment">// 最佳实践示例</span><br><br><span class="hljs-comment">// 1. 永远不要忽略错误</span><br><span class="hljs-keyword">let</span> <span class="hljs-variable">_</span> = <span class="hljs-title function_ invoke__">do_something</span>(); <span class="hljs-comment">// 至少用let _承认你知道这里有Result</span><br><br><span class="hljs-comment">// 2. 使用context()提供有意义的错误信息</span><br><span class="hljs-keyword">let</span> <span class="hljs-variable">file</span> = File::<span class="hljs-title function_ invoke__">open</span>(path)<br>    .<span class="hljs-title function_ invoke__">with_context</span>(|| <span class="hljs-built_in">format!</span>(<span class="hljs-string">&quot;Failed to open config file: &#123;&#125;&quot;</span>, path))?;<br><br><span class="hljs-comment">// 3. 在库中使用thiserror定义明确的错误类型</span><br><span class="hljs-meta">#[derive(Error, Debug)]</span><br><span class="hljs-keyword">pub</span> <span class="hljs-keyword">enum</span> <span class="hljs-title class_">LibError</span> &#123;<br>    <span class="hljs-meta">#[error(<span class="hljs-string">&quot;Invalid input: &#123;0&#125;&quot;</span>)]</span><br>    <span class="hljs-title function_ invoke__">InvalidInput</span>(<span class="hljs-type">String</span>),<br>    <span class="hljs-comment">// ...</span><br>&#125;<br><br><span class="hljs-comment">// 4. 在应用中使用anyhow简化错误处理</span><br><span class="hljs-keyword">fn</span> <span class="hljs-title function_">main</span>() <span class="hljs-punctuation">-&gt;</span> anyhow::<span class="hljs-type">Result</span>&lt;()&gt; &#123;<br>    <span class="hljs-comment">// ...</span><br>    <span class="hljs-title function_ invoke__">Ok</span>(())<br>&#125;<br><br><span class="hljs-comment">// 5. 不要过度使用unwrap()</span><br><span class="hljs-comment">// 只在确定不会失败或原型阶段使用</span><br></code></pre></td></tr></table></figure>
+<h2 id="总结">总结</h2>
+<p>Rust错误处理的核心要点：</p>
+<ol type="1">
+<li><strong>Result/Option</strong>替代异常，强制编译时处理所有错误路径</li>
+<li><strong>?操作符</strong>是错误传播的语法糖，支持自动From转换</li>
+<li><strong>thiserror</strong>用于库开发，定义精确的错误类型枚举</li>
+<li><strong>anyhow</strong>用于应用开发，提供统一的错误类型和上下文信息</li>
+<li><strong>错误分层</strong>：每层定义自己的错误类型，向上转换</li>
+<li><strong>panic用于Bug</strong>：不可恢复的编程错误才用panic，不要用于正常错误流</li>
+</ol>
+<p>Rust的错误处理模式看似繁琐，但它确保了每个可能的错误路径都被处理，这是构建可靠软件的基础。一旦习惯了这种模式，你会发现它比try-catch更加清晰和可控。</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2025-08-20</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">3.4k 字 · 9 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/llm-rag-architecture/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">LLM RAG架构设计与实现</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/rust-wasm-development/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Rust WebAssembly开发实战</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%94%99%E8%AF%AF%E5%A4%84%E7%90%86%E5%93%B2%E5%AD%A6"><span class="toc-text">错误处理哲学</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#option%E7%B1%BB%E5%9E%8B"><span class="toc-text">Option类型</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9F%BA%E6%9C%AC%E4%BD%BF%E7%94%A8"><span class="toc-text">基本使用</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#option%E7%BB%84%E5%90%88%E5%99%A8"><span class="toc-text">Option组合器</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#result%E7%B1%BB%E5%9E%8B"><span class="toc-text">Result类型</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9F%BA%E6%9C%AC%E4%BD%BF%E7%94%A8-1"><span class="toc-text">基本使用</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%93%8D%E4%BD%9C%E7%AC%A6"><span class="toc-text">?操作符</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%93%8D%E4%BD%9C%E7%AC%A6%E7%9A%84from%E8%BD%AC%E6%8D%A2"><span class="toc-text">?操作符的From转换</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%87%AA%E5%AE%9A%E4%B9%89%E9%94%99%E8%AF%AF%E7%B1%BB%E5%9E%8B"><span class="toc-text">自定义错误类型</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%89%8B%E5%8A%A8%E5%AE%9E%E7%8E%B0"><span class="toc-text">手动实现</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BD%BF%E7%94%A8thiserror%E6%8E%A8%E8%8D%90%E7%94%A8%E4%BA%8E%E5%BA%93"><span class="toc-text">使用thiserror（推荐用于库）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BD%BF%E7%94%A8anyhow%E6%8E%A8%E8%8D%90%E7%94%A8%E4%BA%8E%E5%BA%94%E7%94%A8"><span class="toc-text">使用anyhow（推荐用于应用）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#thiserror-vs-anyhow"><span class="toc-text">thiserror vs anyhow</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%94%99%E8%AF%AF%E8%BD%AC%E6%8D%A2%E6%A8%A1%E5%BC%8F"><span class="toc-text">错误转换模式</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E6%88%98%E6%A8%A1%E5%BC%8F"><span class="toc-text">实战模式</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A8%A1%E5%BC%8F1%E9%94%99%E8%AF%AF%E5%88%86%E5%B1%82"><span class="toc-text">模式1：错误分层</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A8%A1%E5%BC%8F2%E6%94%B6%E9%9B%86%E5%A4%9A%E4%B8%AA%E9%94%99%E8%AF%AF"><span class="toc-text">模式2：收集多个错误</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A8%A1%E5%BC%8F3panic%E7%9A%84%E5%90%88%E7%90%86%E4%BD%BF%E7%94%A8"><span class="toc-text">模式3：panic的合理使用</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5%E6%80%BB%E7%BB%93"><span class="toc-text">最佳实践总结</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

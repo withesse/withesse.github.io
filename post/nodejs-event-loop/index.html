@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Node.js事件循环机制深度解析 · zt&#39;s Blog</title>
+  <meta name="description" content="深入解析Node.js事件循环的底层实现，涵盖libuv事件循环阶段、微任务与宏任务、process.nextTick、setImmediate和线程池机制。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/nodejs-event-loop/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Node.js事件循环机制深度解析">
+  <meta property="og:description" content="深入解析Node.js事件循环的底层实现，涵盖libuv事件循环阶段、微任务与宏任务、process.nextTick、setImmediate和线程池机制。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/nodejs-event-loop/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2025-05-27T16:00:00.000Z">
+  <meta property="article:modified_time" content="2025-05-27T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Node.js事件循环机制深度解析">
+  <meta name="twitter:description" content="深入解析Node.js事件循环的底层实现，涵盖libuv事件循环阶段、微任务与宏任务、process.nextTick、setImmediate和线程池机制。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Node.js事件循环机制深度解析","description":"深入解析Node.js事件循环的底层实现，涵盖libuv事件循环阶段、微任务与宏任务、process.nextTick、setImmediate和线程池机制。","datePublished":"2025-05-27T16:00:00.000Z","dateModified":"2025-05-27T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/nodejs-event-loop/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Node.js","item":"https://withesse.co/categories/Node-js/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:100">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Node-js/">Node.js</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/nodejs/"><span class="hash">#</span>nodejs</a><a class="tag" href="/tags/event-loop/"><span class="hash">#</span>event-loop</a><a class="tag" href="/tags/libuv/"><span class="hash">#</span>libuv</a>
+        
+      </div>
+
+      <h1>Node.js事件循环机制深度解析</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2025.05.28</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 7 min</span>
+        </span>
+        <span class="wc"><span class="num">2.6k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%95%B4%E4%BD%93%E6%9E%B6%E6%9E%84"><span class="toc-text">整体架构</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%8B%E4%BB%B6%E5%BE%AA%E7%8E%AF%E7%9A%84%E5%85%AD%E4%B8%AA%E9%98%B6%E6%AE%B5"><span class="toc-text">事件循环的六个阶段</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%90%84%E9%98%B6%E6%AE%B5%E8%AF%A6%E8%A7%A3"><span class="toc-text">各阶段详解</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BE%AE%E4%BB%BB%E5%8A%A1%E4%B8%8E%E5%AE%8F%E4%BB%BB%E5%8A%A1"><span class="toc-text">微任务与宏任务</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%BE%AE%E4%BB%BB%E5%8A%A1%E4%BC%98%E5%85%88%E7%BA%A7"><span class="toc-text">微任务优先级</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#settimeout-vs-setimmediate"><span class="toc-text">setTimeout vs setImmediate</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#process.nexttick%E6%B7%B1%E5%85%A5"><span class="toc-text">process.nextTick深入</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BA%BF%E7%A8%8B%E6%B1%A0"><span class="toc-text">线程池</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E9%99%85%E5%BA%94%E7%94%A8%E4%B8%AD%E7%9A%84%E6%B3%A8%E6%84%8F%E4%BA%8B%E9%A1%B9"><span class="toc-text">实际应用中的注意事项</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%8D%E8%A6%81%E9%98%BB%E5%A1%9E%E4%BA%8B%E4%BB%B6%E5%BE%AA%E7%8E%AF"><span class="toc-text">不要阻塞事件循环</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%9B%91%E6%8E%A7%E4%BA%8B%E4%BB%B6%E5%BE%AA%E7%8E%AF%E5%BB%B6%E8%BF%9F"><span class="toc-text">监控事件循环延迟</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#worker-threads"><span class="toc-text">Worker Threads</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%8B%E4%BB%B6%E5%BE%AA%E7%8E%AF%E5%AE%8C%E6%95%B4%E6%B5%81%E7%A8%8B%E5%9B%BE"><span class="toc-text">事件循环完整流程图</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="前言">前言</h2>
+<p>Node.js的核心特性是单线程非阻塞I/O模型，而这一切的基础就是事件循环（Event
+Loop）。理解事件循环的工作机制，是写出高性能Node.js应用的前提。本文将深入libuv层面，解析事件循环的每个阶段及其执行顺序。</p>
+<h2 id="整体架构">整体架构</h2>
+<pre class="mermaid">graph TB
+    subgraph "Node.js Architecture"
+        JS[JavaScript Code] --&gt; V8[V8 Engine]
+        V8 --&gt; BINDINGS[Node.js Bindings&lt;br&gt;C++ Addons]
+        BINDINGS --&gt; LIBUV[libuv&lt;br&gt;Event Loop + Thread Pool]
+        BINDINGS --&gt; OPENSSL[OpenSSL&lt;br&gt;Crypto]
+        BINDINGS --&gt; ZLIB[zlib&lt;br&gt;Compression]
+        BINDINGS --&gt; HTTP_PARSER[llhttp&lt;br&gt;HTTP Parser]
+
+        LIBUV --&gt; EPOLL[epoll/kqueue/IOCP&lt;br&gt;Async I/O]
+        LIBUV --&gt; TP[Thread Pool&lt;br&gt;4 threads default]
+    end</pre>
+<p>Node.js运行时由几个关键组件构成： -
+<strong>V8</strong>：执行JavaScript代码 -
+<strong>libuv</strong>：提供事件循环和异步I/O - <strong>Node.js
+Bindings</strong>：连接JavaScript和C++层</p>
+<h2 id="事件循环的六个阶段">事件循环的六个阶段</h2>
+<pre class="mermaid">graph TB
+    START((开始)) --&gt; TIMERS
+
+    TIMERS[1. Timers&lt;br&gt;执行setTimeout/setInterval回调] --&gt; PENDING[2. Pending Callbacks&lt;br&gt;执行延迟到下一轮的I/O回调]
+
+    PENDING --&gt; IDLE[3. Idle, Prepare&lt;br&gt;内部使用]
+
+    IDLE --&gt; POLL[4. Poll&lt;br&gt;检索新I/O事件&lt;br&gt;执行I/O相关回调]
+
+    POLL --&gt; CHECK[5. Check&lt;br&gt;执行setImmediate回调]
+
+    CHECK --&gt; CLOSE[6. Close Callbacks&lt;br&gt;执行close事件回调&lt;br&gt;如socket.on close]
+
+    CLOSE --&gt; |下一轮| TIMERS
+
+    style TIMERS fill:#e53935,color:#fff
+    style POLL fill:#1976d2,color:#fff
+    style CHECK fill:#388e3c,color:#fff</pre>
+<h3 id="各阶段详解">各阶段详解</h3>
+<h4 id="timers阶段">1. Timers阶段</h4>
+<p>执行<code>setTimeout()</code>和<code>setInterval()</code>到期的回调。注意：定时器的时间并不是精确的，而是”至少”等待指定时间。</p>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-comment">// setTimeout的执行时机取决于事件循环当前所处阶段</span><br><span class="hljs-keyword">const</span> start = <span class="hljs-title class_">Date</span>.<span class="hljs-title function_">now</span>();<br><br><span class="hljs-built_in">setTimeout</span>(<span class="hljs-function">() =&gt;</span> &#123;<br>    <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">`Timer executed after <span class="hljs-subst">$&#123;<span class="hljs-built_in">Date</span>.now() - start&#125;</span>ms`</span>);<br>&#125;, <span class="hljs-number">100</span>);<br><br><span class="hljs-comment">// 模拟一个耗时操作</span><br><span class="hljs-keyword">const</span> data = <span class="hljs-built_in">require</span>(<span class="hljs-string">&#x27;fs&#x27;</span>).<span class="hljs-title function_">readFileSync</span>(<span class="hljs-string">&#x27;/dev/urandom&#x27;</span>, &#123; <span class="hljs-attr">length</span>: <span class="hljs-number">100000</span> &#125;);<br><span class="hljs-comment">// readFileSync是同步的，会阻塞事件循环</span><br><span class="hljs-comment">// 如果这里耗时200ms，那么setTimeout回调要等到200ms后才执行</span><br></code></pre></td></tr></table></figure>
+<h4 id="pending-callbacks阶段">2. Pending Callbacks阶段</h4>
+<p>处理一些系统操作的回调，比如TCP连接错误。大部分回调在Poll阶段处理，这个阶段只处理少数延迟的I/O回调。</p>
+<h4 id="poll阶段">3. Poll阶段</h4>
+<p>这是最重要的阶段。Poll阶段做两件事： 1. 计算应该阻塞和轮询I/O的时间
+2. 处理Poll队列中的事件</p>
+<pre class="mermaid">flowchart TB
+    ENTER[进入Poll阶段] --&gt; CHECK_QUEUE{Poll队列&lt;br&gt;有回调?}
+
+    CHECK_QUEUE --&gt;|有| EXEC[执行回调&lt;br&gt;直到队列为空&lt;br&gt;或达到系统限制]
+    CHECK_QUEUE --&gt;|空| CHECK_IMMEDIATE{有setImmediate&lt;br&gt;调度?}
+
+    CHECK_IMMEDIATE --&gt;|有| GO_CHECK[进入Check阶段]
+    CHECK_IMMEDIATE --&gt;|没有| CHECK_TIMER{有到期Timer?}
+
+    CHECK_TIMER --&gt;|有| GO_TIMER[进入Timers阶段]
+    CHECK_TIMER --&gt;|没有| WAIT[等待I/O事件&lt;br&gt;阻塞在这里]
+
+    EXEC --&gt; CHECK_QUEUE</pre>
+<h4 id="check阶段">4. Check阶段</h4>
+<p>执行<code>setImmediate()</code>回调。setImmediate是在Poll阶段完成后立即执行。</p>
+<h4 id="close-callbacks阶段">5. Close Callbacks阶段</h4>
+<p>处理关闭事件，如<code>socket.on('close', ...)</code>。</p>
+<h2 id="微任务与宏任务">微任务与宏任务</h2>
+<pre class="mermaid">graph TB
+    subgraph "每个阶段之间"
+        MICRO[微任务队列&lt;br&gt;process.nextTick&lt;br&gt;Promise.then&lt;br&gt;queueMicrotask]
+    end
+
+    subgraph "宏任务（事件循环阶段）"
+        T[Timers]
+        P[Pending]
+        PO[Poll]
+        C[Check]
+        CL[Close]
+    end
+
+    T --&gt; |执行所有微任务| MICRO
+    MICRO --&gt; P
+    P --&gt; |执行所有微任务| MICRO
+    MICRO --&gt; PO
+    PO --&gt; |执行所有微任务| MICRO
+    MICRO --&gt; C
+    C --&gt; |执行所有微任务| MICRO
+    MICRO --&gt; CL</pre>
+<h3 id="微任务优先级">微任务优先级</h3>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-comment">// process.nextTick vs Promise vs queueMicrotask</span><br><span class="hljs-comment">// process.nextTick优先级最高</span><br><br><span class="hljs-title class_">Promise</span>.<span class="hljs-title function_">resolve</span>().<span class="hljs-title function_">then</span>(<span class="hljs-function">() =&gt;</span> <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">&#x27;1: Promise&#x27;</span>));<br><span class="hljs-title function_">queueMicrotask</span>(<span class="hljs-function">() =&gt;</span> <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">&#x27;2: queueMicrotask&#x27;</span>));<br>process.<span class="hljs-title function_">nextTick</span>(<span class="hljs-function">() =&gt;</span> <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">&#x27;3: nextTick&#x27;</span>));<br><br><span class="hljs-comment">// 输出顺序:</span><br><span class="hljs-comment">// 3: nextTick</span><br><span class="hljs-comment">// 1: Promise         (Promise和queueMicrotask在同一队列)</span><br><span class="hljs-comment">// 2: queueMicrotask</span><br></code></pre></td></tr></table></figure>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-comment">// 完整的执行顺序示例</span><br><span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">&#x27;1: script start&#x27;</span>);<br><br><span class="hljs-built_in">setTimeout</span>(<span class="hljs-function">() =&gt;</span> &#123;<br>    <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">&#x27;2: setTimeout&#x27;</span>);<br>    <span class="hljs-title class_">Promise</span>.<span class="hljs-title function_">resolve</span>().<span class="hljs-title function_">then</span>(<span class="hljs-function">() =&gt;</span> &#123;<br>        <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">&#x27;3: setTimeout &gt; Promise&#x27;</span>);<br>    &#125;);<br>&#125;, <span class="hljs-number">0</span>);<br><br><span class="hljs-title function_">setImmediate</span>(<span class="hljs-function">() =&gt;</span> &#123;<br>    <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">&#x27;4: setImmediate&#x27;</span>);<br>    process.<span class="hljs-title function_">nextTick</span>(<span class="hljs-function">() =&gt;</span> &#123;<br>        <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">&#x27;5: setImmediate &gt; nextTick&#x27;</span>);<br>    &#125;);<br>&#125;);<br><br><span class="hljs-title class_">Promise</span>.<span class="hljs-title function_">resolve</span>().<span class="hljs-title function_">then</span>(<span class="hljs-function">() =&gt;</span> &#123;<br>    <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">&#x27;6: Promise&#x27;</span>);<br>&#125;);<br><br>process.<span class="hljs-title function_">nextTick</span>(<span class="hljs-function">() =&gt;</span> &#123;<br>    <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">&#x27;7: nextTick&#x27;</span>);<br>    process.<span class="hljs-title function_">nextTick</span>(<span class="hljs-function">() =&gt;</span> &#123;<br>        <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">&#x27;8: nextTick &gt; nextTick&#x27;</span>);<br>    &#125;);<br>&#125;);<br><br><span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">&#x27;9: script end&#x27;</span>);<br><br><span class="hljs-comment">// 输出:</span><br><span class="hljs-comment">// 1: script start</span><br><span class="hljs-comment">// 9: script end</span><br><span class="hljs-comment">// 7: nextTick</span><br><span class="hljs-comment">// 8: nextTick &gt; nextTick</span><br><span class="hljs-comment">// 6: Promise</span><br><span class="hljs-comment">// 2: setTimeout      (Timer和Immediate的顺序在主模块中不确定)</span><br><span class="hljs-comment">// 3: setTimeout &gt; Promise</span><br><span class="hljs-comment">// 4: setImmediate</span><br><span class="hljs-comment">// 5: setImmediate &gt; nextTick</span><br></code></pre></td></tr></table></figure>
+<h2 id="settimeout-vs-setimmediate">setTimeout vs setImmediate</h2>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-comment">// 在主模块中，顺序不确定（取决于系统性能和事件循环启动时间）</span><br><span class="hljs-built_in">setTimeout</span>(<span class="hljs-function">() =&gt;</span> <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">&#x27;timeout&#x27;</span>), <span class="hljs-number">0</span>);<br><span class="hljs-title function_">setImmediate</span>(<span class="hljs-function">() =&gt;</span> <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">&#x27;immediate&#x27;</span>));<br><span class="hljs-comment">// 可能是 timeout -&gt; immediate，也可能是 immediate -&gt; timeout</span><br><br><span class="hljs-comment">// 但在I/O回调中，setImmediate总是先执行</span><br><span class="hljs-keyword">const</span> fs = <span class="hljs-built_in">require</span>(<span class="hljs-string">&#x27;fs&#x27;</span>);<br>fs.<span class="hljs-title function_">readFile</span>(__filename, <span class="hljs-function">() =&gt;</span> &#123;<br>    <span class="hljs-built_in">setTimeout</span>(<span class="hljs-function">() =&gt;</span> <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">&#x27;timeout&#x27;</span>), <span class="hljs-number">0</span>);<br>    <span class="hljs-title function_">setImmediate</span>(<span class="hljs-function">() =&gt;</span> <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">&#x27;immediate&#x27;</span>));<br>&#125;);<br><span class="hljs-comment">// 总是: immediate -&gt; timeout</span><br><span class="hljs-comment">// 因为I/O回调在Poll阶段执行，下一个阶段是Check（setImmediate）</span><br></code></pre></td></tr></table></figure>
+<pre class="mermaid">sequenceDiagram
+    participant POLL as Poll Phase
+    participant CHECK as Check Phase
+    participant TIMER as Timer Phase
+
+    Note over POLL: fs.readFile回调执行
+    Note over POLL: 调度setTimeout和setImmediate
+
+    POLL-&gt;&gt;CHECK: 进入Check阶段
+    Note over CHECK: 执行setImmediate回调
+
+    CHECK-&gt;&gt;TIMER: 进入Timer阶段
+    Note over TIMER: 执行setTimeout回调</pre>
+<h2 id="process.nexttick深入">process.nextTick深入</h2>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-comment">// process.nextTick递归会阻塞事件循环（I/O饥饿）</span><br><span class="hljs-comment">// 不推荐的写法</span><br><span class="hljs-keyword">function</span> <span class="hljs-title function_">recursiveNextTick</span>(<span class="hljs-params"></span>) &#123;<br>    process.<span class="hljs-title function_">nextTick</span>(recursiveNextTick);<br>    <span class="hljs-comment">// 永远不会进入下一个事件循环阶段！</span><br>&#125;<br><br><span class="hljs-comment">// 推荐使用setImmediate替代</span><br><span class="hljs-keyword">function</span> <span class="hljs-title function_">recursiveImmediate</span>(<span class="hljs-params"></span>) &#123;<br>    <span class="hljs-title function_">setImmediate</span>(recursiveImmediate);<br>    <span class="hljs-comment">// 每次在Check阶段执行，不会阻塞其他阶段</span><br>&#125;<br><br><span class="hljs-comment">// process.nextTick的合理使用场景</span><br><span class="hljs-keyword">class</span> <span class="hljs-title class_">EventEmitterExample</span> <span class="hljs-keyword">extends</span> <span class="hljs-title class_ inherited__">require</span>(<span class="hljs-string">&#x27;events&#x27;</span>) &#123;<br>    <span class="hljs-title function_">constructor</span>(<span class="hljs-params"></span>) &#123;<br>        <span class="hljs-variable language_">super</span>();<br>        <span class="hljs-comment">// 确保事件处理器在构造函数返回后才触发</span><br>        process.<span class="hljs-title function_">nextTick</span>(<span class="hljs-function">() =&gt;</span> &#123;<br>            <span class="hljs-variable language_">this</span>.<span class="hljs-title function_">emit</span>(<span class="hljs-string">&#x27;ready&#x27;</span>);<br>        &#125;);<br>    &#125;<br>&#125;<br><br><span class="hljs-comment">// 用户可以在构造后注册事件处理器</span><br><span class="hljs-keyword">const</span> emitter = <span class="hljs-keyword">new</span> <span class="hljs-title class_">EventEmitterExample</span>();<br>emitter.<span class="hljs-title function_">on</span>(<span class="hljs-string">&#x27;ready&#x27;</span>, <span class="hljs-function">() =&gt;</span> &#123;<br>    <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">&#x27;ready event fired&#x27;</span>);<br>&#125;);<br></code></pre></td></tr></table></figure>
+<h2 id="线程池">线程池</h2>
+<p>libuv维护一个线程池（默认4个线程），用于处理无法通过内核异步机制完成的操作。</p>
+<pre class="mermaid">graph TB
+    subgraph "Main Thread (Event Loop)"
+        EL[Event Loop]
+    end
+
+    subgraph "libuv Thread Pool (UV_THREADPOOL_SIZE)"
+        T1[Thread 1]
+        T2[Thread 2]
+        T3[Thread 3]
+        T4[Thread 4]
+    end
+
+    subgraph "使用线程池的操作"
+        FS[fs.readFile / writeFile]
+        DNS[dns.lookup]
+        CRYPTO[crypto.pbkdf2 / randomBytes]
+        ZLIB[zlib.gzip / deflate]
+    end
+
+    subgraph "使用内核异步I/O"
+        NET[net.connect / http.request]
+        PIPE[pipe操作]
+        SIGNAL[信号处理]
+    end
+
+    FS --&gt; T1
+    DNS --&gt; T2
+    CRYPTO --&gt; T3
+    ZLIB --&gt; T4
+
+    NET --&gt; EL
+    PIPE --&gt; EL
+    SIGNAL --&gt; EL</pre>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-comment">// 调整线程池大小</span><br><span class="hljs-comment">// 在程序启动前设置环境变量</span><br><span class="hljs-comment">// UV_THREADPOOL_SIZE=16 node app.js</span><br><br><span class="hljs-comment">// 或在代码中设置（必须在require任何模块之前）</span><br>process.<span class="hljs-property">env</span>.<span class="hljs-property">UV_THREADPOOL_SIZE</span> = <span class="hljs-number">16</span>;<br><br><span class="hljs-comment">// 线程池满时的排队行为</span><br><span class="hljs-keyword">const</span> crypto = <span class="hljs-built_in">require</span>(<span class="hljs-string">&#x27;crypto&#x27;</span>);<br><span class="hljs-keyword">const</span> start = <span class="hljs-title class_">Date</span>.<span class="hljs-title function_">now</span>();<br><br><span class="hljs-comment">// 默认4个线程，5个并发pbkdf2</span><br><span class="hljs-keyword">for</span> (<span class="hljs-keyword">let</span> i = <span class="hljs-number">0</span>; i &lt; <span class="hljs-number">5</span>; i++) &#123;<br>    crypto.<span class="hljs-title function_">pbkdf2</span>(<span class="hljs-string">&#x27;password&#x27;</span>, <span class="hljs-string">&#x27;salt&#x27;</span>, <span class="hljs-number">100000</span>, <span class="hljs-number">512</span>, <span class="hljs-string">&#x27;sha512&#x27;</span>, <span class="hljs-function">() =&gt;</span> &#123;<br>        <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">`pbkdf2 <span class="hljs-subst">$&#123;i&#125;</span>: <span class="hljs-subst">$&#123;<span class="hljs-built_in">Date</span>.now() - start&#125;</span>ms`</span>);<br>    &#125;);<br>&#125;<br><br><span class="hljs-comment">// 输出示例（4线程）:</span><br><span class="hljs-comment">// pbkdf2 0: 850ms  \</span><br><span class="hljs-comment">// pbkdf2 1: 855ms   &gt; 前4个几乎同时完成</span><br><span class="hljs-comment">// pbkdf2 2: 860ms  /</span><br><span class="hljs-comment">// pbkdf2 3: 862ms /</span><br><span class="hljs-comment">// pbkdf2 4: 1710ms  -&gt; 第5个等待线程释放，耗时约2倍</span><br></code></pre></td></tr></table></figure>
+<h2 id="实际应用中的注意事项">实际应用中的注意事项</h2>
+<h3 id="不要阻塞事件循环">不要阻塞事件循环</h3>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-comment">// 不良实践：同步操作阻塞事件循环</span><br><span class="hljs-keyword">const</span> data = <span class="hljs-title class_">JSON</span>.<span class="hljs-title function_">parse</span>(fs.<span class="hljs-title function_">readFileSync</span>(<span class="hljs-string">&#x27;huge-file.json&#x27;</span>, <span class="hljs-string">&#x27;utf8&#x27;</span>));<br><br><span class="hljs-comment">// 良好实践：使用流或异步操作</span><br><span class="hljs-keyword">const</span> &#123; pipeline &#125; = <span class="hljs-built_in">require</span>(<span class="hljs-string">&#x27;stream/promises&#x27;</span>);<br><span class="hljs-keyword">const</span> &#123; createReadStream &#125; = <span class="hljs-built_in">require</span>(<span class="hljs-string">&#x27;fs&#x27;</span>);<br><span class="hljs-keyword">const</span> <span class="hljs-title class_">JSON</span>Stream = <span class="hljs-built_in">require</span>(<span class="hljs-string">&#x27;JSONStream&#x27;</span>);<br><br><span class="hljs-keyword">async</span> <span class="hljs-keyword">function</span> <span class="hljs-title function_">processLargeJSON</span>(<span class="hljs-params">filePath</span>) &#123;<br>    <span class="hljs-keyword">const</span> results = [];<br>    <span class="hljs-keyword">const</span> readStream = <span class="hljs-title function_">createReadStream</span>(filePath);<br>    <span class="hljs-keyword">const</span> parser = <span class="hljs-title class_">JSON</span>Stream.<span class="hljs-title function_">parse</span>(<span class="hljs-string">&#x27;*&#x27;</span>);<br><br>    parser.<span class="hljs-title function_">on</span>(<span class="hljs-string">&#x27;data&#x27;</span>, <span class="hljs-function">(<span class="hljs-params">item</span>) =&gt;</span> &#123;<br>        results.<span class="hljs-title function_">push</span>(item);<br>    &#125;);<br><br>    <span class="hljs-keyword">await</span> <span class="hljs-title function_">pipeline</span>(readStream, parser);<br>    <span class="hljs-keyword">return</span> results;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="监控事件循环延迟">监控事件循环延迟</h3>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-comment">// 使用perf_hooks监控事件循环延迟</span><br><span class="hljs-keyword">const</span> &#123; monitorEventLoopDelay &#125; = <span class="hljs-built_in">require</span>(<span class="hljs-string">&#x27;perf_hooks&#x27;</span>);<br><br><span class="hljs-keyword">const</span> histogram = <span class="hljs-title function_">monitorEventLoopDelay</span>(&#123; <span class="hljs-attr">resolution</span>: <span class="hljs-number">20</span> &#125;);<br>histogram.<span class="hljs-title function_">enable</span>();<br><br><span class="hljs-built_in">setInterval</span>(<span class="hljs-function">() =&gt;</span> &#123;<br>    <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(&#123;<br>        <span class="hljs-attr">min</span>: histogram.<span class="hljs-property">min</span> / <span class="hljs-number">1e6</span>,     <span class="hljs-comment">// 转换为毫秒</span><br>        <span class="hljs-attr">max</span>: histogram.<span class="hljs-property">max</span> / <span class="hljs-number">1e6</span>,<br>        <span class="hljs-attr">mean</span>: histogram.<span class="hljs-property">mean</span> / <span class="hljs-number">1e6</span>,<br>        <span class="hljs-attr">p99</span>: histogram.<span class="hljs-title function_">percentile</span>(<span class="hljs-number">99</span>) / <span class="hljs-number">1e6</span>,<br>    &#125;);<br>    histogram.<span class="hljs-title function_">reset</span>();<br>&#125;, <span class="hljs-number">5000</span>);<br></code></pre></td></tr></table></figure>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-comment">// 简单的事件循环延迟检测</span><br><span class="hljs-keyword">function</span> <span class="hljs-title function_">monitorLoop</span>(<span class="hljs-params">threshold = <span class="hljs-number">100</span></span>) &#123;<br>    <span class="hljs-keyword">let</span> lastCheck = <span class="hljs-title class_">Date</span>.<span class="hljs-title function_">now</span>();<br><br>    <span class="hljs-built_in">setInterval</span>(<span class="hljs-function">() =&gt;</span> &#123;<br>        <span class="hljs-keyword">const</span> now = <span class="hljs-title class_">Date</span>.<span class="hljs-title function_">now</span>();<br>        <span class="hljs-keyword">const</span> delay = now - lastCheck - <span class="hljs-number">1000</span>; <span class="hljs-comment">// 预期间隔1000ms</span><br>        <span class="hljs-keyword">if</span> (delay &gt; threshold) &#123;<br>            <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">warn</span>(<span class="hljs-string">`Event loop delay: <span class="hljs-subst">$&#123;delay&#125;</span>ms`</span>);<br>        &#125;<br>        lastCheck = now;<br>    &#125;, <span class="hljs-number">1000</span>).<span class="hljs-title function_">unref</span>(); <span class="hljs-comment">// unref防止阻止进程退出</span><br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="worker-threads">Worker Threads</h3>
+<p>对于CPU密集型任务，应该使用Worker Threads而非阻塞事件循环：</p>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-comment">// main.js</span><br><span class="hljs-keyword">const</span> &#123; <span class="hljs-title class_">Worker</span>, isMainThread, parentPort &#125; = <span class="hljs-built_in">require</span>(<span class="hljs-string">&#x27;worker_threads&#x27;</span>);<br><br><span class="hljs-keyword">if</span> (isMainThread) &#123;<br>    <span class="hljs-keyword">function</span> <span class="hljs-title function_">runWorker</span>(<span class="hljs-params">data</span>) &#123;<br>        <span class="hljs-keyword">return</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">Promise</span>(<span class="hljs-function">(<span class="hljs-params">resolve, reject</span>) =&gt;</span> &#123;<br>            <span class="hljs-keyword">const</span> worker = <span class="hljs-keyword">new</span> <span class="hljs-title class_">Worker</span>(__filename, &#123;<br>                <span class="hljs-attr">workerData</span>: data<br>            &#125;);<br>            worker.<span class="hljs-title function_">on</span>(<span class="hljs-string">&#x27;message&#x27;</span>, resolve);<br>            worker.<span class="hljs-title function_">on</span>(<span class="hljs-string">&#x27;error&#x27;</span>, reject);<br>        &#125;);<br>    &#125;<br><br>    <span class="hljs-keyword">async</span> <span class="hljs-keyword">function</span> <span class="hljs-title function_">main</span>(<span class="hljs-params"></span>) &#123;<br>        <span class="hljs-keyword">const</span> results = <span class="hljs-keyword">await</span> <span class="hljs-title class_">Promise</span>.<span class="hljs-title function_">all</span>([<br>            <span class="hljs-title function_">runWorker</span>(&#123; <span class="hljs-attr">task</span>: <span class="hljs-string">&#x27;hash&#x27;</span>, <span class="hljs-attr">data</span>: <span class="hljs-string">&#x27;password1&#x27;</span> &#125;),<br>            <span class="hljs-title function_">runWorker</span>(&#123; <span class="hljs-attr">task</span>: <span class="hljs-string">&#x27;hash&#x27;</span>, <span class="hljs-attr">data</span>: <span class="hljs-string">&#x27;password2&#x27;</span> &#125;),<br>        ]);<br>        <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(results);<br>    &#125;<br><br>    <span class="hljs-title function_">main</span>();<br>&#125; <span class="hljs-keyword">else</span> &#123;<br>    <span class="hljs-keyword">const</span> &#123; workerData &#125; = <span class="hljs-built_in">require</span>(<span class="hljs-string">&#x27;worker_threads&#x27;</span>);<br>    <span class="hljs-keyword">const</span> crypto = <span class="hljs-built_in">require</span>(<span class="hljs-string">&#x27;crypto&#x27;</span>);<br><br>    <span class="hljs-keyword">const</span> hash = crypto.<span class="hljs-title function_">pbkdf2Sync</span>(<br>        workerData.<span class="hljs-property">data</span>, <span class="hljs-string">&#x27;salt&#x27;</span>, <span class="hljs-number">100000</span>, <span class="hljs-number">64</span>, <span class="hljs-string">&#x27;sha512&#x27;</span><br>    );<br>    parentPort.<span class="hljs-title function_">postMessage</span>(hash.<span class="hljs-title function_">toString</span>(<span class="hljs-string">&#x27;hex&#x27;</span>));<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="事件循环完整流程图">事件循环完整流程图</h2>
+<pre class="mermaid">flowchart TB
+    START[Node.js启动] --&gt; INIT[初始化事件循环]
+    INIT --&gt; EXEC[执行入口脚本&lt;br&gt;同步代码]
+    EXEC --&gt; MICRO1[处理微任务&lt;br&gt;nextTick &gt; Promise]
+
+    MICRO1 --&gt; LOOP_START{有待处理&lt;br&gt;事件/回调?}
+    LOOP_START --&gt;|否| EXIT[退出进程]
+    LOOP_START --&gt;|是| TIMERS[Timers阶段]
+
+    TIMERS --&gt; MICRO2[微任务]
+    MICRO2 --&gt; PENDING[Pending阶段]
+    PENDING --&gt; MICRO3[微任务]
+    MICRO3 --&gt; POLL[Poll阶段]
+    POLL --&gt; MICRO4[微任务]
+    MICRO4 --&gt; CHECK[Check阶段]
+    CHECK --&gt; MICRO5[微任务]
+    MICRO5 --&gt; CLOSE[Close阶段]
+    CLOSE --&gt; MICRO6[微任务]
+    MICRO6 --&gt; LOOP_START</pre>
+<h2 id="总结">总结</h2>
+<p>Node.js事件循环的核心知识点：</p>
+<ol type="1">
+<li><strong>六个阶段</strong>：Timers → Pending → Idle/Prepare →
+<strong>Poll</strong> → Check → Close</li>
+<li><strong>微任务在每个阶段之间执行</strong>：<code>process.nextTick</code>优先级高于<code>Promise.then</code></li>
+<li><strong>Poll阶段是核心</strong>：处理I/O事件，控制阻塞等待时间</li>
+<li><strong>setImmediate vs
+setTimeout(0)</strong>：在I/O回调中setImmediate总是先执行</li>
+<li><strong>线程池默认4个线程</strong>：处理fs、dns.lookup、crypto等操作，可通过UV_THREADPOOL_SIZE调整</li>
+<li><strong>不要阻塞事件循环</strong>：CPU密集型任务使用Worker
+Threads</li>
+</ol>
+<p>掌握事件循环机制，能帮助你写出更高效的Node.js代码，也能更好地排查性能问题。</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2025-05-28</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">2.6k 字 · 7 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/zero-trust-architecture/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">零信任架构设计与实施指南</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/service-mesh-istio/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Service Mesh与Istio实战指南</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%95%B4%E4%BD%93%E6%9E%B6%E6%9E%84"><span class="toc-text">整体架构</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%8B%E4%BB%B6%E5%BE%AA%E7%8E%AF%E7%9A%84%E5%85%AD%E4%B8%AA%E9%98%B6%E6%AE%B5"><span class="toc-text">事件循环的六个阶段</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%90%84%E9%98%B6%E6%AE%B5%E8%AF%A6%E8%A7%A3"><span class="toc-text">各阶段详解</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BE%AE%E4%BB%BB%E5%8A%A1%E4%B8%8E%E5%AE%8F%E4%BB%BB%E5%8A%A1"><span class="toc-text">微任务与宏任务</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%BE%AE%E4%BB%BB%E5%8A%A1%E4%BC%98%E5%85%88%E7%BA%A7"><span class="toc-text">微任务优先级</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#settimeout-vs-setimmediate"><span class="toc-text">setTimeout vs setImmediate</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#process.nexttick%E6%B7%B1%E5%85%A5"><span class="toc-text">process.nextTick深入</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BA%BF%E7%A8%8B%E6%B1%A0"><span class="toc-text">线程池</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E9%99%85%E5%BA%94%E7%94%A8%E4%B8%AD%E7%9A%84%E6%B3%A8%E6%84%8F%E4%BA%8B%E9%A1%B9"><span class="toc-text">实际应用中的注意事项</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%8D%E8%A6%81%E9%98%BB%E5%A1%9E%E4%BA%8B%E4%BB%B6%E5%BE%AA%E7%8E%AF"><span class="toc-text">不要阻塞事件循环</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%9B%91%E6%8E%A7%E4%BA%8B%E4%BB%B6%E5%BE%AA%E7%8E%AF%E5%BB%B6%E8%BF%9F"><span class="toc-text">监控事件循环延迟</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#worker-threads"><span class="toc-text">Worker Threads</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%8B%E4%BB%B6%E5%BE%AA%E7%8E%AF%E5%AE%8C%E6%95%B4%E6%B5%81%E7%A8%8B%E5%9B%BE"><span class="toc-text">事件循环完整流程图</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

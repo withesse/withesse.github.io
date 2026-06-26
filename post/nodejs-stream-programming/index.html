@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Node.js Stream编程实战 · zt&#39;s Blog</title>
+  <meta name="description" content="全面解析Node.js Stream编程，涵盖Readable/Writable/Transform/Duplex流、背压机制、pipeline、异步迭代器和实战案例。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/nodejs-stream-programming/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Node.js Stream编程实战">
+  <meta property="og:description" content="全面解析Node.js Stream编程，涵盖Readable/Writable/Transform/Duplex流、背压机制、pipeline、异步迭代器和实战案例。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/nodejs-stream-programming/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2025-06-10T16:00:00.000Z">
+  <meta property="article:modified_time" content="2025-06-10T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Node.js Stream编程实战">
+  <meta name="twitter:description" content="全面解析Node.js Stream编程，涵盖Readable/Writable/Transform/Duplex流、背压机制、pipeline、异步迭代器和实战案例。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Node.js Stream编程实战","description":"全面解析Node.js Stream编程，涵盖Readable/Writable/Transform/Duplex流、背压机制、pipeline、异步迭代器和实战案例。","datePublished":"2025-06-10T16:00:00.000Z","dateModified":"2025-06-10T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/nodejs-stream-programming/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Node.js","item":"https://withesse.co/categories/Node-js/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:100">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Node-js/">Node.js</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/pipeline/"><span class="hash">#</span>pipeline</a><a class="tag" href="/tags/stream/"><span class="hash">#</span>stream</a><a class="tag" href="/tags/nodejs/"><span class="hash">#</span>nodejs</a>
+        
+      </div>
+
+      <h1>Node.js Stream编程实战</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2025.06.11</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 7 min</span>
+        </span>
+        <span class="wc"><span class="num">2.8k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E9%9C%80%E8%A6%81stream"><span class="toc-text">为什么需要Stream？</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%9B%E7%A7%8D%E6%B5%81%E7%B1%BB%E5%9E%8B"><span class="toc-text">四种流类型</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#readable-stream"><span class="toc-text">Readable Stream</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%A4%E7%A7%8D%E6%A8%A1%E5%BC%8F"><span class="toc-text">两种模式</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%BC%82%E6%AD%A5%E8%BF%AD%E4%BB%A3%E5%99%A8%E6%8E%A8%E8%8D%90%E6%96%B9%E5%BC%8F"><span class="toc-text">异步迭代器（推荐方式）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#writable-stream"><span class="toc-text">Writable Stream</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#transform-stream"><span class="toc-text">Transform Stream</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%9E%E7%94%A8transform%E7%A4%BA%E4%BE%8B"><span class="toc-text">实用Transform示例</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%83%8C%E5%8E%8Bbackpressure"><span class="toc-text">背压（Backpressure）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#pipeline%E6%8E%A8%E8%8D%90%E6%96%B9%E5%BC%8F"><span class="toc-text">pipeline（推荐方式）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#pipeline-vs-pipe"><span class="toc-text">pipeline vs pipe</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#stream.composenode.js-16"><span class="toc-text">stream.compose（Node.js 16+）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E6%88%98%E6%A1%88%E4%BE%8B"><span class="toc-text">实战案例</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#http%E6%B5%81%E5%BC%8F%E5%93%8D%E5%BA%94"><span class="toc-text">HTTP流式响应</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%97%A5%E5%BF%97%E6%96%87%E4%BB%B6%E5%AE%9E%E6%97%B6%E5%88%86%E6%9E%90"><span class="toc-text">日志文件实时分析</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%A4%A7%E6%96%87%E4%BB%B6%E5%88%86%E5%9D%97%E4%B8%8A%E4%BC%A0"><span class="toc-text">大文件分块上传</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="前言">前言</h2>
+<p>Stream（流）是Node.js中处理大量数据的核心抽象。与一次性加载全部数据到内存不同，流以小块（chunk）的方式逐步处理数据，内存使用恒定。无论是文件处理、网络通信还是数据转换，流都是Node.js的核心基础设施。</p>
+<h2 id="为什么需要stream">为什么需要Stream？</h2>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-comment">// 不使用流：一次性读取整个文件到内存</span><br><span class="hljs-keyword">const</span> fs = <span class="hljs-built_in">require</span>(<span class="hljs-string">&#x27;fs&#x27;</span>);<br><br><span class="hljs-comment">// 读取一个2GB文件 - 内存直接爆炸</span><br><span class="hljs-keyword">const</span> data = fs.<span class="hljs-title function_">readFileSync</span>(<span class="hljs-string">&#x27;huge-file.csv&#x27;</span>); <span class="hljs-comment">// 需要2GB内存</span><br><span class="hljs-title function_">processData</span>(data);<br><br><span class="hljs-comment">// 使用流：分块处理，内存占用恒定</span><br><span class="hljs-keyword">const</span> stream = fs.<span class="hljs-title function_">createReadStream</span>(<span class="hljs-string">&#x27;huge-file.csv&#x27;</span>);<br>stream.<span class="hljs-title function_">on</span>(<span class="hljs-string">&#x27;data&#x27;</span>, <span class="hljs-function">(<span class="hljs-params">chunk</span>) =&gt;</span> &#123;<br>    <span class="hljs-title function_">processChunk</span>(chunk); <span class="hljs-comment">// 每次处理64KB，内存恒定</span><br>&#125;);<br></code></pre></td></tr></table></figure>
+<pre class="mermaid">graph LR
+    subgraph "不使用Stream"
+        FILE1[2GB文件] --&gt;|全部读入| MEM1[2GB内存]
+        MEM1 --&gt; PROC1[处理]
+    end
+
+    subgraph "使用Stream"
+        FILE2[2GB文件] --&gt;|64KB块| MEM2[64KB内存]
+        MEM2 --&gt; PROC2[处理]
+        PROC2 --&gt; |下一块| MEM2
+    end</pre>
+<h2 id="四种流类型">四种流类型</h2>
+<pre class="mermaid">graph TB
+    subgraph "Readable"
+        R[可读流] --&gt; |产生数据| OUT1[data events]
+        R_EX["fs.createReadStream&lt;br&gt;http.IncomingMessage&lt;br&gt;process.stdin"]
+    end
+
+    subgraph "Writable"
+        IN1[write calls] --&gt; W[可写流]
+        W_EX["fs.createWriteStream&lt;br&gt;http.ServerResponse&lt;br&gt;process.stdout"]
+    end
+
+    subgraph "Transform"
+        IN2[input] --&gt; T[转换流] --&gt; OUT2[output]
+        T_EX["zlib.createGzip&lt;br&gt;crypto.createCipher&lt;br&gt;自定义转换"]
+    end
+
+    subgraph "Duplex"
+        IN3[input] --&gt; D[双工流] --&gt; OUT3[output]
+        D_EX["net.Socket&lt;br&gt;tls.TLSSocket"]
+    end</pre>
+<h2 id="readable-stream">Readable Stream</h2>
+<h3 id="两种模式">两种模式</h3>
+<pre class="mermaid">stateDiagram-v2
+    [*] --&gt; Paused: 默认状态
+    Paused --&gt; Flowing: stream.resume()&lt;br&gt;stream.on('data')&lt;br&gt;stream.pipe()
+    Flowing --&gt; Paused: stream.pause()&lt;br&gt;stream.unpipe()</pre>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-keyword">const</span> &#123; <span class="hljs-title class_">Readable</span> &#125; = <span class="hljs-built_in">require</span>(<span class="hljs-string">&#x27;stream&#x27;</span>);<br><br><span class="hljs-comment">// 方式1: 继承Readable</span><br><span class="hljs-keyword">class</span> <span class="hljs-title class_">Counter</span> <span class="hljs-keyword">extends</span> <span class="hljs-title class_ inherited__">Readable</span> &#123;<br>    <span class="hljs-title function_">constructor</span>(<span class="hljs-params">max, options</span>) &#123;<br>        <span class="hljs-variable language_">super</span>(options);<br>        <span class="hljs-variable language_">this</span>.<span class="hljs-property">max</span> = max;<br>        <span class="hljs-variable language_">this</span>.<span class="hljs-property">current</span> = <span class="hljs-number">0</span>;<br>    &#125;<br><br>    <span class="hljs-title function_">_read</span>(<span class="hljs-params">size</span>) &#123;<br>        <span class="hljs-keyword">if</span> (<span class="hljs-variable language_">this</span>.<span class="hljs-property">current</span> &gt;= <span class="hljs-variable language_">this</span>.<span class="hljs-property">max</span>) &#123;<br>            <span class="hljs-variable language_">this</span>.<span class="hljs-title function_">push</span>(<span class="hljs-literal">null</span>); <span class="hljs-comment">// null表示流结束</span><br>            <span class="hljs-keyword">return</span>;<br>        &#125;<br>        <span class="hljs-variable language_">this</span>.<span class="hljs-property">current</span>++;<br>        <span class="hljs-comment">// push的数据进入内部缓冲区</span><br>        <span class="hljs-variable language_">this</span>.<span class="hljs-title function_">push</span>(<span class="hljs-string">`Count: <span class="hljs-subst">$&#123;<span class="hljs-variable language_">this</span>.current&#125;</span>\n`</span>);<br>    &#125;<br>&#125;<br><br><span class="hljs-keyword">const</span> counter = <span class="hljs-keyword">new</span> <span class="hljs-title class_">Counter</span>(<span class="hljs-number">5</span>);<br>counter.<span class="hljs-title function_">pipe</span>(process.<span class="hljs-property">stdout</span>);<br><span class="hljs-comment">// Count: 1</span><br><span class="hljs-comment">// Count: 2</span><br><span class="hljs-comment">// ...</span><br><span class="hljs-comment">// Count: 5</span><br><br><span class="hljs-comment">// 方式2: Readable.from（从可迭代对象创建流）</span><br><span class="hljs-keyword">const</span> &#123; <span class="hljs-title class_">Readable</span> &#125; = <span class="hljs-built_in">require</span>(<span class="hljs-string">&#x27;stream&#x27;</span>);<br><br><span class="hljs-keyword">async</span> <span class="hljs-keyword">function</span>* <span class="hljs-title function_">generateData</span>(<span class="hljs-params"></span>) &#123;<br>    <span class="hljs-keyword">for</span> (<span class="hljs-keyword">let</span> i = <span class="hljs-number">0</span>; i &lt; <span class="hljs-number">1000</span>; i++) &#123;<br>        <span class="hljs-keyword">yield</span> <span class="hljs-title class_">JSON</span>.<span class="hljs-title function_">stringify</span>(&#123; <span class="hljs-attr">id</span>: i, <span class="hljs-attr">value</span>: <span class="hljs-title class_">Math</span>.<span class="hljs-title function_">random</span>() &#125;) + <span class="hljs-string">&#x27;\n&#x27;</span>;<br>    &#125;<br>&#125;<br><br><span class="hljs-keyword">const</span> dataStream = <span class="hljs-title class_">Readable</span>.<span class="hljs-title function_">from</span>(<span class="hljs-title function_">generateData</span>());<br>dataStream.<span class="hljs-title function_">pipe</span>(process.<span class="hljs-property">stdout</span>);<br></code></pre></td></tr></table></figure>
+<h3 id="异步迭代器推荐方式">异步迭代器（推荐方式）</h3>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-keyword">const</span> fs = <span class="hljs-built_in">require</span>(<span class="hljs-string">&#x27;fs&#x27;</span>);<br><span class="hljs-keyword">const</span> readline = <span class="hljs-built_in">require</span>(<span class="hljs-string">&#x27;readline&#x27;</span>);<br><br><span class="hljs-comment">// 使用async iterator逐行读取大文件</span><br><span class="hljs-keyword">async</span> <span class="hljs-keyword">function</span> <span class="hljs-title function_">processFile</span>(<span class="hljs-params">filePath</span>) &#123;<br>    <span class="hljs-keyword">const</span> fileStream = fs.<span class="hljs-title function_">createReadStream</span>(filePath);<br>    <span class="hljs-keyword">const</span> rl = readline.<span class="hljs-title function_">createInterface</span>(&#123;<br>        <span class="hljs-attr">input</span>: fileStream,<br>        <span class="hljs-attr">crlfDelay</span>: <span class="hljs-title class_">Infinity</span>,<br>    &#125;);<br><br>    <span class="hljs-keyword">let</span> lineCount = <span class="hljs-number">0</span>;<br>    <span class="hljs-keyword">for</span> <span class="hljs-keyword">await</span> (<span class="hljs-keyword">const</span> line <span class="hljs-keyword">of</span> rl) &#123;<br>        lineCount++;<br>        <span class="hljs-comment">// 处理每一行</span><br>        <span class="hljs-keyword">if</span> (line.<span class="hljs-title function_">includes</span>(<span class="hljs-string">&#x27;ERROR&#x27;</span>)) &#123;<br>            <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">`Line <span class="hljs-subst">$&#123;lineCount&#125;</span>: <span class="hljs-subst">$&#123;line&#125;</span>`</span>);<br>        &#125;<br>    &#125;<br>    <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">`Total lines: <span class="hljs-subst">$&#123;lineCount&#125;</span>`</span>);<br>&#125;<br><br><span class="hljs-comment">// Readable流本身也是async iterable</span><br><span class="hljs-keyword">async</span> <span class="hljs-keyword">function</span> <span class="hljs-title function_">readChunks</span>(<span class="hljs-params">filePath</span>) &#123;<br>    <span class="hljs-keyword">const</span> stream = fs.<span class="hljs-title function_">createReadStream</span>(filePath);<br>    <span class="hljs-keyword">for</span> <span class="hljs-keyword">await</span> (<span class="hljs-keyword">const</span> chunk <span class="hljs-keyword">of</span> stream) &#123;<br>        <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">`Received <span class="hljs-subst">$&#123;chunk.length&#125;</span> bytes`</span>);<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="writable-stream">Writable Stream</h2>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-keyword">const</span> &#123; <span class="hljs-title class_">Writable</span> &#125; = <span class="hljs-built_in">require</span>(<span class="hljs-string">&#x27;stream&#x27;</span>);<br><br><span class="hljs-comment">// 自定义Writable</span><br><span class="hljs-keyword">class</span> <span class="hljs-title class_">Logger</span> <span class="hljs-keyword">extends</span> <span class="hljs-title class_ inherited__">Writable</span> &#123;<br>    <span class="hljs-title function_">constructor</span>(<span class="hljs-params">options</span>) &#123;<br>        <span class="hljs-variable language_">super</span>(options);<br>        <span class="hljs-variable language_">this</span>.<span class="hljs-property">logs</span> = [];<br>    &#125;<br><br>    <span class="hljs-title function_">_write</span>(<span class="hljs-params">chunk, encoding, callback</span>) &#123;<br>        <span class="hljs-keyword">const</span> message = chunk.<span class="hljs-title function_">toString</span>();<br>        <span class="hljs-keyword">const</span> logEntry = &#123;<br>            <span class="hljs-attr">timestamp</span>: <span class="hljs-keyword">new</span> <span class="hljs-title class_">Date</span>().<span class="hljs-title function_">toISOString</span>(),<br>            <span class="hljs-attr">message</span>: message.<span class="hljs-title function_">trim</span>(),<br>        &#125;;<br>        <span class="hljs-variable language_">this</span>.<span class="hljs-property">logs</span>.<span class="hljs-title function_">push</span>(logEntry);<br><br>        <span class="hljs-comment">// 模拟异步写入</span><br>        <span class="hljs-title function_">setImmediate</span>(<span class="hljs-function">() =&gt;</span> &#123;<br>            <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-title class_">JSON</span>.<span class="hljs-title function_">stringify</span>(logEntry));<br>            <span class="hljs-title function_">callback</span>(); <span class="hljs-comment">// 必须调用callback通知写入完成</span><br>        &#125;);<br>    &#125;<br><br>    <span class="hljs-comment">// 批量写入优化</span><br>    <span class="hljs-title function_">_writev</span>(<span class="hljs-params">chunks, callback</span>) &#123;<br>        <span class="hljs-keyword">const</span> entries = chunks.<span class="hljs-title function_">map</span>(<span class="hljs-function">(<span class="hljs-params">&#123; chunk &#125;</span>) =&gt;</span> (&#123;<br>            <span class="hljs-attr">timestamp</span>: <span class="hljs-keyword">new</span> <span class="hljs-title class_">Date</span>().<span class="hljs-title function_">toISOString</span>(),<br>            <span class="hljs-attr">message</span>: chunk.<span class="hljs-title function_">toString</span>().<span class="hljs-title function_">trim</span>(),<br>        &#125;));<br>        <span class="hljs-variable language_">this</span>.<span class="hljs-property">logs</span>.<span class="hljs-title function_">push</span>(...entries);<br>        <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">`Batch write: <span class="hljs-subst">$&#123;entries.length&#125;</span> entries`</span>);<br>        <span class="hljs-title function_">callback</span>();<br>    &#125;<br>&#125;<br><br><span class="hljs-keyword">const</span> logger = <span class="hljs-keyword">new</span> <span class="hljs-title class_">Logger</span>();<br>logger.<span class="hljs-title function_">write</span>(<span class="hljs-string">&#x27;Hello\n&#x27;</span>);<br>logger.<span class="hljs-title function_">write</span>(<span class="hljs-string">&#x27;World\n&#x27;</span>);<br>logger.<span class="hljs-title function_">end</span>(<span class="hljs-string">&#x27;Done\n&#x27;</span>); <span class="hljs-comment">// end()会触发finish事件</span><br>logger.<span class="hljs-title function_">on</span>(<span class="hljs-string">&#x27;finish&#x27;</span>, <span class="hljs-function">() =&gt;</span> <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">&#x27;All writes completed&#x27;</span>));<br></code></pre></td></tr></table></figure>
+<h2 id="transform-stream">Transform Stream</h2>
+<p>Transform流既是Readable也是Writable，接收输入并产生输出。</p>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-keyword">const</span> &#123; <span class="hljs-title class_">Transform</span> &#125; = <span class="hljs-built_in">require</span>(<span class="hljs-string">&#x27;stream&#x27;</span>);<br><br><span class="hljs-comment">// CSV到JSON的转换流</span><br><span class="hljs-keyword">class</span> <span class="hljs-title class_">CSVToJSON</span> <span class="hljs-keyword">extends</span> <span class="hljs-title class_ inherited__">Transform</span> &#123;<br>    <span class="hljs-title function_">constructor</span>(<span class="hljs-params">options</span>) &#123;<br>        <span class="hljs-variable language_">super</span>(&#123; ...options, <span class="hljs-attr">readableObjectMode</span>: <span class="hljs-literal">true</span> &#125;);<br>        <span class="hljs-variable language_">this</span>.<span class="hljs-property">headers</span> = <span class="hljs-literal">null</span>;<br>        <span class="hljs-variable language_">this</span>.<span class="hljs-property">buffer</span> = <span class="hljs-string">&#x27;&#x27;</span>;<br>    &#125;<br><br>    <span class="hljs-title function_">_transform</span>(<span class="hljs-params">chunk, encoding, callback</span>) &#123;<br>        <span class="hljs-variable language_">this</span>.<span class="hljs-property">buffer</span> += chunk.<span class="hljs-title function_">toString</span>();<br>        <span class="hljs-keyword">const</span> lines = <span class="hljs-variable language_">this</span>.<span class="hljs-property">buffer</span>.<span class="hljs-title function_">split</span>(<span class="hljs-string">&#x27;\n&#x27;</span>);<br>        <span class="hljs-variable language_">this</span>.<span class="hljs-property">buffer</span> = lines.<span class="hljs-title function_">pop</span>(); <span class="hljs-comment">// 保留不完整的行</span><br><br>        <span class="hljs-keyword">for</span> (<span class="hljs-keyword">const</span> line <span class="hljs-keyword">of</span> lines) &#123;<br>            <span class="hljs-keyword">if</span> (!line.<span class="hljs-title function_">trim</span>()) <span class="hljs-keyword">continue</span>;<br><br>            <span class="hljs-keyword">const</span> values = line.<span class="hljs-title function_">split</span>(<span class="hljs-string">&#x27;,&#x27;</span>).<span class="hljs-title function_">map</span>(<span class="hljs-function"><span class="hljs-params">v</span> =&gt;</span> v.<span class="hljs-title function_">trim</span>());<br><br>            <span class="hljs-keyword">if</span> (!<span class="hljs-variable language_">this</span>.<span class="hljs-property">headers</span>) &#123;<br>                <span class="hljs-variable language_">this</span>.<span class="hljs-property">headers</span> = values;<br>                <span class="hljs-keyword">continue</span>;<br>            &#125;<br><br>            <span class="hljs-keyword">const</span> obj = &#123;&#125;;<br>            <span class="hljs-variable language_">this</span>.<span class="hljs-property">headers</span>.<span class="hljs-title function_">forEach</span>(<span class="hljs-function">(<span class="hljs-params">header, i</span>) =&gt;</span> &#123;<br>                obj[header] = values[i];<br>            &#125;);<br>            <span class="hljs-variable language_">this</span>.<span class="hljs-title function_">push</span>(<span class="hljs-title class_">JSON</span>.<span class="hljs-title function_">stringify</span>(obj) + <span class="hljs-string">&#x27;\n&#x27;</span>);<br>        &#125;<br>        <span class="hljs-title function_">callback</span>();<br>    &#125;<br><br>    <span class="hljs-title function_">_flush</span>(<span class="hljs-params">callback</span>) &#123;<br>        <span class="hljs-comment">// 处理最后一行（如果有）</span><br>        <span class="hljs-keyword">if</span> (<span class="hljs-variable language_">this</span>.<span class="hljs-property">buffer</span>.<span class="hljs-title function_">trim</span>() &amp;&amp; <span class="hljs-variable language_">this</span>.<span class="hljs-property">headers</span>) &#123;<br>            <span class="hljs-keyword">const</span> values = <span class="hljs-variable language_">this</span>.<span class="hljs-property">buffer</span>.<span class="hljs-title function_">split</span>(<span class="hljs-string">&#x27;,&#x27;</span>).<span class="hljs-title function_">map</span>(<span class="hljs-function"><span class="hljs-params">v</span> =&gt;</span> v.<span class="hljs-title function_">trim</span>());<br>            <span class="hljs-keyword">const</span> obj = &#123;&#125;;<br>            <span class="hljs-variable language_">this</span>.<span class="hljs-property">headers</span>.<span class="hljs-title function_">forEach</span>(<span class="hljs-function">(<span class="hljs-params">header, i</span>) =&gt;</span> &#123;<br>                obj[header] = values[i];<br>            &#125;);<br>            <span class="hljs-variable language_">this</span>.<span class="hljs-title function_">push</span>(<span class="hljs-title class_">JSON</span>.<span class="hljs-title function_">stringify</span>(obj) + <span class="hljs-string">&#x27;\n&#x27;</span>);<br>        &#125;<br>        <span class="hljs-title function_">callback</span>();<br>    &#125;<br>&#125;<br><br><span class="hljs-comment">// 使用</span><br><span class="hljs-keyword">const</span> fs = <span class="hljs-built_in">require</span>(<span class="hljs-string">&#x27;fs&#x27;</span>);<br>fs.<span class="hljs-title function_">createReadStream</span>(<span class="hljs-string">&#x27;data.csv&#x27;</span>)<br>    .<span class="hljs-title function_">pipe</span>(<span class="hljs-keyword">new</span> <span class="hljs-title class_">CSVToJSON</span>())<br>    .<span class="hljs-title function_">pipe</span>(fs.<span class="hljs-title function_">createWriteStream</span>(<span class="hljs-string">&#x27;data.jsonl&#x27;</span>));<br></code></pre></td></tr></table></figure>
+<h3 id="实用transform示例">实用Transform示例</h3>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-keyword">const</span> &#123; <span class="hljs-title class_">Transform</span> &#125; = <span class="hljs-built_in">require</span>(<span class="hljs-string">&#x27;stream&#x27;</span>);<br><br><span class="hljs-comment">// 进度报告Transform</span><br><span class="hljs-keyword">class</span> <span class="hljs-title class_">ProgressReporter</span> <span class="hljs-keyword">extends</span> <span class="hljs-title class_ inherited__">Transform</span> &#123;<br>    <span class="hljs-title function_">constructor</span>(<span class="hljs-params">totalSize, options</span>) &#123;<br>        <span class="hljs-variable language_">super</span>(options);<br>        <span class="hljs-variable language_">this</span>.<span class="hljs-property">totalSize</span> = totalSize;<br>        <span class="hljs-variable language_">this</span>.<span class="hljs-property">transferred</span> = <span class="hljs-number">0</span>;<br>    &#125;<br><br>    <span class="hljs-title function_">_transform</span>(<span class="hljs-params">chunk, encoding, callback</span>) &#123;<br>        <span class="hljs-variable language_">this</span>.<span class="hljs-property">transferred</span> += chunk.<span class="hljs-property">length</span>;<br>        <span class="hljs-keyword">const</span> percent = ((<span class="hljs-variable language_">this</span>.<span class="hljs-property">transferred</span> / <span class="hljs-variable language_">this</span>.<span class="hljs-property">totalSize</span>) * <span class="hljs-number">100</span>).<span class="hljs-title function_">toFixed</span>(<span class="hljs-number">1</span>);<br>        process.<span class="hljs-property">stderr</span>.<span class="hljs-title function_">write</span>(<span class="hljs-string">`\rProgress: <span class="hljs-subst">$&#123;percent&#125;</span>%`</span>);<br>        <span class="hljs-variable language_">this</span>.<span class="hljs-title function_">push</span>(chunk); <span class="hljs-comment">// 透传数据</span><br>        <span class="hljs-title function_">callback</span>();<br>    &#125;<br><br>    <span class="hljs-title function_">_flush</span>(<span class="hljs-params">callback</span>) &#123;<br>        process.<span class="hljs-property">stderr</span>.<span class="hljs-title function_">write</span>(<span class="hljs-string">&#x27;\n&#x27;</span>);<br>        <span class="hljs-title function_">callback</span>();<br>    &#125;<br>&#125;<br><br><span class="hljs-comment">// 数据过滤Transform</span><br><span class="hljs-keyword">class</span> <span class="hljs-title class_">JSONFilter</span> <span class="hljs-keyword">extends</span> <span class="hljs-title class_ inherited__">Transform</span> &#123;<br>    <span class="hljs-title function_">constructor</span>(<span class="hljs-params">predicate, options</span>) &#123;<br>        <span class="hljs-variable language_">super</span>(&#123; ...options, <span class="hljs-attr">objectMode</span>: <span class="hljs-literal">true</span> &#125;);<br>        <span class="hljs-variable language_">this</span>.<span class="hljs-property">predicate</span> = predicate;<br>    &#125;<br><br>    <span class="hljs-title function_">_transform</span>(<span class="hljs-params">obj, encoding, callback</span>) &#123;<br>        <span class="hljs-keyword">if</span> (<span class="hljs-variable language_">this</span>.<span class="hljs-title function_">predicate</span>(obj)) &#123;<br>            <span class="hljs-variable language_">this</span>.<span class="hljs-title function_">push</span>(obj);<br>        &#125;<br>        <span class="hljs-title function_">callback</span>();<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="背压backpressure">背压（Backpressure）</h2>
+<p>当写入速度快于读取速度时，数据会在内存中积压。背压机制用于协调生产者和消费者的速度。</p>
+<pre class="mermaid">sequenceDiagram
+    participant R as Readable (快速)
+    participant W as Writable (慢速)
+
+    R-&gt;&gt;W: write(chunk1) → true
+    R-&gt;&gt;W: write(chunk2) → true
+    R-&gt;&gt;W: write(chunk3) → false (缓冲区满)
+    Note over R: 收到false，暂停读取
+
+    Note over W: 处理积压的数据...
+
+    W-&gt;&gt;R: drain事件
+    Note over R: 收到drain，恢复读取
+
+    R-&gt;&gt;W: write(chunk4) → true</pre>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-keyword">const</span> fs = <span class="hljs-built_in">require</span>(<span class="hljs-string">&#x27;fs&#x27;</span>);<br><br><span class="hljs-comment">// 手动处理背压</span><br><span class="hljs-keyword">function</span> <span class="hljs-title function_">copyFile</span>(<span class="hljs-params">src, dest</span>) &#123;<br>    <span class="hljs-keyword">const</span> readable = fs.<span class="hljs-title function_">createReadStream</span>(src);<br>    <span class="hljs-keyword">const</span> writable = fs.<span class="hljs-title function_">createWriteStream</span>(dest);<br><br>    readable.<span class="hljs-title function_">on</span>(<span class="hljs-string">&#x27;data&#x27;</span>, <span class="hljs-function">(<span class="hljs-params">chunk</span>) =&gt;</span> &#123;<br>        <span class="hljs-keyword">const</span> canContinue = writable.<span class="hljs-title function_">write</span>(chunk);<br>        <span class="hljs-keyword">if</span> (!canContinue) &#123;<br>            <span class="hljs-comment">// 写入缓冲区满，暂停读取</span><br>            readable.<span class="hljs-title function_">pause</span>();<br>            writable.<span class="hljs-title function_">once</span>(<span class="hljs-string">&#x27;drain&#x27;</span>, <span class="hljs-function">() =&gt;</span> &#123;<br>                <span class="hljs-comment">// 缓冲区排空，恢复读取</span><br>                readable.<span class="hljs-title function_">resume</span>();<br>            &#125;);<br>        &#125;<br>    &#125;);<br><br>    readable.<span class="hljs-title function_">on</span>(<span class="hljs-string">&#x27;end&#x27;</span>, <span class="hljs-function">() =&gt;</span> &#123;<br>        writable.<span class="hljs-title function_">end</span>();<br>    &#125;);<br>&#125;<br><br><span class="hljs-comment">// pipe自动处理背压（推荐）</span><br><span class="hljs-keyword">function</span> <span class="hljs-title function_">copyFilePipe</span>(<span class="hljs-params">src, dest</span>) &#123;<br>    fs.<span class="hljs-title function_">createReadStream</span>(src).<span class="hljs-title function_">pipe</span>(fs.<span class="hljs-title function_">createWriteStream</span>(dest));<br>    <span class="hljs-comment">// pipe内部自动处理drain/pause</span><br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="pipeline推荐方式">pipeline（推荐方式）</h2>
+<p><code>stream.pipeline()</code>是pipe的改进版，正确处理错误传播和清理。</p>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-keyword">const</span> &#123; pipeline &#125; = <span class="hljs-built_in">require</span>(<span class="hljs-string">&#x27;stream/promises&#x27;</span>);<br><span class="hljs-keyword">const</span> fs = <span class="hljs-built_in">require</span>(<span class="hljs-string">&#x27;fs&#x27;</span>);<br><span class="hljs-keyword">const</span> zlib = <span class="hljs-built_in">require</span>(<span class="hljs-string">&#x27;zlib&#x27;</span>);<br><span class="hljs-keyword">const</span> &#123; <span class="hljs-title class_">Transform</span> &#125; = <span class="hljs-built_in">require</span>(<span class="hljs-string">&#x27;stream&#x27;</span>);<br><br><span class="hljs-comment">// 读取文件 → 转换 → 压缩 → 写入</span><br><span class="hljs-keyword">async</span> <span class="hljs-keyword">function</span> <span class="hljs-title function_">processAndCompress</span>(<span class="hljs-params">inputPath, outputPath</span>) &#123;<br>    <span class="hljs-keyword">const</span> upperCase = <span class="hljs-keyword">new</span> <span class="hljs-title class_">Transform</span>(&#123;<br>        <span class="hljs-title function_">transform</span>(<span class="hljs-params">chunk, encoding, callback</span>) &#123;<br>            <span class="hljs-title function_">callback</span>(<span class="hljs-literal">null</span>, chunk.<span class="hljs-title function_">toString</span>().<span class="hljs-title function_">toUpperCase</span>());<br>        &#125;<br>    &#125;);<br><br>    <span class="hljs-keyword">await</span> <span class="hljs-title function_">pipeline</span>(<br>        fs.<span class="hljs-title function_">createReadStream</span>(inputPath),<br>        upperCase,<br>        zlib.<span class="hljs-title function_">createGzip</span>(),<br>        fs.<span class="hljs-title function_">createWriteStream</span>(outputPath)<br>    );<br>    <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">&#x27;Pipeline complete&#x27;</span>);<br>&#125;<br><br><span class="hljs-comment">// 错误处理</span><br><span class="hljs-keyword">async</span> <span class="hljs-keyword">function</span> <span class="hljs-title function_">safePipeline</span>(<span class="hljs-params"></span>) &#123;<br>    <span class="hljs-keyword">try</span> &#123;<br>        <span class="hljs-keyword">await</span> <span class="hljs-title function_">pipeline</span>(<br>            fs.<span class="hljs-title function_">createReadStream</span>(<span class="hljs-string">&#x27;input.txt&#x27;</span>),<br>            zlib.<span class="hljs-title function_">createGzip</span>(),<br>            fs.<span class="hljs-title function_">createWriteStream</span>(<span class="hljs-string">&#x27;output.gz&#x27;</span>)<br>        );<br>    &#125; <span class="hljs-keyword">catch</span> (err) &#123;<br>        <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">error</span>(<span class="hljs-string">&#x27;Pipeline failed:&#x27;</span>, err.<span class="hljs-property">message</span>);<br>        <span class="hljs-comment">// pipeline会自动清理所有流</span><br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="pipeline-vs-pipe">pipeline vs pipe</h3>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-comment">// pipe的问题：错误处理不方便</span><br>readable<br>    .<span class="hljs-title function_">pipe</span>(transform1)  <span class="hljs-comment">// transform1出错不会传播</span><br>    .<span class="hljs-title function_">pipe</span>(transform2)  <span class="hljs-comment">// transform2出错不会传播</span><br>    .<span class="hljs-title function_">pipe</span>(writable);   <span class="hljs-comment">// 需要在每个流上单独监听error</span><br><br><span class="hljs-comment">// pipeline的优势：统一错误处理+自动清理</span><br><span class="hljs-keyword">const</span> &#123; pipeline &#125; = <span class="hljs-built_in">require</span>(<span class="hljs-string">&#x27;stream&#x27;</span>);<br><br><span class="hljs-title function_">pipeline</span>(<br>    readable,<br>    transform1,<br>    transform2,<br>    writable,<br>    <span class="hljs-function">(<span class="hljs-params">err</span>) =&gt;</span> &#123;<br>        <span class="hljs-keyword">if</span> (err) &#123;<br>            <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">error</span>(<span class="hljs-string">&#x27;Pipeline failed:&#x27;</span>, err);<br>        &#125; <span class="hljs-keyword">else</span> &#123;<br>            <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">&#x27;Pipeline succeeded&#x27;</span>);<br>        &#125;<br>    &#125;<br>);<br></code></pre></td></tr></table></figure>
+<h2 id="stream.composenode.js-16">stream.compose（Node.js 16+）</h2>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-keyword">const</span> &#123; compose &#125; = <span class="hljs-built_in">require</span>(<span class="hljs-string">&#x27;stream&#x27;</span>);<br><span class="hljs-keyword">const</span> &#123; <span class="hljs-title class_">Transform</span> &#125; = <span class="hljs-built_in">require</span>(<span class="hljs-string">&#x27;stream&#x27;</span>);<br><br><span class="hljs-comment">// 将多个Transform组合成一个</span><br><span class="hljs-keyword">function</span> <span class="hljs-title function_">createProcessingPipeline</span>(<span class="hljs-params"></span>) &#123;<br>    <span class="hljs-keyword">const</span> parse = <span class="hljs-keyword">new</span> <span class="hljs-title class_">Transform</span>(&#123;<br>        <span class="hljs-attr">objectMode</span>: <span class="hljs-literal">true</span>,<br>        <span class="hljs-title function_">transform</span>(<span class="hljs-params">chunk, encoding, callback</span>) &#123;<br>            <span class="hljs-keyword">try</span> &#123;<br>                <span class="hljs-title function_">callback</span>(<span class="hljs-literal">null</span>, <span class="hljs-title class_">JSON</span>.<span class="hljs-title function_">parse</span>(chunk.<span class="hljs-title function_">toString</span>()));<br>            &#125; <span class="hljs-keyword">catch</span> (e) &#123;<br>                <span class="hljs-title function_">callback</span>(e);<br>            &#125;<br>        &#125;<br>    &#125;);<br><br>    <span class="hljs-keyword">const</span> filter = <span class="hljs-keyword">new</span> <span class="hljs-title class_">Transform</span>(&#123;<br>        <span class="hljs-attr">objectMode</span>: <span class="hljs-literal">true</span>,<br>        <span class="hljs-title function_">transform</span>(<span class="hljs-params">obj, encoding, callback</span>) &#123;<br>            <span class="hljs-keyword">if</span> (obj.<span class="hljs-property">status</span> === <span class="hljs-string">&#x27;active&#x27;</span>) &#123;<br>                <span class="hljs-title function_">callback</span>(<span class="hljs-literal">null</span>, obj);<br>            &#125; <span class="hljs-keyword">else</span> &#123;<br>                <span class="hljs-title function_">callback</span>(); <span class="hljs-comment">// 跳过</span><br>            &#125;<br>        &#125;<br>    &#125;);<br><br>    <span class="hljs-keyword">const</span> format = <span class="hljs-keyword">new</span> <span class="hljs-title class_">Transform</span>(&#123;<br>        <span class="hljs-attr">objectMode</span>: <span class="hljs-literal">true</span>,<br>        <span class="hljs-title function_">transform</span>(<span class="hljs-params">obj, encoding, callback</span>) &#123;<br>            <span class="hljs-title function_">callback</span>(<span class="hljs-literal">null</span>, <span class="hljs-string">`<span class="hljs-subst">$&#123;obj.id&#125;</span>: <span class="hljs-subst">$&#123;obj.name&#125;</span>\n`</span>);<br>        &#125;<br>    &#125;);<br><br>    <span class="hljs-comment">// 组合成单个可复用的流</span><br>    <span class="hljs-keyword">return</span> <span class="hljs-title function_">compose</span>(parse, filter, format);<br>&#125;<br><br><span class="hljs-comment">// 使用组合流</span><br><span class="hljs-keyword">const</span> processor = <span class="hljs-title function_">createProcessingPipeline</span>();<br>fs.<span class="hljs-title function_">createReadStream</span>(<span class="hljs-string">&#x27;data.jsonl&#x27;</span>)<br>    .<span class="hljs-title function_">pipe</span>(processor)<br>    .<span class="hljs-title function_">pipe</span>(process.<span class="hljs-property">stdout</span>);<br></code></pre></td></tr></table></figure>
+<h2 id="实战案例">实战案例</h2>
+<h3 id="http流式响应">HTTP流式响应</h3>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-keyword">const</span> http = <span class="hljs-built_in">require</span>(<span class="hljs-string">&#x27;http&#x27;</span>);<br><span class="hljs-keyword">const</span> fs = <span class="hljs-built_in">require</span>(<span class="hljs-string">&#x27;fs&#x27;</span>);<br><span class="hljs-keyword">const</span> &#123; pipeline &#125; = <span class="hljs-built_in">require</span>(<span class="hljs-string">&#x27;stream/promises&#x27;</span>);<br><span class="hljs-keyword">const</span> zlib = <span class="hljs-built_in">require</span>(<span class="hljs-string">&#x27;zlib&#x27;</span>);<br><br><span class="hljs-keyword">const</span> server = http.<span class="hljs-title function_">createServer</span>(<span class="hljs-keyword">async</span> (req, res) =&gt; &#123;<br>    <span class="hljs-keyword">if</span> (req.<span class="hljs-property">url</span> === <span class="hljs-string">&#x27;/download&#x27;</span>) &#123;<br>        <span class="hljs-keyword">const</span> filePath = <span class="hljs-string">&#x27;/data/large-file.csv&#x27;</span>;<br>        <span class="hljs-keyword">const</span> stat = fs.<span class="hljs-title function_">statSync</span>(filePath);<br><br>        res.<span class="hljs-title function_">writeHead</span>(<span class="hljs-number">200</span>, &#123;<br>            <span class="hljs-string">&#x27;Content-Type&#x27;</span>: <span class="hljs-string">&#x27;text/csv&#x27;</span>,<br>            <span class="hljs-string">&#x27;Content-Encoding&#x27;</span>: <span class="hljs-string">&#x27;gzip&#x27;</span>,<br>            <span class="hljs-string">&#x27;Transfer-Encoding&#x27;</span>: <span class="hljs-string">&#x27;chunked&#x27;</span>,<br>        &#125;);<br><br>        <span class="hljs-keyword">try</span> &#123;<br>            <span class="hljs-keyword">await</span> <span class="hljs-title function_">pipeline</span>(<br>                fs.<span class="hljs-title function_">createReadStream</span>(filePath),<br>                zlib.<span class="hljs-title function_">createGzip</span>(),<br>                res<br>            );<br>        &#125; <span class="hljs-keyword">catch</span> (err) &#123;<br>            <span class="hljs-keyword">if</span> (!res.<span class="hljs-property">headersSent</span>) &#123;<br>                res.<span class="hljs-title function_">writeHead</span>(<span class="hljs-number">500</span>);<br>                res.<span class="hljs-title function_">end</span>(<span class="hljs-string">&#x27;Internal Server Error&#x27;</span>);<br>            &#125;<br>        &#125;<br>    &#125;<br>&#125;);<br></code></pre></td></tr></table></figure>
+<h3 id="日志文件实时分析">日志文件实时分析</h3>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-keyword">const</span> fs = <span class="hljs-built_in">require</span>(<span class="hljs-string">&#x27;fs&#x27;</span>);<br><span class="hljs-keyword">const</span> readline = <span class="hljs-built_in">require</span>(<span class="hljs-string">&#x27;readline&#x27;</span>);<br><span class="hljs-keyword">const</span> &#123; <span class="hljs-title class_">Transform</span> &#125; = <span class="hljs-built_in">require</span>(<span class="hljs-string">&#x27;stream&#x27;</span>);<br><br><span class="hljs-keyword">class</span> <span class="hljs-title class_">LogAnalyzer</span> <span class="hljs-keyword">extends</span> <span class="hljs-title class_ inherited__">Transform</span> &#123;<br>    <span class="hljs-title function_">constructor</span>(<span class="hljs-params"></span>) &#123;<br>        <span class="hljs-variable language_">super</span>(&#123; <span class="hljs-attr">objectMode</span>: <span class="hljs-literal">true</span> &#125;);<br>        <span class="hljs-variable language_">this</span>.<span class="hljs-property">stats</span> = &#123; <span class="hljs-attr">total</span>: <span class="hljs-number">0</span>, <span class="hljs-attr">errors</span>: <span class="hljs-number">0</span>, <span class="hljs-attr">warnings</span>: <span class="hljs-number">0</span> &#125;;<br>    &#125;<br><br>    <span class="hljs-title function_">_transform</span>(<span class="hljs-params">line, encoding, callback</span>) &#123;<br>        <span class="hljs-variable language_">this</span>.<span class="hljs-property">stats</span>.<span class="hljs-property">total</span>++;<br><br>        <span class="hljs-keyword">if</span> (line.<span class="hljs-title function_">includes</span>(<span class="hljs-string">&#x27;ERROR&#x27;</span>)) &#123;<br>            <span class="hljs-variable language_">this</span>.<span class="hljs-property">stats</span>.<span class="hljs-property">errors</span>++;<br>            <span class="hljs-variable language_">this</span>.<span class="hljs-title function_">push</span>(&#123; <span class="hljs-attr">type</span>: <span class="hljs-string">&#x27;error&#x27;</span>, line, <span class="hljs-attr">stats</span>: &#123; ...<span class="hljs-variable language_">this</span>.<span class="hljs-property">stats</span> &#125; &#125;);<br>        &#125; <span class="hljs-keyword">else</span> <span class="hljs-keyword">if</span> (line.<span class="hljs-title function_">includes</span>(<span class="hljs-string">&#x27;WARN&#x27;</span>)) &#123;<br>            <span class="hljs-variable language_">this</span>.<span class="hljs-property">stats</span>.<span class="hljs-property">warnings</span>++;<br>        &#125;<br>        <span class="hljs-title function_">callback</span>();<br>    &#125;<br><br>    <span class="hljs-title function_">_flush</span>(<span class="hljs-params">callback</span>) &#123;<br>        <span class="hljs-variable language_">this</span>.<span class="hljs-title function_">push</span>(&#123; <span class="hljs-attr">type</span>: <span class="hljs-string">&#x27;summary&#x27;</span>, <span class="hljs-attr">stats</span>: &#123; ...<span class="hljs-variable language_">this</span>.<span class="hljs-property">stats</span> &#125; &#125;);<br>        <span class="hljs-title function_">callback</span>();<br>    &#125;<br>&#125;<br><br><span class="hljs-keyword">async</span> <span class="hljs-keyword">function</span> <span class="hljs-title function_">analyzeLog</span>(<span class="hljs-params">filePath</span>) &#123;<br>    <span class="hljs-keyword">const</span> rl = readline.<span class="hljs-title function_">createInterface</span>(&#123;<br>        <span class="hljs-attr">input</span>: fs.<span class="hljs-title function_">createReadStream</span>(filePath),<br>        <span class="hljs-attr">crlfDelay</span>: <span class="hljs-title class_">Infinity</span>,<br>    &#125;);<br><br>    <span class="hljs-keyword">const</span> analyzer = <span class="hljs-keyword">new</span> <span class="hljs-title class_">LogAnalyzer</span>();<br><br>    <span class="hljs-keyword">for</span> <span class="hljs-keyword">await</span> (<span class="hljs-keyword">const</span> line <span class="hljs-keyword">of</span> rl) &#123;<br>        analyzer.<span class="hljs-title function_">write</span>(line);<br>    &#125;<br>    analyzer.<span class="hljs-title function_">end</span>();<br><br>    <span class="hljs-keyword">for</span> <span class="hljs-keyword">await</span> (<span class="hljs-keyword">const</span> result <span class="hljs-keyword">of</span> analyzer) &#123;<br>        <span class="hljs-keyword">if</span> (result.<span class="hljs-property">type</span> === <span class="hljs-string">&#x27;error&#x27;</span>) &#123;<br>            <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">`[ERROR] <span class="hljs-subst">$&#123;result.line&#125;</span>`</span>);<br>        &#125; <span class="hljs-keyword">else</span> <span class="hljs-keyword">if</span> (result.<span class="hljs-property">type</span> === <span class="hljs-string">&#x27;summary&#x27;</span>) &#123;<br>            <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">`\nSummary: <span class="hljs-subst">$&#123;<span class="hljs-built_in">JSON</span>.stringify(result.stats)&#125;</span>`</span>);<br>        &#125;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="大文件分块上传">大文件分块上传</h3>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-keyword">const</span> &#123; <span class="hljs-title class_">Readable</span> &#125; = <span class="hljs-built_in">require</span>(<span class="hljs-string">&#x27;stream&#x27;</span>);<br><span class="hljs-keyword">const</span> fs = <span class="hljs-built_in">require</span>(<span class="hljs-string">&#x27;fs&#x27;</span>);<br><br><span class="hljs-keyword">async</span> <span class="hljs-keyword">function</span> <span class="hljs-title function_">uploadInChunks</span>(<span class="hljs-params">filePath, chunkSize = <span class="hljs-number">5</span> * <span class="hljs-number">1024</span> * <span class="hljs-number">1024</span></span>) &#123;<br>    <span class="hljs-keyword">const</span> fileStream = fs.<span class="hljs-title function_">createReadStream</span>(filePath, &#123;<br>        <span class="hljs-attr">highWaterMark</span>: chunkSize,<br>    &#125;);<br><br>    <span class="hljs-keyword">let</span> partNumber = <span class="hljs-number">0</span>;<br>    <span class="hljs-keyword">for</span> <span class="hljs-keyword">await</span> (<span class="hljs-keyword">const</span> chunk <span class="hljs-keyword">of</span> fileStream) &#123;<br>        partNumber++;<br>        <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">`Uploading part <span class="hljs-subst">$&#123;partNumber&#125;</span>: <span class="hljs-subst">$&#123;chunk.length&#125;</span> bytes`</span>);<br><br>        <span class="hljs-keyword">await</span> <span class="hljs-title function_">uploadPart</span>(partNumber, chunk);<br>    &#125;<br><br>    <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">`Upload complete: <span class="hljs-subst">$&#123;partNumber&#125;</span> parts`</span>);<br>&#125;<br><br><span class="hljs-keyword">async</span> <span class="hljs-keyword">function</span> <span class="hljs-title function_">uploadPart</span>(<span class="hljs-params">partNumber, data</span>) &#123;<br>    <span class="hljs-comment">// 模拟上传</span><br>    <span class="hljs-keyword">return</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">Promise</span>(<span class="hljs-function"><span class="hljs-params">resolve</span> =&gt;</span> <span class="hljs-built_in">setTimeout</span>(resolve, <span class="hljs-number">100</span>));<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="总结">总结</h2>
+<p>Node.js Stream编程的核心要点：</p>
+<ol type="1">
+<li><strong>四种流类型</strong>：Readable、Writable、Transform、Duplex，各有使用场景</li>
+<li><strong>背压机制</strong>：自动协调生产者和消费者速度，防止内存溢出</li>
+<li><strong>pipeline优于pipe</strong>：统一错误处理，自动清理资源</li>
+<li><strong>异步迭代器</strong>：<code>for await...of</code>是消费Readable流的最优雅方式</li>
+<li><strong>stream.compose</strong>：将多个Transform组合成可复用的单元</li>
+<li><strong>实际应用</strong>：文件处理、HTTP流式响应、日志分析、数据转换</li>
+</ol>
+<p>流是Node.js处理大数据量的核心工具，掌握流编程能让你的应用在处理大文件和高并发场景下保持优秀的内存效率。</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2025-06-11</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">2.8k 字 · 7 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/oauth2-oidc-in-depth/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">OAuth2.0与OIDC协议深入解析</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/nextjs-fullstack-guide/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Next.js全栈开发指南</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E9%9C%80%E8%A6%81stream"><span class="toc-text">为什么需要Stream？</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%9B%E7%A7%8D%E6%B5%81%E7%B1%BB%E5%9E%8B"><span class="toc-text">四种流类型</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#readable-stream"><span class="toc-text">Readable Stream</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%A4%E7%A7%8D%E6%A8%A1%E5%BC%8F"><span class="toc-text">两种模式</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%BC%82%E6%AD%A5%E8%BF%AD%E4%BB%A3%E5%99%A8%E6%8E%A8%E8%8D%90%E6%96%B9%E5%BC%8F"><span class="toc-text">异步迭代器（推荐方式）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#writable-stream"><span class="toc-text">Writable Stream</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#transform-stream"><span class="toc-text">Transform Stream</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%9E%E7%94%A8transform%E7%A4%BA%E4%BE%8B"><span class="toc-text">实用Transform示例</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%83%8C%E5%8E%8Bbackpressure"><span class="toc-text">背压（Backpressure）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#pipeline%E6%8E%A8%E8%8D%90%E6%96%B9%E5%BC%8F"><span class="toc-text">pipeline（推荐方式）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#pipeline-vs-pipe"><span class="toc-text">pipeline vs pipe</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#stream.composenode.js-16"><span class="toc-text">stream.compose（Node.js 16+）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E6%88%98%E6%A1%88%E4%BE%8B"><span class="toc-text">实战案例</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#http%E6%B5%81%E5%BC%8F%E5%93%8D%E5%BA%94"><span class="toc-text">HTTP流式响应</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%97%A5%E5%BF%97%E6%96%87%E4%BB%B6%E5%AE%9E%E6%97%B6%E5%88%86%E6%9E%90"><span class="toc-text">日志文件实时分析</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%A4%A7%E6%96%87%E4%BB%B6%E5%88%86%E5%9D%97%E4%B8%8A%E4%BC%A0"><span class="toc-text">大文件分块上传</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

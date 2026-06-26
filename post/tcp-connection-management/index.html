@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TCP连接管理：三次握手到TIME_WAIT优化 · zt&#39;s Blog</title>
+  <meta name="description" content="深入解析TCP连接的完整生命周期，从三次握手建立连接到四次挥手释放连接，以及TIME_WAIT状态优化和连接池化策略。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/tcp-connection-management/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="TCP连接管理：三次握手到TIME_WAIT优化">
+  <meta property="og:description" content="深入解析TCP连接的完整生命周期，从三次握手建立连接到四次挥手释放连接，以及TIME_WAIT状态优化和连接池化策略。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/tcp-connection-management/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2025-04-04T16:00:00.000Z">
+  <meta property="article:modified_time" content="2025-04-04T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="TCP连接管理：三次握手到TIME_WAIT优化">
+  <meta name="twitter:description" content="深入解析TCP连接的完整生命周期，从三次握手建立连接到四次挥手释放连接，以及TIME_WAIT状态优化和连接池化策略。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"TCP连接管理：三次握手到TIME_WAIT优化","description":"深入解析TCP连接的完整生命周期，从三次握手建立连接到四次挥手释放连接，以及TIME_WAIT状态优化和连接池化策略。","datePublished":"2025-04-04T16:00:00.000Z","dateModified":"2025-04-04T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/tcp-connection-management/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Network","item":"https://withesse.co/categories/Network/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:235">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Network/">Network</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/tcp/"><span class="hash">#</span>tcp</a><a class="tag" href="/tags/network/"><span class="hash">#</span>network</a><a class="tag" href="/tags/connection/"><span class="hash">#</span>connection</a>
+        
+      </div>
+
+      <h1>TCP连接管理：三次握手到TIME_WAIT优化</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2025.04.05</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 6 min</span>
+        </span>
+        <span class="wc"><span class="num">2.2k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#tcp%E8%BF%9E%E6%8E%A5%E7%8A%B6%E6%80%81%E6%9C%BA"><span class="toc-text">TCP连接状态机</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%89%E6%AC%A1%E6%8F%A1%E6%89%8Bthree-way-handshake"><span class="toc-text">三次握手（Three-Way
+Handshake）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%8F%A1%E6%89%8B%E8%BF%87%E7%A8%8B%E8%AF%A6%E8%A7%A3"><span class="toc-text">握手过程详解</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E9%9C%80%E8%A6%81%E4%B8%89%E6%AC%A1%E6%8F%A1%E6%89%8B"><span class="toc-text">为什么需要三次握手？</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#syn-flood%E6%94%BB%E5%87%BB%E4%B8%8E%E9%98%B2%E5%BE%A1"><span class="toc-text">SYN Flood攻击与防御</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#tcp-fast-open-tfo"><span class="toc-text">TCP Fast Open (TFO)</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%9B%E6%AC%A1%E6%8C%A5%E6%89%8Bfour-way-teardown"><span class="toc-text">四次挥手（Four-Way Teardown）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%8C%A5%E6%89%8B%E8%BF%87%E7%A8%8B%E8%AF%A6%E8%A7%A3"><span class="toc-text">挥手过程详解</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E6%98%AF%E5%9B%9B%E6%AC%A1%E8%80%8C%E9%9D%9E%E4%B8%89%E6%AC%A1"><span class="toc-text">为什么是四次而非三次？</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#time_wait%E7%8A%B6%E6%80%81%E6%B7%B1%E5%BA%A6%E5%88%86%E6%9E%90"><span class="toc-text">TIME_WAIT状态深度分析</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#time_wait%E7%9A%84%E4%BD%9C%E7%94%A8"><span class="toc-text">TIME_WAIT的作用</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#time_wait%E8%BF%87%E5%A4%9A%E7%9A%84%E9%97%AE%E9%A2%98"><span class="toc-text">TIME_WAIT过多的问题</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#time_wait%E4%BC%98%E5%8C%96%E7%AD%96%E7%95%A5"><span class="toc-text">TIME_WAIT优化策略</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#tcp-keepalive"><span class="toc-text">TCP Keepalive</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%BF%9E%E6%8E%A5%E6%B1%A0%E5%8C%96connection-pooling"><span class="toc-text">连接池化（Connection Pooling）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BF%9E%E6%8E%A5%E6%B1%A0%E7%9A%84%E6%A0%B8%E5%BF%83%E5%8F%82%E6%95%B0"><span class="toc-text">连接池的核心参数</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#http%E8%BF%9E%E6%8E%A5%E6%B1%A0keep-alive"><span class="toc-text">HTTP连接池（Keep-Alive）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%B3%E9%94%AE%E5%86%85%E6%A0%B8%E5%8F%82%E6%95%B0%E6%B1%87%E6%80%BB"><span class="toc-text">关键内核参数汇总</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%8E%92%E6%9F%A5%E5%B7%A5%E5%85%B7"><span class="toc-text">排查工具</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="前言">前言</h2>
+<p>TCP（Transmission Control
+Protocol）是互联网最核心的传输层协议之一。理解TCP连接管理机制对于网络性能优化、排查连接问题至关重要。本文将从三次握手、四次挥手、TIME_WAIT优化、Keepalive机制和连接池化等方面深入分析TCP连接的完整生命周期。</p>
+<h2 id="tcp连接状态机">TCP连接状态机</h2>
+<p>TCP连接的本质是一个有限状态机。理解各状态之间的转换关系是掌握TCP连接管理的基础。</p>
+<pre class="mermaid">stateDiagram-v2
+    [*] --&gt; CLOSED
+    CLOSED --&gt; LISTEN: passive open
+    CLOSED --&gt; SYN_SENT: active open / send SYN
+    LISTEN --&gt; SYN_RCVD: recv SYN / send SYN+ACK
+    SYN_SENT --&gt; ESTABLISHED: recv SYN+ACK / send ACK
+    SYN_RCVD --&gt; ESTABLISHED: recv ACK
+    ESTABLISHED --&gt; FIN_WAIT_1: close / send FIN
+    ESTABLISHED --&gt; CLOSE_WAIT: recv FIN / send ACK
+    FIN_WAIT_1 --&gt; FIN_WAIT_2: recv ACK
+    FIN_WAIT_1 --&gt; CLOSING: recv FIN / send ACK
+    FIN_WAIT_2 --&gt; TIME_WAIT: recv FIN / send ACK
+    CLOSING --&gt; TIME_WAIT: recv ACK
+    CLOSE_WAIT --&gt; LAST_ACK: close / send FIN
+    LAST_ACK --&gt; CLOSED: recv ACK
+    TIME_WAIT --&gt; CLOSED: 2MSL timeout</pre>
+<h2 id="三次握手three-way-handshake">三次握手（Three-Way
+Handshake）</h2>
+<h3 id="握手过程详解">握手过程详解</h3>
+<p>三次握手的目的是在客户端和服务端之间建立可靠连接，同步序列号和确认号。</p>
+<pre class="mermaid">sequenceDiagram
+    participant C as Client
+    participant S as Server
+
+    Note over S: LISTEN
+
+    C-&gt;&gt;S: SYN (seq=x)
+    Note over C: SYN_SENT
+    Note over S: SYN_RCVD
+
+    S-&gt;&gt;C: SYN+ACK (seq=y, ack=x+1)
+
+    C-&gt;&gt;S: ACK (seq=x+1, ack=y+1)
+    Note over C: ESTABLISHED
+    Note over S: ESTABLISHED
+
+    Note over C,S: Data Transfer Begins</pre>
+<h3 id="为什么需要三次握手">为什么需要三次握手？</h3>
+<p>核心原因是<strong>防止历史连接的建立</strong>。假设只有两次握手：</p>
+<ol type="1">
+<li>客户端发送SYN(seq=90)，由于网络延迟滞留</li>
+<li>客户端超时重发SYN(seq=100)，服务端收到并建立连接</li>
+<li>之后滞留的SYN(seq=90)到达服务端，服务端误认为是新连接</li>
+</ol>
+<p>三次握手通过第三个ACK让客户端确认服务端的SYN，避免了历史连接问题。</p>
+<h3 id="syn-flood攻击与防御">SYN Flood攻击与防御</h3>
+<p>SYN
+Flood是经典的DoS攻击方式，攻击者发送大量伪造源IP的SYN包，消耗服务端的半连接队列资源。</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 查看半连接队列大小</span><br><span class="hljs-built_in">cat</span> /proc/sys/net/ipv4/tcp_max_syn_backlog<br><br><span class="hljs-comment"># 开启SYN Cookie防护</span><br><span class="hljs-built_in">echo</span> 1 &gt; /proc/sys/net/ipv4/tcp_syncookies<br><br><span class="hljs-comment"># 调整半连接队列大小</span><br><span class="hljs-built_in">echo</span> 4096 &gt; /proc/sys/net/ipv4/tcp_max_syn_backlog<br><br><span class="hljs-comment"># 减少SYN+ACK重传次数（默认5次，约63秒）</span><br><span class="hljs-built_in">echo</span> 2 &gt; /proc/sys/net/ipv4/tcp_synack_retries<br></code></pre></td></tr></table></figure>
+<p>SYN
+Cookie的原理是不使用半连接队列来保存状态，而是将连接信息编码到SYN+ACK的序列号中：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-comment">// SYN Cookie 编码（简化）</span><br><span class="hljs-comment">// cookie = hash(saddr, daddr, sport, dport, secret) + (time &lt;&lt; 24) + mss_index</span><br></code></pre></td></tr></table></figure>
+<h3 id="tcp-fast-open-tfo">TCP Fast Open (TFO)</h3>
+<p>TFO允许在SYN包中携带数据，减少一个RTT：</p>
+<pre class="mermaid">sequenceDiagram
+    participant C as Client
+    participant S as Server
+
+    Note over C,S: 首次连接（获取Cookie）
+    C-&gt;&gt;S: SYN + TFO Cookie Request
+    S-&gt;&gt;C: SYN+ACK + TFO Cookie
+    C-&gt;&gt;S: ACK
+
+    Note over C,S: 后续连接（携带数据）
+    C-&gt;&gt;S: SYN + TFO Cookie + Data
+    Note over S: 验证Cookie，处理Data
+    S-&gt;&gt;C: SYN+ACK + Response Data
+    C-&gt;&gt;S: ACK</pre>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 服务端开启TFO</span><br><span class="hljs-built_in">echo</span> 3 &gt; /proc/sys/net/ipv4/tcp_fastopen<br><span class="hljs-comment"># 0: 禁用, 1: 客户端, 2: 服务端, 3: 客户端+服务端</span><br></code></pre></td></tr></table></figure>
+<h2 id="四次挥手four-way-teardown">四次挥手（Four-Way Teardown）</h2>
+<h3 id="挥手过程详解">挥手过程详解</h3>
+<pre class="mermaid">sequenceDiagram
+    participant C as Client (Active Close)
+    participant S as Server (Passive Close)
+
+    Note over C: ESTABLISHED
+    Note over S: ESTABLISHED
+
+    C-&gt;&gt;S: FIN (seq=u)
+    Note over C: FIN_WAIT_1
+
+    S-&gt;&gt;C: ACK (ack=u+1)
+    Note over C: FIN_WAIT_2
+    Note over S: CLOSE_WAIT
+
+    Note over S: Server may still send data...
+
+    S-&gt;&gt;C: FIN (seq=w)
+    Note over S: LAST_ACK
+
+    C-&gt;&gt;S: ACK (ack=w+1)
+    Note over C: TIME_WAIT (2MSL)
+    Note over S: CLOSED
+
+    Note over C: Wait 2MSL...
+    Note over C: CLOSED</pre>
+<h3 id="为什么是四次而非三次">为什么是四次而非三次？</h3>
+<p>TCP是全双工协议，关闭需要双方各自发送FIN。服务端收到FIN后可能还有数据要发送，因此ACK和FIN分开发送。不过在没有待发数据时，内核会将ACK和FIN合并为一个包，实际变成”三次挥手”。</p>
+<h2 id="time_wait状态深度分析">TIME_WAIT状态深度分析</h2>
+<h3 id="time_wait的作用">TIME_WAIT的作用</h3>
+<p>TIME_WAIT持续2MSL（Maximum Segment
+Lifetime，Linux默认60秒），有两个关键作用：</p>
+<ol type="1">
+<li><strong>确保最后的ACK被对方收到</strong>：如果ACK丢失，对方会重发FIN，TIME_WAIT状态可以正确响应</li>
+<li><strong>防止旧连接的延迟数据被新连接接收</strong>：确保旧连接的所有报文段在网络中消失</li>
+</ol>
+<h3 id="time_wait过多的问题">TIME_WAIT过多的问题</h3>
+<p>在高并发短连接场景下，大量TIME_WAIT会消耗： - 文件描述符 -
+内存（每个约3.3KB） - 端口号（客户端受限于65535个端口）</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 查看各状态连接数</span><br>ss -ant | awk <span class="hljs-string">&#x27;&#123;print $1&#125;&#x27;</span> | <span class="hljs-built_in">sort</span> | <span class="hljs-built_in">uniq</span> -c | <span class="hljs-built_in">sort</span> -rn<br><br><span class="hljs-comment"># 查看TIME_WAIT数量</span><br>ss -ant state time-wait | <span class="hljs-built_in">wc</span> -l<br></code></pre></td></tr></table></figure>
+<h3 id="time_wait优化策略">TIME_WAIT优化策略</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 1. 开启TIME_WAIT重用（推荐）</span><br><span class="hljs-built_in">echo</span> 1 &gt; /proc/sys/net/ipv4/tcp_tw_reuse<br><span class="hljs-comment"># 允许将TIME_WAIT的socket用于新的连接（仅对客户端有效）</span><br><span class="hljs-comment"># 前提：开启tcp_timestamps</span><br><br><span class="hljs-comment"># 2. 开启时间戳（tcp_tw_reuse的前提）</span><br><span class="hljs-built_in">echo</span> 1 &gt; /proc/sys/net/ipv4/tcp_timestamps<br><br><span class="hljs-comment"># 3. 增大本地端口范围</span><br><span class="hljs-built_in">echo</span> <span class="hljs-string">&quot;1024 65535&quot;</span> &gt; /proc/sys/net/ipv4/ip_local_port_range<br><br><span class="hljs-comment"># 4. 调整最大TIME_WAIT数量</span><br><span class="hljs-built_in">echo</span> 20000 &gt; /proc/sys/net/ipv4/tcp_max_tw_buckets<br><br><span class="hljs-comment"># 注意：tcp_tw_recycle 已在 Linux 4.12 中移除，不要使用！</span><br><span class="hljs-comment"># 在NAT环境下会导致严重问题</span><br></code></pre></td></tr></table></figure>
+<blockquote>
+<p><strong>重要提示</strong>：<code>tcp_tw_recycle</code>
+因为在NAT场景下会丢弃合法连接，已被Linux内核移除。永远不要使用这个参数。</p>
+</blockquote>
+<h2 id="tcp-keepalive">TCP Keepalive</h2>
+<p>TCP Keepalive用于检测空闲连接是否仍然存活：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 连接空闲多久后开始探测（默认7200秒=2小时）</span><br><span class="hljs-built_in">echo</span> 600 &gt; /proc/sys/net/ipv4/tcp_keepalive_time<br><br><span class="hljs-comment"># 探测间隔（默认75秒）</span><br><span class="hljs-built_in">echo</span> 15 &gt; /proc/sys/net/ipv4/tcp_keepalive_intvl<br><br><span class="hljs-comment"># 探测次数（默认9次）</span><br><span class="hljs-built_in">echo</span> 5 &gt; /proc/sys/net/ipv4/tcp_keepalive_probes<br></code></pre></td></tr></table></figure>
+<p>程序层面设置Keepalive：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-comment">// Go语言示例</span><br>conn, _ := net.DialTimeout(<span class="hljs-string">&quot;tcp&quot;</span>, <span class="hljs-string">&quot;example.com:80&quot;</span>, <span class="hljs-number">5</span>*time.Second)<br>tcpConn := conn.(*net.TCPConn)<br>tcpConn.SetKeepAlive(<span class="hljs-literal">true</span>)<br>tcpConn.SetKeepAlivePeriod(<span class="hljs-number">60</span> * time.Second)<br></code></pre></td></tr></table></figure>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-comment"># Python示例</span><br><span class="hljs-keyword">import</span> socket<br><br>sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)<br>sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, <span class="hljs-number">1</span>)<br><span class="hljs-comment"># Linux特有</span><br>sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, <span class="hljs-number">600</span>)<br>sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, <span class="hljs-number">15</span>)<br>sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, <span class="hljs-number">5</span>)<br></code></pre></td></tr></table></figure>
+<h2 id="连接池化connection-pooling">连接池化（Connection Pooling）</h2>
+<p>在高并发场景下，频繁建立和关闭TCP连接的开销非常大。连接池是必要的优化手段。</p>
+<pre class="mermaid">graph LR
+    subgraph Application
+        T1[Thread 1]
+        T2[Thread 2]
+        T3[Thread 3]
+    end
+
+    subgraph Connection Pool
+        C1[Conn 1 - Active]
+        C2[Conn 2 - Active]
+        C3[Conn 3 - Idle]
+        C4[Conn 4 - Idle]
+    end
+
+    subgraph Backend Servers
+        S1[Server A]
+        S2[Server B]
+    end
+
+    T1 --&gt; C1
+    T2 --&gt; C2
+    T3 -.-&gt; C3
+    C1 --&gt; S1
+    C2 --&gt; S2
+    C3 --&gt; S1
+    C4 --&gt; S2</pre>
+<h3 id="连接池的核心参数">连接池的核心参数</h3>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-comment">// Go database/sql 连接池配置</span><br>db, _ := sql.Open(<span class="hljs-string">&quot;mysql&quot;</span>, dsn)<br><br><span class="hljs-comment">// 最大打开连接数</span><br>db.SetMaxOpenConns(<span class="hljs-number">100</span>)<br><br><span class="hljs-comment">// 最大空闲连接数</span><br>db.SetMaxIdleConns(<span class="hljs-number">25</span>)<br><br><span class="hljs-comment">// 连接最大存活时间</span><br>db.SetConnMaxLifetime(<span class="hljs-number">5</span> * time.Minute)<br><br><span class="hljs-comment">// 连接最大空闲时间</span><br>db.SetConnMaxIdleTime(<span class="hljs-number">3</span> * time.Minute)<br></code></pre></td></tr></table></figure>
+<h3 id="http连接池keep-alive">HTTP连接池（Keep-Alive）</h3>
+<p>HTTP/1.1默认开启Keep-Alive，复用底层TCP连接：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-comment">// Go HTTP客户端连接池</span><br>transport := &amp;http.Transport&#123;<br>    MaxIdleConns:        <span class="hljs-number">100</span>,              <span class="hljs-comment">// 全局最大空闲连接</span><br>    MaxIdleConnsPerHost: <span class="hljs-number">10</span>,               <span class="hljs-comment">// 每个Host最大空闲连接</span><br>    MaxConnsPerHost:     <span class="hljs-number">50</span>,               <span class="hljs-comment">// 每个Host最大连接数</span><br>    IdleConnTimeout:     <span class="hljs-number">90</span> * time.Second, <span class="hljs-comment">// 空闲超时</span><br>    TLSHandshakeTimeout: <span class="hljs-number">10</span> * time.Second,<br>&#125;<br><br>client := &amp;http.Client&#123;<br>    Transport: transport,<br>    Timeout:   <span class="hljs-number">30</span> * time.Second,<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="关键内核参数汇总">关键内核参数汇总</h2>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># === 连接建立相关 ===</span><br>net.ipv4.tcp_syn_retries = 3          <span class="hljs-comment"># SYN重传次数</span><br>net.ipv4.tcp_synack_retries = 2       <span class="hljs-comment"># SYN+ACK重传次数</span><br>net.ipv4.tcp_max_syn_backlog = 4096   <span class="hljs-comment"># 半连接队列大小</span><br>net.core.somaxconn = 4096             <span class="hljs-comment"># 全连接队列大小</span><br>net.ipv4.tcp_syncookies = 1           <span class="hljs-comment"># SYN Cookie</span><br>net.ipv4.tcp_fastopen = 3             <span class="hljs-comment"># TCP Fast Open</span><br><br><span class="hljs-comment"># === 连接维持相关 ===</span><br>net.ipv4.tcp_keepalive_time = 600<br>net.ipv4.tcp_keepalive_intvl = 15<br>net.ipv4.tcp_keepalive_probes = 5<br><br><span class="hljs-comment"># === 连接关闭相关 ===</span><br>net.ipv4.tcp_tw_reuse = 1             <span class="hljs-comment"># TIME_WAIT重用</span><br>net.ipv4.tcp_timestamps = 1           <span class="hljs-comment"># 时间戳</span><br>net.ipv4.tcp_max_tw_buckets = 20000   <span class="hljs-comment"># 最大TIME_WAIT数</span><br>net.ipv4.tcp_fin_timeout = 30         <span class="hljs-comment"># FIN_WAIT_2超时</span><br>net.ipv4.ip_local_port_range = 1024 65535<br><br><span class="hljs-comment"># === 缓冲区相关 ===</span><br>net.ipv4.tcp_rmem = 4096 87380 6291456  <span class="hljs-comment"># 接收缓冲区</span><br>net.ipv4.tcp_wmem = 4096 65536 4194304  <span class="hljs-comment"># 发送缓冲区</span><br>net.core.rmem_max = 16777216<br>net.core.wmem_max = 16777216<br></code></pre></td></tr></table></figure>
+<h2 id="排查工具">排查工具</h2>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 查看连接状态分布</span><br>ss -s<br><br><span class="hljs-comment"># 查看特定端口的连接</span><br>ss -tnp sport = :8080<br><br><span class="hljs-comment"># 抓包分析握手过程</span><br>tcpdump -i eth0 -nn <span class="hljs-string">&#x27;tcp[tcpflags] &amp; (tcp-syn|tcp-fin|tcp-rst) != 0&#x27;</span> -c 50<br><br><span class="hljs-comment"># 查看socket统计信息</span><br><span class="hljs-built_in">cat</span> /proc/net/sockstat<br><br><span class="hljs-comment"># 跟踪TCP连接事件</span><br><span class="hljs-comment"># 需要bcc-tools</span><br>tcpconnect  <span class="hljs-comment"># 跟踪主动连接</span><br>tcpaccept   <span class="hljs-comment"># 跟踪被动连接</span><br>tcpretrans  <span class="hljs-comment"># 跟踪重传</span><br></code></pre></td></tr></table></figure>
+<h2 id="总结">总结</h2>
+<p>TCP连接管理是网络编程的基础知识。核心要点：</p>
+<ol type="1">
+<li><strong>三次握手</strong>确保双方同步序列号，防止历史连接干扰</li>
+<li><strong>四次挥手</strong>因为TCP全双工特性，需要双向关闭</li>
+<li><strong>TIME_WAIT</strong>不是问题，是TCP可靠性的保证；通过<code>tcp_tw_reuse</code>和连接池来优化</li>
+<li><strong>Keepalive</strong>用于检测死连接，但默认2小时太长，需要根据场景调整</li>
+<li><strong>连接池</strong>是高并发场景下的必备优化手段</li>
+</ol>
+<p>理解这些机制后，在遇到连接超时、TIME_WAIT堆积、连接泄漏等问题时，就能快速定位和解决。</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2025-04-05</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">2.2k 字 · 6 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/react/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">React 概念：深入指南</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/spring-security-oauth2/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Spring Security + OAuth2统一认证实战</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#tcp%E8%BF%9E%E6%8E%A5%E7%8A%B6%E6%80%81%E6%9C%BA"><span class="toc-text">TCP连接状态机</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%89%E6%AC%A1%E6%8F%A1%E6%89%8Bthree-way-handshake"><span class="toc-text">三次握手（Three-Way
+Handshake）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%8F%A1%E6%89%8B%E8%BF%87%E7%A8%8B%E8%AF%A6%E8%A7%A3"><span class="toc-text">握手过程详解</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E9%9C%80%E8%A6%81%E4%B8%89%E6%AC%A1%E6%8F%A1%E6%89%8B"><span class="toc-text">为什么需要三次握手？</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#syn-flood%E6%94%BB%E5%87%BB%E4%B8%8E%E9%98%B2%E5%BE%A1"><span class="toc-text">SYN Flood攻击与防御</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#tcp-fast-open-tfo"><span class="toc-text">TCP Fast Open (TFO)</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%9B%E6%AC%A1%E6%8C%A5%E6%89%8Bfour-way-teardown"><span class="toc-text">四次挥手（Four-Way Teardown）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%8C%A5%E6%89%8B%E8%BF%87%E7%A8%8B%E8%AF%A6%E8%A7%A3"><span class="toc-text">挥手过程详解</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E6%98%AF%E5%9B%9B%E6%AC%A1%E8%80%8C%E9%9D%9E%E4%B8%89%E6%AC%A1"><span class="toc-text">为什么是四次而非三次？</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#time_wait%E7%8A%B6%E6%80%81%E6%B7%B1%E5%BA%A6%E5%88%86%E6%9E%90"><span class="toc-text">TIME_WAIT状态深度分析</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#time_wait%E7%9A%84%E4%BD%9C%E7%94%A8"><span class="toc-text">TIME_WAIT的作用</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#time_wait%E8%BF%87%E5%A4%9A%E7%9A%84%E9%97%AE%E9%A2%98"><span class="toc-text">TIME_WAIT过多的问题</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#time_wait%E4%BC%98%E5%8C%96%E7%AD%96%E7%95%A5"><span class="toc-text">TIME_WAIT优化策略</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#tcp-keepalive"><span class="toc-text">TCP Keepalive</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%BF%9E%E6%8E%A5%E6%B1%A0%E5%8C%96connection-pooling"><span class="toc-text">连接池化（Connection Pooling）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BF%9E%E6%8E%A5%E6%B1%A0%E7%9A%84%E6%A0%B8%E5%BF%83%E5%8F%82%E6%95%B0"><span class="toc-text">连接池的核心参数</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#http%E8%BF%9E%E6%8E%A5%E6%B1%A0keep-alive"><span class="toc-text">HTTP连接池（Keep-Alive）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%B3%E9%94%AE%E5%86%85%E6%A0%B8%E5%8F%82%E6%95%B0%E6%B1%87%E6%80%BB"><span class="toc-text">关键内核参数汇总</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%8E%92%E6%9F%A5%E5%B7%A5%E5%85%B7"><span class="toc-text">排查工具</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>消息队列对比：Kafka vs RocketMQ vs Pulsar · zt&#39;s Blog</title>
+  <meta name="description" content="全面对比Kafka、RocketMQ和Pulsar三大消息队列的架构设计、消息模型、存储机制、消费模式与性能特征，提供场景化选型建议。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/message-queue-comparison/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="消息队列对比：Kafka vs RocketMQ vs Pulsar">
+  <meta property="og:description" content="全面对比Kafka、RocketMQ和Pulsar三大消息队列的架构设计、消息模型、存储机制、消费模式与性能特征，提供场景化选型建议。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/message-queue-comparison/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2024-03-19T16:00:00.000Z">
+  <meta property="article:modified_time" content="2024-03-19T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="消息队列对比：Kafka vs RocketMQ vs Pulsar">
+  <meta name="twitter:description" content="全面对比Kafka、RocketMQ和Pulsar三大消息队列的架构设计、消息模型、存储机制、消费模式与性能特征，提供场景化选型建议。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"消息队列对比：Kafka vs RocketMQ vs Pulsar","description":"全面对比Kafka、RocketMQ和Pulsar三大消息队列的架构设计、消息模型、存储机制、消费模式与性能特征，提供场景化选型建议。","datePublished":"2024-03-19T16:00:00.000Z","dateModified":"2024-03-19T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/message-queue-comparison/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Architecture","item":"https://withesse.co/categories/Architecture/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:152">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Architecture/">Architecture</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/message-queue/"><span class="hash">#</span>message-queue</a><a class="tag" href="/tags/kafka/"><span class="hash">#</span>kafka</a><a class="tag" href="/tags/rocketmq/"><span class="hash">#</span>rocketmq</a><a class="tag" href="/tags/pulsar/"><span class="hash">#</span>pulsar</a>
+        
+      </div>
+
+      <h1>消息队列对比：Kafka vs RocketMQ vs Pulsar</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2024.03.20</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 7 min</span>
+        </span>
+        <span class="wc"><span class="num">2.8k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9E%B6%E6%9E%84%E5%AF%B9%E6%AF%94"><span class="toc-text">架构对比</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#kafka-%E6%9E%B6%E6%9E%84"><span class="toc-text">Kafka 架构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#rocketmq-%E6%9E%B6%E6%9E%84"><span class="toc-text">RocketMQ 架构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#pulsar-%E6%9E%B6%E6%9E%84"><span class="toc-text">Pulsar 架构</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%B6%88%E6%81%AF%E6%A8%A1%E5%9E%8B%E5%AF%B9%E6%AF%94"><span class="toc-text">消息模型对比</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#kafka"><span class="toc-text">Kafka</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#rocketmq"><span class="toc-text">RocketMQ</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#pulsar"><span class="toc-text">Pulsar</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AD%98%E5%82%A8%E6%9C%BA%E5%88%B6%E5%AF%B9%E6%AF%94"><span class="toc-text">存储机制对比</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%B6%88%E8%B4%B9%E6%A8%A1%E5%BC%8F"><span class="toc-text">消费模式</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%A1%BA%E5%BA%8F%E4%BF%9D%E8%AF%81"><span class="toc-text">顺序保证</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#exactly-once-%E8%AF%AD%E4%B9%89"><span class="toc-text">Exactly-Once 语义</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%A7%E8%83%BD%E5%AF%B9%E6%AF%94"><span class="toc-text">性能对比</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9F%BA%E5%87%86%E6%B5%8B%E8%AF%95%E5%8F%82%E8%80%83%E6%95%B0%E6%8D%AE"><span class="toc-text">基准测试参考数据</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%89%B9%E8%89%B2%E5%8A%9F%E8%83%BD%E5%AF%B9%E6%AF%94"><span class="toc-text">特色功能对比</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%80%89%E5%9E%8B%E5%BB%BA%E8%AE%AE"><span class="toc-text">选型建议</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%AF%A6%E7%BB%86%E9%80%89%E5%9E%8B%E6%8C%87%E5%8D%97"><span class="toc-text">详细选型指南</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%94%9F%E4%BA%A7%E7%8E%AF%E5%A2%83%E9%85%8D%E7%BD%AE%E5%BB%BA%E8%AE%AE"><span class="toc-text">生产环境配置建议</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="前言">前言</h2>
+<p>消息队列是分布式系统中实现异步通信、削峰填谷和系统解耦的关键组件。Kafka、RocketMQ
+和 Pulsar
+是当前最主流的三个消息队列系统，它们各有特色和适用场景。本文将从架构、消息模型、存储机制、消费模式、可靠性保证等维度进行深入对比，帮助你做出合适的技术选型。</p>
+<h2 id="架构对比">架构对比</h2>
+<h3 id="kafka-架构">Kafka 架构</h3>
+<pre class="mermaid">graph TB
+    Producer[Producer] --&gt; Broker1[Broker 1]
+    Producer --&gt; Broker2[Broker 2]
+    Producer --&gt; Broker3[Broker 3]
+
+    subgraph Kafka Cluster
+        Broker1 --&gt; |Partition 0 Leader| P0L[P0]
+        Broker1 --&gt; |Partition 2 Follower| P2F[P2]
+        Broker2 --&gt; |Partition 1 Leader| P1L[P1]
+        Broker2 --&gt; |Partition 0 Follower| P0F[P0]
+        Broker3 --&gt; |Partition 2 Leader| P2L[P2]
+        Broker3 --&gt; |Partition 1 Follower| P1F[P1]
+    end
+
+    ZK[ZooKeeper / KRaft] &lt;--&gt; Broker1
+    ZK &lt;--&gt; Broker2
+    ZK &lt;--&gt; Broker3
+
+    Broker1 --&gt; Consumer[Consumer Group]
+    Broker2 --&gt; Consumer
+    Broker3 --&gt; Consumer</pre>
+<p>Kafka 的核心特点： - <strong>Broker 即存储</strong>：消息持久化在
+Broker 本地磁盘 - <strong>Partition 分区</strong>：Topic 分为多个
+Partition，实现并行处理 - <strong>ISR 机制</strong>：In-Sync Replicas
+保证副本一致性 - <strong>KRaft 模式</strong>：新版本用 Raft 协议替代
+ZooKeeper</p>
+<h3 id="rocketmq-架构">RocketMQ 架构</h3>
+<pre class="mermaid">graph TB
+    Producer[Producer] --&gt; NameServer[NameServer 集群]
+    Consumer[Consumer] --&gt; NameServer
+
+    NameServer --&gt; |路由信息| Producer
+    NameServer --&gt; |路由信息| Consumer
+
+    subgraph Broker Cluster
+        subgraph Broker Group 1
+            BM1[Broker-a Master]
+            BS1[Broker-a Slave]
+            BM1 --&gt;|同步| BS1
+        end
+        subgraph Broker Group 2
+            BM2[Broker-b Master]
+            BS2[Broker-b Slave]
+            BM2 --&gt;|同步| BS2
+        end
+    end
+
+    Producer --&gt;|发送消息| BM1
+    Producer --&gt;|发送消息| BM2
+    Consumer --&gt;|消费消息| BM1
+    Consumer --&gt;|消费消息| BM2</pre>
+<p>RocketMQ 的核心特点： -
+<strong>NameServer</strong>：轻量级路由注册中心，无状态 -
+<strong>CommitLog + ConsumeQueue</strong>：存储计算分离的两级存储 -
+<strong>主从复制</strong>：同步/异步两种复制模式 -
+<strong>事务消息</strong>：原生支持分布式事务消息</p>
+<h3 id="pulsar-架构">Pulsar 架构</h3>
+<pre class="mermaid">graph TB
+    Producer[Producer] --&gt; Broker1[Broker 1]
+    Producer --&gt; Broker2[Broker 2]
+    Consumer[Consumer] --&gt; Broker1
+    Consumer --&gt; Broker2
+
+    subgraph Broker Layer(无状态)
+        Broker1[Broker 1&lt;br/&gt;计算层]
+        Broker2[Broker 2&lt;br/&gt;计算层]
+    end
+
+    Broker1 --&gt; BK1[Bookie 1]
+    Broker1 --&gt; BK2[Bookie 2]
+    Broker2 --&gt; BK2
+    Broker2 --&gt; BK3[Bookie 3]
+
+    subgraph BookKeeper(存储层)
+        BK1[Bookie 1]
+        BK2[Bookie 2]
+        BK3[Bookie 3]
+    end
+
+    ZK[ZooKeeper] &lt;--&gt; Broker1
+    ZK &lt;--&gt; Broker2
+    ZK &lt;--&gt; BK1</pre>
+<p>Pulsar 的核心特点： - <strong>存储计算分离</strong>：Broker
+无状态，存储由 BookKeeper 负责 - <strong>分层存储</strong>：热数据在
+BookKeeper，冷数据可卸载到对象存储 -
+<strong>多租户</strong>：原生支持租户/命名空间隔离 -
+<strong>统一消息模型</strong>：同时支持流式和队列语义</p>
+<h2 id="消息模型对比">消息模型对比</h2>
+<h3 id="kafka">Kafka</h3>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">// Kafka Producer</span><br><span class="hljs-type">Properties</span> <span class="hljs-variable">props</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">Properties</span>();<br>props.put(<span class="hljs-string">&quot;bootstrap.servers&quot;</span>, <span class="hljs-string">&quot;kafka1:9092,kafka2:9092&quot;</span>);<br>props.put(<span class="hljs-string">&quot;key.serializer&quot;</span>, StringSerializer.class.getName());<br>props.put(<span class="hljs-string">&quot;value.serializer&quot;</span>, StringSerializer.class.getName());<br>props.put(<span class="hljs-string">&quot;acks&quot;</span>, <span class="hljs-string">&quot;all&quot;</span>);               <span class="hljs-comment">// 等待所有 ISR 副本确认</span><br>props.put(<span class="hljs-string">&quot;retries&quot;</span>, <span class="hljs-number">3</span>);<br>props.put(<span class="hljs-string">&quot;enable.idempotence&quot;</span>, <span class="hljs-literal">true</span>);   <span class="hljs-comment">// 幂等生产者</span><br><br>KafkaProducer&lt;String, String&gt; producer = <span class="hljs-keyword">new</span> <span class="hljs-title class_">KafkaProducer</span>&lt;&gt;(props);<br><br>ProducerRecord&lt;String, String&gt; record = <span class="hljs-keyword">new</span> <span class="hljs-title class_">ProducerRecord</span>&lt;&gt;(<br>    <span class="hljs-string">&quot;order-topic&quot;</span>,                       <span class="hljs-comment">// topic</span><br>    order.getId(),                       <span class="hljs-comment">// key (决定分区)</span><br>    JsonUtils.toJson(order)              <span class="hljs-comment">// value</span><br>);<br><br>producer.send(record, (metadata, exception) -&gt; &#123;<br>    <span class="hljs-keyword">if</span> (exception == <span class="hljs-literal">null</span>) &#123;<br>        log.info(<span class="hljs-string">&quot;Sent to partition=&#123;&#125;, offset=&#123;&#125;&quot;</span>,<br>            metadata.partition(), metadata.offset());<br>    &#125; <span class="hljs-keyword">else</span> &#123;<br>        log.error(<span class="hljs-string">&quot;Send failed&quot;</span>, exception);<br>    &#125;<br>&#125;);<br><br><span class="hljs-comment">// Kafka Consumer</span><br><span class="hljs-type">Properties</span> <span class="hljs-variable">consumerProps</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">Properties</span>();<br>consumerProps.put(<span class="hljs-string">&quot;bootstrap.servers&quot;</span>, <span class="hljs-string">&quot;kafka1:9092&quot;</span>);<br>consumerProps.put(<span class="hljs-string">&quot;group.id&quot;</span>, <span class="hljs-string">&quot;order-processor&quot;</span>);<br>consumerProps.put(<span class="hljs-string">&quot;enable.auto.commit&quot;</span>, <span class="hljs-literal">false</span>);<br>consumerProps.put(<span class="hljs-string">&quot;auto.offset.reset&quot;</span>, <span class="hljs-string">&quot;earliest&quot;</span>);<br><br>KafkaConsumer&lt;String, String&gt; consumer = <span class="hljs-keyword">new</span> <span class="hljs-title class_">KafkaConsumer</span>&lt;&gt;(consumerProps);<br>consumer.subscribe(List.of(<span class="hljs-string">&quot;order-topic&quot;</span>));<br><br><span class="hljs-keyword">while</span> (<span class="hljs-literal">true</span>) &#123;<br>    ConsumerRecords&lt;String, String&gt; records = consumer.poll(Duration.ofMillis(<span class="hljs-number">100</span>));<br>    <span class="hljs-keyword">for</span> (ConsumerRecord&lt;String, String&gt; record : records) &#123;<br>        processOrder(record.value());<br>    &#125;<br>    consumer.commitSync(); <span class="hljs-comment">// 手动提交 offset</span><br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="rocketmq">RocketMQ</h3>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">// RocketMQ Producer</span><br><span class="hljs-type">DefaultMQProducer</span> <span class="hljs-variable">producer</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">DefaultMQProducer</span>(<span class="hljs-string">&quot;order-producer-group&quot;</span>);<br>producer.setNamesrvAddr(<span class="hljs-string">&quot;namesrv1:9876;namesrv2:9876&quot;</span>);<br>producer.setSendMsgTimeout(<span class="hljs-number">3000</span>);<br>producer.setRetryTimesWhenSendFailed(<span class="hljs-number">3</span>);<br>producer.start();<br><br><span class="hljs-type">Message</span> <span class="hljs-variable">msg</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">Message</span>(<br>    <span class="hljs-string">&quot;order-topic&quot;</span>,          <span class="hljs-comment">// topic</span><br>    <span class="hljs-string">&quot;OrderCreated&quot;</span>,         <span class="hljs-comment">// tag</span><br>    order.getId(),          <span class="hljs-comment">// key</span><br>    JsonUtils.toJson(order).getBytes(StandardCharsets.UTF_8) <span class="hljs-comment">// body</span><br>);<br><br><span class="hljs-comment">// 同步发送</span><br><span class="hljs-type">SendResult</span> <span class="hljs-variable">result</span> <span class="hljs-operator">=</span> producer.send(msg);<br>log.info(<span class="hljs-string">&quot;Send result: &#123;&#125;, msgId: &#123;&#125;&quot;</span>, result.getSendStatus(), result.getMsgId());<br><br><span class="hljs-comment">// 延迟消息</span><br>msg.setDelayTimeLevel(<span class="hljs-number">3</span>);  <span class="hljs-comment">// 延迟10s (1s 5s 10s 30s ...)</span><br>producer.send(msg);<br><br><span class="hljs-comment">// RocketMQ Consumer</span><br><span class="hljs-type">DefaultMQPushConsumer</span> <span class="hljs-variable">consumer</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">DefaultMQPushConsumer</span>(<span class="hljs-string">&quot;order-consumer-group&quot;</span>);<br>consumer.setNamesrvAddr(<span class="hljs-string">&quot;namesrv1:9876&quot;</span>);<br>consumer.subscribe(<span class="hljs-string">&quot;order-topic&quot;</span>, <span class="hljs-string">&quot;OrderCreated || OrderPaid&quot;</span>);<br>consumer.setConsumeFromWhere(ConsumeFromWhere.CONSUME_FROM_FIRST_OFFSET);<br><br>consumer.registerMessageListener((MessageListenerConcurrently) (msgs, context) -&gt; &#123;<br>    <span class="hljs-keyword">for</span> (MessageExt msg : msgs) &#123;<br>        <span class="hljs-keyword">try</span> &#123;<br>            <span class="hljs-type">Order</span> <span class="hljs-variable">order</span> <span class="hljs-operator">=</span> JsonUtils.fromJson(<span class="hljs-keyword">new</span> <span class="hljs-title class_">String</span>(msg.getBody()), Order.class);<br>            processOrder(order);<br>        &#125; <span class="hljs-keyword">catch</span> (Exception e) &#123;<br>            log.error(<span class="hljs-string">&quot;Process message failed, msgId=&#123;&#125;&quot;</span>, msg.getMsgId(), e);<br>            <span class="hljs-keyword">return</span> ConsumeConcurrentlyStatus.RECONSUME_LATER; <span class="hljs-comment">// 稍后重试</span><br>        &#125;<br>    &#125;<br>    <span class="hljs-keyword">return</span> ConsumeConcurrentlyStatus.CONSUME_SUCCESS;<br>&#125;);<br><br>consumer.start();<br></code></pre></td></tr></table></figure>
+<h3 id="pulsar">Pulsar</h3>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">// Pulsar Producer</span><br><span class="hljs-type">PulsarClient</span> <span class="hljs-variable">client</span> <span class="hljs-operator">=</span> PulsarClient.builder()<br>    .serviceUrl(<span class="hljs-string">&quot;pulsar://pulsar1:6650,pulsar2:6650&quot;</span>)<br>    .build();<br><br>Producer&lt;Order&gt; producer = client.newProducer(Schema.JSON(Order.class))<br>    .topic(<span class="hljs-string">&quot;persistent://public/default/orders&quot;</span>)<br>    .batchingMaxPublishDelay(<span class="hljs-number">10</span>, TimeUnit.MILLISECONDS)<br>    .sendTimeout(<span class="hljs-number">30</span>, TimeUnit.SECONDS)<br>    .blockIfQueueFull(<span class="hljs-literal">true</span>)<br>    .create();<br><br><span class="hljs-comment">// 异步发送</span><br>producer.sendAsync(order).thenAccept(msgId -&gt; &#123;<br>    log.info(<span class="hljs-string">&quot;Published message: &#123;&#125;&quot;</span>, msgId);<br>&#125;).exceptionally(ex -&gt; &#123;<br>    log.error(<span class="hljs-string">&quot;Publish failed&quot;</span>, ex);<br>    <span class="hljs-keyword">return</span> <span class="hljs-literal">null</span>;<br>&#125;);<br><br><span class="hljs-comment">// Pulsar Consumer - 支持多种订阅模式</span><br>Consumer&lt;Order&gt; consumer = client.newConsumer(Schema.JSON(Order.class))<br>    .topic(<span class="hljs-string">&quot;persistent://public/default/orders&quot;</span>)<br>    .subscriptionName(<span class="hljs-string">&quot;order-processor&quot;</span>)<br>    .subscriptionType(SubscriptionType.Key_Shared) <span class="hljs-comment">// 按 key 分发</span><br>    .ackTimeout(<span class="hljs-number">30</span>, TimeUnit.SECONDS)<br>    .subscribe();<br><br><span class="hljs-keyword">while</span> (<span class="hljs-literal">true</span>) &#123;<br>    Message&lt;Order&gt; msg = consumer.receive();<br>    <span class="hljs-keyword">try</span> &#123;<br>        processOrder(msg.getValue());<br>        consumer.acknowledge(msg);<br>    &#125; <span class="hljs-keyword">catch</span> (Exception e) &#123;<br>        consumer.negativeAcknowledge(msg); <span class="hljs-comment">// 否定确认，触发重投</span><br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="存储机制对比">存储机制对比</h2>
+<pre class="mermaid">graph TB
+    subgraph "Kafka 存储"
+        KTopic[Topic] --&gt; KP1[Partition 0]
+        KTopic --&gt; KP2[Partition 1]
+        KP1 --&gt; KSeg1[Segment 0&lt;br/&gt;.log + .index]
+        KP1 --&gt; KSeg2[Segment 1&lt;br/&gt;.log + .index]
+    end
+
+    subgraph "RocketMQ 存储"
+        RCL[CommitLog&lt;br/&gt;所有消息顺序写入] --&gt; RCQ1[ConsumeQueue&lt;br/&gt;Topic-A Queue 0]
+        RCL --&gt; RCQ2[ConsumeQueue&lt;br/&gt;Topic-A Queue 1]
+        RCL --&gt; RCQ3[ConsumeQueue&lt;br/&gt;Topic-B Queue 0]
+    end
+
+    subgraph "Pulsar 存储"
+        PTopic[Topic] --&gt; PLedger1[Ledger 1]
+        PTopic --&gt; PLedger2[Ledger 2]
+        PLedger1 --&gt; PEntry[Entry/Fragment]
+        PEntry --&gt; PBK1[Bookie 1]
+        PEntry --&gt; PBK2[Bookie 2]
+    end</pre>
+<table>
+<colgroup>
+<col style="width: 19%" />
+<col style="width: 22%" />
+<col style="width: 32%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>维度</th>
+<th>Kafka</th>
+<th>RocketMQ</th>
+<th>Pulsar</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>存储引擎</td>
+<td>分区日志文件</td>
+<td>CommitLog + ConsumeQueue</td>
+<td>BookKeeper (Ledger)</td>
+</tr>
+<tr class="even">
+<td>写入方式</td>
+<td>分区级顺序写</td>
+<td>全局顺序写 CommitLog</td>
+<td>Ledger 顺序写</td>
+</tr>
+<tr class="odd">
+<td>存储与计算</td>
+<td>耦合（Broker 即存储）</td>
+<td>耦合</td>
+<td>分离</td>
+</tr>
+<tr class="even">
+<td>分层存储</td>
+<td>Tiered Storage（较新）</td>
+<td>不支持</td>
+<td>原生支持（S3/HDFS）</td>
+</tr>
+<tr class="odd">
+<td>数据保留</td>
+<td>基于时间/大小</td>
+<td>基于时间</td>
+<td>基于时间/大小/策略</td>
+</tr>
+</tbody>
+</table>
+<h2 id="消费模式">消费模式</h2>
+<pre class="mermaid">graph TB
+    subgraph Kafka消费模式
+        KCG[Consumer Group] --&gt; KC1[Consumer 1&lt;br/&gt;Partition 0,1]
+        KCG --&gt; KC2[Consumer 2&lt;br/&gt;Partition 2,3]
+        Note1[一个 Partition 只能被&lt;br/&gt;组内一个 Consumer 消费]
+    end
+
+    subgraph Pulsar订阅模式
+        direction TB
+        PE[Exclusive&lt;br/&gt;独占] --&gt; PE1[1个Consumer]
+        PF[Failover&lt;br/&gt;灾备] --&gt; PF1[主Consumer]
+        PF --&gt; PF2[备Consumer]
+        PS[Shared&lt;br/&gt;共享] --&gt; PS1[Consumer 1]
+        PS --&gt; PS2[Consumer 2]
+        PS --&gt; PS3[Consumer 3]
+        PKS[Key_Shared&lt;br/&gt;键共享] --&gt; PKS1[Consumer 1&lt;br/&gt;key-a,key-b]
+        PKS --&gt; PKS2[Consumer 2&lt;br/&gt;key-c,key-d]
+    end</pre>
+<h2 id="顺序保证">顺序保证</h2>
+<pre class="mermaid">graph LR
+    subgraph Kafka
+        KP[Producer] --&gt;|相同Key| KPart[同一Partition]
+        KPart --&gt; KC[单Consumer]
+        Note2[Partition内有序]
+    end
+
+    subgraph RocketMQ
+        RP[Producer] --&gt;|MessageQueueSelector| RQ[同一Queue]
+        RQ --&gt; RC[单线程消费]
+        Note3[Queue内有序]
+    end</pre>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">// Kafka 顺序消息</span><br>producer.send(<span class="hljs-keyword">new</span> <span class="hljs-title class_">ProducerRecord</span>&lt;&gt;(<br>    <span class="hljs-string">&quot;order-topic&quot;</span>,<br>    orderId,       <span class="hljs-comment">// 相同 orderId 路由到同一 partition</span><br>    orderEvent<br>));<br><br><span class="hljs-comment">// RocketMQ 顺序消息</span><br>producer.send(msg, (mqs, msg1, arg) -&gt; &#123;<br>    <span class="hljs-type">String</span> <span class="hljs-variable">orderId</span> <span class="hljs-operator">=</span> (String) arg;<br>    <span class="hljs-type">int</span> <span class="hljs-variable">index</span> <span class="hljs-operator">=</span> Math.abs(orderId.hashCode()) % mqs.size();<br>    <span class="hljs-keyword">return</span> mqs.get(index); <span class="hljs-comment">// 相同 orderId 路由到同一 queue</span><br>&#125;, orderId);<br><br><span class="hljs-comment">// 顺序消费</span><br>consumer.registerMessageListener((MessageListenerOrderly) (msgs, context) -&gt; &#123;<br>    <span class="hljs-keyword">for</span> (MessageExt msg : msgs) &#123;<br>        processOrderEvent(msg);<br>    &#125;<br>    <span class="hljs-keyword">return</span> ConsumeOrderlyStatus.SUCCESS;<br>&#125;);<br></code></pre></td></tr></table></figure>
+<h2 id="exactly-once-语义">Exactly-Once 语义</h2>
+<table>
+<thead>
+<tr class="header">
+<th>级别</th>
+<th>含义</th>
+<th>实现方式</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>At-most-once</td>
+<td>最多一次，可能丢失</td>
+<td>发后即忘，自动提交 offset</td>
+</tr>
+<tr class="even">
+<td>At-least-once</td>
+<td>至少一次，可能重复</td>
+<td>消费后手动确认</td>
+</tr>
+<tr class="odd">
+<td>Exactly-once</td>
+<td>精确一次，不丢不重</td>
+<td>幂等 + 事务</td>
+</tr>
+</tbody>
+</table>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">// Kafka Exactly-Once (事务生产者 + 幂等消费者)</span><br>props.put(<span class="hljs-string">&quot;enable.idempotence&quot;</span>, <span class="hljs-literal">true</span>);<br>props.put(<span class="hljs-string">&quot;transactional.id&quot;</span>, <span class="hljs-string">&quot;order-tx-001&quot;</span>);<br><br>KafkaProducer&lt;String, String&gt; producer = <span class="hljs-keyword">new</span> <span class="hljs-title class_">KafkaProducer</span>&lt;&gt;(props);<br>producer.initTransactions();<br><br><span class="hljs-keyword">try</span> &#123;<br>    producer.beginTransaction();<br><br>    <span class="hljs-comment">// 发送消息</span><br>    producer.send(<span class="hljs-keyword">new</span> <span class="hljs-title class_">ProducerRecord</span>&lt;&gt;(<span class="hljs-string">&quot;output-topic&quot;</span>, key, value));<br><br>    <span class="hljs-comment">// 提交消费者 offset（作为事务的一部分）</span><br>    producer.sendOffsetsToTransaction(<br>        Map.of(<span class="hljs-keyword">new</span> <span class="hljs-title class_">TopicPartition</span>(<span class="hljs-string">&quot;input-topic&quot;</span>, <span class="hljs-number">0</span>),<br>               <span class="hljs-keyword">new</span> <span class="hljs-title class_">OffsetAndMetadata</span>(offset + <span class="hljs-number">1</span>)),<br>        consumerGroupMetadata<br>    );<br><br>    producer.commitTransaction();<br>&#125; <span class="hljs-keyword">catch</span> (Exception e) &#123;<br>    producer.abortTransaction();<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="性能对比">性能对比</h2>
+<h3 id="基准测试参考数据">基准测试参考数据</h3>
+<table>
+<thead>
+<tr class="header">
+<th>指标</th>
+<th>Kafka</th>
+<th>RocketMQ</th>
+<th>Pulsar</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>单 Broker 吞吐</td>
+<td>~100万 msg/s</td>
+<td>~20万 msg/s</td>
+<td>~50万 msg/s</td>
+</tr>
+<tr class="even">
+<td>端到端延迟 (P99)</td>
+<td>~5ms</td>
+<td>~3ms</td>
+<td>~5ms</td>
+</tr>
+<tr class="odd">
+<td>Topic 数量影响</td>
+<td>数百个后性能下降</td>
+<td>可支持数万</td>
+<td>支持百万级</td>
+</tr>
+<tr class="even">
+<td>消息大小</td>
+<td>适合大消息</td>
+<td>适合小消息</td>
+<td>均衡</td>
+</tr>
+</tbody>
+</table>
+<pre class="mermaid">graph LR
+    subgraph 吞吐量 (msg/s)
+        K[Kafka: ~1M]
+        R[RocketMQ: ~200K]
+        P[Pulsar: ~500K]
+    end
+
+    subgraph Topic数量扩展性
+        K2[Kafka: 数百]
+        R2[RocketMQ: 数万]
+        P2[Pulsar: 百万级]
+    end</pre>
+<p>Kafka 在 Topic/Partition 数量较少时吞吐量最高，但大量 Topic
+时性能会明显下降（因为每个 Partition 对应独立的日志文件，随机 IO
+增加）。RocketMQ 使用全局 CommitLog，Topic
+数量增长对写入性能影响小。Pulsar 的存储计算分离使其在 Topic
+扩展性上最优。</p>
+<h2 id="特色功能对比">特色功能对比</h2>
+<table>
+<thead>
+<tr class="header">
+<th>功能</th>
+<th>Kafka</th>
+<th>RocketMQ</th>
+<th>Pulsar</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>延迟消息</td>
+<td>不支持</td>
+<td>支持（固定级别/任意延迟）</td>
+<td>支持</td>
+</tr>
+<tr class="even">
+<td>事务消息</td>
+<td>支持</td>
+<td>支持（半消息）</td>
+<td>支持</td>
+</tr>
+<tr class="odd">
+<td>消息回溯</td>
+<td>按 offset/时间</td>
+<td>按时间</td>
+<td>按 messageId/时间</td>
+</tr>
+<tr class="even">
+<td>死信队列</td>
+<td>不支持</td>
+<td>支持</td>
+<td>支持</td>
+</tr>
+<tr class="odd">
+<td>消息过滤</td>
+<td>不支持</td>
+<td>Tag + SQL92</td>
+<td>不支持</td>
+</tr>
+<tr class="even">
+<td>Schema 管理</td>
+<td>Schema Registry</td>
+<td>不支持</td>
+<td>原生 Schema</td>
+</tr>
+<tr class="odd">
+<td>多租户</td>
+<td>不支持</td>
+<td>不支持</td>
+<td>原生支持</td>
+</tr>
+<tr class="even">
+<td>Geo 复制</td>
+<td>MirrorMaker</td>
+<td>不支持</td>
+<td>原生支持</td>
+</tr>
+<tr class="odd">
+<td>流计算</td>
+<td>Kafka Streams</td>
+<td>不支持</td>
+<td>Pulsar Functions</td>
+</tr>
+</tbody>
+</table>
+<h2 id="选型建议">选型建议</h2>
+<pre class="mermaid">graph TD
+    Start[选择消息队列] --&gt; Q1{主要用途?}
+
+    Q1 --&gt;|大数据/日志收集/流处理| Kafka[Apache Kafka]
+    Q1 --&gt;|在线业务/电商交易| Q2{需要哪些特性?}
+    Q1 --&gt;|云原生/多租户/海量Topic| Pulsar[Apache Pulsar]
+
+    Q2 --&gt;|延迟消息/事务消息/消息过滤| RocketMQ[Apache RocketMQ]
+    Q2 --&gt;|高吞吐/生态丰富| Kafka
+    Q2 --&gt;|存储计算分离/弹性扩展| Pulsar</pre>
+<h3 id="详细选型指南">详细选型指南</h3>
+<p><strong>选择 Kafka</strong>： - 日志收集与分析（ELK 链路） -
+流式数据处理（配合 Flink/Spark） - 事件驱动架构（高吞吐场景） - 已有
+Kafka 生态和运维经验</p>
+<p><strong>选择 RocketMQ</strong>： - 电商交易系统（订单、支付） -
+需要延迟消息（如超时未支付取消） - 需要事务消息（分布式事务） - 需要按
+Tag 过滤消息 - 阿里云生态用户</p>
+<p><strong>选择 Pulsar</strong>： - 需要多租户隔离 - 海量 Topic
+场景（IoT） - 需要分层存储（冷热分离） - 需要跨地域复制 -
+追求存储计算分离的云原生架构</p>
+<h2 id="生产环境配置建议">生产环境配置建议</h2>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># Kafka 生产环境关键配置</span><br><span class="hljs-comment"># broker</span><br><span class="hljs-attr">num.partitions:</span> <span class="hljs-number">6</span><br><span class="hljs-attr">default.replication.factor:</span> <span class="hljs-number">3</span><br><span class="hljs-attr">min.insync.replicas:</span> <span class="hljs-number">2</span><br><span class="hljs-attr">unclean.leader.election.enable:</span> <span class="hljs-literal">false</span><br><span class="hljs-attr">log.retention.hours:</span> <span class="hljs-number">168</span>  <span class="hljs-comment"># 7天</span><br><br><span class="hljs-comment"># producer</span><br><span class="hljs-attr">acks:</span> <span class="hljs-string">all</span><br><span class="hljs-attr">retries:</span> <span class="hljs-number">3</span><br><span class="hljs-attr">max.in.flight.requests.per.connection:</span> <span class="hljs-number">5</span><br><span class="hljs-attr">enable.idempotence:</span> <span class="hljs-literal">true</span><br><br><span class="hljs-comment"># consumer</span><br><span class="hljs-attr">enable.auto.commit:</span> <span class="hljs-literal">false</span><br><span class="hljs-attr">max.poll.records:</span> <span class="hljs-number">500</span><br><span class="hljs-attr">session.timeout.ms:</span> <span class="hljs-number">30000</span><br></code></pre></td></tr></table></figure>
+<h2 id="总结">总结</h2>
+<p>Kafka、RocketMQ 和 Pulsar 各有所长。Kafka
+以极致吞吐和丰富的流处理生态见长，是大数据领域的事实标准。RocketMQ
+在在线业务场景下表现出色，延迟消息和事务消息是其杀手锏。Pulsar
+凭借存储计算分离的架构和原生多租户支持，在云原生场景下优势明显。选型时应根据业务需求、团队经验和现有基础设施综合考虑，避免盲目追新。</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2024-03-20</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">2.8k 字 · 7 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/collections/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Collections</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/circuit-breaker-pattern/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">熔断器模式：从Hystrix到Sentinel</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9E%B6%E6%9E%84%E5%AF%B9%E6%AF%94"><span class="toc-text">架构对比</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#kafka-%E6%9E%B6%E6%9E%84"><span class="toc-text">Kafka 架构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#rocketmq-%E6%9E%B6%E6%9E%84"><span class="toc-text">RocketMQ 架构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#pulsar-%E6%9E%B6%E6%9E%84"><span class="toc-text">Pulsar 架构</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%B6%88%E6%81%AF%E6%A8%A1%E5%9E%8B%E5%AF%B9%E6%AF%94"><span class="toc-text">消息模型对比</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#kafka"><span class="toc-text">Kafka</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#rocketmq"><span class="toc-text">RocketMQ</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#pulsar"><span class="toc-text">Pulsar</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AD%98%E5%82%A8%E6%9C%BA%E5%88%B6%E5%AF%B9%E6%AF%94"><span class="toc-text">存储机制对比</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%B6%88%E8%B4%B9%E6%A8%A1%E5%BC%8F"><span class="toc-text">消费模式</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%A1%BA%E5%BA%8F%E4%BF%9D%E8%AF%81"><span class="toc-text">顺序保证</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#exactly-once-%E8%AF%AD%E4%B9%89"><span class="toc-text">Exactly-Once 语义</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%A7%E8%83%BD%E5%AF%B9%E6%AF%94"><span class="toc-text">性能对比</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9F%BA%E5%87%86%E6%B5%8B%E8%AF%95%E5%8F%82%E8%80%83%E6%95%B0%E6%8D%AE"><span class="toc-text">基准测试参考数据</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%89%B9%E8%89%B2%E5%8A%9F%E8%83%BD%E5%AF%B9%E6%AF%94"><span class="toc-text">特色功能对比</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%80%89%E5%9E%8B%E5%BB%BA%E8%AE%AE"><span class="toc-text">选型建议</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%AF%A6%E7%BB%86%E9%80%89%E5%9E%8B%E6%8C%87%E5%8D%97"><span class="toc-text">详细选型指南</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%94%9F%E4%BA%A7%E7%8E%AF%E5%A2%83%E9%85%8D%E7%BD%AE%E5%BB%BA%E8%AE%AE"><span class="toc-text">生产环境配置建议</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

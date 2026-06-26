@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Deno vs Node.js：运行时之争 · zt&#39;s Blog</title>
+  <meta name="description" content="全面对比Deno和Node.js两大JavaScript运行时，涵盖安全模型、TypeScript支持、模块系统、标准库和部署方案的差异分析。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/deno-vs-nodejs/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Deno vs Node.js：运行时之争">
+  <meta property="og:description" content="全面对比Deno和Node.js两大JavaScript运行时，涵盖安全模型、TypeScript支持、模块系统、标准库和部署方案的差异分析。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/deno-vs-nodejs/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2025-07-08T16:00:00.000Z">
+  <meta property="article:modified_time" content="2025-07-08T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Deno vs Node.js：运行时之争">
+  <meta name="twitter:description" content="全面对比Deno和Node.js两大JavaScript运行时，涵盖安全模型、TypeScript支持、模块系统、标准库和部署方案的差异分析。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Deno vs Node.js：运行时之争","description":"全面对比Deno和Node.js两大JavaScript运行时，涵盖安全模型、TypeScript支持、模块系统、标准库和部署方案的差异分析。","datePublished":"2025-07-08T16:00:00.000Z","dateModified":"2025-07-08T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/deno-vs-nodejs/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Node.js","item":"https://withesse.co/categories/Node-js/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:100">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Node-js/">Node.js</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/runtime/"><span class="hash">#</span>runtime</a><a class="tag" href="/tags/deno/"><span class="hash">#</span>deno</a><a class="tag" href="/tags/nodejs/"><span class="hash">#</span>nodejs</a>
+        
+      </div>
+
+      <h1>Deno vs Node.js：运行时之争</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2025.07.09</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 7 min</span>
+        </span>
+        <span class="wc"><span class="num">3.0k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9E%B6%E6%9E%84%E5%AF%B9%E6%AF%94"><span class="toc-text">架构对比</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%89%E5%85%A8%E6%A8%A1%E5%9E%8B"><span class="toc-text">安全模型</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#typescript%E6%94%AF%E6%8C%81"><span class="toc-text">TypeScript支持</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A8%A1%E5%9D%97%E7%B3%BB%E7%BB%9F"><span class="toc-text">模块系统</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#deno.json%E9%85%8D%E7%BD%AE"><span class="toc-text">deno.json配置</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A0%87%E5%87%86%E5%BA%93%E5%AF%B9%E6%AF%94"><span class="toc-text">标准库对比</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#web%E6%A1%86%E6%9E%B6%E5%AF%B9%E6%AF%94"><span class="toc-text">Web框架对比</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#deno-deploy"><span class="toc-text">Deno Deploy</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#node.js%E5%85%BC%E5%AE%B9%E6%80%A7deno-2.0"><span class="toc-text">Node.js兼容性（Deno 2.0+）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%BF%81%E7%A7%BB%E6%8C%87%E5%8D%97"><span class="toc-text">迁移指南</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%89%B9%E6%80%A7%E5%AF%B9%E6%AF%94%E6%80%BB%E7%BB%93"><span class="toc-text">特性对比总结</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%80%89%E6%8B%A9%E5%BB%BA%E8%AE%AE"><span class="toc-text">选择建议</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="前言">前言</h2>
+<p>Deno由Node.js的原作者Ryan
+Dahl于2018年发布，旨在解决Node.js的设计缺陷。经过多年发展，Deno
+2.0在保持其安全优先理念的同时，大幅提升了Node.js兼容性。本文将从多个维度深入对比这两个运行时。</p>
+<h2 id="架构对比">架构对比</h2>
+<pre class="mermaid">graph TB
+    subgraph "Node.js Architecture"
+        NJS[JavaScript/TypeScript] --&gt; NV8[V8 Engine]
+        NV8 --&gt; NAPI[Node API / N-API]
+        NAPI --&gt; NLIBUV[libuv&lt;br&gt;Event Loop]
+        NAPI --&gt; NOPENSSL[OpenSSL]
+        NAPI --&gt; NHTTP[llhttp]
+        NJS --&gt; NNPM[npm/yarn/pnpm&lt;br&gt;node_modules]
+    end
+
+    subgraph "Deno Architecture"
+        DJS[JavaScript/TypeScript] --&gt; DV8[V8 Engine]
+        DV8 --&gt; DRUST[Rust Core&lt;br&gt;deno_core]
+        DRUST --&gt; DTOKIO[Tokio&lt;br&gt;Async Runtime]
+        DRUST --&gt; DRUSTLS[Rustls&lt;br&gt;TLS]
+        DRUST --&gt; DHTTP[hyper&lt;br&gt;HTTP]
+        DJS --&gt; DMOD[URL Imports&lt;br&gt;+ npm: specifier]
+    end</pre>
+<p>关键区别：Deno使用Rust和Tokio构建，而Node.js使用C++和libuv。</p>
+<h2 id="安全模型">安全模型</h2>
+<p>Deno最显著的特性是默认安全——默认情况下，程序没有任何文件系统、网络、环境变量的访问权限。</p>
+<pre class="mermaid">graph LR
+    subgraph "Node.js"
+        NS[脚本] --&gt; NFS[文件系统 - 完全访问]
+        NS --&gt; NNET[网络 - 完全访问]
+        NS --&gt; NENV[环境变量 - 完全访问]
+        NS --&gt; NSUB[子进程 - 完全访问]
+    end
+
+    subgraph "Deno"
+        DS[脚本] --&gt; DFS[文件系统 - 需要--allow-read/write]
+        DS --&gt; DNET[网络 - 需要--allow-net]
+        DS --&gt; DENV[环境变量 - 需要--allow-env]
+        DS --&gt; DSUB[子进程 - 需要--allow-run]
+    end
+
+    style NFS fill:#d32f2f,color:#fff
+    style NNET fill:#d32f2f,color:#fff
+    style DFS fill:#388e3c,color:#fff
+    style DNET fill:#388e3c,color:#fff</pre>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># Deno权限控制</span><br><br><span class="hljs-comment"># 无权限运行（最安全）</span><br>deno run script.ts<br><br><span class="hljs-comment"># 只允许读取特定目录</span><br>deno run --allow-read=/data script.ts<br><br><span class="hljs-comment"># 只允许访问特定域名</span><br>deno run --allow-net=api.example.com,cdn.example.com script.ts<br><br><span class="hljs-comment"># 允许读写特定目录 + 网络</span><br>deno run --allow-read=/data --allow-write=/output --allow-net script.ts<br><br><span class="hljs-comment"># 允许环境变量（指定变量名）</span><br>deno run --allow-env=API_KEY,DATABASE_URL script.ts<br><br><span class="hljs-comment"># 允许运行特定子进程</span><br>deno run --allow-run=git,node script.ts<br><br><span class="hljs-comment"># 所有权限（等同于Node.js，不推荐）</span><br>deno run --allow-all script.ts<br><span class="hljs-comment"># 或简写</span><br>deno run -A script.ts<br></code></pre></td></tr></table></figure>
+<figure class="highlight typescript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><code class="hljs typescript"><span class="hljs-comment">// Deno权限API</span><br><span class="hljs-keyword">const</span> status = <span class="hljs-keyword">await</span> <span class="hljs-title class_">Deno</span>.<span class="hljs-property">permissions</span>.<span class="hljs-title function_">query</span>(&#123; <span class="hljs-attr">name</span>: <span class="hljs-string">&quot;read&quot;</span>, <span class="hljs-attr">path</span>: <span class="hljs-string">&quot;/etc&quot;</span> &#125;);<br><span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(status.<span class="hljs-property">state</span>); <span class="hljs-comment">// &quot;granted&quot; | &quot;denied&quot; | &quot;prompt&quot;</span><br><br><span class="hljs-comment">// 运行时请求权限</span><br><span class="hljs-keyword">const</span> result = <span class="hljs-keyword">await</span> <span class="hljs-title class_">Deno</span>.<span class="hljs-property">permissions</span>.<span class="hljs-title function_">request</span>(&#123; <span class="hljs-attr">name</span>: <span class="hljs-string">&quot;net&quot;</span>, <span class="hljs-attr">host</span>: <span class="hljs-string">&quot;api.example.com&quot;</span> &#125;);<br><span class="hljs-keyword">if</span> (result.<span class="hljs-property">state</span> === <span class="hljs-string">&quot;granted&quot;</span>) &#123;<br>    <span class="hljs-keyword">const</span> resp = <span class="hljs-keyword">await</span> <span class="hljs-title function_">fetch</span>(<span class="hljs-string">&quot;https://api.example.com/data&quot;</span>);<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="typescript支持">TypeScript支持</h2>
+<figure class="highlight typescript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><code class="hljs typescript"><span class="hljs-comment">// Node.js: 需要额外配置</span><br><span class="hljs-comment">// 1. 安装typescript + ts-node/tsx</span><br><span class="hljs-comment">// 2. 配置tsconfig.json</span><br><span class="hljs-comment">// 3. 使用tsx运行或编译后运行</span><br><br><span class="hljs-comment">// 项目设置</span><br><span class="hljs-comment">// npm install -D typescript @types/node ts-node</span><br><span class="hljs-comment">// npx tsc --init</span><br><br><span class="hljs-comment">// 运行方式</span><br><span class="hljs-comment">// npx tsx src/app.ts</span><br><span class="hljs-comment">// 或 node --loader ts-node/esm src/app.ts</span><br><br><span class="hljs-comment">// ============================================</span><br><br><span class="hljs-comment">// Deno: 原生支持，零配置</span><br><span class="hljs-comment">// deno run app.ts</span><br><br><span class="hljs-comment">// Deno自带类型检查</span><br><span class="hljs-comment">// deno check app.ts</span><br><br><span class="hljs-comment">// 跳过类型检查（更快）</span><br><span class="hljs-comment">// deno run --no-check app.ts</span><br></code></pre></td></tr></table></figure>
+<figure class="highlight typescript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><code class="hljs typescript"><span class="hljs-comment">// Deno示例 - 无需任何配置</span><br><span class="hljs-keyword">interface</span> <span class="hljs-title class_">User</span> &#123;<br>    <span class="hljs-attr">id</span>: <span class="hljs-built_in">number</span>;<br>    <span class="hljs-attr">name</span>: <span class="hljs-built_in">string</span>;<br>    <span class="hljs-attr">email</span>: <span class="hljs-built_in">string</span>;<br>&#125;<br><br><span class="hljs-keyword">async</span> <span class="hljs-keyword">function</span> <span class="hljs-title function_">fetchUser</span>(<span class="hljs-params">id: <span class="hljs-built_in">number</span></span>): <span class="hljs-title class_">Promise</span>&lt;<span class="hljs-title class_">User</span>&gt; &#123;<br>    <span class="hljs-keyword">const</span> resp = <span class="hljs-keyword">await</span> <span class="hljs-title function_">fetch</span>(<span class="hljs-string">`https://jsonplaceholder.typicode.com/users/<span class="hljs-subst">$&#123;id&#125;</span>`</span>);<br>    <span class="hljs-keyword">return</span> resp.<span class="hljs-title function_">json</span>();<br>&#125;<br><br><span class="hljs-keyword">const</span> user = <span class="hljs-keyword">await</span> <span class="hljs-title function_">fetchUser</span>(<span class="hljs-number">1</span>);<br><span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">`Hello, <span class="hljs-subst">$&#123;user.name&#125;</span>!`</span>);<br><br><span class="hljs-comment">// 直接运行:</span><br><span class="hljs-comment">// deno run --allow-net app.ts</span><br></code></pre></td></tr></table></figure>
+<h2 id="模块系统">模块系统</h2>
+<pre class="mermaid">graph TB
+    subgraph "Node.js Module System"
+        NPM[npm Registry] --&gt; NM[node_modules/]
+        NM --&gt; PKG[package.json&lt;br&gt;dependencies]
+        NM --&gt; |嵌套依赖| NESTED[node_modules/&lt;br&gt;  express/&lt;br&gt;    node_modules/&lt;br&gt;      ...]
+    end
+
+    subgraph "Deno Module System"
+        URL[URL Import&lt;br&gt;https://deno.land/std] --&gt; CACHE[全局缓存&lt;br&gt;~/.cache/deno/]
+        NPMSPEC[npm: specifier&lt;br&gt;npm:express@4] --&gt; CACHE
+        JSR[JSR Registry&lt;br&gt;jsr:@std/path] --&gt; CACHE
+    end</pre>
+<figure class="highlight typescript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><code class="hljs typescript"><span class="hljs-comment">// Node.js模块导入</span><br><span class="hljs-keyword">import</span> express <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;express&#x27;</span>;                    <span class="hljs-comment">// npm包</span><br><span class="hljs-keyword">import</span> &#123; readFile &#125; <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;fs/promises&#x27;</span>;           <span class="hljs-comment">// 内置模块</span><br><span class="hljs-keyword">import</span> &#123; myUtil &#125; <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;./utils.js&#x27;</span>;              <span class="hljs-comment">// 本地文件</span><br><br><span class="hljs-comment">// Deno模块导入 - 多种方式</span><br><span class="hljs-comment">// 1. URL导入（Deno原生方式）</span><br><span class="hljs-keyword">import</span> &#123; serve &#125; <span class="hljs-keyword">from</span> <span class="hljs-string">&quot;https://deno.land/std@0.220.0/http/server.ts&quot;</span>;<br><br><span class="hljs-comment">// 2. npm:协议（兼容npm生态）</span><br><span class="hljs-keyword">import</span> express <span class="hljs-keyword">from</span> <span class="hljs-string">&quot;npm:express@4&quot;</span>;<br><span class="hljs-keyword">import</span> chalk <span class="hljs-keyword">from</span> <span class="hljs-string">&quot;npm:chalk@5&quot;</span>;<br><br><span class="hljs-comment">// 3. JSR (JavaScript Registry - Deno推荐)</span><br><span class="hljs-keyword">import</span> &#123; join &#125; <span class="hljs-keyword">from</span> <span class="hljs-string">&quot;jsr:@std/path@1&quot;</span>;<br><span class="hljs-keyword">import</span> &#123; parse &#125; <span class="hljs-keyword">from</span> <span class="hljs-string">&quot;jsr:@std/csv@1&quot;</span>;<br><br><span class="hljs-comment">// 4. Import Maps（配置别名）</span><br><span class="hljs-comment">// deno.json:</span><br><span class="hljs-comment">// &#123;</span><br><span class="hljs-comment">//   &quot;imports&quot;: &#123;</span><br><span class="hljs-comment">//     &quot;@std/&quot;: &quot;jsr:@std/&quot;,</span><br><span class="hljs-comment">//     &quot;express&quot;: &quot;npm:express@4&quot;,</span><br><span class="hljs-comment">//     &quot;~/&quot;: &quot;./src/&quot;</span><br><span class="hljs-comment">//   &#125;</span><br><span class="hljs-comment">// &#125;</span><br><br><span class="hljs-comment">// 使用别名导入</span><br><span class="hljs-keyword">import</span> &#123; join &#125; <span class="hljs-keyword">from</span> <span class="hljs-string">&quot;@std/path&quot;</span>;<br><span class="hljs-keyword">import</span> express <span class="hljs-keyword">from</span> <span class="hljs-string">&quot;express&quot;</span>;<br><span class="hljs-keyword">import</span> &#123; config &#125; <span class="hljs-keyword">from</span> <span class="hljs-string">&quot;~/config.ts&quot;</span>;<br></code></pre></td></tr></table></figure>
+<h3 id="deno.json配置">deno.json配置</h3>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br></pre></td><td class="code"><pre><code class="hljs jsonc">// deno.json<br>&#123;<br>    // Import Maps<br>    &quot;imports&quot;: &#123;<br>        &quot;@std/&quot;: &quot;jsr:@std/&quot;,<br>        &quot;express&quot;: &quot;npm:express@4&quot;,<br>        &quot;hono&quot;: &quot;jsr:@hono/hono@4&quot;,<br>        &quot;~/&quot;: &quot;./src/&quot;<br>    &#125;,<br><br>    // TypeScript编译选项<br>    &quot;compilerOptions&quot;: &#123;<br>        &quot;strict&quot;: true,<br>        &quot;jsx&quot;: &quot;react-jsx&quot;,<br>        &quot;jsxImportSource&quot;: &quot;react&quot;<br>    &#125;,<br><br>    // 任务（类似npm scripts）<br>    &quot;tasks&quot;: &#123;<br>        &quot;dev&quot;: &quot;deno run --watch --allow-net --allow-read src/main.ts&quot;,<br>        &quot;start&quot;: &quot;deno run --allow-net --allow-read src/main.ts&quot;,<br>        &quot;test&quot;: &quot;deno test --allow-read&quot;,<br>        &quot;lint&quot;: &quot;deno lint&quot;,<br>        &quot;fmt&quot;: &quot;deno fmt&quot;,<br>        &quot;check&quot;: &quot;deno check src/**/*.ts&quot;<br>    &#125;,<br><br>    // 格式化配置<br>    &quot;fmt&quot;: &#123;<br>        &quot;indentWidth&quot;: 2,<br>        &quot;semiColons&quot;: true,<br>        &quot;singleQuote&quot;: true<br>    &#125;,<br><br>    // Lint配置<br>    &quot;lint&quot;: &#123;<br>        &quot;rules&quot;: &#123;<br>            &quot;tags&quot;: [&quot;recommended&quot;]<br>        &#125;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="标准库对比">标准库对比</h2>
+<figure class="highlight typescript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br></pre></td><td class="code"><pre><code class="hljs typescript"><span class="hljs-comment">// ===== 文件操作 =====</span><br><br><span class="hljs-comment">// Node.js</span><br><span class="hljs-keyword">import</span> &#123; readFile, writeFile &#125; <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;fs/promises&#x27;</span>;<br><span class="hljs-keyword">const</span> data = <span class="hljs-keyword">await</span> <span class="hljs-title function_">readFile</span>(<span class="hljs-string">&#x27;file.txt&#x27;</span>, <span class="hljs-string">&#x27;utf-8&#x27;</span>);<br><span class="hljs-keyword">await</span> <span class="hljs-title function_">writeFile</span>(<span class="hljs-string">&#x27;output.txt&#x27;</span>, data);<br><br><span class="hljs-comment">// Deno</span><br><span class="hljs-keyword">const</span> data = <span class="hljs-keyword">await</span> <span class="hljs-title class_">Deno</span>.<span class="hljs-title function_">readTextFile</span>(<span class="hljs-string">&#x27;file.txt&#x27;</span>);<br><span class="hljs-keyword">await</span> <span class="hljs-title class_">Deno</span>.<span class="hljs-title function_">writeTextFile</span>(<span class="hljs-string">&#x27;output.txt&#x27;</span>, data);<br><br><span class="hljs-comment">// ===== HTTP服务器 =====</span><br><br><span class="hljs-comment">// Node.js</span><br><span class="hljs-keyword">import</span> &#123; createServer &#125; <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;http&#x27;</span>;<br><span class="hljs-keyword">const</span> server = <span class="hljs-title function_">createServer</span>(<span class="hljs-function">(<span class="hljs-params">req, res</span>) =&gt;</span> &#123;<br>    res.<span class="hljs-title function_">writeHead</span>(<span class="hljs-number">200</span>);<br>    res.<span class="hljs-title function_">end</span>(<span class="hljs-string">&#x27;Hello&#x27;</span>);<br>&#125;);<br>server.<span class="hljs-title function_">listen</span>(<span class="hljs-number">3000</span>);<br><br><span class="hljs-comment">// Deno (内置Web标准API)</span><br><span class="hljs-title class_">Deno</span>.<span class="hljs-title function_">serve</span>(&#123; <span class="hljs-attr">port</span>: <span class="hljs-number">3000</span> &#125;, <span class="hljs-function">(<span class="hljs-params">req</span>) =&gt;</span> &#123;<br>    <span class="hljs-keyword">return</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">Response</span>(<span class="hljs-string">&#x27;Hello&#x27;</span>);<br>&#125;);<br><br><span class="hljs-comment">// ===== HTTP请求 =====</span><br><br><span class="hljs-comment">// Node.js (需要node-fetch或内置fetch)</span><br><span class="hljs-keyword">const</span> resp = <span class="hljs-keyword">await</span> <span class="hljs-title function_">fetch</span>(<span class="hljs-string">&#x27;https://api.example.com/data&#x27;</span>);<br><span class="hljs-keyword">const</span> json = <span class="hljs-keyword">await</span> resp.<span class="hljs-title function_">json</span>();<br><br><span class="hljs-comment">// Deno (fetch是全局内置的)</span><br><span class="hljs-keyword">const</span> resp = <span class="hljs-keyword">await</span> <span class="hljs-title function_">fetch</span>(<span class="hljs-string">&#x27;https://api.example.com/data&#x27;</span>);<br><span class="hljs-keyword">const</span> json = <span class="hljs-keyword">await</span> resp.<span class="hljs-title function_">json</span>();<br><br><span class="hljs-comment">// ===== 测试 =====</span><br><br><span class="hljs-comment">// Node.js (内置test runner, Node 20+)</span><br><span class="hljs-keyword">import</span> &#123; test, describe, it &#125; <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;node:test&#x27;</span>;<br><span class="hljs-keyword">import</span> assert <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;node:assert&#x27;</span>;<br><br><span class="hljs-title function_">describe</span>(<span class="hljs-string">&#x27;math&#x27;</span>, <span class="hljs-function">() =&gt;</span> &#123;<br>    <span class="hljs-title function_">it</span>(<span class="hljs-string">&#x27;should add&#x27;</span>, <span class="hljs-function">() =&gt;</span> &#123;<br>        assert.<span class="hljs-title function_">strictEqual</span>(<span class="hljs-number">1</span> + <span class="hljs-number">1</span>, <span class="hljs-number">2</span>);<br>    &#125;);<br>&#125;);<br><br><span class="hljs-comment">// Deno (内置测试)</span><br><span class="hljs-title class_">Deno</span>.<span class="hljs-title function_">test</span>(<span class="hljs-string">&#x27;math - should add&#x27;</span>, <span class="hljs-function">() =&gt;</span> &#123;<br>    <span class="hljs-title function_">assertEquals</span>(<span class="hljs-number">1</span> + <span class="hljs-number">1</span>, <span class="hljs-number">2</span>);<br>&#125;);<br><br><span class="hljs-comment">// Deno BDD风格</span><br><span class="hljs-keyword">import</span> &#123; describe, it, expect &#125; <span class="hljs-keyword">from</span> <span class="hljs-string">&quot;jsr:@std/testing/bdd&quot;</span>;<br><br><span class="hljs-title function_">describe</span>(<span class="hljs-string">&#x27;math&#x27;</span>, <span class="hljs-function">() =&gt;</span> &#123;<br>    <span class="hljs-title function_">it</span>(<span class="hljs-string">&#x27;should add&#x27;</span>, <span class="hljs-function">() =&gt;</span> &#123;<br>        <span class="hljs-title function_">expect</span>(<span class="hljs-number">1</span> + <span class="hljs-number">1</span>).<span class="hljs-title function_">toBe</span>(<span class="hljs-number">2</span>);<br>    &#125;);<br>&#125;);<br></code></pre></td></tr></table></figure>
+<h2 id="web框架对比">Web框架对比</h2>
+<figure class="highlight typescript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br></pre></td><td class="code"><pre><code class="hljs typescript"><span class="hljs-comment">// Express (Node.js)</span><br><span class="hljs-keyword">import</span> express <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;express&#x27;</span>;<br><span class="hljs-keyword">const</span> app = <span class="hljs-title function_">express</span>();<br><br>app.<span class="hljs-title function_">get</span>(<span class="hljs-string">&#x27;/api/users/:id&#x27;</span>, <span class="hljs-keyword">async</span> (req, res) =&gt; &#123;<br>    <span class="hljs-keyword">const</span> user = <span class="hljs-keyword">await</span> <span class="hljs-title function_">getUser</span>(req.<span class="hljs-property">params</span>.<span class="hljs-property">id</span>);<br>    res.<span class="hljs-title function_">json</span>(user);<br>&#125;);<br><br>app.<span class="hljs-title function_">listen</span>(<span class="hljs-number">3000</span>);<br><br><span class="hljs-comment">// ============================================</span><br><br><span class="hljs-comment">// Hono (Deno / Node.js / Bun / Workers)</span><br><span class="hljs-keyword">import</span> &#123; <span class="hljs-title class_">Hono</span> &#125; <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;hono&#x27;</span>;<br><span class="hljs-keyword">const</span> app = <span class="hljs-keyword">new</span> <span class="hljs-title class_">Hono</span>();<br><br>app.<span class="hljs-title function_">get</span>(<span class="hljs-string">&#x27;/api/users/:id&#x27;</span>, <span class="hljs-keyword">async</span> (c) =&gt; &#123;<br>    <span class="hljs-keyword">const</span> user = <span class="hljs-keyword">await</span> <span class="hljs-title function_">getUser</span>(c.<span class="hljs-property">req</span>.<span class="hljs-title function_">param</span>(<span class="hljs-string">&#x27;id&#x27;</span>));<br>    <span class="hljs-keyword">return</span> c.<span class="hljs-title function_">json</span>(user);<br>&#125;);<br><br><span class="hljs-title class_">Deno</span>.<span class="hljs-title function_">serve</span>(app.<span class="hljs-property">fetch</span>);<br><br><span class="hljs-comment">// ============================================</span><br><br><span class="hljs-comment">// Oak (Deno原生)</span><br><span class="hljs-keyword">import</span> &#123; <span class="hljs-title class_">Application</span>, <span class="hljs-title class_">Router</span> &#125; <span class="hljs-keyword">from</span> <span class="hljs-string">&quot;jsr:@oak/oak@16&quot;</span>;<br><br><span class="hljs-keyword">const</span> router = <span class="hljs-keyword">new</span> <span class="hljs-title class_">Router</span>();<br>router.<span class="hljs-title function_">get</span>(<span class="hljs-string">&#x27;/api/users/:id&#x27;</span>, <span class="hljs-keyword">async</span> (ctx) =&gt; &#123;<br>    <span class="hljs-keyword">const</span> user = <span class="hljs-keyword">await</span> <span class="hljs-title function_">getUser</span>(ctx.<span class="hljs-property">params</span>.<span class="hljs-property">id</span>);<br>    ctx.<span class="hljs-property">response</span>.<span class="hljs-property">body</span> = user;<br>&#125;);<br><br><span class="hljs-keyword">const</span> app = <span class="hljs-keyword">new</span> <span class="hljs-title class_">Application</span>();<br>app.<span class="hljs-title function_">use</span>(router.<span class="hljs-title function_">routes</span>());<br><span class="hljs-keyword">await</span> app.<span class="hljs-title function_">listen</span>(&#123; <span class="hljs-attr">port</span>: <span class="hljs-number">3000</span> &#125;);<br></code></pre></td></tr></table></figure>
+<h2 id="deno-deploy">Deno Deploy</h2>
+<pre class="mermaid">graph TB
+    CODE[Source Code] --&gt; DEPLOY[Deno Deploy]
+    DEPLOY --&gt; EDGE1[Edge Node&lt;br&gt;Asia]
+    DEPLOY --&gt; EDGE2[Edge Node&lt;br&gt;Europe]
+    DEPLOY --&gt; EDGE3[Edge Node&lt;br&gt;Americas]
+
+    USER1[Users Asia] --&gt; EDGE1
+    USER2[Users Europe] --&gt; EDGE2
+    USER3[Users Americas] --&gt; EDGE3
+
+    EDGE1 --&gt; KV[(Deno KV&lt;br&gt;Global Database)]
+    EDGE2 --&gt; KV
+    EDGE3 --&gt; KV</pre>
+<figure class="highlight typescript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><code class="hljs typescript"><span class="hljs-comment">// Deno Deploy示例 - 部署到全球边缘</span><br><span class="hljs-keyword">import</span> &#123; <span class="hljs-title class_">Hono</span> &#125; <span class="hljs-keyword">from</span> <span class="hljs-string">&quot;jsr:@hono/hono&quot;</span>;<br><br><span class="hljs-keyword">const</span> app = <span class="hljs-keyword">new</span> <span class="hljs-title class_">Hono</span>();<br><span class="hljs-keyword">const</span> kv = <span class="hljs-keyword">await</span> <span class="hljs-title class_">Deno</span>.<span class="hljs-title function_">openKv</span>(); <span class="hljs-comment">// Deno KV - 全球分布式数据库</span><br><br>app.<span class="hljs-title function_">get</span>(<span class="hljs-string">&quot;/api/visits&quot;</span>, <span class="hljs-keyword">async</span> (c) =&gt; &#123;<br>    <span class="hljs-keyword">const</span> key = [<span class="hljs-string">&quot;visits&quot;</span>, <span class="hljs-string">&quot;total&quot;</span>];<br>    <span class="hljs-keyword">const</span> result = <span class="hljs-keyword">await</span> kv.<span class="hljs-property">get</span>&lt;<span class="hljs-built_in">number</span>&gt;(key);<br>    <span class="hljs-keyword">const</span> count = (result.<span class="hljs-property">value</span> ?? <span class="hljs-number">0</span>) + <span class="hljs-number">1</span>;<br>    <span class="hljs-keyword">await</span> kv.<span class="hljs-title function_">set</span>(key, count);<br>    <span class="hljs-keyword">return</span> c.<span class="hljs-title function_">json</span>(&#123; <span class="hljs-attr">visits</span>: count &#125;);<br>&#125;);<br><br>app.<span class="hljs-title function_">get</span>(<span class="hljs-string">&quot;/&quot;</span>, <span class="hljs-function">(<span class="hljs-params">c</span>) =&gt;</span> &#123;<br>    <span class="hljs-keyword">return</span> c.<span class="hljs-title function_">html</span>(<span class="hljs-string">`&lt;h1&gt;Hello from the Edge!&lt;/h1&gt;`</span>);<br>&#125;);<br><br><span class="hljs-title class_">Deno</span>.<span class="hljs-title function_">serve</span>(app.<span class="hljs-property">fetch</span>);<br></code></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 部署到Deno Deploy</span><br><span class="hljs-comment"># 方式1: GitHub集成（推荐）</span><br><span class="hljs-comment"># 在 dash.deno.com 连接GitHub仓库</span><br><br><span class="hljs-comment"># 方式2: CLI部署</span><br>deno install -Agf jsr:@deno/deployctl<br>deployctl deploy --project=my-project src/main.ts<br></code></pre></td></tr></table></figure>
+<h2 id="node.js兼容性deno-2.0">Node.js兼容性（Deno 2.0+）</h2>
+<pre class="mermaid">flowchart TB
+    DENO2[Deno 2.0] --&gt; COMPAT{兼容性}
+    COMPAT --&gt; NPM[npm包支持&lt;br&gt;大多数npm包可用]
+    COMPAT --&gt; NODEAPI[Node.js API&lt;br&gt;fs, path, http...]
+    COMPAT --&gt; PKGJSON[package.json支持]
+    COMPAT --&gt; NM[node_modules支持]
+
+    NPM --&gt; EXAMPLE1["import express from 'npm:express'"]
+    NODEAPI --&gt; EXAMPLE2["import { readFile } from 'node:fs'"]</pre>
+<figure class="highlight typescript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><code class="hljs typescript"><span class="hljs-comment">// Deno 2.0运行Node.js代码</span><br><span class="hljs-comment">// 大多数Node.js代码可以直接运行</span><br><br><span class="hljs-comment">// 使用Node.js内置模块</span><br><span class="hljs-keyword">import</span> &#123; readFileSync &#125; <span class="hljs-keyword">from</span> <span class="hljs-string">&quot;node:fs&quot;</span>;<br><span class="hljs-keyword">import</span> &#123; join &#125; <span class="hljs-keyword">from</span> <span class="hljs-string">&quot;node:path&quot;</span>;<br><span class="hljs-keyword">import</span> &#123; createServer &#125; <span class="hljs-keyword">from</span> <span class="hljs-string">&quot;node:http&quot;</span>;<br><br><span class="hljs-comment">// 使用npm包</span><br><span class="hljs-keyword">import</span> chalk <span class="hljs-keyword">from</span> <span class="hljs-string">&quot;npm:chalk@5&quot;</span>;<br><span class="hljs-keyword">import</span> lodash <span class="hljs-keyword">from</span> <span class="hljs-string">&quot;npm:lodash@4&quot;</span>;<br><br><span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(chalk.<span class="hljs-title function_">green</span>(<span class="hljs-string">&quot;Hello from Deno with npm packages!&quot;</span>));<br><br><span class="hljs-comment">// 甚至可以使用package.json</span><br><span class="hljs-comment">// deno会自动读取package.json中的dependencies</span><br></code></pre></td></tr></table></figure>
+<h2 id="迁移指南">迁移指南</h2>
+<figure class="highlight typescript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></td><td class="code"><pre><code class="hljs typescript"><span class="hljs-comment">// 从Node.js迁移到Deno的常见变化</span><br><br><span class="hljs-comment">// 1. 文件扩展名必须写全</span><br><span class="hljs-comment">// Node.js</span><br><span class="hljs-keyword">import</span> &#123; helper &#125; <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;./utils&#x27;</span>;        <span class="hljs-comment">// 可以省略.js</span><br><span class="hljs-comment">// Deno</span><br><span class="hljs-keyword">import</span> &#123; helper &#125; <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;./utils.ts&#x27;</span>;     <span class="hljs-comment">// 必须写.ts</span><br><br><span class="hljs-comment">// 2. 使用node:前缀访问Node API</span><br><span class="hljs-comment">// Node.js</span><br><span class="hljs-keyword">import</span> fs <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;fs&#x27;</span>;<br><span class="hljs-comment">// Deno</span><br><span class="hljs-keyword">import</span> fs <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;node:fs&#x27;</span>;<br><br><span class="hljs-comment">// 3. 全局对象差异</span><br><span class="hljs-comment">// Node.js</span><br><span class="hljs-keyword">const</span> buf = <span class="hljs-title class_">Buffer</span>.<span class="hljs-title function_">from</span>(<span class="hljs-string">&#x27;hello&#x27;</span>);<br><span class="hljs-comment">// Deno (需要从node:buffer导入)</span><br><span class="hljs-keyword">import</span> &#123; <span class="hljs-title class_">Buffer</span> &#125; <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;node:buffer&#x27;</span>;<br><span class="hljs-keyword">const</span> buf = <span class="hljs-title class_">Buffer</span>.<span class="hljs-title function_">from</span>(<span class="hljs-string">&#x27;hello&#x27;</span>);<br><br><span class="hljs-comment">// 4. __dirname / __filename</span><br><span class="hljs-comment">// Node.js</span><br><span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(__dirname);<br><span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(__filename);<br><span class="hljs-comment">// Deno</span><br><span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-keyword">import</span>.<span class="hljs-property">meta</span>.<span class="hljs-property">dirname</span>);     <span class="hljs-comment">// Deno 1.40+</span><br><span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-keyword">import</span>.<span class="hljs-property">meta</span>.<span class="hljs-property">filename</span>);<br><br><span class="hljs-comment">// 5. process对象</span><br><span class="hljs-comment">// Node.js</span><br><span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(process.<span class="hljs-property">env</span>.<span class="hljs-property">HOME</span>);<br><span class="hljs-comment">// Deno</span><br><span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-title class_">Deno</span>.<span class="hljs-property">env</span>.<span class="hljs-title function_">get</span>(<span class="hljs-string">&#x27;HOME&#x27;</span>));<br><span class="hljs-comment">// 或兼容方式</span><br><span class="hljs-keyword">import</span> process <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;node:process&#x27;</span>;<br><span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(process.<span class="hljs-property">env</span>.<span class="hljs-property">HOME</span>);<br></code></pre></td></tr></table></figure>
+<h2 id="特性对比总结">特性对比总结</h2>
+<table>
+<thead>
+<tr class="header">
+<th>特性</th>
+<th>Node.js</th>
+<th>Deno</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>语言</td>
+<td>C++/libuv</td>
+<td>Rust/Tokio</td>
+</tr>
+<tr class="even">
+<td>TypeScript</td>
+<td>需要配置</td>
+<td>原生支持</td>
+</tr>
+<tr class="odd">
+<td>安全模型</td>
+<td>无沙箱</td>
+<td>默认安全，权限控制</td>
+</tr>
+<tr class="even">
+<td>包管理</td>
+<td>npm/yarn/pnpm</td>
+<td>URL导入 + npm: + JSR</td>
+</tr>
+<tr class="odd">
+<td>标准库</td>
+<td>需要npm包</td>
+<td>内置标准库</td>
+</tr>
+<tr class="even">
+<td>测试</td>
+<td>需要Jest等</td>
+<td>内置测试运行器</td>
+</tr>
+<tr class="odd">
+<td>格式化</td>
+<td>需要Prettier</td>
+<td>内置 deno fmt</td>
+</tr>
+<tr class="even">
+<td>Lint</td>
+<td>需要ESLint</td>
+<td>内置 deno lint</td>
+</tr>
+<tr class="odd">
+<td>生态系统</td>
+<td>最大（npm）</td>
+<td>较小但兼容npm</td>
+</tr>
+<tr class="even">
+<td>部署</td>
+<td>PM2/Docker</td>
+<td>Deno Deploy（边缘计算）</td>
+</tr>
+<tr class="odd">
+<td>Web标准</td>
+<td>逐步支持</td>
+<td>优先使用Web标准API</td>
+</tr>
+<tr class="even">
+<td>编译</td>
+<td>pkg/nexe</td>
+<td>deno compile（单一可执行文件）</td>
+</tr>
+</tbody>
+</table>
+<h2 id="选择建议">选择建议</h2>
+<pre class="mermaid">flowchart TB
+    START[新项目选择运行时] --&gt; Q1{需要大量npm包?}
+    Q1 --&gt;|是| Q2{对安全性要求高?}
+    Q1 --&gt;|否| DENO_REC[推荐Deno]
+
+    Q2 --&gt;|是| DENO_NPM[Deno + npm兼容]
+    Q2 --&gt;|否| NODE_REC[Node.js]
+
+    DENO_REC --&gt; Q3{需要边缘部署?}
+    Q3 --&gt;|是| DENO_DEPLOY[Deno + Deno Deploy]
+    Q3 --&gt;|否| DENO_GENERAL[Deno]
+
+    NODE_REC --&gt; Q4{企业级项目?}
+    Q4 --&gt;|是| NODE_MATURE[Node.js&lt;br&gt;生态最成熟]
+    Q4 --&gt;|否| EITHER[两者皆可]</pre>
+<h2 id="总结">总结</h2>
+<p>Node.js和Deno各有优势：</p>
+<ol type="1">
+<li><strong>Node.js</strong>：生态系统最大，企业采用最广，适合需要大量第三方库的项目</li>
+<li><strong>Deno</strong>：安全优先，开发体验好（内置TypeScript/测试/格式化/Lint），适合新项目</li>
+<li><strong>Deno 2.0</strong>：npm兼容性大幅提升，迁移成本降低</li>
+<li><strong>Deno Deploy</strong>：边缘计算部署方案，全球低延迟</li>
+<li><strong>选择建议</strong>：新项目可以优先考虑Deno，现有Node.js项目无需急于迁移</li>
+</ol>
+<p>两个运行时在互相学习中共同进步——Node.js引入了权限模型（实验性），Deno提升了npm兼容性。最终受益的是开发者生态。</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2025-07-09</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">3.0k 字 · 7 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/container-security/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">容器安全最佳实践与工具链</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/micro-frontend-architecture/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">微前端架构方案对比与实践</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9E%B6%E6%9E%84%E5%AF%B9%E6%AF%94"><span class="toc-text">架构对比</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%89%E5%85%A8%E6%A8%A1%E5%9E%8B"><span class="toc-text">安全模型</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#typescript%E6%94%AF%E6%8C%81"><span class="toc-text">TypeScript支持</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A8%A1%E5%9D%97%E7%B3%BB%E7%BB%9F"><span class="toc-text">模块系统</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#deno.json%E9%85%8D%E7%BD%AE"><span class="toc-text">deno.json配置</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A0%87%E5%87%86%E5%BA%93%E5%AF%B9%E6%AF%94"><span class="toc-text">标准库对比</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#web%E6%A1%86%E6%9E%B6%E5%AF%B9%E6%AF%94"><span class="toc-text">Web框架对比</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#deno-deploy"><span class="toc-text">Deno Deploy</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#node.js%E5%85%BC%E5%AE%B9%E6%80%A7deno-2.0"><span class="toc-text">Node.js兼容性（Deno 2.0+）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%BF%81%E7%A7%BB%E6%8C%87%E5%8D%97"><span class="toc-text">迁移指南</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%89%B9%E6%80%A7%E5%AF%B9%E6%AF%94%E6%80%BB%E7%BB%93"><span class="toc-text">特性对比总结</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%80%89%E6%8B%A9%E5%BB%BA%E8%AE%AE"><span class="toc-text">选择建议</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

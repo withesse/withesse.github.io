@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>分布式事务解决方案全景分析 · zt&#39;s Blog</title>
+  <meta name="description" content="全面分析分布式事务的各种解决方案，涵盖2PC/3PC、TCC、Saga、本地消息表、MQ事务消息及Seata AT模式，含原理图解和代码实现。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/distributed-transaction/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="分布式事务解决方案全景分析">
+  <meta property="og:description" content="全面分析分布式事务的各种解决方案，涵盖2PC/3PC、TCC、Saga、本地消息表、MQ事务消息及Seata AT模式，含原理图解和代码实现。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/distributed-transaction/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2022-11-07T16:00:00.000Z">
+  <meta property="article:modified_time" content="2022-11-07T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="分布式事务解决方案全景分析">
+  <meta name="twitter:description" content="全面分析分布式事务的各种解决方案，涵盖2PC/3PC、TCC、Saga、本地消息表、MQ事务消息及Seata AT模式，含原理图解和代码实现。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"分布式事务解决方案全景分析","description":"全面分析分布式事务的各种解决方案，涵盖2PC/3PC、TCC、Saga、本地消息表、MQ事务消息及Seata AT模式，含原理图解和代码实现。","datePublished":"2022-11-07T16:00:00.000Z","dateModified":"2022-11-07T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/distributed-transaction/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Architecture","item":"https://withesse.co/categories/Architecture/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:152">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Architecture/">Architecture</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/distributed-transaction/"><span class="hash">#</span>distributed-transaction</a><a class="tag" href="/tags/saga/"><span class="hash">#</span>saga</a><a class="tag" href="/tags/2pc/"><span class="hash">#</span>2pc</a><a class="tag" href="/tags/tcc/"><span class="hash">#</span>tcc</a>
+        
+      </div>
+
+      <h1>分布式事务解决方案全景分析</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2022.11.08</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 11 min</span>
+        </span>
+        <span class="wc"><span class="num">4.3k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1%E7%9A%84%E6%8C%91%E6%88%98"><span class="toc-text">分布式事务的挑战</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%B8%E5%9E%8B%E5%9C%BA%E6%99%AF%E7%94%B5%E5%95%86%E4%B8%8B%E5%8D%95"><span class="toc-text">典型场景：电商下单</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#cap-%E4%B8%8E-base"><span class="toc-text">CAP 与 BASE</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#pc%E4%B8%A4%E9%98%B6%E6%AE%B5%E6%8F%90%E4%BA%A4"><span class="toc-text">2PC（两阶段提交）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8D%8F%E8%AE%AE%E6%B5%81%E7%A8%8B"><span class="toc-text">协议流程</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%A4%B1%E8%B4%A5%E5%9B%9E%E6%BB%9A%E5%9C%BA%E6%99%AF"><span class="toc-text">失败回滚场景</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#pc-%E7%9A%84%E9%97%AE%E9%A2%98"><span class="toc-text">2PC 的问题</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#pc%E4%B8%89%E9%98%B6%E6%AE%B5%E6%8F%90%E4%BA%A4"><span class="toc-text">3PC（三阶段提交）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#tcc-%E6%A8%A1%E5%BC%8F"><span class="toc-text">TCC 模式</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%89%E4%B8%AA%E9%98%B6%E6%AE%B5"><span class="toc-text">三个阶段</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BB%A3%E7%A0%81%E5%AE%9E%E7%8E%B0"><span class="toc-text">代码实现</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#tcc-%E7%9A%84%E6%B3%A8%E6%84%8F%E4%BA%8B%E9%A1%B9"><span class="toc-text">TCC 的注意事项</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#saga-%E6%A8%A1%E5%BC%8F"><span class="toc-text">Saga 模式</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%BC%96%E6%8E%92%E5%BC%8F-sagaorchestration"><span class="toc-text">编排式 Saga（Orchestration）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8D%8F%E5%90%8C%E5%BC%8F-sagachoreography"><span class="toc-text">协同式 Saga（Choreography）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9C%AC%E5%9C%B0%E6%B6%88%E6%81%AF%E8%A1%A8"><span class="toc-text">本地消息表</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#mq-%E4%BA%8B%E5%8A%A1%E6%B6%88%E6%81%AF"><span class="toc-text">MQ 事务消息</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#seata-at-%E6%A8%A1%E5%BC%8F"><span class="toc-text">Seata AT 模式</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%96%B9%E6%A1%88%E5%AF%B9%E6%AF%94%E4%B8%8E%E9%80%89%E5%9E%8B"><span class="toc-text">方案对比与选型</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%B8%A9%E5%9D%91%E8%AE%B0%E5%BD%95"><span class="toc-text">踩坑记录</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E6%B5%8B%E7%BB%93%E6%9E%9C"><span class="toc-text">实测结果</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%88%91%E7%9A%84%E7%9C%8B%E6%B3%95"><span class="toc-text">我的看法</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="前言">前言</h2>
+<p>在微服务架构中，一个业务操作往往需要跨多个服务完成，每个服务有独立的数据库。传统的数据库事务（ACID）无法跨服务使用，如何保证跨服务数据的一致性，是分布式系统中最具挑战性的问题之一。本文将全面分析主流的分布式事务解决方案，帮助你根据业务场景选择合适的方案。</p>
+<h2 id="分布式事务的挑战">分布式事务的挑战</h2>
+<h3 id="典型场景电商下单">典型场景：电商下单</h3>
+<pre class="mermaid">graph LR
+    Client[用户] --&gt; OrderService[订单服务]
+    OrderService --&gt; |1. 创建订单| OrderDB[(订单DB)]
+    OrderService --&gt; |2. 扣减库存| InventoryService[库存服务]
+    InventoryService --&gt; InventoryDB[(库存DB)]
+    OrderService --&gt; |3. 扣款| PaymentService[支付服务]
+    PaymentService --&gt; PaymentDB[(支付DB)]
+    OrderService --&gt; |4. 增加积分| PointService[积分服务]
+    PointService --&gt; PointDB[(积分DB)]</pre>
+<p>这个流程中，如果支付成功但库存扣减失败，系统就会处于不一致状态。我们需要一种机制来保证”要么全部成功，要么全部回滚”。</p>
+<h3 id="cap-与-base">CAP 与 BASE</h3>
+<p>根据 CAP
+定理，分布式系统无法同时满足一致性（C）、可用性（A）和分区容忍性（P）。在实际系统中，网络分区不可避免（P
+必须保证），因此需要在 C 和 A 之间取舍。</p>
+<p>大多数分布式事务方案选择了 BASE 模型： - <strong>Basically
+Available</strong>：基本可用 - <strong>Soft
+state</strong>：软状态，允许中间状态 - <strong>Eventually
+consistent</strong>：最终一致性</p>
+<h2 id="pc两阶段提交">2PC（两阶段提交）</h2>
+<h3 id="协议流程">协议流程</h3>
+<pre class="mermaid">sequenceDiagram
+    participant TM as 事务管理器(协调者)
+    participant RM1 as 资源管理器1
+    participant RM2 as 资源管理器2
+    participant RM3 as 资源管理器3
+
+    Note over TM: Phase 1: Prepare(投票)
+    TM-&gt;&gt;RM1: Prepare
+    TM-&gt;&gt;RM2: Prepare
+    TM-&gt;&gt;RM3: Prepare
+
+    RM1--&gt;&gt;TM: Yes (已写undo/redo log)
+    RM2--&gt;&gt;TM: Yes
+    RM3--&gt;&gt;TM: Yes
+
+    Note over TM: 所有参与者都投Yes
+    Note over TM: Phase 2: Commit
+
+    TM-&gt;&gt;RM1: Commit
+    TM-&gt;&gt;RM2: Commit
+    TM-&gt;&gt;RM3: Commit
+
+    RM1--&gt;&gt;TM: ACK
+    RM2--&gt;&gt;TM: ACK
+    RM3--&gt;&gt;TM: ACK</pre>
+<h3 id="失败回滚场景">失败回滚场景</h3>
+<pre class="mermaid">sequenceDiagram
+    participant TM as 事务管理器
+    participant RM1 as 资源管理器1
+    participant RM2 as 资源管理器2
+    participant RM3 as 资源管理器3
+
+    Note over TM: Phase 1: Prepare
+    TM-&gt;&gt;RM1: Prepare
+    TM-&gt;&gt;RM2: Prepare
+    TM-&gt;&gt;RM3: Prepare
+
+    RM1--&gt;&gt;TM: Yes
+    RM2--&gt;&gt;TM: No (资源不足)
+    RM3--&gt;&gt;TM: Yes
+
+    Note over TM: 有参与者投No
+    Note over TM: Phase 2: Rollback
+
+    TM-&gt;&gt;RM1: Rollback
+    TM-&gt;&gt;RM2: Rollback
+    TM-&gt;&gt;RM3: Rollback</pre>
+<h3 id="pc-的问题">2PC 的问题</h3>
+<ol type="1">
+<li><strong>同步阻塞</strong>：Prepare 后资源被锁定，直到
+Commit/Rollback</li>
+<li><strong>单点故障</strong>：协调者宕机，参与者无法推进</li>
+<li><strong>数据不一致</strong>：Phase 2 中部分参与者收到
+Commit，部分未收到</li>
+<li><strong>性能差</strong>：全局锁导致并发能力低</li>
+</ol>
+<h2 id="pc三阶段提交">3PC（三阶段提交）</h2>
+<p>3PC 在 2PC 基础上增加了 CanCommit 阶段和超时机制。</p>
+<pre class="mermaid">sequenceDiagram
+    participant TM as 事务管理器
+    participant RM1 as 参与者1
+    participant RM2 as 参与者2
+
+    Note over TM: Phase 1: CanCommit(探测)
+    TM-&gt;&gt;RM1: CanCommit?
+    TM-&gt;&gt;RM2: CanCommit?
+    RM1--&gt;&gt;TM: Yes
+    RM2--&gt;&gt;TM: Yes
+
+    Note over TM: Phase 2: PreCommit(预提交)
+    TM-&gt;&gt;RM1: PreCommit
+    TM-&gt;&gt;RM2: PreCommit
+    RM1--&gt;&gt;TM: ACK (写undo/redo log)
+    RM2--&gt;&gt;TM: ACK
+
+    Note over TM: Phase 3: DoCommit(正式提交)
+    TM-&gt;&gt;RM1: DoCommit
+    TM-&gt;&gt;RM2: DoCommit
+    RM1--&gt;&gt;TM: Done
+    RM2--&gt;&gt;TM: Done</pre>
+<p>3PC 引入超时机制：如果参与者在 PreCommit 后超时未收到
+DoCommit，会自动提交。这降低了阻塞概率，但在网络分区时仍可能导致不一致。实际应用中
+3PC 很少被采用。</p>
+<h2 id="tcc-模式">TCC 模式</h2>
+<p>TCC（Try-Confirm-Cancel）是应用层的两阶段提交，将事务逻辑交给业务代码实现。</p>
+<h3 id="三个阶段">三个阶段</h3>
+<pre class="mermaid">sequenceDiagram
+    participant App as 业务应用
+    participant Order as 订单服务
+    participant Payment as 支付服务
+    participant Inventory as 库存服务
+
+    Note over App: Try 阶段: 资源预留
+    App-&gt;&gt;Order: try: 创建订单(TRYING状态)
+    App-&gt;&gt;Payment: try: 冻结金额
+    App-&gt;&gt;Inventory: try: 冻结库存
+
+    alt 全部Try成功
+        Note over App: Confirm 阶段: 确认执行
+        App-&gt;&gt;Order: confirm: 订单→CONFIRMED
+        App-&gt;&gt;Payment: confirm: 扣除冻结金额
+        App-&gt;&gt;Inventory: confirm: 扣除冻结库存
+    else 任一Try失败
+        Note over App: Cancel 阶段: 回滚释放
+        App-&gt;&gt;Order: cancel: 取消订单
+        App-&gt;&gt;Payment: cancel: 解冻金额
+        App-&gt;&gt;Inventory: cancel: 释放冻结库存
+    end</pre>
+<h3 id="代码实现">代码实现</h3>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">// TCC 接口定义</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">interface</span> <span class="hljs-title class_">InventoryTccService</span> &#123;<br>    <span class="hljs-comment">/**</span><br><span class="hljs-comment">     * Try: 冻结库存</span><br><span class="hljs-comment">     * 可用库存 -N, 冻结库存 +N</span><br><span class="hljs-comment">     */</span><br>    <span class="hljs-meta">@TwoPhaseBusinessAction(name = &quot;inventoryTry&quot;,</span><br><span class="hljs-meta">        commitMethod = &quot;confirm&quot;, rollbackMethod = &quot;cancel&quot;)</span><br>    <span class="hljs-type">boolean</span> <span class="hljs-title function_">tryFreezeStock</span><span class="hljs-params">(BusinessActionContext ctx,</span><br><span class="hljs-params">                           <span class="hljs-meta">@BusinessActionContextParameter(paramName = &quot;productId&quot;)</span> String productId,</span><br><span class="hljs-params">                           <span class="hljs-meta">@BusinessActionContextParameter(paramName = &quot;quantity&quot;)</span> <span class="hljs-type">int</span> quantity)</span>;<br><br>    <span class="hljs-comment">/**</span><br><span class="hljs-comment">     * Confirm: 扣除冻结库存</span><br><span class="hljs-comment">     * 冻结库存 -N</span><br><span class="hljs-comment">     */</span><br>    <span class="hljs-type">boolean</span> <span class="hljs-title function_">confirm</span><span class="hljs-params">(BusinessActionContext ctx)</span>;<br><br>    <span class="hljs-comment">/**</span><br><span class="hljs-comment">     * Cancel: 释放冻结库存</span><br><span class="hljs-comment">     * 可用库存 +N, 冻结库存 -N</span><br><span class="hljs-comment">     */</span><br>    <span class="hljs-type">boolean</span> <span class="hljs-title function_">cancel</span><span class="hljs-params">(BusinessActionContext ctx)</span>;<br>&#125;<br><br><span class="hljs-meta">@Service</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">InventoryTccServiceImpl</span> <span class="hljs-keyword">implements</span> <span class="hljs-title class_">InventoryTccService</span> &#123;<br>    <span class="hljs-meta">@Autowired</span><br>    <span class="hljs-keyword">private</span> InventoryMapper inventoryMapper;<br><br>    <span class="hljs-meta">@Override</span><br>    <span class="hljs-meta">@Transactional</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-type">boolean</span> <span class="hljs-title function_">tryFreezeStock</span><span class="hljs-params">(BusinessActionContext ctx,</span><br><span class="hljs-params">                                   String productId, <span class="hljs-type">int</span> quantity)</span> &#123;<br>        <span class="hljs-comment">// 检查并冻结库存</span><br>        <span class="hljs-type">int</span> <span class="hljs-variable">affected</span> <span class="hljs-operator">=</span> inventoryMapper.freezeStock(productId, quantity);<br>        <span class="hljs-keyword">if</span> (affected == <span class="hljs-number">0</span>) &#123;<br>            <span class="hljs-keyword">throw</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">StockNotEnoughException</span>(productId);<br>        &#125;<br>        <span class="hljs-keyword">return</span> <span class="hljs-literal">true</span>;<br>    &#125;<br><br>    <span class="hljs-meta">@Override</span><br>    <span class="hljs-meta">@Transactional</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-type">boolean</span> <span class="hljs-title function_">confirm</span><span class="hljs-params">(BusinessActionContext ctx)</span> &#123;<br>        <span class="hljs-type">String</span> <span class="hljs-variable">productId</span> <span class="hljs-operator">=</span> ctx.getActionContext(<span class="hljs-string">&quot;productId&quot;</span>).toString();<br>        <span class="hljs-type">int</span> <span class="hljs-variable">quantity</span> <span class="hljs-operator">=</span> (<span class="hljs-type">int</span>) ctx.getActionContext(<span class="hljs-string">&quot;quantity&quot;</span>);<br><br>        <span class="hljs-comment">// 扣除冻结库存</span><br>        inventoryMapper.deductFrozenStock(productId, quantity);<br>        <span class="hljs-keyword">return</span> <span class="hljs-literal">true</span>;<br>    &#125;<br><br>    <span class="hljs-meta">@Override</span><br>    <span class="hljs-meta">@Transactional</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-type">boolean</span> <span class="hljs-title function_">cancel</span><span class="hljs-params">(BusinessActionContext ctx)</span> &#123;<br>        <span class="hljs-type">String</span> <span class="hljs-variable">productId</span> <span class="hljs-operator">=</span> ctx.getActionContext(<span class="hljs-string">&quot;productId&quot;</span>).toString();<br>        <span class="hljs-type">int</span> <span class="hljs-variable">quantity</span> <span class="hljs-operator">=</span> (<span class="hljs-type">int</span>) ctx.getActionContext(<span class="hljs-string">&quot;quantity&quot;</span>);<br><br>        <span class="hljs-comment">// 释放冻结库存</span><br>        inventoryMapper.releaseFrozenStock(productId, quantity);<br>        <span class="hljs-keyword">return</span> <span class="hljs-literal">true</span>;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 库存表需要支持 TCC 的冻结字段</span><br><span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">TABLE</span> inventory (<br>    product_id <span class="hljs-type">VARCHAR</span>(<span class="hljs-number">36</span>) <span class="hljs-keyword">PRIMARY</span> KEY,<br>    available_stock <span class="hljs-type">INT</span> <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span>,<br>    frozen_stock <span class="hljs-type">INT</span> <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span> <span class="hljs-keyword">DEFAULT</span> <span class="hljs-number">0</span>,<br>    version <span class="hljs-type">INT</span> <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span> <span class="hljs-keyword">DEFAULT</span> <span class="hljs-number">0</span><br>);<br><br><span class="hljs-comment">-- Try: 冻结库存</span><br><span class="hljs-keyword">UPDATE</span> inventory<br><span class="hljs-keyword">SET</span> available_stock <span class="hljs-operator">=</span> available_stock <span class="hljs-operator">-</span> #&#123;quantity&#125;,<br>    frozen_stock <span class="hljs-operator">=</span> frozen_stock <span class="hljs-operator">+</span> #&#123;quantity&#125;,<br>    version <span class="hljs-operator">=</span> version <span class="hljs-operator">+</span> <span class="hljs-number">1</span><br><span class="hljs-keyword">WHERE</span> product_id <span class="hljs-operator">=</span> #&#123;productId&#125;<br>  <span class="hljs-keyword">AND</span> available_stock <span class="hljs-operator">&gt;=</span> #&#123;quantity&#125;<br>  <span class="hljs-keyword">AND</span> version <span class="hljs-operator">=</span> #&#123;version&#125;;<br><br><span class="hljs-comment">-- Confirm: 扣除冻结库存</span><br><span class="hljs-keyword">UPDATE</span> inventory<br><span class="hljs-keyword">SET</span> frozen_stock <span class="hljs-operator">=</span> frozen_stock <span class="hljs-operator">-</span> #&#123;quantity&#125;<br><span class="hljs-keyword">WHERE</span> product_id <span class="hljs-operator">=</span> #&#123;productId&#125;;<br><br><span class="hljs-comment">-- Cancel: 释放冻结库存</span><br><span class="hljs-keyword">UPDATE</span> inventory<br><span class="hljs-keyword">SET</span> available_stock <span class="hljs-operator">=</span> available_stock <span class="hljs-operator">+</span> #&#123;quantity&#125;,<br>    frozen_stock <span class="hljs-operator">=</span> frozen_stock <span class="hljs-operator">-</span> #&#123;quantity&#125;<br><span class="hljs-keyword">WHERE</span> product_id <span class="hljs-operator">=</span> #&#123;productId&#125;;<br></code></pre></td></tr></table></figure>
+<h3 id="tcc-的注意事项">TCC 的注意事项</h3>
+<ul>
+<li><strong>空回滚</strong>：Try 未执行但 Cancel 被调用，Cancel
+需要识别并直接返回成功</li>
+<li><strong>幂等性</strong>：Confirm 和 Cancel
+可能被重复调用，必须保证幂等</li>
+<li><strong>悬挂问题</strong>：Cancel 先于 Try 执行，后续 Try
+不应再执行</li>
+</ul>
+<h2 id="saga-模式">Saga 模式</h2>
+<h3 id="编排式-sagaorchestration">编排式 Saga（Orchestration）</h3>
+<pre class="mermaid">graph TD
+    Start[开始] --&gt; S1[创建订单]
+    S1 --&gt;|成功| S2[扣减库存]
+    S2 --&gt;|成功| S3[扣款]
+    S3 --&gt;|成功| S4[发送通知]
+    S4 --&gt; End[完成]
+
+    S1 --&gt;|失败| End2[结束]
+    S2 --&gt;|失败| C1[取消订单]
+    S3 --&gt;|失败| C2[恢复库存]
+    C2 --&gt; C1
+    C1 --&gt; End2</pre>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">// Saga 编排器定义</span><br><span class="hljs-meta">@Component</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">PlaceOrderSaga</span> &#123;<br><br>    <span class="hljs-meta">@Bean</span><br>    <span class="hljs-keyword">public</span> Saga&lt;PlaceOrderState&gt; <span class="hljs-title function_">placeOrderSaga</span><span class="hljs-params">()</span> &#123;<br>        <span class="hljs-keyword">return</span> Saga.&lt;PlaceOrderState&gt;builder()<br>            .addStep(<span class="hljs-string">&quot;create-order&quot;</span>)<br>                .action(<span class="hljs-built_in">this</span>::createOrder)<br>                .compensation(<span class="hljs-built_in">this</span>::cancelOrder)<br>            .addStep(<span class="hljs-string">&quot;reserve-inventory&quot;</span>)<br>                .action(<span class="hljs-built_in">this</span>::reserveInventory)<br>                .compensation(<span class="hljs-built_in">this</span>::releaseInventory)<br>            .addStep(<span class="hljs-string">&quot;process-payment&quot;</span>)<br>                .action(<span class="hljs-built_in">this</span>::processPayment)<br>                .compensation(<span class="hljs-built_in">this</span>::refundPayment)<br>            .addStep(<span class="hljs-string">&quot;send-notification&quot;</span>)<br>                .action(<span class="hljs-built_in">this</span>::sendNotification)<br>                <span class="hljs-comment">// 通知步骤无需补偿</span><br>            .build();<br>    &#125;<br><br>    <span class="hljs-keyword">private</span> StepResult <span class="hljs-title function_">createOrder</span><span class="hljs-params">(PlaceOrderState state)</span> &#123;<br>        <span class="hljs-type">String</span> <span class="hljs-variable">orderId</span> <span class="hljs-operator">=</span> orderService.create(state.getCustomerId(), state.getItems());<br>        state.setOrderId(orderId);<br>        <span class="hljs-keyword">return</span> StepResult.success();<br>    &#125;<br><br>    <span class="hljs-keyword">private</span> StepResult <span class="hljs-title function_">cancelOrder</span><span class="hljs-params">(PlaceOrderState state)</span> &#123;<br>        orderService.cancel(state.getOrderId());<br>        <span class="hljs-keyword">return</span> StepResult.success();<br>    &#125;<br><br>    <span class="hljs-keyword">private</span> StepResult <span class="hljs-title function_">reserveInventory</span><span class="hljs-params">(PlaceOrderState state)</span> &#123;<br>        <span class="hljs-type">boolean</span> <span class="hljs-variable">reserved</span> <span class="hljs-operator">=</span> inventoryService.reserve(<br>            state.getOrderId(), state.getItems());<br>        <span class="hljs-keyword">return</span> reserved ? StepResult.success() : StepResult.failure(<span class="hljs-string">&quot;Stock not enough&quot;</span>);<br>    &#125;<br><br>    <span class="hljs-keyword">private</span> StepResult <span class="hljs-title function_">releaseInventory</span><span class="hljs-params">(PlaceOrderState state)</span> &#123;<br>        inventoryService.release(state.getOrderId());<br>        <span class="hljs-keyword">return</span> StepResult.success();<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="协同式-sagachoreography">协同式 Saga（Choreography）</h3>
+<pre class="mermaid">sequenceDiagram
+    participant OS as 订单服务
+    participant MQ as 消息队列
+    participant IS as 库存服务
+    participant PS as 支付服务
+    participant NS as 通知服务
+
+    OS-&gt;&gt;MQ: OrderCreated
+    MQ-&gt;&gt;IS: OrderCreated
+
+    IS-&gt;&gt;MQ: InventoryReserved
+    MQ-&gt;&gt;PS: InventoryReserved
+
+    PS-&gt;&gt;MQ: PaymentProcessed
+    MQ-&gt;&gt;OS: PaymentProcessed
+    MQ-&gt;&gt;NS: PaymentProcessed
+
+    Note over OS: 更新订单状态为已完成
+    Note over NS: 发送订单确认通知
+
+    Note over PS: --- 如果支付失败 ---
+    PS-&gt;&gt;MQ: PaymentFailed
+    MQ-&gt;&gt;IS: PaymentFailed
+    Note over IS: 释放库存
+    MQ-&gt;&gt;OS: PaymentFailed
+    Note over OS: 取消订单</pre>
+<h2 id="本地消息表">本地消息表</h2>
+<p>本地消息表是实现最终一致性的经典方案，通过将消息与业务操作放在同一个本地事务中来保证可靠性。</p>
+<pre class="mermaid">sequenceDiagram
+    participant OrderService as 订单服务
+    participant DB as 订单DB
+    participant MsgTable as 消息表(同DB)
+    participant Timer as 定时任务
+    participant MQ as 消息队列
+    participant InventoryService as 库存服务
+
+    OrderService-&gt;&gt;DB: BEGIN TRANSACTION
+    OrderService-&gt;&gt;DB: INSERT 订单
+    OrderService-&gt;&gt;MsgTable: INSERT 消息(status=NEW)
+    OrderService-&gt;&gt;DB: COMMIT
+
+    Timer-&gt;&gt;MsgTable: 扫描 status=NEW 的消息
+    Timer-&gt;&gt;MQ: 发送消息
+    Timer-&gt;&gt;MsgTable: 更新 status=SENT
+
+    MQ-&gt;&gt;InventoryService: 消费消息
+    InventoryService-&gt;&gt;InventoryService: 扣减库存
+    InventoryService--&gt;&gt;MQ: ACK
+
+    Note over Timer: 超时未ACK则重新发送</pre>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-meta">@Service</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">OrderService</span> &#123;<br>    <span class="hljs-meta">@Autowired</span><br>    <span class="hljs-keyword">private</span> OrderMapper orderMapper;<br>    <span class="hljs-meta">@Autowired</span><br>    <span class="hljs-keyword">private</span> OutboxMessageMapper outboxMapper;<br><br>    <span class="hljs-meta">@Transactional</span><br>    <span class="hljs-keyword">public</span> String <span class="hljs-title function_">createOrder</span><span class="hljs-params">(CreateOrderRequest request)</span> &#123;<br>        <span class="hljs-comment">// 1. 创建订单</span><br>        <span class="hljs-type">Order</span> <span class="hljs-variable">order</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">Order</span>(request);<br>        orderMapper.insert(order);<br><br>        <span class="hljs-comment">// 2. 写入消息表（同一事务）</span><br>        <span class="hljs-type">OutboxMessage</span> <span class="hljs-variable">message</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">OutboxMessage</span>();<br>        message.setId(UUID.randomUUID().toString());<br>        message.setTopic(<span class="hljs-string">&quot;order-events&quot;</span>);<br>        message.setKey(order.getId());<br>        message.setPayload(JsonUtils.toJson(<span class="hljs-keyword">new</span> <span class="hljs-title class_">OrderCreatedEvent</span>(order)));<br>        message.setStatus(<span class="hljs-string">&quot;NEW&quot;</span>);<br>        message.setCreatedAt(LocalDateTime.now());<br>        outboxMapper.insert(message);<br><br>        <span class="hljs-keyword">return</span> order.getId();<br>    &#125;<br>&#125;<br><br><span class="hljs-comment">// 定时任务扫描并发送消息</span><br><span class="hljs-meta">@Component</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">OutboxMessagePublisher</span> &#123;<br>    <span class="hljs-meta">@Scheduled(fixedDelay = 1000)</span><br>    <span class="hljs-meta">@Transactional</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">publishPendingMessages</span><span class="hljs-params">()</span> &#123;<br>        List&lt;OutboxMessage&gt; messages = outboxMapper<br>            .findByStatus(<span class="hljs-string">&quot;NEW&quot;</span>, <span class="hljs-number">100</span>);<br><br>        <span class="hljs-keyword">for</span> (OutboxMessage msg : messages) &#123;<br>            <span class="hljs-keyword">try</span> &#123;<br>                kafkaTemplate.send(msg.getTopic(), msg.getKey(), msg.getPayload());<br>                outboxMapper.updateStatus(msg.getId(), <span class="hljs-string">&quot;SENT&quot;</span>);<br>            &#125; <span class="hljs-keyword">catch</span> (Exception e) &#123;<br>                log.warn(<span class="hljs-string">&quot;Failed to send message: &#123;&#125;&quot;</span>, msg.getId(), e);<br>                outboxMapper.incrementRetryCount(msg.getId());<br>            &#125;<br>        &#125;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 本地消息表</span><br><span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">TABLE</span> outbox_message (<br>    id          <span class="hljs-type">VARCHAR</span>(<span class="hljs-number">36</span>) <span class="hljs-keyword">PRIMARY</span> KEY,<br>    topic       <span class="hljs-type">VARCHAR</span>(<span class="hljs-number">100</span>) <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span>,<br>    msg_key     <span class="hljs-type">VARCHAR</span>(<span class="hljs-number">100</span>),<br>    payload     TEXT <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span>,<br>    status      <span class="hljs-type">VARCHAR</span>(<span class="hljs-number">20</span>) <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span> <span class="hljs-keyword">DEFAULT</span> <span class="hljs-string">&#x27;NEW&#x27;</span>,<br>    retry_count <span class="hljs-type">INT</span> <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span> <span class="hljs-keyword">DEFAULT</span> <span class="hljs-number">0</span>,<br>    created_at  <span class="hljs-type">TIMESTAMP</span> <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span>,<br>    updated_at  <span class="hljs-type">TIMESTAMP</span> <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span> <span class="hljs-keyword">DEFAULT</span> <span class="hljs-built_in">CURRENT_TIMESTAMP</span>,<br>    INDEX idx_status_created (status, created_at)<br>);<br></code></pre></td></tr></table></figure>
+<h2 id="mq-事务消息">MQ 事务消息</h2>
+<p>RocketMQ
+的事务消息提供了类似本地消息表的能力，但无需自己维护消息表。</p>
+<pre class="mermaid">sequenceDiagram
+    participant Producer as 生产者
+    participant MQ as RocketMQ Broker
+    participant DB as 本地数据库
+    participant Consumer as 消费者
+
+    Producer-&gt;&gt;MQ: 1. 发送半消息(Half Message)
+    MQ--&gt;&gt;Producer: 2. 半消息发送成功
+
+    Producer-&gt;&gt;DB: 3. 执行本地事务
+    alt 本地事务成功
+        Producer-&gt;&gt;MQ: 4a. Commit
+        MQ-&gt;&gt;Consumer: 5. 投递消息
+    else 本地事务失败
+        Producer-&gt;&gt;MQ: 4b. Rollback
+        MQ-&gt;&gt;MQ: 丢弃半消息
+    end
+
+    Note over MQ: 如果长时间未收到确认
+    MQ-&gt;&gt;Producer: 回查本地事务状态
+    Producer-&gt;&gt;DB: 查询事务执行结果
+    Producer-&gt;&gt;MQ: 返回 Commit/Rollback</pre>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">// RocketMQ 事务消息生产者</span><br><span class="hljs-meta">@Component</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">OrderTransactionProducer</span> &#123;<br>    <span class="hljs-meta">@Autowired</span><br>    <span class="hljs-keyword">private</span> TransactionMQProducer producer;<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">createOrderWithTransaction</span><span class="hljs-params">(CreateOrderRequest request)</span> &#123;<br>        <span class="hljs-type">Message</span> <span class="hljs-variable">msg</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">Message</span>(<br>            <span class="hljs-string">&quot;order-events&quot;</span>,<br>            <span class="hljs-string">&quot;OrderCreated&quot;</span>,<br>            JsonUtils.toJson(request).getBytes()<br>        );<br><br>        <span class="hljs-comment">// 发送事务消息</span><br>        producer.sendMessageInTransaction(msg, request);<br>    &#125;<br>&#125;<br><br><span class="hljs-comment">// 事务监听器</span><br><span class="hljs-meta">@Component</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">OrderTransactionListener</span> <span class="hljs-keyword">implements</span> <span class="hljs-title class_">TransactionListener</span> &#123;<br>    <span class="hljs-meta">@Autowired</span><br>    <span class="hljs-keyword">private</span> OrderService orderService;<br><br>    <span class="hljs-meta">@Override</span><br>    <span class="hljs-keyword">public</span> LocalTransactionState <span class="hljs-title function_">executeLocalTransaction</span><span class="hljs-params">(Message msg, Object arg)</span> &#123;<br>        <span class="hljs-type">CreateOrderRequest</span> <span class="hljs-variable">request</span> <span class="hljs-operator">=</span> (CreateOrderRequest) arg;<br>        <span class="hljs-keyword">try</span> &#123;<br>            orderService.createOrder(request);<br>            <span class="hljs-keyword">return</span> LocalTransactionState.COMMIT_MESSAGE;<br>        &#125; <span class="hljs-keyword">catch</span> (Exception e) &#123;<br>            log.error(<span class="hljs-string">&quot;Create order failed&quot;</span>, e);<br>            <span class="hljs-keyword">return</span> LocalTransactionState.ROLLBACK_MESSAGE;<br>        &#125;<br>    &#125;<br><br>    <span class="hljs-meta">@Override</span><br>    <span class="hljs-keyword">public</span> LocalTransactionState <span class="hljs-title function_">checkLocalTransaction</span><span class="hljs-params">(MessageExt msg)</span> &#123;<br>        <span class="hljs-comment">// 回查本地事务状态</span><br>        <span class="hljs-type">String</span> <span class="hljs-variable">orderId</span> <span class="hljs-operator">=</span> msg.getProperty(<span class="hljs-string">&quot;orderId&quot;</span>);<br>        <span class="hljs-type">Order</span> <span class="hljs-variable">order</span> <span class="hljs-operator">=</span> orderService.findById(orderId);<br>        <span class="hljs-keyword">if</span> (order != <span class="hljs-literal">null</span>) &#123;<br>            <span class="hljs-keyword">return</span> LocalTransactionState.COMMIT_MESSAGE;<br>        &#125;<br>        <span class="hljs-keyword">return</span> LocalTransactionState.UNKNOW; <span class="hljs-comment">// 让 Broker 继续回查</span><br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="seata-at-模式">Seata AT 模式</h2>
+<p>Seata 是阿里巴巴开源的分布式事务框架，AT（Auto
+Transaction）模式通过自动生成回滚日志来实现分布式事务，对业务代码侵入最小。</p>
+<pre class="mermaid">sequenceDiagram
+    participant TM as TM(事务管理器)
+    participant TC as TC(事务协调器)
+    participant RM1 as RM(订单服务)
+    participant RM2 as RM(库存服务)
+
+    TM-&gt;&gt;TC: 1. Begin 全局事务, 获取 XID
+    TC--&gt;&gt;TM: XID = 192.168.1.1:8091:123456
+
+    TM-&gt;&gt;RM1: 2. 调用订单服务(携带XID)
+    RM1-&gt;&gt;RM1: 执行SQL, 自动生成&lt;br/&gt;before/after image
+    RM1-&gt;&gt;TC: 3. 注册分支事务
+    TC--&gt;&gt;RM1: Branch ID
+
+    TM-&gt;&gt;RM2: 4. 调用库存服务(携带XID)
+    RM2-&gt;&gt;RM2: 执行SQL, 自动生成&lt;br/&gt;before/after image
+    RM2-&gt;&gt;TC: 5. 注册分支事务
+    TC--&gt;&gt;RM2: Branch ID
+
+    alt 全部成功
+        TM-&gt;&gt;TC: 6a. Commit 全局事务
+        TC-&gt;&gt;RM1: 异步删除 undo log
+        TC-&gt;&gt;RM2: 异步删除 undo log
+    else 任一失败
+        TM-&gt;&gt;TC: 6b. Rollback 全局事务
+        TC-&gt;&gt;RM1: 回滚: 用 before image 恢复数据
+        TC-&gt;&gt;RM2: 回滚: 用 before image 恢复数据
+    end</pre>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">// Seata AT 模式使用 - 只需一个注解</span><br><span class="hljs-meta">@Service</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">OrderService</span> &#123;<br><br>    <span class="hljs-meta">@GlobalTransactional(name = &quot;create-order&quot;, timeoutMills = 60000)</span><br>    <span class="hljs-keyword">public</span> String <span class="hljs-title function_">createOrder</span><span class="hljs-params">(CreateOrderRequest request)</span> &#123;<br>        <span class="hljs-comment">// 1. 创建订单（本地事务，Seata 自动拦截）</span><br>        <span class="hljs-type">Order</span> <span class="hljs-variable">order</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">Order</span>(request);<br>        orderMapper.insert(order);<br><br>        <span class="hljs-comment">// 2. 远程调用扣减库存</span><br>        inventoryClient.deduct(order.getProductId(), order.getQuantity());<br><br>        <span class="hljs-comment">// 3. 远程调用扣款</span><br>        paymentClient.pay(order.getCustomerId(), order.getTotalAmount());<br><br>        <span class="hljs-keyword">return</span> order.getId();<br>    &#125;<br>&#125;<br><br><span class="hljs-comment">// application.yml</span><br><span class="hljs-comment">// seata:</span><br><span class="hljs-comment">//   enabled: true</span><br><span class="hljs-comment">//   tx-service-group: my_tx_group</span><br><span class="hljs-comment">//   service:</span><br><span class="hljs-comment">//     vgroup-mapping:</span><br><span class="hljs-comment">//       my_tx_group: default</span><br><span class="hljs-comment">//   registry:</span><br><span class="hljs-comment">//     type: nacos</span><br><span class="hljs-comment">//     nacos:</span><br><span class="hljs-comment">//       server-addr: localhost:8848</span><br></code></pre></td></tr></table></figure>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- Seata AT 模式需要在每个业务数据库中创建 undo_log 表</span><br><span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">TABLE</span> undo_log (<br>    branch_id     <span class="hljs-type">BIGINT</span> <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span> COMMENT <span class="hljs-string">&#x27;分支事务ID&#x27;</span>,<br>    xid           <span class="hljs-type">VARCHAR</span>(<span class="hljs-number">128</span>) <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span> COMMENT <span class="hljs-string">&#x27;全局事务ID&#x27;</span>,<br>    context       <span class="hljs-type">VARCHAR</span>(<span class="hljs-number">128</span>) <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span> COMMENT <span class="hljs-string">&#x27;上下文&#x27;</span>,<br>    rollback_info LONGBLOB <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span> COMMENT <span class="hljs-string">&#x27;回滚数据&#x27;</span>,<br>    log_status    <span class="hljs-type">INT</span> <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span> COMMENT <span class="hljs-string">&#x27;状态 0-正常 1-已清理&#x27;</span>,<br>    log_created   DATETIME <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span>,<br>    log_modified  DATETIME <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span>,<br>    <span class="hljs-keyword">UNIQUE</span> KEY ux_undo_log (xid, branch_id)<br>) ENGINE <span class="hljs-operator">=</span> InnoDB;<br></code></pre></td></tr></table></figure>
+<h2 id="方案对比与选型">方案对比与选型</h2>
+<table>
+<thead>
+<tr class="header">
+<th>方案</th>
+<th>一致性</th>
+<th>性能</th>
+<th>复杂度</th>
+<th>侵入性</th>
+<th>适用场景</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>2PC</td>
+<td>强一致</td>
+<td>低</td>
+<td>中</td>
+<td>低</td>
+<td>数据库层面，跨库事务</td>
+</tr>
+<tr class="even">
+<td>TCC</td>
+<td>最终一致</td>
+<td>高</td>
+<td>高</td>
+<td>高</td>
+<td>资金、库存等核心场景</td>
+</tr>
+<tr class="odd">
+<td>Saga</td>
+<td>最终一致</td>
+<td>高</td>
+<td>中</td>
+<td>中</td>
+<td>长事务，多步骤业务流程</td>
+</tr>
+<tr class="even">
+<td>本地消息表</td>
+<td>最终一致</td>
+<td>高</td>
+<td>中</td>
+<td>低</td>
+<td>异步通知场景</td>
+</tr>
+<tr class="odd">
+<td>MQ事务消息</td>
+<td>最终一致</td>
+<td>高</td>
+<td>低</td>
+<td>低</td>
+<td>基于消息的异步协作</td>
+</tr>
+<tr class="even">
+<td>Seata AT</td>
+<td>最终一致</td>
+<td>中</td>
+<td>低</td>
+<td>极低</td>
+<td>快速接入，中等并发</td>
+</tr>
+</tbody>
+</table>
+<pre class="mermaid">graph TD
+    Start[选择分布式事务方案] --&gt; Q1{是否需要强一致性?}
+    Q1 --&gt;|是| TwoPC[2PC/XA]
+    Q1 --&gt;|否,最终一致即可| Q2{业务侵入可接受?}
+
+    Q2 --&gt;|接受高侵入| Q3{资金等关键场景?}
+    Q3 --&gt;|是| TCC[TCC模式]
+    Q3 --&gt;|否| Saga[Saga模式]
+
+    Q2 --&gt;|希望低侵入| Q4{是否使用MQ?}
+    Q4 --&gt;|是| MQTx[MQ事务消息]
+    Q4 --&gt;|否| Q5{想快速接入?}
+    Q5 --&gt;|是| Seata[Seata AT]
+    Q5 --&gt;|否| LocalMsg[本地消息表]</pre>
+<h2 id="总结">总结</h2>
+<p>没有万能的分布式事务方案，选择时需要综合考虑一致性要求、性能需求、开发复杂度和业务特点：</p>
+<ul>
+<li><strong>强一致性场景</strong>（如跨库转账）：2PC/XA</li>
+<li><strong>资金核心场景</strong>（需要精确控制）：TCC</li>
+<li><strong>长流程业务</strong>（如订单履约）：Saga</li>
+<li><strong>异步解耦</strong>（不要求实时一致）：本地消息表 / MQ
+事务消息</li>
+<li><strong>快速接入</strong>（低侵入、中等并发）：Seata AT</li>
+</ul>
+<p>在实践中，建议优先考虑最终一致性方案，只在业务确实需要时才引入强一致性方案。同时，要做好幂等设计和补偿机制，这是分布式事务可靠性的基石。</p>
+<hr />
+<h2 id="踩坑记录">踩坑记录</h2>
+<p>订单服务拆分后，「下单 → 扣库存 → 扣积分」跨三个服务，我们最早引入了
+Seata AT 模式。上线后压测发现 TPS 只有 300，远低于预期的
+2000，瓶颈在库存服务大量出现「全局锁等待超时」。</p>
+<p>根本原因：Seata AT 在 <code>try</code>
+阶段会对修改的行加全局锁，高并发下锁竞争极其严重。我们当时用一个
+<code>inventory</code>
+表的同一行记录库存，所有订单都在抢同一把全局锁。</p>
+<p>重构方案分两步：一是把「下单 + 扣库存」改为 TCC
+模式，<code>try</code> 阶段只冻结库存（写入 <code>freeze</code>
+字段），<code>confirm</code> 才真正扣减，<code>cancel</code>
+释放冻结；二是「扣积分」改为本地消息表 +
+异步消费，因为积分对实时性要求不高，允许最终一致。重构后 TPS 提升到
+1800，全局锁等待彻底消失。</p>
+<h2 id="实测结果">实测结果</h2>
+<p>8 核 16G，MySQL 5.7，并发下单压测</p>
+<table>
+<thead>
+<tr class="header">
+<th>方案</th>
+<th>TPS</th>
+<th>全局锁超时率</th>
+<th>数据一致性</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Seata AT 模式</td>
+<td>300</td>
+<td>12%</td>
+<td>强一致</td>
+</tr>
+<tr class="even">
+<td>TCC 模式（库存）</td>
+<td>1,800</td>
+<td>0%</td>
+<td>强一致</td>
+</tr>
+<tr class="odd">
+<td>本地消息表（积分）</td>
+<td>不限流</td>
+<td>不适用</td>
+<td>最终一致，延迟 &lt; 500ms</td>
+</tr>
+</tbody>
+</table>
+<p>改造后稳定运行至今，数据不一致事件：0 起。</p>
+<h2 id="我的看法">我的看法</h2>
+<p>大多数业务根本不需要强一致性的分布式事务。「下单扣库存」可以做成最终一致，「支付扣款」才需要强一致。</p>
+<p>在引入 Seata 或 TCC
+之前，先问自己：<strong>这个场景真的需要强一致吗？</strong> 能接受 500ms
+内最终一致的话，本地消息表就够了，复杂度和性能代价比 2PC/TCC
+小一个数量级。引入强一致性方案的代价不只是性能，还有代码复杂度和运维成本，团队要有能力维护才行。</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2022-11-08</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">4.3k 字 · 11 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/go-goroutine-scheduler/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Go协程调度器GMP模型深入解析</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/k8s-intro/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">在学习Kubernetes之前，您必须了解的关键概念</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1%E7%9A%84%E6%8C%91%E6%88%98"><span class="toc-text">分布式事务的挑战</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%B8%E5%9E%8B%E5%9C%BA%E6%99%AF%E7%94%B5%E5%95%86%E4%B8%8B%E5%8D%95"><span class="toc-text">典型场景：电商下单</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#cap-%E4%B8%8E-base"><span class="toc-text">CAP 与 BASE</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#pc%E4%B8%A4%E9%98%B6%E6%AE%B5%E6%8F%90%E4%BA%A4"><span class="toc-text">2PC（两阶段提交）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8D%8F%E8%AE%AE%E6%B5%81%E7%A8%8B"><span class="toc-text">协议流程</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%A4%B1%E8%B4%A5%E5%9B%9E%E6%BB%9A%E5%9C%BA%E6%99%AF"><span class="toc-text">失败回滚场景</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#pc-%E7%9A%84%E9%97%AE%E9%A2%98"><span class="toc-text">2PC 的问题</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#pc%E4%B8%89%E9%98%B6%E6%AE%B5%E6%8F%90%E4%BA%A4"><span class="toc-text">3PC（三阶段提交）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#tcc-%E6%A8%A1%E5%BC%8F"><span class="toc-text">TCC 模式</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%89%E4%B8%AA%E9%98%B6%E6%AE%B5"><span class="toc-text">三个阶段</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BB%A3%E7%A0%81%E5%AE%9E%E7%8E%B0"><span class="toc-text">代码实现</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#tcc-%E7%9A%84%E6%B3%A8%E6%84%8F%E4%BA%8B%E9%A1%B9"><span class="toc-text">TCC 的注意事项</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#saga-%E6%A8%A1%E5%BC%8F"><span class="toc-text">Saga 模式</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%BC%96%E6%8E%92%E5%BC%8F-sagaorchestration"><span class="toc-text">编排式 Saga（Orchestration）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8D%8F%E5%90%8C%E5%BC%8F-sagachoreography"><span class="toc-text">协同式 Saga（Choreography）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9C%AC%E5%9C%B0%E6%B6%88%E6%81%AF%E8%A1%A8"><span class="toc-text">本地消息表</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#mq-%E4%BA%8B%E5%8A%A1%E6%B6%88%E6%81%AF"><span class="toc-text">MQ 事务消息</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#seata-at-%E6%A8%A1%E5%BC%8F"><span class="toc-text">Seata AT 模式</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%96%B9%E6%A1%88%E5%AF%B9%E6%AF%94%E4%B8%8E%E9%80%89%E5%9E%8B"><span class="toc-text">方案对比与选型</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%B8%A9%E5%9D%91%E8%AE%B0%E5%BD%95"><span class="toc-text">踩坑记录</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E6%B5%8B%E7%BB%93%E6%9E%9C"><span class="toc-text">实测结果</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%88%91%E7%9A%84%E7%9C%8B%E6%B3%95"><span class="toc-text">我的看法</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

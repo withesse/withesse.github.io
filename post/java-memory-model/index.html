@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>深入理解Java内存模型(JMM) · zt&#39;s Blog</title>
+  <meta name="description" content="全面解析Java内存模型，深入理解happens-before规则、volatile语义、内存屏障及其在并发编程中的实际应用">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/java-memory-model/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="深入理解Java内存模型(JMM)">
+  <meta property="og:description" content="全面解析Java内存模型，深入理解happens-before规则、volatile语义、内存屏障及其在并发编程中的实际应用">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/java-memory-model/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2024-11-05T16:00:00.000Z">
+  <meta property="article:modified_time" content="2024-11-05T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="深入理解Java内存模型(JMM)">
+  <meta name="twitter:description" content="全面解析Java内存模型，深入理解happens-before规则、volatile语义、内存屏障及其在并发编程中的实际应用">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"深入理解Java内存模型(JMM)","description":"全面解析Java内存模型，深入理解happens-before规则、volatile语义、内存屏障及其在并发编程中的实际应用","datePublished":"2024-11-05T16:00:00.000Z","dateModified":"2024-11-05T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/java-memory-model/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Java","item":"https://withesse.co/categories/Java/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:25">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Java/">Java</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/java/"><span class="hash">#</span>java</a><a class="tag" href="/tags/jmm/"><span class="hash">#</span>jmm</a><a class="tag" href="/tags/memory-model/"><span class="hash">#</span>memory-model</a><a class="tag" href="/tags/happens-before/"><span class="hash">#</span>happens-before</a>
+        
+      </div>
+
+      <h1>深入理解Java内存模型(JMM)</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2024.11.06</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          <span class="row gap8" style="align-items:center"><span class="lang-dot" style="background:#E76F00"></span>Java</span>
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 8 min</span>
+        </span>
+        <span class="wc"><span class="num">3.4k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">1. 引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#jmm%E7%9A%84%E7%BB%93%E6%9E%84%E4%B8%8E%E6%8A%BD%E8%B1%A1"><span class="toc-text">2. JMM的结构与抽象</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%BB%E5%86%85%E5%AD%98%E4%B8%8E%E5%B7%A5%E4%BD%9C%E5%86%85%E5%AD%98"><span class="toc-text">2.1 主内存与工作内存</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%86%85%E5%AD%98%E4%BA%A4%E4%BA%92%E6%93%8D%E4%BD%9C"><span class="toc-text">2.2 内存交互操作</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%87%8D%E6%8E%92%E5%BA%8F"><span class="toc-text">3. 重排序</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%87%8D%E6%8E%92%E5%BA%8F%E5%B8%A6%E6%9D%A5%E7%9A%84%E9%97%AE%E9%A2%98"><span class="toc-text">3.1 重排序带来的问题</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#happens-before%E8%A7%84%E5%88%99"><span class="toc-text">4. happens-before规则</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%AB%E5%A4%A7happens-before%E8%A7%84%E5%88%99"><span class="toc-text">4.1 八大happens-before规则</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#happens-before%E4%B8%8E%E5%AE%9E%E9%99%85%E6%89%A7%E8%A1%8C%E9%A1%BA%E5%BA%8F"><span class="toc-text">4.2
+happens-before与实际执行顺序</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#volatile%E7%9A%84%E5%86%85%E5%AD%98%E8%AF%AD%E4%B9%89"><span class="toc-text">5. volatile的内存语义</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#volatile%E7%9A%84%E4%B8%A4%E5%A4%A7%E7%89%B9%E6%80%A7"><span class="toc-text">5.1 volatile的两大特性</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#volatile%E7%9A%84%E5%86%85%E5%AD%98%E5%B1%8F%E9%9A%9C"><span class="toc-text">5.2 volatile的内存屏障</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#volatile%E4%B8%8D%E4%BF%9D%E8%AF%81%E5%8E%9F%E5%AD%90%E6%80%A7"><span class="toc-text">5.3 volatile不保证原子性</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8F%8C%E9%87%8D%E6%A3%80%E6%9F%A5%E9%94%81%E5%AE%9Adcl%E4%B8%8Evolatile"><span class="toc-text">6. 双重检查锁定(DCL)与volatile</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#final%E5%AD%97%E6%AE%B5%E7%9A%84%E5%86%85%E5%AD%98%E8%AF%AD%E4%B9%89"><span class="toc-text">7. final字段的内存语义</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#this%E5%BC%95%E7%94%A8%E9%80%B8%E5%87%BA%E7%9A%84%E5%8F%8D%E9%9D%A2%E7%A4%BA%E4%BE%8B"><span class="toc-text">this引用逸出的反面示例</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5"><span class="toc-text">8. 最佳实践</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">9. 总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="引言">1. 引言</h2>
+<p>当我们编写多线程程序时，一个看似正确的代码可能在运行时产生意想不到的结果。这并非程序逻辑有误，而是因为现代处理器和编译器为了提升性能会对指令进行重排序，而Java内存模型（Java
+Memory Model,
+JMM）正是定义了在这种复杂环境下，多线程程序如何正确地共享数据。</p>
+<p>JMM是理解Java并发编程的理论基础。不理解JMM，就很难真正理解<code>volatile</code>、<code>synchronized</code>、<code>final</code>这些关键字在并发环境下的行为。</p>
+<h2 id="jmm的结构与抽象">2. JMM的结构与抽象</h2>
+<h3 id="主内存与工作内存">2.1 主内存与工作内存</h3>
+<p>JMM将内存抽象为主内存（Main Memory）和工作内存（Working
+Memory）两个层次：</p>
+<pre class="mermaid">graph TB
+    subgraph 主内存 Main Memory
+        MV[共享变量]
+    end
+    subgraph 线程1工作内存
+        WM1[变量副本1]
+    end
+    subgraph 线程2工作内存
+        WM2[变量副本2]
+    end
+    subgraph 线程3工作内存
+        WM3[变量副本3]
+    end
+
+    WM1 &lt;--&gt;|read/write| MV
+    WM2 &lt;--&gt;|read/write| MV
+    WM3 &lt;--&gt;|read/write| MV
+
+    style MV fill:#FFD700,stroke:#333
+    style WM1 fill:#87CEEB
+    style WM2 fill:#87CEEB
+    style WM3 fill:#87CEEB</pre>
+<ul>
+<li><strong>主内存</strong>：所有线程共享的内存区域，存储共享变量的”官方值”</li>
+<li><strong>工作内存</strong>：每个线程私有，存储该线程使用的共享变量副本</li>
+</ul>
+<p>线程对变量的所有操作（读取、赋值）都必须在工作内存中进行，不能直接操作主内存。线程间变量值的传递必须通过主内存完成。</p>
+<h3 id="内存交互操作">2.2 内存交互操作</h3>
+<p>JMM定义了8种原子操作来完成主内存与工作内存之间的交互：</p>
+<pre class="mermaid">sequenceDiagram
+    participant WM as 工作内存
+    participant MM as 主内存
+
+    Note over MM: lock (锁定)
+    MM-&gt;&gt;WM: read (读取) + load (载入)
+    Note over WM: use (使用) - 传给执行引擎
+    Note over WM: assign (赋值) - 执行引擎写回
+    WM-&gt;&gt;MM: store (存储) + write (写入)
+    Note over MM: unlock (解锁)</pre>
+<table>
+<thead>
+<tr class="header">
+<th>操作</th>
+<th>作用域</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>lock</td>
+<td>主内存</td>
+<td>将变量标识为线程独占状态</td>
+</tr>
+<tr class="even">
+<td>unlock</td>
+<td>主内存</td>
+<td>释放锁定的变量</td>
+</tr>
+<tr class="odd">
+<td>read</td>
+<td>主内存</td>
+<td>将变量值从主内存传输到工作内存</td>
+</tr>
+<tr class="even">
+<td>load</td>
+<td>工作内存</td>
+<td>将read到的值放入工作内存的变量副本</td>
+</tr>
+<tr class="odd">
+<td>use</td>
+<td>工作内存</td>
+<td>将工作内存中的值传给执行引擎</td>
+</tr>
+<tr class="even">
+<td>assign</td>
+<td>工作内存</td>
+<td>将执行引擎的值赋给工作内存中的变量</td>
+</tr>
+<tr class="odd">
+<td>store</td>
+<td>工作内存</td>
+<td>将工作内存中的变量值传送到主内存</td>
+</tr>
+<tr class="even">
+<td>write</td>
+<td>主内存</td>
+<td>将store传来的值写入主内存变量</td>
+</tr>
+</tbody>
+</table>
+<h2 id="重排序">3. 重排序</h2>
+<p>为了提升执行效率，编译器和处理器会对指令进行重排序。重排序分为三种类型：</p>
+<pre class="mermaid">graph LR
+    A[源代码] --&gt;|1.编译器优化重排序| B[编译后指令]
+    B --&gt;|2.指令级并行重排序| C[处理器执行序列]
+    C --&gt;|3.内存系统重排序| D[最终执行效果]
+    style A fill:#E8F5E8
+    style D fill:#FFE4E1</pre>
+<ol type="1">
+<li><strong>编译器优化重排序</strong>：编译器在不改变单线程语义的前提下重新安排语句执行顺序</li>
+<li><strong>指令级并行重排序</strong>：现代处理器使用指令级并行技术将多条指令重叠执行</li>
+<li><strong>内存系统重排序</strong>：处理器使用写缓冲区、无效化队列，导致加载和存储操作看起来被重排序</li>
+</ol>
+<h3 id="重排序带来的问题">3.1 重排序带来的问题</h3>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">/**</span><br><span class="hljs-comment"> * 重排序导致的可见性问题示例</span><br><span class="hljs-comment"> * 理论上result可能为0，违反直觉</span><br><span class="hljs-comment"> */</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">ReorderingDemo</span> &#123;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">static</span> <span class="hljs-type">int</span> <span class="hljs-variable">x</span> <span class="hljs-operator">=</span> <span class="hljs-number">0</span>, y = <span class="hljs-number">0</span>;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">static</span> <span class="hljs-type">int</span> <span class="hljs-variable">a</span> <span class="hljs-operator">=</span> <span class="hljs-number">0</span>, b = <span class="hljs-number">0</span>;<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">main</span><span class="hljs-params">(String[] args)</span> <span class="hljs-keyword">throws</span> InterruptedException &#123;<br>        <span class="hljs-type">int</span> <span class="hljs-variable">count</span> <span class="hljs-operator">=</span> <span class="hljs-number">0</span>;<br>        <span class="hljs-keyword">while</span> (<span class="hljs-literal">true</span>) &#123;<br>            x = <span class="hljs-number">0</span>; y = <span class="hljs-number">0</span>; a = <span class="hljs-number">0</span>; b = <span class="hljs-number">0</span>;<br>            count++;<br><br>            <span class="hljs-type">Thread</span> <span class="hljs-variable">t1</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">Thread</span>(() -&gt; &#123;<br>                a = <span class="hljs-number">1</span>; <span class="hljs-comment">// 语句1</span><br>                x = b; <span class="hljs-comment">// 语句2</span><br>            &#125;);<br>            <span class="hljs-type">Thread</span> <span class="hljs-variable">t2</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">Thread</span>(() -&gt; &#123;<br>                b = <span class="hljs-number">1</span>; <span class="hljs-comment">// 语句3</span><br>                y = a; <span class="hljs-comment">// 语句4</span><br>            &#125;);<br>            t1.start();<br>            t2.start();<br>            t1.join();<br>            t2.join();<br><br>            <span class="hljs-comment">// 如果发生了重排序（语句2在语句1之前执行，语句4在语句3之前执行）</span><br>            <span class="hljs-comment">// 那么x == 0 &amp;&amp; y == 0 是可能出现的</span><br>            <span class="hljs-keyword">if</span> (x == <span class="hljs-number">0</span> &amp;&amp; y == <span class="hljs-number">0</span>) &#123;<br>                System.out.println(<span class="hljs-string">&quot;Reordering detected at iteration: &quot;</span> + count);<br>                <span class="hljs-keyword">break</span>;<br>            &#125;<br>        &#125;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="happens-before规则">4. happens-before规则</h2>
+<p>JMM通过happens-before关系来保证跨线程的内存可见性。如果操作A
+happens-before操作B，那么A的执行结果对B可见，且A的执行顺序排在B之前（从内存可见性角度）。</p>
+<h3 id="八大happens-before规则">4.1 八大happens-before规则</h3>
+<pre class="mermaid">graph TD
+    HB[happens-before规则] --&gt; R1[1. 程序顺序规则]
+    HB --&gt; R2[2. 监视器锁规则]
+    HB --&gt; R3[3. volatile变量规则]
+    HB --&gt; R4[4. 线程启动规则]
+    HB --&gt; R5[5. 线程终止规则]
+    HB --&gt; R6[6. 线程中断规则]
+    HB --&gt; R7[7. 对象终结规则]
+    HB --&gt; R8[8. 传递性规则]
+
+    R1 --&gt;|"同一线程中前面的操作&lt;br/&gt;hb后面的操作"| E1[单线程内有序]
+    R2 --&gt;|"unlock hb&lt;br/&gt;后续的lock"| E2[锁的可见性]
+    R3 --&gt;|"volatile写 hb&lt;br/&gt;后续的volatile读"| E3[volatile可见性]
+
+    style HB fill:#FFD700,stroke:#333,stroke-width:2px</pre>
+<table>
+<colgroup>
+<col style="width: 45%" />
+<col style="width: 54%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>规则</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>程序顺序规则</td>
+<td>一个线程中每个操作happens-before该线程中后续操作</td>
+</tr>
+<tr class="even">
+<td>监视器锁规则</td>
+<td>对一个锁的unlock操作happens-before后续对同一个锁的lock操作</td>
+</tr>
+<tr class="odd">
+<td>volatile变量规则</td>
+<td>对一个volatile变量的写操作happens-before后续对该变量的读操作</td>
+</tr>
+<tr class="even">
+<td>线程启动规则</td>
+<td>Thread.start() happens-before 该线程中的任何操作</td>
+</tr>
+<tr class="odd">
+<td>线程终止规则</td>
+<td>线程中的所有操作happens-before其他线程检测到该线程终止（join/isAlive）</td>
+</tr>
+<tr class="even">
+<td>线程中断规则</td>
+<td>对线程interrupt()的调用happens-before被中断线程检测到中断事件</td>
+</tr>
+<tr class="odd">
+<td>对象终结规则</td>
+<td>对象的构造函数执行完毕happens-before finalize()方法</td>
+</tr>
+<tr class="even">
+<td>传递性</td>
+<td>如果A happens-before B，B happens-before C，则A happens-before
+C</td>
+</tr>
+</tbody>
+</table>
+<h3 id="happens-before与实际执行顺序">4.2
+happens-before与实际执行顺序</h3>
+<p>需要注意的是，happens-before并不意味着实际的执行顺序。JMM允许在不影响happens-before语义的情况下进行重排序：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">/**</span><br><span class="hljs-comment"> * 虽然语句1 happens-before 语句2（程序顺序规则），</span><br><span class="hljs-comment"> * 但因为两者之间没有数据依赖，编译器/处理器可能重排序它们的实际执行顺序。</span><br><span class="hljs-comment"> * 只要最终结果与顺序执行一致即可。</span><br><span class="hljs-comment"> */</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">HappensBeforeDemo</span> &#123;<br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">example</span><span class="hljs-params">()</span> &#123;<br>        <span class="hljs-type">int</span> <span class="hljs-variable">a</span> <span class="hljs-operator">=</span> <span class="hljs-number">1</span>;   <span class="hljs-comment">// 语句1</span><br>        <span class="hljs-type">int</span> <span class="hljs-variable">b</span> <span class="hljs-operator">=</span> <span class="hljs-number">2</span>;   <span class="hljs-comment">// 语句2 -- 可能与语句1重排序</span><br>        <span class="hljs-type">int</span> <span class="hljs-variable">c</span> <span class="hljs-operator">=</span> a + b; <span class="hljs-comment">// 语句3 -- 依赖语句1和2，不能被重排到它们之前</span><br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="volatile的内存语义">5. volatile的内存语义</h2>
+<h3 id="volatile的两大特性">5.1 volatile的两大特性</h3>
+<p><code>volatile</code>关键字提供了两个语义保证：</p>
+<ol type="1">
+<li><strong>可见性</strong>：对volatile变量的写操作会立即刷新到主内存，读操作会从主内存重新读取</li>
+<li><strong>有序性</strong>：禁止volatile变量相关的指令重排序</li>
+</ol>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">VolatileDemo</span> &#123;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">volatile</span> <span class="hljs-type">boolean</span> <span class="hljs-variable">flag</span> <span class="hljs-operator">=</span> <span class="hljs-literal">false</span>;<br>    <span class="hljs-keyword">private</span> <span class="hljs-type">int</span> <span class="hljs-variable">data</span> <span class="hljs-operator">=</span> <span class="hljs-number">0</span>;<br><br>    <span class="hljs-comment">/**</span><br><span class="hljs-comment">     * 线程A执行</span><br><span class="hljs-comment">     * 由于flag是volatile的：</span><br><span class="hljs-comment">     * - data = 42 不会被重排到 flag = true 之后</span><br><span class="hljs-comment">     * - flag = true 会立即刷新到主内存</span><br><span class="hljs-comment">     */</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">writer</span><span class="hljs-params">()</span> &#123;<br>        data = <span class="hljs-number">42</span>;        <span class="hljs-comment">// 普通写</span><br>        flag = <span class="hljs-literal">true</span>;      <span class="hljs-comment">// volatile写 -- 充当内存屏障</span><br>    &#125;<br><br>    <span class="hljs-comment">/**</span><br><span class="hljs-comment">     * 线程B执行</span><br><span class="hljs-comment">     * 由于flag是volatile的：</span><br><span class="hljs-comment">     * - 读取flag会从主内存刷新</span><br><span class="hljs-comment">     * - 读取data不会被重排到读取flag之前</span><br><span class="hljs-comment">     * - 如果看到flag == true，则必然能看到data == 42</span><br><span class="hljs-comment">     */</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">reader</span><span class="hljs-params">()</span> &#123;<br>        <span class="hljs-keyword">if</span> (flag) &#123;       <span class="hljs-comment">// volatile读 -- 充当内存屏障</span><br>            System.out.println(data); <span class="hljs-comment">// 保证输出42</span><br>        &#125;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="volatile的内存屏障">5.2 volatile的内存屏障</h3>
+<p>JMM通过插入内存屏障（Memory Barrier）来实现volatile的语义：</p>
+<pre class="mermaid">graph TB
+    subgraph volatile写操作
+        SW1[StoreStore屏障] --&gt; VW[volatile写]
+        VW --&gt; SW2[StoreLoad屏障]
+    end
+    subgraph volatile读操作
+        VR[volatile读] --&gt; SR1[LoadLoad屏障]
+        SR1 --&gt; SR2[LoadStore屏障]
+    end
+
+    style VW fill:#FF6347
+    style VR fill:#4169E1,color:#fff
+    style SW1 fill:#FFD700
+    style SW2 fill:#FFD700
+    style SR1 fill:#FFD700
+    style SR2 fill:#FFD700</pre>
+<table>
+<colgroup>
+<col style="width: 37%" />
+<col style="width: 37%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>屏障类型</th>
+<th>指令示例</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>LoadLoad</td>
+<td>Load1; LoadLoad; Load2</td>
+<td>确保Load1在Load2之前执行</td>
+</tr>
+<tr class="even">
+<td>StoreStore</td>
+<td>Store1; StoreStore; Store2</td>
+<td>确保Store1在Store2之前刷新到主内存</td>
+</tr>
+<tr class="odd">
+<td>LoadStore</td>
+<td>Load1; LoadStore; Store2</td>
+<td>确保Load1在Store2之前执行</td>
+</tr>
+<tr class="even">
+<td>StoreLoad</td>
+<td>Store1; StoreLoad; Load2</td>
+<td>确保Store1刷新到主内存后才执行Load2，开销最大</td>
+</tr>
+</tbody>
+</table>
+<h3 id="volatile不保证原子性">5.3 volatile不保证原子性</h3>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">/**</span><br><span class="hljs-comment"> * volatile不能保证复合操作的原子性</span><br><span class="hljs-comment"> * count++不是原子操作：read-modify-write</span><br><span class="hljs-comment"> */</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">VolatileNotAtomic</span> &#123;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">volatile</span> <span class="hljs-type">int</span> <span class="hljs-variable">count</span> <span class="hljs-operator">=</span> <span class="hljs-number">0</span>;<br><br>    <span class="hljs-comment">// 这个方法在多线程下是不安全的</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">unsafeIncrement</span><span class="hljs-params">()</span> &#123;<br>        count++; <span class="hljs-comment">// 非原子操作：读取 -&gt; 加1 -&gt; 写回</span><br>    &#125;<br><br>    <span class="hljs-comment">// 正确做法1：使用synchronized</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">synchronized</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">safeIncrement1</span><span class="hljs-params">()</span> &#123;<br>        count++;<br>    &#125;<br><br>    <span class="hljs-comment">// 正确做法2：使用AtomicInteger</span><br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> java.util.concurrent.atomic.<span class="hljs-type">AtomicInteger</span> <span class="hljs-variable">atomicCount</span> <span class="hljs-operator">=</span><br>        <span class="hljs-keyword">new</span> <span class="hljs-title class_">java</span>.util.concurrent.atomic.AtomicInteger(<span class="hljs-number">0</span>);<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">safeIncrement2</span><span class="hljs-params">()</span> &#123;<br>        atomicCount.incrementAndGet();<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="双重检查锁定dcl与volatile">6. 双重检查锁定(DCL)与volatile</h2>
+<p>双重检查锁定是volatile最经典的应用场景之一：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">Singleton</span> &#123;<br>    <span class="hljs-comment">// 必须用volatile修饰，禁止指令重排序</span><br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">volatile</span> Singleton instance;<br><br>    <span class="hljs-keyword">private</span> <span class="hljs-title function_">Singleton</span><span class="hljs-params">()</span> &#123;<br>        <span class="hljs-comment">// 私有构造函数</span><br>    &#125;<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> Singleton <span class="hljs-title function_">getInstance</span><span class="hljs-params">()</span> &#123;<br>        <span class="hljs-keyword">if</span> (instance == <span class="hljs-literal">null</span>) &#123;                 <span class="hljs-comment">// 第一次检查（无锁）</span><br>            <span class="hljs-keyword">synchronized</span> (Singleton.class) &#123;<br>                <span class="hljs-keyword">if</span> (instance == <span class="hljs-literal">null</span>) &#123;         <span class="hljs-comment">// 第二次检查（有锁）</span><br>                    instance = <span class="hljs-keyword">new</span> <span class="hljs-title class_">Singleton</span>(); <span class="hljs-comment">// 关键点</span><br>                &#125;<br>            &#125;<br>        &#125;<br>        <span class="hljs-keyword">return</span> instance;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<p>为什么必须用<code>volatile</code>？因为<code>instance = new Singleton()</code>不是原子操作，它实际上包含三个步骤：</p>
+<pre class="mermaid">graph LR
+    S1["1. 分配内存空间"] --&gt; S2["2. 初始化对象"]
+    S2 --&gt; S3["3. 将引用指向内存地址"]
+
+    S1b["1. 分配内存空间"] --&gt; S3b["2. 将引用指向内存地址&lt;br/&gt;(对象尚未初始化!)"]
+    S3b --&gt; S2b["3. 初始化对象"]
+
+    subgraph 正常顺序
+        S1
+        S2
+        S3
+    end
+    subgraph 重排序后
+        S1b
+        S3b
+        S2b
+    end
+
+    style S3b fill:#FF6347,color:#fff</pre>
+<p>如果发生重排序，步骤2和3交换，另一个线程可能在第一次检查时看到<code>instance != null</code>，但获取到的是一个尚未完成初始化的对象，导致程序出错。<code>volatile</code>通过禁止重排序解决了这个问题。</p>
+<h2 id="final字段的内存语义">7. final字段的内存语义</h2>
+<p>JMM对<code>final</code>字段也有特殊的内存语义保证：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">FinalFieldExample</span> &#123;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> <span class="hljs-type">int</span> x;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> <span class="hljs-type">int</span>[] arr;<br>    <span class="hljs-keyword">private</span> <span class="hljs-type">int</span> y; <span class="hljs-comment">// 普通字段，无特殊保证</span><br><br>    <span class="hljs-keyword">public</span> <span class="hljs-title function_">FinalFieldExample</span><span class="hljs-params">()</span> &#123;<br>        x = <span class="hljs-number">42</span>;                     <span class="hljs-comment">// final字段写入</span><br>        arr = <span class="hljs-keyword">new</span> <span class="hljs-title class_">int</span>[]&#123;<span class="hljs-number">1</span>, <span class="hljs-number">2</span>, <span class="hljs-number">3</span>&#125;;   <span class="hljs-comment">// final字段写入（引用类型）</span><br>        y = <span class="hljs-number">100</span>;                    <span class="hljs-comment">// 普通字段写入</span><br>    &#125;<br>    <span class="hljs-comment">// 构造函数结束时，会插入StoreStore屏障</span><br>    <span class="hljs-comment">// 确保final字段在对象引用发布前已初始化完成</span><br><br>    <span class="hljs-comment">/**</span><br><span class="hljs-comment">     * JMM保证：</span><br><span class="hljs-comment">     * 1. 在构造函数内对final字段的写入，与对象引用赋值不会重排序</span><br><span class="hljs-comment">     * 2. 其他线程通过对象引用首次读到final字段时，能看到正确的初始化值</span><br><span class="hljs-comment">     * 3. final引用类型指向的对象（如数组），其成员在构造函数中的初始化也有保证</span><br><span class="hljs-comment">     *</span><br><span class="hljs-comment">     * 前提条件：对象引用不能在构造函数中逸出（this引用不能泄露）</span><br><span class="hljs-comment">     */</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">reader</span><span class="hljs-params">(FinalFieldExample obj)</span> &#123;<br>        <span class="hljs-type">int</span> <span class="hljs-variable">localX</span> <span class="hljs-operator">=</span> obj.x;      <span class="hljs-comment">// 保证读到42</span><br>        <span class="hljs-type">int</span>[] localArr = obj.arr; <span class="hljs-comment">// 保证读到已初始化的数组</span><br>        <span class="hljs-type">int</span> <span class="hljs-variable">localY</span> <span class="hljs-operator">=</span> obj.y;      <span class="hljs-comment">// 不保证读到100（普通字段无保证）</span><br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="this引用逸出的反面示例">this引用逸出的反面示例</h3>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">/**</span><br><span class="hljs-comment"> * 错误示例：构造函数中this引用逸出</span><br><span class="hljs-comment"> * final字段的可见性保证将失效</span><br><span class="hljs-comment"> */</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">ThisEscapeExample</span> &#123;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> <span class="hljs-type">int</span> value;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">static</span> ThisEscapeExample instance;<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-title function_">ThisEscapeExample</span><span class="hljs-params">(<span class="hljs-type">int</span> v)</span> &#123;<br>        instance = <span class="hljs-built_in">this</span>; <span class="hljs-comment">// 危险！this引用在构造函数完成前逸出</span><br>        value = v;       <span class="hljs-comment">// final字段可能还未初始化</span><br>    &#125;<br>    <span class="hljs-comment">// 其他线程通过instance读取value时，可能看到默认值0而非v</span><br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="最佳实践">8. 最佳实践</h2>
+<ol type="1">
+<li><strong>正确使用volatile</strong>：仅适用于一写多读的简单标志位场景，不能替代锁来保护复合操作。</li>
+<li><strong>理解happens-before</strong>：这是分析并发正确性的根本工具，遇到并发问题时先从happens-before关系入手。</li>
+<li><strong>不要依赖指令执行顺序</strong>：除非有happens-before关系保证，否则不要假设任何执行顺序。</li>
+<li><strong>安全发布对象</strong>：使用volatile、synchronized、final或并发容器来安全地发布共享对象。</li>
+<li><strong>避免构造函数中的this逸出</strong>：否则final字段的语义保证将失效。</li>
+<li><strong>使用高层并发工具</strong>：优先使用<code>java.util.concurrent</code>包提供的线程安全容器和同步工具，而非自己实现底层同步。</li>
+</ol>
+<h2 id="总结">9. 总结</h2>
+<p>Java内存模型是连接Java语言层面并发语义和底层硬件内存架构的桥梁。它通过以下核心机制保证了多线程程序的正确性：</p>
+<ul>
+<li><strong>happens-before规则</strong>定义了操作之间的可见性保证，是并发正确性的理论基础</li>
+<li><strong>volatile</strong>通过内存屏障实现了可见性和有序性，是轻量级的同步手段</li>
+<li><strong>synchronized</strong>通过Monitor机制提供了原子性、可见性和有序性的完整保证</li>
+<li><strong>final</strong>通过特殊的内存语义保证了不可变对象的安全发布</li>
+</ul>
+<p>理解JMM不仅有助于编写正确的并发程序，更能帮助我们理解各种并发工具和设计模式的底层原理，是成为高级Java开发者的必经之路。</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2024-11-06</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">3.4k 字 · 8 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/api-security-checklist/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">API 安全核对清单</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/redis-distributed-lock/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Redis分布式锁的正确实现方式</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">1. 引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#jmm%E7%9A%84%E7%BB%93%E6%9E%84%E4%B8%8E%E6%8A%BD%E8%B1%A1"><span class="toc-text">2. JMM的结构与抽象</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%BB%E5%86%85%E5%AD%98%E4%B8%8E%E5%B7%A5%E4%BD%9C%E5%86%85%E5%AD%98"><span class="toc-text">2.1 主内存与工作内存</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%86%85%E5%AD%98%E4%BA%A4%E4%BA%92%E6%93%8D%E4%BD%9C"><span class="toc-text">2.2 内存交互操作</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%87%8D%E6%8E%92%E5%BA%8F"><span class="toc-text">3. 重排序</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%87%8D%E6%8E%92%E5%BA%8F%E5%B8%A6%E6%9D%A5%E7%9A%84%E9%97%AE%E9%A2%98"><span class="toc-text">3.1 重排序带来的问题</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#happens-before%E8%A7%84%E5%88%99"><span class="toc-text">4. happens-before规则</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%AB%E5%A4%A7happens-before%E8%A7%84%E5%88%99"><span class="toc-text">4.1 八大happens-before规则</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#happens-before%E4%B8%8E%E5%AE%9E%E9%99%85%E6%89%A7%E8%A1%8C%E9%A1%BA%E5%BA%8F"><span class="toc-text">4.2
+happens-before与实际执行顺序</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#volatile%E7%9A%84%E5%86%85%E5%AD%98%E8%AF%AD%E4%B9%89"><span class="toc-text">5. volatile的内存语义</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#volatile%E7%9A%84%E4%B8%A4%E5%A4%A7%E7%89%B9%E6%80%A7"><span class="toc-text">5.1 volatile的两大特性</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#volatile%E7%9A%84%E5%86%85%E5%AD%98%E5%B1%8F%E9%9A%9C"><span class="toc-text">5.2 volatile的内存屏障</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#volatile%E4%B8%8D%E4%BF%9D%E8%AF%81%E5%8E%9F%E5%AD%90%E6%80%A7"><span class="toc-text">5.3 volatile不保证原子性</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8F%8C%E9%87%8D%E6%A3%80%E6%9F%A5%E9%94%81%E5%AE%9Adcl%E4%B8%8Evolatile"><span class="toc-text">6. 双重检查锁定(DCL)与volatile</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#final%E5%AD%97%E6%AE%B5%E7%9A%84%E5%86%85%E5%AD%98%E8%AF%AD%E4%B9%89"><span class="toc-text">7. final字段的内存语义</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#this%E5%BC%95%E7%94%A8%E9%80%B8%E5%87%BA%E7%9A%84%E5%8F%8D%E9%9D%A2%E7%A4%BA%E4%BE%8B"><span class="toc-text">this引用逸出的反面示例</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5"><span class="toc-text">8. 最佳实践</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">9. 总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

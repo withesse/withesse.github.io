@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Entity Framework 6 性能优化实战 · zt&#39;s Blog</title>
+  <meta name="description" content="从 N+1 查询、懒加载陷阱到批量操作，系统梳理 Entity Framework 6 的性能优化策略，结合实际项目经验总结常见坑。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/entity-framework-optimization/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Entity Framework 6 性能优化实战">
+  <meta property="og:description" content="从 N+1 查询、懒加载陷阱到批量操作，系统梳理 Entity Framework 6 的性能优化策略，结合实际项目经验总结常见坑。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/entity-framework-optimization/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2015-11-09T16:00:00.000Z">
+  <meta property="article:modified_time" content="2015-11-09T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Entity Framework 6 性能优化实战">
+  <meta name="twitter:description" content="从 N+1 查询、懒加载陷阱到批量操作，系统梳理 Entity Framework 6 的性能优化策略，结合实际项目经验总结常见坑。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Entity Framework 6 性能优化实战","description":"从 N+1 查询、懒加载陷阱到批量操作，系统梳理 Entity Framework 6 的性能优化策略，结合实际项目经验总结常见坑。","datePublished":"2015-11-09T16:00:00.000Z","dateModified":"2015-11-09T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/entity-framework-optimization/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"C#","item":"https://withesse.co/categories/C/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:145">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/C/">C#</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/csharp/"><span class="hash">#</span>csharp</a><a class="tag" href="/tags/orm/"><span class="hash">#</span>orm</a><a class="tag" href="/tags/entity-framework/"><span class="hash">#</span>entity-framework</a><a class="tag" href="/tags/performance/"><span class="hash">#</span>performance</a>
+        
+      </div>
+
+      <h1>Entity Framework 6 性能优化实战</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2015.11.10</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          <span class="row gap8" style="align-items:center"><span class="lang-dot" style="background:#178600"></span>C#</span>
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 3 min</span>
+        </span>
+        <span class="wc"><span class="num">1.3k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#n1-%E6%9F%A5%E8%AF%A2%E6%9C%80%E5%B8%B8%E8%A7%81%E7%9A%84%E6%80%A7%E8%83%BD%E6%9D%80%E6%89%8B"><span class="toc-text">1. N+1 查询：最常见的性能杀手</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%87%92%E5%8A%A0%E8%BD%BD%E9%99%B7%E9%98%B1"><span class="toc-text">2. 懒加载陷阱</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#asnotracking%E5%8F%AA%E8%AF%BB%E6%9F%A5%E8%AF%A2%E7%9A%84%E5%88%A9%E5%99%A8"><span class="toc-text">3. AsNoTracking：只读查询的利器</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%89%B9%E9%87%8F%E6%93%8D%E4%BD%9C"><span class="toc-text">4. 批量操作</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%AD%A3%E7%A1%AE%E4%BD%BF%E7%94%A8%E7%B4%A2%E5%BC%95"><span class="toc-text">5. 正确使用索引</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BD%BF%E7%94%A8-sql-%E6%9F%A5%E8%AF%A2%E5%A4%84%E7%90%86%E5%A4%8D%E6%9D%82%E5%9C%BA%E6%99%AF"><span class="toc-text">6. 使用 SQL 查询处理复杂场景</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%B8%A9%E5%9D%91%E8%AE%B0%E5%BD%95"><span class="toc-text">踩坑记录</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <p>EF 6
+让数据访问变得异常方便，但便利的背后隐藏了不少性能陷阱。我们项目在数据量上来之后，慢查询问题一波接一波，最终痛定思痛做了一轮系统排查和优化。这篇文章记录那次优化的主要发现。</p>
+<h2 id="n1-查询最常见的性能杀手">1. N+1 查询：最常见的性能杀手</h2>
+<figure class="highlight csharp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><code class="hljs csharp"><span class="hljs-comment">// 问题代码：典型的 N+1</span><br><span class="hljs-keyword">var</span> orders = db.Orders.Where(o =&gt; o.Status == OrderStatus.Pending).ToList();<br><span class="hljs-keyword">foreach</span> (<span class="hljs-keyword">var</span> order <span class="hljs-keyword">in</span> orders)<br>&#123;<br>    <span class="hljs-comment">// 每次访问 order.Customer 都触发一次 SELECT — N 次额外查询！</span><br>    Console.WriteLine(<span class="hljs-string">$&quot;<span class="hljs-subst">&#123;order.Id&#125;</span> - <span class="hljs-subst">&#123;order.Customer.Name&#125;</span>&quot;</span>);<br>&#125;<br><br><span class="hljs-comment">// 解决方案 1：Eager Loading（立即加载）</span><br><span class="hljs-keyword">var</span> orders = db.Orders<br>               .Include(o =&gt; o.Customer)<br>               .Include(o =&gt; o.OrderItems.Select(i =&gt; i.Product)) <span class="hljs-comment">// 多级 Include</span><br>               .Where(o =&gt; o.Status == OrderStatus.Pending)<br>               .ToList();<br><br><span class="hljs-comment">// 解决方案 2：Projection（投影），只取需要的字段</span><br><span class="hljs-keyword">var</span> result = db.Orders<br>               .Where(o =&gt; o.Status == OrderStatus.Pending)<br>               .Select(o =&gt; <span class="hljs-keyword">new</span> &#123;<br>                   o.Id,<br>                   CustomerName = o.Customer.Name,<br>                   ItemCount = o.OrderItems.Count()<br>               &#125;)<br>               .ToList();<br></code></pre></td></tr></table></figure>
+<p>第二种（Projection）通常比 Include 更高效，生成的 SQL
+只包含需要的列，避免了传输大量无用数据。</p>
+<h2 id="懒加载陷阱">2. 懒加载陷阱</h2>
+<p>EF 6
+默认开启懒加载，导航属性在访问时才触发查询。这在循环中极其危险：</p>
+<figure class="highlight csharp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><code class="hljs csharp"><span class="hljs-comment">// 关闭全局懒加载（推荐在性能敏感场景关闭）</span><br>db.Configuration.LazyLoadingEnabled = <span class="hljs-literal">false</span>;<br><br><span class="hljs-comment">// 或者按需开启：只在特定 DbContext 作用域内使用懒加载</span><br><span class="hljs-keyword">using</span> (<span class="hljs-keyword">var</span> db = <span class="hljs-keyword">new</span> AppDbContext())<br>&#123;<br>    db.Configuration.LazyLoadingEnabled = <span class="hljs-literal">true</span>;<br>    <span class="hljs-comment">// 在这里可以用懒加载，但要小心</span><br>&#125;<br></code></pre></td></tr></table></figure>
+<p>懒加载在单次访问时很方便，但一旦进入循环就成了性能噩梦。我的原则是：<strong>生产代码中关闭懒加载，用显式的
+Include 或投影</strong>。</p>
+<h2 id="asnotracking只读查询的利器">3. AsNoTracking：只读查询的利器</h2>
+<p>EF 默认会跟踪查询返回的所有实体（变更追踪），以便后续
+<code>SaveChanges()</code>
+时检测修改。对于只读查询，这个机制纯属浪费：</p>
+<figure class="highlight csharp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><code class="hljs csharp"><span class="hljs-comment">// 默认：开启追踪，内存和CPU额外开销</span><br><span class="hljs-keyword">var</span> users = db.Users.Where(u =&gt; u.IsActive).ToList();<br><br><span class="hljs-comment">// AsNoTracking：跳过追踪，只读查询提速 30%~50%</span><br><span class="hljs-keyword">var</span> users = db.Users.AsNoTracking()<br>                    .Where(u =&gt; u.IsActive)<br>                    .ToList();<br><br><span class="hljs-comment">// 全局关闭追踪（适合只读的 DbContext）</span><br>db.Configuration.AutoDetectChangesEnabled = <span class="hljs-literal">false</span>;<br></code></pre></td></tr></table></figure>
+<h2 id="批量操作">4. 批量操作</h2>
+<p>EF 的 <code>SaveChanges()</code> 对每条记录生成独立的
+INSERT/UPDATE/DELETE 语句，批量操作时性能极差：</p>
+<figure class="highlight csharp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><code class="hljs csharp"><span class="hljs-comment">// 问题：插入 10000 条 = 执行 10000 次 INSERT</span><br><span class="hljs-keyword">for</span> (<span class="hljs-built_in">int</span> i = <span class="hljs-number">0</span>; i &lt; <span class="hljs-number">10000</span>; i++)<br>&#123;<br>    db.Users.Add(<span class="hljs-keyword">new</span> User &#123; Name = <span class="hljs-string">$&quot;User<span class="hljs-subst">&#123;i&#125;</span>&quot;</span> &#125;);<br>&#125;<br>db.SaveChanges(); <span class="hljs-comment">// 极慢</span><br><br><span class="hljs-comment">// 解决方案 1：分批提交，每批 500 条</span><br><span class="hljs-keyword">const</span> <span class="hljs-built_in">int</span> batchSize = <span class="hljs-number">500</span>;<br><span class="hljs-keyword">for</span> (<span class="hljs-built_in">int</span> i = <span class="hljs-number">0</span>; i &lt; users.Count; i++)<br>&#123;<br>    db.Users.Add(users[i]);<br>    <span class="hljs-keyword">if</span> (i % batchSize == <span class="hljs-number">0</span>)<br>    &#123;<br>        db.SaveChanges();<br>        <span class="hljs-comment">// 重新创建 DbContext，清空追踪缓存</span><br>        db = <span class="hljs-keyword">new</span> AppDbContext();<br>    &#125;<br>&#125;<br><br><span class="hljs-comment">// 解决方案 2：使用 EFCore.BulkExtensions（第三方库）</span><br>db.BulkInsert(users);<br>db.BulkUpdate(users);<br>db.BulkDelete(users);<br></code></pre></td></tr></table></figure>
+<p>实测：插入 10000 条数据，逐条 SaveChanges 约 45 秒，BulkInsert 约 1.2
+秒，差距约 37 倍。</p>
+<h2 id="正确使用索引">5. 正确使用索引</h2>
+<p>EF Code First
+默认只对外键和主键创建索引，业务查询字段需要手动添加：</p>
+<figure class="highlight csharp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><code class="hljs csharp"><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title">User</span><br>&#123;<br>    <span class="hljs-keyword">public</span> <span class="hljs-built_in">int</span> Id &#123; <span class="hljs-keyword">get</span>; <span class="hljs-keyword">set</span>; &#125;<br><br>    [<span class="hljs-meta">Index(<span class="hljs-string">&quot;IX_User_Email&quot;</span>, IsUnique = true)</span>]<br>    [<span class="hljs-meta">StringLength(100)</span>]<br>    <span class="hljs-keyword">public</span> <span class="hljs-built_in">string</span> Email &#123; <span class="hljs-keyword">get</span>; <span class="hljs-keyword">set</span>; &#125;<br><br>    [<span class="hljs-meta">Index(<span class="hljs-string">&quot;IX_User_Status_CreatedAt&quot;</span>, Order = 1)</span>]<br>    <span class="hljs-keyword">public</span> UserStatus Status &#123; <span class="hljs-keyword">get</span>; <span class="hljs-keyword">set</span>; &#125;<br><br>    [<span class="hljs-meta">Index(<span class="hljs-string">&quot;IX_User_Status_CreatedAt&quot;</span>, Order = 2)</span>]<br>    <span class="hljs-keyword">public</span> DateTime CreatedAt &#123; <span class="hljs-keyword">get</span>; <span class="hljs-keyword">set</span>; &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<p>或者通过 Fluent API：</p>
+<figure class="highlight csharp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><code class="hljs csharp">modelBuilder.Entity&lt;User&gt;()<br>    .HasIndex(u =&gt; u.Email).IsUnique()<br>    .HasIndex(u =&gt; <span class="hljs-keyword">new</span> &#123; u.Status, u.CreatedAt &#125;);<br></code></pre></td></tr></table></figure>
+<h2 id="使用-sql-查询处理复杂场景">6. 使用 SQL 查询处理复杂场景</h2>
+<p>EF 生成的 SQL 并不总是最优的，复杂统计查询直接写 SQL 更可控：</p>
+<figure class="highlight csharp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><code class="hljs csharp"><span class="hljs-comment">// 原始 SQL 查询（返回实体）</span><br><span class="hljs-keyword">var</span> users = db.Database.SqlQuery&lt;User&gt;(<br>    <span class="hljs-string">&quot;SELECT * FROM Users WHERE Status = @status AND Age &gt; @age&quot;</span>,<br>    <span class="hljs-keyword">new</span> SqlParameter(<span class="hljs-string">&quot;status&quot;</span>, <span class="hljs-number">1</span>),<br>    <span class="hljs-keyword">new</span> SqlParameter(<span class="hljs-string">&quot;age&quot;</span>, <span class="hljs-number">18</span>)<br>).ToList();<br><br><span class="hljs-comment">// 存储过程</span><br><span class="hljs-keyword">var</span> result = db.Database.SqlQuery&lt;OrderSummary&gt;(<br>    <span class="hljs-string">&quot;EXEC GetOrderSummary @startDate, @endDate&quot;</span>,<br>    <span class="hljs-keyword">new</span> SqlParameter(<span class="hljs-string">&quot;startDate&quot;</span>, startDate),<br>    <span class="hljs-keyword">new</span> SqlParameter(<span class="hljs-string">&quot;endDate&quot;</span>, endDate)<br>).ToList();<br></code></pre></td></tr></table></figure>
+<h2 id="踩坑记录">踩坑记录</h2>
+<p>有一次上线后收到报警，一个报表接口响应时间从 200ms 飙到 12
+秒。排查发现，开发同学在报表逻辑里不小心用了导航属性，循环里触发了 800
+次额外查询。更糟糕的是，这个问题在开发环境根本发现不了——测试数据只有 20
+条，生产数据是 2000 条。</p>
+<p>从那之后我们建立了一个规范：所有涉及集合查询的代码，必须开启 EF 的
+SQL 日志，在本地验证生成的 SQL 没有 N+1 问题再提交。</p>
+<figure class="highlight csharp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><code class="hljs csharp"><span class="hljs-comment">// 开启 SQL 日志，在 DbContext 构造函数或初始化时添加</span><br>db.Database.Log = sql =&gt; Debug.WriteLine(sql);<br></code></pre></td></tr></table></figure>
+<h2 id="总结">总结</h2>
+<p>EF 6 性能优化的几个核心原则：</p>
+<ul>
+<li><strong>显式 Include</strong> 代替懒加载，避免 N+1</li>
+<li><strong>投影（Select）</strong> 只取需要的字段，减少数据传输</li>
+<li><strong>AsNoTracking</strong> 用于所有只读查询</li>
+<li><strong>分批提交</strong> 或第三方批量库处理大量写入</li>
+<li><strong>SQL 日志</strong> 是发现性能问题的第一步</li>
+<li>复杂查询不要强迫 EF 生成，直接写 SQL 更可控</li>
+</ul>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2015-11-10</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">1.3k 字 · 3 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/csharp6-new-features/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">C# 6.0 新特性解析：让代码更简洁</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/aspnet-mvc5-guide/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">ASP.NET MVC 5 实战：从路由到过滤器</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#n1-%E6%9F%A5%E8%AF%A2%E6%9C%80%E5%B8%B8%E8%A7%81%E7%9A%84%E6%80%A7%E8%83%BD%E6%9D%80%E6%89%8B"><span class="toc-text">1. N+1 查询：最常见的性能杀手</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%87%92%E5%8A%A0%E8%BD%BD%E9%99%B7%E9%98%B1"><span class="toc-text">2. 懒加载陷阱</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#asnotracking%E5%8F%AA%E8%AF%BB%E6%9F%A5%E8%AF%A2%E7%9A%84%E5%88%A9%E5%99%A8"><span class="toc-text">3. AsNoTracking：只读查询的利器</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%89%B9%E9%87%8F%E6%93%8D%E4%BD%9C"><span class="toc-text">4. 批量操作</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%AD%A3%E7%A1%AE%E4%BD%BF%E7%94%A8%E7%B4%A2%E5%BC%95"><span class="toc-text">5. 正确使用索引</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BD%BF%E7%94%A8-sql-%E6%9F%A5%E8%AF%A2%E5%A4%84%E7%90%86%E5%A4%8D%E6%9D%82%E5%9C%BA%E6%99%AF"><span class="toc-text">6. 使用 SQL 查询处理复杂场景</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%B8%A9%E5%9D%91%E8%AE%B0%E5%BD%95"><span class="toc-text">踩坑记录</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

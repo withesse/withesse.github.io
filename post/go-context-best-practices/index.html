@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Go Context最佳实践与源码分析 · zt&#39;s Blog</title>
+  <meta name="description" content="深入分析Go Context的实现原理、传播机制与最佳实践，避免常见的Context反模式">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/go-context-best-practices/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Go Context最佳实践与源码分析">
+  <meta property="og:description" content="深入分析Go Context的实现原理、传播机制与最佳实践，避免常见的Context反模式">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/go-context-best-practices/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2023-08-08T16:00:00.000Z">
+  <meta property="article:modified_time" content="2023-08-08T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Go Context最佳实践与源码分析">
+  <meta name="twitter:description" content="深入分析Go Context的实现原理、传播机制与最佳实践，避免常见的Context反模式">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Go Context最佳实践与源码分析","description":"深入分析Go Context的实现原理、传播机制与最佳实践，避免常见的Context反模式","datePublished":"2023-08-08T16:00:00.000Z","dateModified":"2023-08-08T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/go-context-best-practices/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Go","item":"https://withesse.co/categories/Go/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:190">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Go/">Go</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/go/"><span class="hash">#</span>go</a><a class="tag" href="/tags/context/"><span class="hash">#</span>context</a><a class="tag" href="/tags/cancellation/"><span class="hash">#</span>cancellation</a>
+        
+      </div>
+
+      <h1>Go Context最佳实践与源码分析</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2023.08.09</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          <span class="row gap8" style="align-items:center"><span class="lang-dot" style="background:#00ADD8"></span>Go</span>
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 9 min</span>
+        </span>
+        <span class="wc"><span class="num">3.5k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#context%E6%8E%A5%E5%8F%A3%E5%AE%9A%E4%B9%89"><span class="toc-text">Context接口定义</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#context%E6%A0%91%E5%BD%A2%E7%BB%93%E6%9E%84"><span class="toc-text">Context树形结构</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90"><span class="toc-text">源码分析</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#emptyctx%E6%A0%B9context"><span class="toc-text">emptyCtx：根context</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#cancelctx%E5%8F%AF%E5%8F%96%E6%B6%88context"><span class="toc-text">cancelCtx：可取消context</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#timerctx%E5%B8%A6%E8%B6%85%E6%97%B6%E7%9A%84context"><span class="toc-text">timerCtx：带超时的context</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#valuectx%E6%90%BA%E5%B8%A6%E5%80%BC%E7%9A%84context"><span class="toc-text">valueCtx：携带值的context</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E6%88%98%E7%94%A8%E6%B3%95"><span class="toc-text">实战用法</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#withcancel%E6%89%8B%E5%8A%A8%E5%8F%96%E6%B6%88"><span class="toc-text">WithCancel：手动取消</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#withtimeout%E8%B6%85%E6%97%B6%E6%8E%A7%E5%88%B6"><span class="toc-text">WithTimeout：超时控制</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#withvalue%E4%BC%A0%E9%80%92%E8%AF%B7%E6%B1%82%E8%8C%83%E5%9B%B4%E7%9A%84%E5%80%BC"><span class="toc-text">WithValue：传递请求范围的值</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#withcancelcausego-1.20"><span class="toc-text">WithCancelCause（Go 1.20+）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#afterfuncgo-1.21"><span class="toc-text">AfterFunc（Go 1.21+）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#context%E4%BC%A0%E6%92%AD%E6%A8%A1%E5%BC%8F"><span class="toc-text">Context传播模式</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#http%E5%AE%A2%E6%88%B7%E7%AB%AF%E4%BC%A0%E6%92%AD"><span class="toc-text">HTTP客户端传播</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E5%BA%93%E6%93%8D%E4%BD%9C%E4%BC%A0%E6%92%AD"><span class="toc-text">数据库操作传播</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8F%8D%E6%A8%A1%E5%BC%8F%E4%B8%8E%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5"><span class="toc-text">反模式与最佳实践</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8F%8D%E6%A8%A1%E5%BC%8F1%E5%B0%86context%E5%AD%98%E5%82%A8%E5%9C%A8%E7%BB%93%E6%9E%84%E4%BD%93%E4%B8%AD"><span class="toc-text">反模式1：将Context存储在结构体中</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8F%8D%E6%A8%A1%E5%BC%8F2%E4%BD%BF%E7%94%A8context%E4%BC%A0%E9%80%92%E4%B8%9A%E5%8A%A1%E6%95%B0%E6%8D%AE"><span class="toc-text">反模式2：使用Context传递业务数据</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8F%8D%E6%A8%A1%E5%BC%8F3%E5%BF%BD%E7%95%A5cancel%E5%87%BD%E6%95%B0"><span class="toc-text">反模式3：忽略cancel函数</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5%E6%B1%87%E6%80%BB"><span class="toc-text">最佳实践汇总</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%A7%E8%83%BD%E8%80%83%E9%87%8F"><span class="toc-text">性能考量</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#context%E5%88%9B%E5%BB%BA%E7%9A%84%E5%BC%80%E9%94%80"><span class="toc-text">Context创建的开销</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="引言">引言</h2>
+<p><code>context.Context</code>是Go标准库中最重要的接口之一。它提供了跨API边界和goroutine之间传递截止时间、取消信号和请求范围值的标准方式。自Go
+1.7正式进入标准库以来，context已经成为Go服务端编程的基石。</p>
+<p>然而，context的误用也是Go开发中最常见的问题之一。本文将从接口定义出发，深入分析context的源码实现，结合实际案例探讨最佳实践与需要避免的反模式。</p>
+<h2 id="context接口定义">Context接口定义</h2>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-comment">// context/context.go</span><br><span class="hljs-keyword">type</span> Context <span class="hljs-keyword">interface</span> &#123;<br>    <span class="hljs-comment">// Deadline 返回context被取消的时间点</span><br>    <span class="hljs-comment">// ok==false 表示没有设置deadline</span><br>    Deadline() (deadline time.Time, ok <span class="hljs-type">bool</span>)<br><br>    <span class="hljs-comment">// Done 返回一个channel，当context被取消时关闭</span><br>    <span class="hljs-comment">// 如果context永远不会被取消，返回nil</span><br>    Done() &lt;-<span class="hljs-keyword">chan</span> <span class="hljs-keyword">struct</span>&#123;&#125;<br><br>    <span class="hljs-comment">// Err 返回context被取消的原因</span><br>    <span class="hljs-comment">// Done channel未关闭时返回nil</span><br>    <span class="hljs-comment">// 可能的值：context.Canceled 或 context.DeadlineExceeded</span><br>    Err() <span class="hljs-type">error</span><br><br>    <span class="hljs-comment">// Value 返回与key关联的值</span><br>    Value(key <span class="hljs-keyword">interface</span>&#123;&#125;) <span class="hljs-keyword">interface</span>&#123;&#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<pre class="mermaid">graph TB
+    subgraph "Context 接口"
+        I["Context"]
+        I --&gt; D["Deadline() - 获取截止时间"]
+        I --&gt; DN["Done() - 取消通知channel"]
+        I --&gt; E["Err() - 取消原因"]
+        I --&gt; V["Value() - 携带的值"]
+    end</pre>
+<h2 id="context树形结构">Context树形结构</h2>
+<p>context通过<code>WithCancel</code>、<code>WithTimeout</code>、<code>WithDeadline</code>、<code>WithValue</code>等函数派生出子context，形成树形结构。父context取消时，所有子context也会被取消。</p>
+<pre class="mermaid">graph TB
+    BG["context.Background()"] --&gt; C1["WithCancel"]
+    BG --&gt; C2["WithTimeout(5s)"]
+    C1 --&gt; C3["WithValue(userID)"]
+    C1 --&gt; C4["WithTimeout(3s)"]
+    C2 --&gt; C5["WithCancel"]
+    C2 --&gt; C6["WithValue(traceID)"]
+
+    style BG fill:#9f9
+    style C1 fill:#ff9
+    style C2 fill:#ff9
+    style C3 fill:#9ff
+    style C4 fill:#ff9
+    style C5 fill:#ff9
+    style C6 fill:#9ff</pre>
+<p>当C1被取消时，C3和C4也会被取消。当C2超时时，C5和C6也会被取消。</p>
+<h2 id="源码分析">源码分析</h2>
+<h3 id="emptyctx根context">emptyCtx：根context</h3>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-comment">// context.Background() 和 context.TODO() 返回的类型</span><br><span class="hljs-keyword">type</span> emptyCtx <span class="hljs-keyword">struct</span>&#123;&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-params">(emptyCtx)</span></span> Deadline() (deadline time.Time, ok <span class="hljs-type">bool</span>) &#123; <span class="hljs-keyword">return</span> &#125;<br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-params">(emptyCtx)</span></span> Done() &lt;-<span class="hljs-keyword">chan</span> <span class="hljs-keyword">struct</span>&#123;&#125;                    &#123; <span class="hljs-keyword">return</span> <span class="hljs-literal">nil</span> &#125;<br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-params">(emptyCtx)</span></span> Err() <span class="hljs-type">error</span>                              &#123; <span class="hljs-keyword">return</span> <span class="hljs-literal">nil</span> &#125;<br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-params">(emptyCtx)</span></span> Value(key <span class="hljs-keyword">interface</span>&#123;&#125;) <span class="hljs-keyword">interface</span>&#123;&#125;        &#123; <span class="hljs-keyword">return</span> <span class="hljs-literal">nil</span> &#125;<br><br><span class="hljs-keyword">var</span> (<br>    background = <span class="hljs-built_in">new</span>(emptyCtx)<br>    todo       = <span class="hljs-built_in">new</span>(emptyCtx)<br>)<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">Background</span><span class="hljs-params">()</span></span> Context &#123; <span class="hljs-keyword">return</span> background &#125;<br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">TODO</span><span class="hljs-params">()</span></span> Context       &#123; <span class="hljs-keyword">return</span> todo &#125;<br></code></pre></td></tr></table></figure>
+<h3 id="cancelctx可取消context">cancelCtx：可取消context</h3>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-comment">// WithCancel 返回的context类型</span><br><span class="hljs-keyword">type</span> cancelCtx <span class="hljs-keyword">struct</span> &#123;<br>    Context                        <span class="hljs-comment">// 嵌入父context</span><br><br>    mu       sync.Mutex            <span class="hljs-comment">// 保护以下字段</span><br>    done     atomic.Value          <span class="hljs-comment">// chan struct&#123;&#125;, lazily created</span><br>    children <span class="hljs-keyword">map</span>[canceler]<span class="hljs-keyword">struct</span>&#123;&#125; <span class="hljs-comment">// 子context集合</span><br>    err      <span class="hljs-type">error</span>                 <span class="hljs-comment">// 取消原因</span><br>    cause    <span class="hljs-type">error</span>                 <span class="hljs-comment">// 取消的根因 (Go 1.20+)</span><br>&#125;<br><br><span class="hljs-comment">// cancel 方法的实现</span><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-params">(c *cancelCtx)</span></span> cancel(removeFromParent <span class="hljs-type">bool</span>, err, cause <span class="hljs-type">error</span>) &#123;<br>    c.mu.Lock()<br>    <span class="hljs-keyword">if</span> c.err != <span class="hljs-literal">nil</span> &#123;<br>        c.mu.Unlock()<br>        <span class="hljs-keyword">return</span> <span class="hljs-comment">// 已经被取消</span><br>    &#125;<br>    c.err = err<br>    c.cause = cause<br><br>    <span class="hljs-comment">// 关闭done channel，通知所有等待者</span><br>    d, _ := c.done.Load().(<span class="hljs-keyword">chan</span> <span class="hljs-keyword">struct</span>&#123;&#125;)<br>    <span class="hljs-keyword">if</span> d == <span class="hljs-literal">nil</span> &#123;<br>        c.done.Store(closedchan)<br>    &#125; <span class="hljs-keyword">else</span> &#123;<br>        <span class="hljs-built_in">close</span>(d)<br>    &#125;<br><br>    <span class="hljs-comment">// 递归取消所有子context</span><br>    <span class="hljs-keyword">for</span> child := <span class="hljs-keyword">range</span> c.children &#123;<br>        child.cancel(<span class="hljs-literal">false</span>, err, cause)<br>    &#125;<br>    c.children = <span class="hljs-literal">nil</span><br>    c.mu.Unlock()<br><br>    <span class="hljs-keyword">if</span> removeFromParent &#123;<br>        removeChild(c.Context, c)<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<pre class="mermaid">sequenceDiagram
+    participant P as 父Context
+    participant C as cancelCtx
+    participant CH as children
+    participant D as done channel
+
+    Note over P,D: WithCancel 创建过程
+    P-&gt;&gt;C: 创建 cancelCtx{parent}
+    C-&gt;&gt;P: 注册为父的child
+
+    Note over P,D: cancel() 调用过程
+    C-&gt;&gt;C: 设置 err
+    C-&gt;&gt;D: close(done)
+    loop 遍历children
+        C-&gt;&gt;CH: child.cancel()
+    end
+    C-&gt;&gt;P: 从父中移除自己</pre>
+<h3 id="timerctx带超时的context">timerCtx：带超时的context</h3>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-keyword">type</span> timerCtx <span class="hljs-keyword">struct</span> &#123;<br>    cancelCtx                  <span class="hljs-comment">// 嵌入cancelCtx</span><br>    timer     *time.Timer      <span class="hljs-comment">// 定时器</span><br>    deadline  time.Time        <span class="hljs-comment">// 截止时间</span><br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">WithTimeout</span><span class="hljs-params">(parent Context, timeout time.Duration)</span></span> (Context, CancelFunc) &#123;<br>    <span class="hljs-keyword">return</span> WithDeadline(parent, time.Now().Add(timeout))<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">WithDeadline</span><span class="hljs-params">(parent Context, d time.Time)</span></span> (Context, CancelFunc) &#123;<br>    <span class="hljs-comment">// 如果父context的deadline更早，直接用WithCancel</span><br>    <span class="hljs-keyword">if</span> cur, ok := parent.Deadline(); ok &amp;&amp; cur.Before(d) &#123;<br>        <span class="hljs-keyword">return</span> WithCancel(parent)<br>    &#125;<br><br>    c := &amp;timerCtx&#123;<br>        cancelCtx: newCancelCtx(parent),<br>        deadline:  d,<br>    &#125;<br>    propagateCancel(parent, c)<br><br>    dur := time.Until(d)<br>    <span class="hljs-keyword">if</span> dur &lt;= <span class="hljs-number">0</span> &#123;<br>        c.cancel(<span class="hljs-literal">true</span>, DeadlineExceeded, <span class="hljs-literal">nil</span>) <span class="hljs-comment">// 已过期</span><br>        <span class="hljs-keyword">return</span> c, <span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">()</span></span> &#123; c.cancel(<span class="hljs-literal">false</span>, Canceled, <span class="hljs-literal">nil</span>) &#125;<br>    &#125;<br><br>    c.mu.Lock()<br>    <span class="hljs-keyword">defer</span> c.mu.Unlock()<br>    <span class="hljs-keyword">if</span> c.err == <span class="hljs-literal">nil</span> &#123;<br>        <span class="hljs-comment">// 设置定时器，到期自动取消</span><br>        c.timer = time.AfterFunc(dur, <span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">()</span></span> &#123;<br>            c.cancel(<span class="hljs-literal">true</span>, DeadlineExceeded, <span class="hljs-literal">nil</span>)<br>        &#125;)<br>    &#125;<br>    <span class="hljs-keyword">return</span> c, <span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">()</span></span> &#123; c.cancel(<span class="hljs-literal">true</span>, Canceled, <span class="hljs-literal">nil</span>) &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="valuectx携带值的context">valueCtx：携带值的context</h3>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-keyword">type</span> valueCtx <span class="hljs-keyword">struct</span> &#123;<br>    Context            <span class="hljs-comment">// 嵌入父context</span><br>    key, val <span class="hljs-keyword">interface</span>&#123;&#125;<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-params">(c *valueCtx)</span></span> Value(key <span class="hljs-keyword">interface</span>&#123;&#125;) <span class="hljs-keyword">interface</span>&#123;&#125; &#123;<br>    <span class="hljs-keyword">if</span> c.key == key &#123;<br>        <span class="hljs-keyword">return</span> c.val<br>    &#125;<br>    <span class="hljs-comment">// 向上递归查找</span><br>    <span class="hljs-keyword">return</span> value(c.Context, key)<br>&#125;<br></code></pre></td></tr></table></figure>
+<p>Value的查找是沿着context链向上遍历的，时间复杂度为O(n)。</p>
+<pre class="mermaid">flowchart LR
+    V3["valueCtx&lt;br/&gt;key=traceID"] --&gt;|"not found"| V2["valueCtx&lt;br/&gt;key=userID"]
+    V2 --&gt;|"not found"| C1["cancelCtx"]
+    C1 --&gt;|"not found"| BG["Background&lt;br/&gt;return nil"]
+
+    Q["Value(userID)"] -.-&gt;|"查找"| V3
+    V2 -.-&gt;|"found!"| R["返回 userID 的值"]
+
+    style R fill:#9f9</pre>
+<h2 id="实战用法">实战用法</h2>
+<h3 id="withcancel手动取消">WithCancel：手动取消</h3>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-keyword">package</span> main<br><br><span class="hljs-keyword">import</span> (<br>    <span class="hljs-string">&quot;context&quot;</span><br>    <span class="hljs-string">&quot;fmt&quot;</span><br>    <span class="hljs-string">&quot;time&quot;</span><br>)<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">worker</span><span class="hljs-params">(ctx context.Context, id <span class="hljs-type">int</span>)</span></span> &#123;<br>    <span class="hljs-keyword">for</span> &#123;<br>        <span class="hljs-keyword">select</span> &#123;<br>        <span class="hljs-keyword">case</span> &lt;-ctx.Done():<br>            fmt.Printf(<span class="hljs-string">&quot;Worker %d: stopped, reason: %v\n&quot;</span>, id, ctx.Err())<br>            <span class="hljs-keyword">return</span><br>        <span class="hljs-keyword">default</span>:<br>            fmt.Printf(<span class="hljs-string">&quot;Worker %d: working...\n&quot;</span>, id)<br>            time.Sleep(<span class="hljs-number">500</span> * time.Millisecond)<br>        &#125;<br>    &#125;<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">main</span><span class="hljs-params">()</span></span> &#123;<br>    ctx, cancel := context.WithCancel(context.Background())<br><br>    <span class="hljs-comment">// 启动多个worker</span><br>    <span class="hljs-keyword">for</span> i := <span class="hljs-number">1</span>; i &lt;= <span class="hljs-number">3</span>; i++ &#123;<br>        <span class="hljs-keyword">go</span> worker(ctx, i)<br>    &#125;<br><br>    <span class="hljs-comment">// 运行2秒后取消</span><br>    time.Sleep(<span class="hljs-number">2</span> * time.Second)<br>    fmt.Println(<span class="hljs-string">&quot;Main: cancelling all workers...&quot;</span>)<br>    cancel()<br><br>    <span class="hljs-comment">// 等待worker处理完取消信号</span><br>    time.Sleep(<span class="hljs-number">100</span> * time.Millisecond)<br>    fmt.Println(<span class="hljs-string">&quot;Main: done&quot;</span>)<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="withtimeout超时控制">WithTimeout：超时控制</h3>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-keyword">package</span> main<br><br><span class="hljs-keyword">import</span> (<br>    <span class="hljs-string">&quot;context&quot;</span><br>    <span class="hljs-string">&quot;fmt&quot;</span><br>    <span class="hljs-string">&quot;time&quot;</span><br>)<br><br><span class="hljs-comment">// 模拟数据库查询</span><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">queryDatabase</span><span class="hljs-params">(ctx context.Context, query <span class="hljs-type">string</span>)</span></span> (<span class="hljs-type">string</span>, <span class="hljs-type">error</span>) &#123;<br>    <span class="hljs-comment">// 模拟慢查询</span><br>    resultCh := <span class="hljs-built_in">make</span>(<span class="hljs-keyword">chan</span> <span class="hljs-type">string</span>, <span class="hljs-number">1</span>)<br>    <span class="hljs-keyword">go</span> <span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">()</span></span> &#123;<br>        time.Sleep(<span class="hljs-number">3</span> * time.Second) <span class="hljs-comment">// 模拟耗时操作</span><br>        resultCh &lt;- <span class="hljs-string">&quot;query result&quot;</span><br>    &#125;()<br><br>    <span class="hljs-keyword">select</span> &#123;<br>    <span class="hljs-keyword">case</span> result := &lt;-resultCh:<br>        <span class="hljs-keyword">return</span> result, <span class="hljs-literal">nil</span><br>    <span class="hljs-keyword">case</span> &lt;-ctx.Done():<br>        <span class="hljs-keyword">return</span> <span class="hljs-string">&quot;&quot;</span>, fmt.Errorf(<span class="hljs-string">&quot;query cancelled: %w&quot;</span>, ctx.Err())<br>    &#125;<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">main</span><span class="hljs-params">()</span></span> &#123;<br>    <span class="hljs-comment">// 设置2秒超时</span><br>    ctx, cancel := context.WithTimeout(context.Background(), <span class="hljs-number">2</span>*time.Second)<br>    <span class="hljs-keyword">defer</span> cancel() <span class="hljs-comment">// 即使正常完成也要调用cancel释放资源</span><br><br>    result, err := queryDatabase(ctx, <span class="hljs-string">&quot;SELECT * FROM users&quot;</span>)<br>    <span class="hljs-keyword">if</span> err != <span class="hljs-literal">nil</span> &#123;<br>        fmt.Printf(<span class="hljs-string">&quot;Error: %v\n&quot;</span>, err)<br>        <span class="hljs-keyword">return</span><br>    &#125;<br>    fmt.Printf(<span class="hljs-string">&quot;Result: %s\n&quot;</span>, result)<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="withvalue传递请求范围的值">WithValue：传递请求范围的值</h3>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-keyword">package</span> main<br><br><span class="hljs-keyword">import</span> (<br>    <span class="hljs-string">&quot;context&quot;</span><br>    <span class="hljs-string">&quot;fmt&quot;</span><br>    <span class="hljs-string">&quot;net/http&quot;</span><br>)<br><br><span class="hljs-comment">// 使用自定义类型作为key，避免冲突</span><br><span class="hljs-keyword">type</span> contextKey <span class="hljs-type">string</span><br><br><span class="hljs-keyword">const</span> (<br>    requestIDKey contextKey = <span class="hljs-string">&quot;requestID&quot;</span><br>    userIDKey    contextKey = <span class="hljs-string">&quot;userID&quot;</span><br>)<br><br><span class="hljs-comment">// 中间件：注入请求ID</span><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">requestIDMiddleware</span><span class="hljs-params">(next http.Handler)</span></span> http.Handler &#123;<br>    <span class="hljs-keyword">return</span> http.HandlerFunc(<span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">(w http.ResponseWriter, r *http.Request)</span></span> &#123;<br>        reqID := r.Header.Get(<span class="hljs-string">&quot;X-Request-ID&quot;</span>)<br>        <span class="hljs-keyword">if</span> reqID == <span class="hljs-string">&quot;&quot;</span> &#123;<br>            reqID = generateID() <span class="hljs-comment">// 生成唯一ID</span><br>        &#125;<br>        ctx := context.WithValue(r.Context(), requestIDKey, reqID)<br>        next.ServeHTTP(w, r.WithContext(ctx))<br>    &#125;)<br>&#125;<br><br><span class="hljs-comment">// 从context中获取请求ID</span><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">getRequestID</span><span class="hljs-params">(ctx context.Context)</span></span> <span class="hljs-type">string</span> &#123;<br>    <span class="hljs-keyword">if</span> id, ok := ctx.Value(requestIDKey).(<span class="hljs-type">string</span>); ok &#123;<br>        <span class="hljs-keyword">return</span> id<br>    &#125;<br>    <span class="hljs-keyword">return</span> <span class="hljs-string">&quot;unknown&quot;</span><br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">handler</span><span class="hljs-params">(w http.ResponseWriter, r *http.Request)</span></span> &#123;<br>    reqID := getRequestID(r.Context())<br>    fmt.Fprintf(w, <span class="hljs-string">&quot;Request ID: %s\n&quot;</span>, reqID)<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">generateID</span><span class="hljs-params">()</span></span> <span class="hljs-type">string</span> &#123;<br>    <span class="hljs-keyword">return</span> <span class="hljs-string">&quot;req-12345&quot;</span> <span class="hljs-comment">// 实际应用中使用UUID</span><br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">main</span><span class="hljs-params">()</span></span> &#123;<br>    mux := http.NewServeMux()<br>    mux.Handle(<span class="hljs-string">&quot;/&quot;</span>, requestIDMiddleware(http.HandlerFunc(handler)))<br>    fmt.Println(<span class="hljs-string">&quot;Server starting on :8080&quot;</span>)<br>    http.ListenAndServe(<span class="hljs-string">&quot;:8080&quot;</span>, mux)<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="withcancelcausego-1.20">WithCancelCause（Go 1.20+）</h3>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-keyword">package</span> main<br><br><span class="hljs-keyword">import</span> (<br>    <span class="hljs-string">&quot;context&quot;</span><br>    <span class="hljs-string">&quot;errors&quot;</span><br>    <span class="hljs-string">&quot;fmt&quot;</span><br>)<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">main</span><span class="hljs-params">()</span></span> &#123;<br>    ctx, cancel := context.WithCancelCause(context.Background())<br><br>    <span class="hljs-keyword">go</span> <span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">()</span></span> &#123;<br>        <span class="hljs-comment">// 带原因的取消</span><br>        cancel(fmt.Errorf(<span class="hljs-string">&quot;database connection lost&quot;</span>))<br>    &#125;()<br><br>    &lt;-ctx.Done()<br>    fmt.Println(<span class="hljs-string">&quot;Err:&quot;</span>, ctx.Err())                      <span class="hljs-comment">// context canceled</span><br>    fmt.Println(<span class="hljs-string">&quot;Cause:&quot;</span>, context.Cause(ctx))            <span class="hljs-comment">// database connection lost</span><br>    fmt.Println(<span class="hljs-string">&quot;Is canceled:&quot;</span>, errors.Is(ctx.Err(), context.Canceled)) <span class="hljs-comment">// true</span><br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="afterfuncgo-1.21">AfterFunc（Go 1.21+）</h3>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-keyword">package</span> main<br><br><span class="hljs-keyword">import</span> (<br>    <span class="hljs-string">&quot;context&quot;</span><br>    <span class="hljs-string">&quot;fmt&quot;</span><br>    <span class="hljs-string">&quot;time&quot;</span><br>)<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">main</span><span class="hljs-params">()</span></span> &#123;<br>    ctx, cancel := context.WithTimeout(context.Background(), <span class="hljs-number">2</span>*time.Second)<br>    <span class="hljs-keyword">defer</span> cancel()<br><br>    <span class="hljs-comment">// 当context取消时执行清理函数</span><br>    stop := context.AfterFunc(ctx, <span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">()</span></span> &#123;<br>        fmt.Println(<span class="hljs-string">&quot;Context cancelled, performing cleanup...&quot;</span>)<br>    &#125;)<br><br>    <span class="hljs-comment">// 如果在context取消前就不需要cleanup了，可以取消注册</span><br>    _ = stop <span class="hljs-comment">// stop() 会取消注册</span><br><br>    &lt;-ctx.Done()<br>    time.Sleep(<span class="hljs-number">100</span> * time.Millisecond) <span class="hljs-comment">// 等待AfterFunc执行</span><br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="context传播模式">Context传播模式</h2>
+<h3 id="http客户端传播">HTTP客户端传播</h3>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-keyword">package</span> main<br><br><span class="hljs-keyword">import</span> (<br>    <span class="hljs-string">&quot;context&quot;</span><br>    <span class="hljs-string">&quot;fmt&quot;</span><br>    <span class="hljs-string">&quot;io&quot;</span><br>    <span class="hljs-string">&quot;net/http&quot;</span><br>    <span class="hljs-string">&quot;time&quot;</span><br>)<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">fetchWithContext</span><span class="hljs-params">(ctx context.Context, url <span class="hljs-type">string</span>)</span></span> (<span class="hljs-type">string</span>, <span class="hljs-type">error</span>) &#123;<br>    <span class="hljs-comment">// 创建带context的HTTP请求</span><br>    req, err := http.NewRequestWithContext(ctx, <span class="hljs-string">&quot;GET&quot;</span>, url, <span class="hljs-literal">nil</span>)<br>    <span class="hljs-keyword">if</span> err != <span class="hljs-literal">nil</span> &#123;<br>        <span class="hljs-keyword">return</span> <span class="hljs-string">&quot;&quot;</span>, fmt.Errorf(<span class="hljs-string">&quot;creating request: %w&quot;</span>, err)<br>    &#125;<br><br>    resp, err := http.DefaultClient.Do(req)<br>    <span class="hljs-keyword">if</span> err != <span class="hljs-literal">nil</span> &#123;<br>        <span class="hljs-keyword">return</span> <span class="hljs-string">&quot;&quot;</span>, fmt.Errorf(<span class="hljs-string">&quot;executing request: %w&quot;</span>, err)<br>    &#125;<br>    <span class="hljs-keyword">defer</span> resp.Body.Close()<br><br>    body, err := io.ReadAll(resp.Body)<br>    <span class="hljs-keyword">if</span> err != <span class="hljs-literal">nil</span> &#123;<br>        <span class="hljs-keyword">return</span> <span class="hljs-string">&quot;&quot;</span>, fmt.Errorf(<span class="hljs-string">&quot;reading body: %w&quot;</span>, err)<br>    &#125;<br><br>    <span class="hljs-keyword">return</span> <span class="hljs-type">string</span>(body), <span class="hljs-literal">nil</span><br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">main</span><span class="hljs-params">()</span></span> &#123;<br>    ctx, cancel := context.WithTimeout(context.Background(), <span class="hljs-number">5</span>*time.Second)<br>    <span class="hljs-keyword">defer</span> cancel()<br><br>    result, err := fetchWithContext(ctx, <span class="hljs-string">&quot;https://httpbin.org/get&quot;</span>)<br>    <span class="hljs-keyword">if</span> err != <span class="hljs-literal">nil</span> &#123;<br>        fmt.Printf(<span class="hljs-string">&quot;Error: %v\n&quot;</span>, err)<br>        <span class="hljs-keyword">return</span><br>    &#125;<br>    fmt.Printf(<span class="hljs-string">&quot;Response length: %d\n&quot;</span>, <span class="hljs-built_in">len</span>(result))<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="数据库操作传播">数据库操作传播</h3>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-keyword">package</span> main<br><br><span class="hljs-keyword">import</span> (<br>    <span class="hljs-string">&quot;context&quot;</span><br>    <span class="hljs-string">&quot;database/sql&quot;</span><br>    <span class="hljs-string">&quot;fmt&quot;</span><br>    <span class="hljs-string">&quot;time&quot;</span><br>)<br><br><span class="hljs-keyword">type</span> UserRepository <span class="hljs-keyword">struct</span> &#123;<br>    db *sql.DB<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-params">(r *UserRepository)</span></span> FindByID(ctx context.Context, id <span class="hljs-type">string</span>) (*User, <span class="hljs-type">error</span>) &#123;<br>    <span class="hljs-comment">// context传递给数据库查询，超时会自动取消查询</span><br>    row := r.db.QueryRowContext(ctx,<br>        <span class="hljs-string">&quot;SELECT id, name, email FROM users WHERE id = $1&quot;</span>, id)<br><br>    <span class="hljs-keyword">var</span> user User<br>    <span class="hljs-keyword">if</span> err := row.Scan(&amp;user.ID, &amp;user.Name, &amp;user.Email); err != <span class="hljs-literal">nil</span> &#123;<br>        <span class="hljs-keyword">return</span> <span class="hljs-literal">nil</span>, fmt.Errorf(<span class="hljs-string">&quot;scanning user: %w&quot;</span>, err)<br>    &#125;<br>    <span class="hljs-keyword">return</span> &amp;user, <span class="hljs-literal">nil</span><br>&#125;<br><br><span class="hljs-keyword">type</span> User <span class="hljs-keyword">struct</span> &#123;<br>    ID    <span class="hljs-type">string</span><br>    Name  <span class="hljs-type">string</span><br>    Email <span class="hljs-type">string</span><br>&#125;<br><br><span class="hljs-comment">// 服务层传播context</span><br><span class="hljs-keyword">type</span> UserService <span class="hljs-keyword">struct</span> &#123;<br>    repo *UserRepository<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-params">(s *UserService)</span></span> GetUser(ctx context.Context, id <span class="hljs-type">string</span>) (*User, <span class="hljs-type">error</span>) &#123;<br>    <span class="hljs-comment">// 可以进一步设置更细粒度的超时</span><br>    queryCtx, cancel := context.WithTimeout(ctx, <span class="hljs-number">2</span>*time.Second)<br>    <span class="hljs-keyword">defer</span> cancel()<br><br>    <span class="hljs-keyword">return</span> s.repo.FindByID(queryCtx, id)<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="反模式与最佳实践">反模式与最佳实践</h2>
+<h3
+id="反模式1将context存储在结构体中">反模式1：将Context存储在结构体中</h3>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-comment">// 错误：不要把context存在结构体中</span><br><span class="hljs-keyword">type</span> BadService <span class="hljs-keyword">struct</span> &#123;<br>    ctx    context.Context <span class="hljs-comment">// 不要这样做！</span><br>    db     *sql.DB<br>&#125;<br><br><span class="hljs-comment">// 正确：context应该作为函数的第一个参数传递</span><br><span class="hljs-keyword">type</span> GoodService <span class="hljs-keyword">struct</span> &#123;<br>    db *sql.DB<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-params">(s *GoodService)</span></span> DoWork(ctx context.Context) <span class="hljs-type">error</span> &#123;<br>    <span class="hljs-comment">// context作为参数传递</span><br>    <span class="hljs-keyword">return</span> s.db.PingContext(ctx)<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3
+id="反模式2使用context传递业务数据">反模式2：使用Context传递业务数据</h3>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-comment">// 错误：不要用context传递业务逻辑所需的参数</span><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">processOrder</span><span class="hljs-params">(ctx context.Context)</span></span> <span class="hljs-type">error</span> &#123;<br>    orderID := ctx.Value(<span class="hljs-string">&quot;orderID&quot;</span>).(<span class="hljs-type">string</span>) <span class="hljs-comment">// 不要这样做！</span><br>    amount := ctx.Value(<span class="hljs-string">&quot;amount&quot;</span>).(<span class="hljs-type">float64</span>)   <span class="hljs-comment">// 不要这样做！</span><br>    <span class="hljs-comment">// ...</span><br>&#125;<br><br><span class="hljs-comment">// 正确：业务数据作为函数参数显式传递</span><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">processOrder</span><span class="hljs-params">(ctx context.Context, orderID <span class="hljs-type">string</span>, amount <span class="hljs-type">float64</span>)</span></span> <span class="hljs-type">error</span> &#123;<br>    <span class="hljs-comment">// context只用于传递请求范围的元数据（traceID、requestID等）</span><br>    traceID := getTraceID(ctx) <span class="hljs-comment">// 这是合适的用法</span><br>    _ = traceID<br>    <span class="hljs-comment">// ...</span><br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="反模式3忽略cancel函数">反模式3：忽略cancel函数</h3>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-comment">// 错误：泄漏context资源</span><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">leakyFunction</span><span class="hljs-params">()</span></span> &#123;<br>    ctx, _ := context.WithTimeout(context.Background(), <span class="hljs-number">5</span>*time.Second)<br>    <span class="hljs-comment">// cancel被丢弃了！timer资源不会被提前释放</span><br>    doWork(ctx)<br>&#125;<br><br><span class="hljs-comment">// 正确：始终调用cancel</span><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">correctFunction</span><span class="hljs-params">()</span></span> &#123;<br>    ctx, cancel := context.WithTimeout(context.Background(), <span class="hljs-number">5</span>*time.Second)<br>    <span class="hljs-keyword">defer</span> cancel() <span class="hljs-comment">// 确保资源释放</span><br>    doWork(ctx)<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">doWork</span><span class="hljs-params">(ctx context.Context)</span></span> &#123;&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="最佳实践汇总">最佳实践汇总</h3>
+<pre class="mermaid">graph TB
+    subgraph "Context 最佳实践"
+        A["1. context作为第一个参数&lt;br/&gt;命名为ctx"]
+        B["2. 不要传nil context&lt;br/&gt;不确定时用TODO()"]
+        C["3. WithValue只传请求范围数据&lt;br/&gt;traceID, requestID等"]
+        D["4. 始终defer cancel()"]
+        E["5. 不要存在struct中"]
+        F["6. 不要传业务参数"]
+        G["7. key用unexported自定义类型"]
+    end</pre>
+<h2 id="性能考量">性能考量</h2>
+<h3 id="context创建的开销">Context创建的开销</h3>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-keyword">package</span> main<br><br><span class="hljs-keyword">import</span> (<br>    <span class="hljs-string">&quot;context&quot;</span><br>    <span class="hljs-string">&quot;testing&quot;</span><br>    <span class="hljs-string">&quot;time&quot;</span><br>)<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">BenchmarkWithCancel</span><span class="hljs-params">(b *testing.B)</span></span> &#123;<br>    ctx := context.Background()<br>    <span class="hljs-keyword">for</span> i := <span class="hljs-number">0</span>; i &lt; b.N; i++ &#123;<br>        _, cancel := context.WithCancel(ctx)<br>        cancel()<br>    &#125;<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">BenchmarkWithTimeout</span><span class="hljs-params">(b *testing.B)</span></span> &#123;<br>    ctx := context.Background()<br>    <span class="hljs-keyword">for</span> i := <span class="hljs-number">0</span>; i &lt; b.N; i++ &#123;<br>        _, cancel := context.WithTimeout(ctx, time.Second)<br>        cancel()<br>    &#125;<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">BenchmarkWithValue</span><span class="hljs-params">(b *testing.B)</span></span> &#123;<br>    ctx := context.Background()<br>    key := contextKey(<span class="hljs-string">&quot;key&quot;</span>)<br>    <span class="hljs-keyword">for</span> i := <span class="hljs-number">0</span>; i &lt; b.N; i++ &#123;<br>        _ = context.WithValue(ctx, key, <span class="hljs-string">&quot;value&quot;</span>)<br>    &#125;<br>&#125;<br><br><span class="hljs-comment">// 深层Value查找的开销</span><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">BenchmarkDeepValueLookup</span><span class="hljs-params">(b *testing.B)</span></span> &#123;<br>    ctx := context.Background()<br>    <span class="hljs-comment">// 构建深度为100的context链</span><br>    <span class="hljs-keyword">for</span> i := <span class="hljs-number">0</span>; i &lt; <span class="hljs-number">100</span>; i++ &#123;<br>        ctx = context.WithValue(ctx, contextKey(fmt.Sprintf(<span class="hljs-string">&quot;key-%d&quot;</span>, i)), i)<br>    &#125;<br>    targetKey := contextKey(<span class="hljs-string">&quot;key-0&quot;</span>) <span class="hljs-comment">// 最深层的key</span><br><br>    b.ResetTimer()<br>    <span class="hljs-keyword">for</span> i := <span class="hljs-number">0</span>; i &lt; b.N; i++ &#123;<br>        _ = ctx.Value(targetKey)<br>    &#125;<br>&#125;<br><br><span class="hljs-keyword">type</span> contextKey <span class="hljs-type">string</span><br></code></pre></td></tr></table></figure>
+<p>深层的WithValue链会导致Value查找变慢（O(n)）。如果需要传递多个值，可以将它们打包到一个结构体中：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-comment">// 将多个值打包为一个</span><br><span class="hljs-keyword">type</span> RequestMetadata <span class="hljs-keyword">struct</span> &#123;<br>    TraceID   <span class="hljs-type">string</span><br>    RequestID <span class="hljs-type">string</span><br>    UserAgent <span class="hljs-type">string</span><br>&#125;<br><br><span class="hljs-keyword">type</span> metadataKey <span class="hljs-keyword">struct</span>&#123;&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">WithMetadata</span><span class="hljs-params">(ctx context.Context, md *RequestMetadata)</span></span> context.Context &#123;<br>    <span class="hljs-keyword">return</span> context.WithValue(ctx, metadataKey&#123;&#125;, md)<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">GetMetadata</span><span class="hljs-params">(ctx context.Context)</span></span> *RequestMetadata &#123;<br>    <span class="hljs-keyword">if</span> md, ok := ctx.Value(metadataKey&#123;&#125;).(*RequestMetadata); ok &#123;<br>        <span class="hljs-keyword">return</span> md<br>    &#125;<br>    <span class="hljs-keyword">return</span> <span class="hljs-literal">nil</span><br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="总结">总结</h2>
+<p>Context是Go并发编程和服务端开发的核心工具，正确使用它可以：</p>
+<ol type="1">
+<li><strong>统一取消传播</strong>：一个请求的取消能自动传播到所有相关的goroutine和IO操作</li>
+<li><strong>超时控制</strong>：防止请求无限等待，保护系统资源</li>
+<li><strong>元数据传递</strong>：在请求链路中传递traceID等观测数据</li>
+</ol>
+<p>关键要点： - Context形成树形结构，父取消会传播到所有子context -
+<code>cancelCtx</code>通过关闭done channel和递归取消children实现级联取消
+- <code>timerCtx</code>基于<code>time.AfterFunc</code>实现自动超时取消 -
+<code>valueCtx</code>通过链表向上查找，深度不宜过大 -
+遵循最佳实践，避免将context存储在结构体中或用于传递业务参数</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2023-08-09</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">3.5k 字 · 9 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/go-memory-management/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Go内存管理与垃圾回收机制</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/go-interface-internals/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Go接口底层实现与设计哲学</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#context%E6%8E%A5%E5%8F%A3%E5%AE%9A%E4%B9%89"><span class="toc-text">Context接口定义</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#context%E6%A0%91%E5%BD%A2%E7%BB%93%E6%9E%84"><span class="toc-text">Context树形结构</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90"><span class="toc-text">源码分析</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#emptyctx%E6%A0%B9context"><span class="toc-text">emptyCtx：根context</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#cancelctx%E5%8F%AF%E5%8F%96%E6%B6%88context"><span class="toc-text">cancelCtx：可取消context</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#timerctx%E5%B8%A6%E8%B6%85%E6%97%B6%E7%9A%84context"><span class="toc-text">timerCtx：带超时的context</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#valuectx%E6%90%BA%E5%B8%A6%E5%80%BC%E7%9A%84context"><span class="toc-text">valueCtx：携带值的context</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E6%88%98%E7%94%A8%E6%B3%95"><span class="toc-text">实战用法</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#withcancel%E6%89%8B%E5%8A%A8%E5%8F%96%E6%B6%88"><span class="toc-text">WithCancel：手动取消</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#withtimeout%E8%B6%85%E6%97%B6%E6%8E%A7%E5%88%B6"><span class="toc-text">WithTimeout：超时控制</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#withvalue%E4%BC%A0%E9%80%92%E8%AF%B7%E6%B1%82%E8%8C%83%E5%9B%B4%E7%9A%84%E5%80%BC"><span class="toc-text">WithValue：传递请求范围的值</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#withcancelcausego-1.20"><span class="toc-text">WithCancelCause（Go 1.20+）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#afterfuncgo-1.21"><span class="toc-text">AfterFunc（Go 1.21+）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#context%E4%BC%A0%E6%92%AD%E6%A8%A1%E5%BC%8F"><span class="toc-text">Context传播模式</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#http%E5%AE%A2%E6%88%B7%E7%AB%AF%E4%BC%A0%E6%92%AD"><span class="toc-text">HTTP客户端传播</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E5%BA%93%E6%93%8D%E4%BD%9C%E4%BC%A0%E6%92%AD"><span class="toc-text">数据库操作传播</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8F%8D%E6%A8%A1%E5%BC%8F%E4%B8%8E%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5"><span class="toc-text">反模式与最佳实践</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8F%8D%E6%A8%A1%E5%BC%8F1%E5%B0%86context%E5%AD%98%E5%82%A8%E5%9C%A8%E7%BB%93%E6%9E%84%E4%BD%93%E4%B8%AD"><span class="toc-text">反模式1：将Context存储在结构体中</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8F%8D%E6%A8%A1%E5%BC%8F2%E4%BD%BF%E7%94%A8context%E4%BC%A0%E9%80%92%E4%B8%9A%E5%8A%A1%E6%95%B0%E6%8D%AE"><span class="toc-text">反模式2：使用Context传递业务数据</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8F%8D%E6%A8%A1%E5%BC%8F3%E5%BF%BD%E7%95%A5cancel%E5%87%BD%E6%95%B0"><span class="toc-text">反模式3：忽略cancel函数</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5%E6%B1%87%E6%80%BB"><span class="toc-text">最佳实践汇总</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%A7%E8%83%BD%E8%80%83%E9%87%8F"><span class="toc-text">性能考量</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#context%E5%88%9B%E5%BB%BA%E7%9A%84%E5%BC%80%E9%94%80"><span class="toc-text">Context创建的开销</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

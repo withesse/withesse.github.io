@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CQRS与事件溯源架构实践 · zt&#39;s Blog</title>
+  <meta name="description" content="深入解析CQRS与事件溯源架构模式，涵盖事件存储、投影、快照机制，以及Axon Framework实战示例和优缺点分析。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/cqrs-event-sourcing/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="CQRS与事件溯源架构实践">
+  <meta property="og:description" content="深入解析CQRS与事件溯源架构模式，涵盖事件存储、投影、快照机制，以及Axon Framework实战示例和优缺点分析。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/cqrs-event-sourcing/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2023-12-05T16:00:00.000Z">
+  <meta property="article:modified_time" content="2023-12-05T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="CQRS与事件溯源架构实践">
+  <meta name="twitter:description" content="深入解析CQRS与事件溯源架构模式，涵盖事件存储、投影、快照机制，以及Axon Framework实战示例和优缺点分析。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"CQRS与事件溯源架构实践","description":"深入解析CQRS与事件溯源架构模式，涵盖事件存储、投影、快照机制，以及Axon Framework实战示例和优缺点分析。","datePublished":"2023-12-05T16:00:00.000Z","dateModified":"2023-12-05T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/cqrs-event-sourcing/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Architecture","item":"https://withesse.co/categories/Architecture/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:152">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Architecture/">Architecture</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/cqrs/"><span class="hash">#</span>cqrs</a><a class="tag" href="/tags/event-sourcing/"><span class="hash">#</span>event-sourcing</a><a class="tag" href="/tags/architecture/"><span class="hash">#</span>architecture</a>
+        
+      </div>
+
+      <h1>CQRS与事件溯源架构实践</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2023.12.06</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 8 min</span>
+        </span>
+        <span class="wc"><span class="num">3.1k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#cqrs-%E6%A8%A1%E5%BC%8F"><span class="toc-text">CQRS 模式</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BC%A0%E7%BB%9F-crud-%E7%9A%84%E9%97%AE%E9%A2%98"><span class="toc-text">传统 CRUD 的问题</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#cqrs-%E6%9E%B6%E6%9E%84"><span class="toc-text">CQRS 架构</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%8B%E4%BB%B6%E6%BA%AF%E6%BA%90event-sourcing"><span class="toc-text">事件溯源（Event Sourcing）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E7%90%86%E5%BF%B5"><span class="toc-text">核心理念</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BA%8B%E4%BB%B6%E5%AD%98%E5%82%A8%E8%AE%BE%E8%AE%A1"><span class="toc-text">事件存储设计</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#event-store-%E5%AE%9E%E7%8E%B0"><span class="toc-text">Event Store 实现</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%8A%95%E5%BD%B1projection"><span class="toc-text">投影（Projection）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BF%AB%E7%85%A7%E6%9C%BA%E5%88%B6"><span class="toc-text">快照机制</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#axon-framework-%E5%AE%9E%E6%88%98"><span class="toc-text">Axon Framework 实战</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#cqrs-event-sourcing-%E7%9A%84%E6%95%B0%E6%8D%AE%E6%B5%81"><span class="toc-text">CQRS + Event Sourcing
+的数据流</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BC%98%E7%BC%BA%E7%82%B9%E5%88%86%E6%9E%90"><span class="toc-text">优缺点分析</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BC%98%E5%8A%BF"><span class="toc-text">优势</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%8C%91%E6%88%98"><span class="toc-text">挑战</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%80%82%E7%94%A8%E5%9C%BA%E6%99%AF"><span class="toc-text">适用场景</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="前言">前言</h2>
+<p>传统的 CRUD
+模式将读写操作混合在同一个模型中，当系统复杂度增长时，读写需求的差异会导致模型变得臃肿。CQRS（Command
+Query Responsibility
+Segregation）通过分离读写模型来解决这个问题，而事件溯源（Event
+Sourcing）则提供了一种全新的数据持久化范式——不存储状态，而是存储导致状态变化的事件序列。两者结合，构成了处理复杂业务领域的强大架构模式。</p>
+<h2 id="cqrs-模式">CQRS 模式</h2>
+<h3 id="传统-crud-的问题">传统 CRUD 的问题</h3>
+<p>在传统架构中，同一个模型（通常是 ORM
+Entity）既负责处理写操作，又负责响应查询请求。</p>
+<pre class="mermaid">graph LR
+    Client[客户端] --&gt; API[API Layer]
+    API --&gt; Service[Service Layer]
+    Service --&gt; Repo[Repository]
+    Repo --&gt; DB[(数据库)]
+
+    style DB fill:#f96</pre>
+<p>这种方式的问题在于：</p>
+<ol type="1">
+<li><strong>读写冲突</strong>：复杂查询需要关联多个表，而写操作需要保持数据一致性，两者的优化方向相反</li>
+<li><strong>模型臃肿</strong>：领域模型为了满足查询需求而添加了大量计算属性</li>
+<li><strong>扩展受限</strong>：读写无法独立扩缩容</li>
+</ol>
+<h3 id="cqrs-架构">CQRS 架构</h3>
+<p>CQRS
+的核心思想是将一个系统的操作分为两类：改变状态的<strong>命令（Command）</strong>和返回数据的<strong>查询（Query）</strong>，使用不同的模型来处理它们。</p>
+<pre class="mermaid">graph TB
+    Client[客户端]
+
+    Client --&gt;|写操作| CommandAPI[Command API]
+    Client --&gt;|读操作| QueryAPI[Query API]
+
+    CommandAPI --&gt; CommandHandler[Command Handler]
+    CommandHandler --&gt; WriteModel[写模型/领域模型]
+    WriteModel --&gt; WriteDB[(写数据库&lt;br/&gt;MySQL)]
+
+    WriteDB --&gt;|数据同步| ReadDB[(读数据库&lt;br/&gt;Elasticsearch)]
+
+    QueryAPI --&gt; QueryHandler[Query Handler]
+    QueryHandler --&gt; ReadModel[读模型/视图模型]
+    ReadModel --&gt; ReadDB
+
+    style WriteDB fill:#f96
+    style ReadDB fill:#6f9</pre>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">// Command 定义</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">record</span> <span class="hljs-title class_">CreateOrderCommand</span><span class="hljs-params">(</span><br><span class="hljs-params">    String customerId,</span><br><span class="hljs-params">    List&lt;OrderItemDTO&gt; items,</span><br><span class="hljs-params">    String shippingAddress</span><br><span class="hljs-params">)</span> &#123;&#125;<br><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">record</span> <span class="hljs-title class_">CancelOrderCommand</span><span class="hljs-params">(String orderId, String reason)</span> &#123;&#125;<br><br><span class="hljs-comment">// Command Handler</span><br><span class="hljs-meta">@Service</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">OrderCommandHandler</span> &#123;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> OrderRepository orderRepository;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> EventPublisher eventPublisher;<br><br>    <span class="hljs-meta">@CommandHandler</span><br>    <span class="hljs-meta">@Transactional</span><br>    <span class="hljs-keyword">public</span> String <span class="hljs-title function_">handle</span><span class="hljs-params">(CreateOrderCommand cmd)</span> &#123;<br>        <span class="hljs-type">Order</span> <span class="hljs-variable">order</span> <span class="hljs-operator">=</span> Order.create(<br>            cmd.customerId(),<br>            cmd.items(),<br>            cmd.shippingAddress()<br>        );<br>        orderRepository.save(order);<br>        eventPublisher.publish(order.getDomainEvents());<br>        <span class="hljs-keyword">return</span> order.getId();<br>    &#125;<br><br>    <span class="hljs-meta">@CommandHandler</span><br>    <span class="hljs-meta">@Transactional</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">handle</span><span class="hljs-params">(CancelOrderCommand cmd)</span> &#123;<br>        <span class="hljs-type">Order</span> <span class="hljs-variable">order</span> <span class="hljs-operator">=</span> orderRepository.findById(cmd.orderId())<br>            .orElseThrow(() -&gt; <span class="hljs-keyword">new</span> <span class="hljs-title class_">OrderNotFoundException</span>(cmd.orderId()));<br>        order.cancel(cmd.reason());<br>        orderRepository.save(order);<br>        eventPublisher.publish(order.getDomainEvents());<br>    &#125;<br>&#125;<br><br><span class="hljs-comment">// Query 定义与处理</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">record</span> <span class="hljs-title class_">GetOrderDetailQuery</span><span class="hljs-params">(String orderId)</span> &#123;&#125;<br><br><span class="hljs-meta">@Service</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">OrderQueryHandler</span> &#123;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> OrderReadRepository readRepository;<br><br>    <span class="hljs-meta">@QueryHandler</span><br>    <span class="hljs-keyword">public</span> OrderDetailView <span class="hljs-title function_">handle</span><span class="hljs-params">(GetOrderDetailQuery query)</span> &#123;<br>        <span class="hljs-keyword">return</span> readRepository.findById(query.orderId())<br>            .orElseThrow(() -&gt; <span class="hljs-keyword">new</span> <span class="hljs-title class_">OrderNotFoundException</span>(query.orderId()));<br>    &#125;<br>&#125;<br><br><span class="hljs-comment">// 读模型 - 针对查询优化的扁平化视图</span><br><span class="hljs-meta">@Document(indexName = &quot;orders&quot;)</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">OrderDetailView</span> &#123;<br>    <span class="hljs-keyword">private</span> String orderId;<br>    <span class="hljs-keyword">private</span> String customerName;<br>    <span class="hljs-keyword">private</span> String customerEmail;<br>    <span class="hljs-keyword">private</span> BigDecimal totalAmount;<br>    <span class="hljs-keyword">private</span> String status;<br>    <span class="hljs-keyword">private</span> List&lt;OrderItemView&gt; items;<br>    <span class="hljs-keyword">private</span> String shippingAddress;<br>    <span class="hljs-keyword">private</span> LocalDateTime createdAt;<br>    <span class="hljs-keyword">private</span> LocalDateTime updatedAt;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="事件溯源event-sourcing">事件溯源（Event Sourcing）</h2>
+<h3 id="核心理念">核心理念</h3>
+<p>传统的数据存储方式是保存实体的最新状态。事件溯源反其道而行——不保存状态，只保存导致状态变化的事件。实体的当前状态通过重放所有历史事件来计算得出。</p>
+<pre class="mermaid">graph LR
+    subgraph 传统方式
+        A[Account] --&gt;|UPDATE balance=800| DB1[(DB)]
+    end
+
+    subgraph 事件溯源
+        E1[AccountCreated&lt;br/&gt;balance=1000] --&gt; E2[MoneyWithdrawn&lt;br/&gt;amount=200]
+        E2 --&gt; E3[MoneyDeposited&lt;br/&gt;amount=500]
+        E3 --&gt; E4[MoneyWithdrawn&lt;br/&gt;amount=300]
+        E4 --&gt; Store[(Event Store)]
+        Store --&gt;|重放事件| State[当前余额: 1000]
+    end</pre>
+<h3 id="事件存储设计">事件存储设计</h3>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- Event Store 表结构</span><br><span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">TABLE</span> event_store (<br>    id              BIGSERIAL <span class="hljs-keyword">PRIMARY</span> KEY,<br>    aggregate_type  <span class="hljs-type">VARCHAR</span>(<span class="hljs-number">255</span>) <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span>,<br>    aggregate_id    <span class="hljs-type">VARCHAR</span>(<span class="hljs-number">36</span>) <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span>,<br>    sequence_number <span class="hljs-type">BIGINT</span> <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span>,<br>    event_type      <span class="hljs-type">VARCHAR</span>(<span class="hljs-number">255</span>) <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span>,<br>    event_data      JSONB <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span>,<br>    metadata        JSONB,<br>    created_at      <span class="hljs-type">TIMESTAMP</span> <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span> <span class="hljs-keyword">DEFAULT</span> NOW(),<br><br>    <span class="hljs-keyword">UNIQUE</span> (aggregate_id, sequence_number)<br>);<br><br><span class="hljs-keyword">CREATE</span> INDEX idx_event_store_aggregate<br>    <span class="hljs-keyword">ON</span> event_store (aggregate_id, sequence_number);<br><br><span class="hljs-comment">-- 快照表</span><br><span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">TABLE</span> snapshots (<br>    aggregate_id    <span class="hljs-type">VARCHAR</span>(<span class="hljs-number">36</span>) <span class="hljs-keyword">PRIMARY</span> KEY,<br>    aggregate_type  <span class="hljs-type">VARCHAR</span>(<span class="hljs-number">255</span>) <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span>,<br>    sequence_number <span class="hljs-type">BIGINT</span> <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span>,<br>    snapshot_data   JSONB <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span>,<br>    created_at      <span class="hljs-type">TIMESTAMP</span> <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span> <span class="hljs-keyword">DEFAULT</span> NOW()<br>);<br></code></pre></td></tr></table></figure>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">// 事件溯源聚合根</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">abstract</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">EventSourcedAggregate</span> &#123;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> List&lt;DomainEvent&gt; uncommittedEvents = <span class="hljs-keyword">new</span> <span class="hljs-title class_">ArrayList</span>&lt;&gt;();<br>    <span class="hljs-keyword">private</span> <span class="hljs-type">long</span> <span class="hljs-variable">version</span> <span class="hljs-operator">=</span> -<span class="hljs-number">1</span>;<br><br>    <span class="hljs-comment">// 从事件流中重建聚合</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> &lt;T <span class="hljs-keyword">extends</span> <span class="hljs-title class_">EventSourcedAggregate</span>&gt; T <span class="hljs-title function_">reconstitute</span><span class="hljs-params">(</span><br><span class="hljs-params">            Class&lt;T&gt; type, List&lt;DomainEvent&gt; events)</span> &#123;<br>        <span class="hljs-type">T</span> <span class="hljs-variable">aggregate</span> <span class="hljs-operator">=</span> instantiate(type);<br>        <span class="hljs-keyword">for</span> (DomainEvent event : events) &#123;<br>            aggregate.apply(event, <span class="hljs-literal">false</span>);<br>        &#125;<br>        <span class="hljs-keyword">return</span> aggregate;<br>    &#125;<br><br>    <span class="hljs-comment">// 应用新事件</span><br>    <span class="hljs-keyword">protected</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">raiseEvent</span><span class="hljs-params">(DomainEvent event)</span> &#123;<br>        apply(event, <span class="hljs-literal">true</span>);<br>    &#125;<br><br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">apply</span><span class="hljs-params">(DomainEvent event, <span class="hljs-type">boolean</span> isNew)</span> &#123;<br>        <span class="hljs-comment">// 通过反射调用对应的 when 方法</span><br>        invokeWhenMethod(event);<br>        version++;<br>        <span class="hljs-keyword">if</span> (isNew) &#123;<br>            uncommittedEvents.add(event);<br>        &#125;<br>    &#125;<br><br>    <span class="hljs-keyword">public</span> List&lt;DomainEvent&gt; <span class="hljs-title function_">getUncommittedEvents</span><span class="hljs-params">()</span> &#123;<br>        <span class="hljs-keyword">return</span> Collections.unmodifiableList(uncommittedEvents);<br>    &#125;<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">markEventsAsCommitted</span><span class="hljs-params">()</span> &#123;<br>        uncommittedEvents.clear();<br>    &#125;<br>&#125;<br><br><span class="hljs-comment">// 订单聚合根 - 事件溯源版本</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">Order</span> <span class="hljs-keyword">extends</span> <span class="hljs-title class_">EventSourcedAggregate</span> &#123;<br>    <span class="hljs-keyword">private</span> String orderId;<br>    <span class="hljs-keyword">private</span> String customerId;<br>    <span class="hljs-keyword">private</span> List&lt;OrderItem&gt; items;<br>    <span class="hljs-keyword">private</span> OrderStatus status;<br>    <span class="hljs-keyword">private</span> Money totalAmount;<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> Order <span class="hljs-title function_">create</span><span class="hljs-params">(String customerId, List&lt;OrderItem&gt; items)</span> &#123;<br>        <span class="hljs-type">Order</span> <span class="hljs-variable">order</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">Order</span>();<br>        order.raiseEvent(<span class="hljs-keyword">new</span> <span class="hljs-title class_">OrderCreatedEvent</span>(<br>            UUID.randomUUID().toString(),<br>            customerId,<br>            items,<br>            calculateTotal(items),<br>            Instant.now()<br>        ));<br>        <span class="hljs-keyword">return</span> order;<br>    &#125;<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">cancel</span><span class="hljs-params">(String reason)</span> &#123;<br>        <span class="hljs-keyword">if</span> (status != OrderStatus.PLACED) &#123;<br>            <span class="hljs-keyword">throw</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">IllegalStateException</span>(<span class="hljs-string">&quot;Cannot cancel order in status: &quot;</span> + status);<br>        &#125;<br>        raiseEvent(<span class="hljs-keyword">new</span> <span class="hljs-title class_">OrderCancelledEvent</span>(orderId, reason, Instant.now()));<br>    &#125;<br><br>    <span class="hljs-comment">// Event handlers - 纯状态变更，无副作用</span><br>    <span class="hljs-meta">@SuppressWarnings(&quot;unused&quot;)</span><br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">when</span><span class="hljs-params">(OrderCreatedEvent event)</span> &#123;<br>        <span class="hljs-built_in">this</span>.orderId = event.orderId();<br>        <span class="hljs-built_in">this</span>.customerId = event.customerId();<br>        <span class="hljs-built_in">this</span>.items = <span class="hljs-keyword">new</span> <span class="hljs-title class_">ArrayList</span>&lt;&gt;(event.items());<br>        <span class="hljs-built_in">this</span>.totalAmount = event.totalAmount();<br>        <span class="hljs-built_in">this</span>.status = OrderStatus.PLACED;<br>    &#125;<br><br>    <span class="hljs-meta">@SuppressWarnings(&quot;unused&quot;)</span><br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">when</span><span class="hljs-params">(OrderCancelledEvent event)</span> &#123;<br>        <span class="hljs-built_in">this</span>.status = OrderStatus.CANCELLED;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="event-store-实现">Event Store 实现</h3>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-meta">@Repository</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">JdbcEventStore</span> <span class="hljs-keyword">implements</span> <span class="hljs-title class_">EventStore</span> &#123;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> JdbcTemplate jdbc;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> ObjectMapper objectMapper;<br><br>    <span class="hljs-meta">@Override</span><br>    <span class="hljs-meta">@Transactional</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">saveEvents</span><span class="hljs-params">(String aggregateId, List&lt;DomainEvent&gt; events,</span><br><span class="hljs-params">                           <span class="hljs-type">long</span> expectedVersion)</span> &#123;<br>        <span class="hljs-comment">// 乐观并发控制</span><br>        <span class="hljs-type">long</span> <span class="hljs-variable">currentVersion</span> <span class="hljs-operator">=</span> getCurrentVersion(aggregateId);<br>        <span class="hljs-keyword">if</span> (currentVersion != expectedVersion) &#123;<br>            <span class="hljs-keyword">throw</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">ConcurrencyException</span>(<br>                <span class="hljs-string">&quot;Expected version &quot;</span> + expectedVersion +<br>                <span class="hljs-string">&quot; but found &quot;</span> + currentVersion);<br>        &#125;<br><br>        <span class="hljs-type">long</span> <span class="hljs-variable">seq</span> <span class="hljs-operator">=</span> expectedVersion + <span class="hljs-number">1</span>;<br>        <span class="hljs-keyword">for</span> (DomainEvent event : events) &#123;<br>            jdbc.update(<span class="hljs-string">&quot;&quot;&quot;</span><br><span class="hljs-string">                INSERT INTO event_store</span><br><span class="hljs-string">                    (aggregate_type, aggregate_id, sequence_number,</span><br><span class="hljs-string">                     event_type, event_data, metadata, created_at)</span><br><span class="hljs-string">                VALUES (?, ?, ?, ?, ?::jsonb, ?::jsonb, ?)</span><br><span class="hljs-string">                &quot;&quot;&quot;</span>,<br>                event.getAggregateType(),<br>                aggregateId,<br>                seq++,<br>                event.getClass().getSimpleName(),<br>                objectMapper.writeValueAsString(event),<br>                objectMapper.writeValueAsString(event.getMetadata()),<br>                Instant.now()<br>            );<br>        &#125;<br>    &#125;<br><br>    <span class="hljs-meta">@Override</span><br>    <span class="hljs-keyword">public</span> List&lt;DomainEvent&gt; <span class="hljs-title function_">getEvents</span><span class="hljs-params">(String aggregateId)</span> &#123;<br>        <span class="hljs-keyword">return</span> jdbc.query(<span class="hljs-string">&quot;&quot;&quot;</span><br><span class="hljs-string">            SELECT event_type, event_data FROM event_store</span><br><span class="hljs-string">            WHERE aggregate_id = ?</span><br><span class="hljs-string">            ORDER BY sequence_number ASC</span><br><span class="hljs-string">            &quot;&quot;&quot;</span>,<br>            (rs, rowNum) -&gt; deserializeEvent(<br>                rs.getString(<span class="hljs-string">&quot;event_type&quot;</span>),<br>                rs.getString(<span class="hljs-string">&quot;event_data&quot;</span>)<br>            ),<br>            aggregateId<br>        );<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="投影projection">投影（Projection）</h2>
+<p>投影是将事件流转换为查询优化的读模型的过程。每个投影关注特定的事件子集，维护特定的视图。</p>
+<pre class="mermaid">graph LR
+    ES[(Event Store)] --&gt; P1[订单列表投影]
+    ES --&gt; P2[客户订单统计投影]
+    ES --&gt; P3[商品销量投影]
+
+    P1 --&gt; V1[(orders_list_view&lt;br/&gt;MySQL)]
+    P2 --&gt; V2[(customer_stats&lt;br/&gt;Redis)]
+    P3 --&gt; V3[(product_sales&lt;br/&gt;Elasticsearch)]</pre>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">// 投影处理器</span><br><span class="hljs-meta">@Component</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">OrderListProjection</span> &#123;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> OrderReadRepository readRepo;<br><br>    <span class="hljs-meta">@EventHandler</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">on</span><span class="hljs-params">(OrderCreatedEvent event)</span> &#123;<br>        <span class="hljs-type">OrderListView</span> <span class="hljs-variable">view</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">OrderListView</span>();<br>        view.setOrderId(event.orderId());<br>        view.setCustomerId(event.customerId());<br>        view.setTotalAmount(event.totalAmount().value());<br>        view.setStatus(<span class="hljs-string">&quot;PLACED&quot;</span>);<br>        view.setItemCount(event.items().size());<br>        view.setCreatedAt(event.occurredAt());<br>        readRepo.save(view);<br>    &#125;<br><br>    <span class="hljs-meta">@EventHandler</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">on</span><span class="hljs-params">(OrderPaidEvent event)</span> &#123;<br>        readRepo.updateStatus(event.orderId(), <span class="hljs-string">&quot;PAID&quot;</span>);<br>    &#125;<br><br>    <span class="hljs-meta">@EventHandler</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">on</span><span class="hljs-params">(OrderCancelledEvent event)</span> &#123;<br>        readRepo.updateStatus(event.orderId(), <span class="hljs-string">&quot;CANCELLED&quot;</span>);<br>    &#125;<br><br>    <span class="hljs-meta">@EventHandler</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">on</span><span class="hljs-params">(OrderShippedEvent event)</span> &#123;<br>        readRepo.updateStatusAndTracking(<br>            event.orderId(), <span class="hljs-string">&quot;SHIPPED&quot;</span>, event.trackingNumber());<br>    &#125;<br>&#125;<br><br><span class="hljs-comment">// 客户统计投影</span><br><span class="hljs-meta">@Component</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">CustomerStatsProjection</span> &#123;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> RedisTemplate&lt;String, Object&gt; redis;<br><br>    <span class="hljs-meta">@EventHandler</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">on</span><span class="hljs-params">(OrderCreatedEvent event)</span> &#123;<br>        <span class="hljs-type">String</span> <span class="hljs-variable">key</span> <span class="hljs-operator">=</span> <span class="hljs-string">&quot;customer:stats:&quot;</span> + event.customerId();<br>        redis.opsForHash().increment(key, <span class="hljs-string">&quot;totalOrders&quot;</span>, <span class="hljs-number">1</span>);<br>        redis.opsForHash().increment(key, <span class="hljs-string">&quot;totalAmount&quot;</span>,<br>            event.totalAmount().value().longValue());<br>    &#125;<br><br>    <span class="hljs-meta">@EventHandler</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">on</span><span class="hljs-params">(OrderCancelledEvent event)</span> &#123;<br>        <span class="hljs-type">String</span> <span class="hljs-variable">key</span> <span class="hljs-operator">=</span> <span class="hljs-string">&quot;customer:stats:&quot;</span> + event.customerId();<br>        redis.opsForHash().increment(key, <span class="hljs-string">&quot;cancelledOrders&quot;</span>, <span class="hljs-number">1</span>);<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="快照机制">快照机制</h2>
+<p>当聚合的事件数量很多时，每次重放所有事件会很慢。快照机制定期保存聚合的状态快照，重建时只需要从最近的快照开始重放后续事件。</p>
+<pre class="mermaid">sequenceDiagram
+    participant Client
+    participant Repo as Repository
+    participant SS as Snapshot Store
+    participant ES as Event Store
+
+    Client-&gt;&gt;Repo: 加载聚合(id=123)
+    Repo-&gt;&gt;SS: 获取最新快照
+    SS--&gt;&gt;Repo: 快照(version=100, state)
+
+    Repo-&gt;&gt;ES: 获取version&gt;100的事件
+    ES--&gt;&gt;Repo: events[101..105]
+
+    Repo-&gt;&gt;Repo: 从快照恢复状态&lt;br/&gt;重放5个事件
+    Repo--&gt;&gt;Client: 聚合(version=105)</pre>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">SnapshotRepository</span>&lt;T <span class="hljs-keyword">extends</span> <span class="hljs-title class_">EventSourcedAggregate</span>&gt; &#123;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">final</span> <span class="hljs-type">int</span> <span class="hljs-variable">SNAPSHOT_INTERVAL</span> <span class="hljs-operator">=</span> <span class="hljs-number">100</span>;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> EventStore eventStore;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> SnapshotStore snapshotStore;<br><br>    <span class="hljs-keyword">public</span> T <span class="hljs-title function_">load</span><span class="hljs-params">(String aggregateId, Class&lt;T&gt; type)</span> &#123;<br>        <span class="hljs-comment">// 1. 尝试加载快照</span><br>        Optional&lt;Snapshot&gt; snapshot = snapshotStore.getLatest(aggregateId);<br><br>        List&lt;DomainEvent&gt; events;<br>        T aggregate;<br><br>        <span class="hljs-keyword">if</span> (snapshot.isPresent()) &#123;<br>            <span class="hljs-comment">// 2. 从快照恢复</span><br>            aggregate = deserialize(snapshot.get().getData(), type);<br>            <span class="hljs-comment">// 3. 只加载快照之后的事件</span><br>            events = eventStore.getEventsAfter(<br>                aggregateId, snapshot.get().getVersion());<br>        &#125; <span class="hljs-keyword">else</span> &#123;<br>            aggregate = instantiate(type);<br>            events = eventStore.getEvents(aggregateId);<br>        &#125;<br><br>        <span class="hljs-comment">// 4. 重放事件</span><br>        <span class="hljs-keyword">for</span> (DomainEvent event : events) &#123;<br>            aggregate.apply(event, <span class="hljs-literal">false</span>);<br>        &#125;<br><br>        <span class="hljs-keyword">return</span> aggregate;<br>    &#125;<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">save</span><span class="hljs-params">(T aggregate)</span> &#123;<br>        eventStore.saveEvents(<br>            aggregate.getId(),<br>            aggregate.getUncommittedEvents(),<br>            aggregate.getVersion()<br>        );<br><br>        <span class="hljs-comment">// 检查是否需要创建新快照</span><br>        <span class="hljs-keyword">if</span> (aggregate.getVersion() % SNAPSHOT_INTERVAL == <span class="hljs-number">0</span>) &#123;<br>            snapshotStore.save(<span class="hljs-keyword">new</span> <span class="hljs-title class_">Snapshot</span>(<br>                aggregate.getId(),<br>                aggregate.getVersion(),<br>                serialize(aggregate)<br>            ));<br>        &#125;<br><br>        aggregate.markEventsAsCommitted();<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="axon-framework-实战">Axon Framework 实战</h2>
+<p>Axon Framework 是 Java 生态中最成熟的 CQRS + Event Sourcing
+框架。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">// 使用 Axon 的聚合根定义</span><br><span class="hljs-meta">@Aggregate</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">OrderAggregate</span> &#123;<br>    <span class="hljs-meta">@AggregateIdentifier</span><br>    <span class="hljs-keyword">private</span> String orderId;<br>    <span class="hljs-keyword">private</span> OrderStatus status;<br>    <span class="hljs-keyword">private</span> Money totalAmount;<br><br>    <span class="hljs-meta">@CommandHandler</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-title function_">OrderAggregate</span><span class="hljs-params">(CreateOrderCommand cmd)</span> &#123;<br>        <span class="hljs-comment">// 验证业务规则</span><br>        <span class="hljs-keyword">if</span> (cmd.items().isEmpty()) &#123;<br>            <span class="hljs-keyword">throw</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">IllegalArgumentException</span>(<span class="hljs-string">&quot;Order must have items&quot;</span>);<br>        &#125;<br>        <span class="hljs-comment">// 发布事件</span><br>        AggregateLifecycle.apply(<span class="hljs-keyword">new</span> <span class="hljs-title class_">OrderCreatedEvent</span>(<br>            cmd.getOrderId(),<br>            cmd.getCustomerId(),<br>            cmd.getItems(),<br>            calculateTotal(cmd.getItems())<br>        ));<br>    &#125;<br><br>    <span class="hljs-meta">@CommandHandler</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">handle</span><span class="hljs-params">(ConfirmOrderCommand cmd)</span> &#123;<br>        <span class="hljs-keyword">if</span> (status != OrderStatus.PLACED) &#123;<br>            <span class="hljs-keyword">throw</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">IllegalStateException</span>(<span class="hljs-string">&quot;Order not in PLACED status&quot;</span>);<br>        &#125;<br>        AggregateLifecycle.apply(<span class="hljs-keyword">new</span> <span class="hljs-title class_">OrderConfirmedEvent</span>(orderId));<br>    &#125;<br><br>    <span class="hljs-meta">@EventSourcingHandler</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">on</span><span class="hljs-params">(OrderCreatedEvent event)</span> &#123;<br>        <span class="hljs-built_in">this</span>.orderId = event.getOrderId();<br>        <span class="hljs-built_in">this</span>.status = OrderStatus.PLACED;<br>        <span class="hljs-built_in">this</span>.totalAmount = event.getTotalAmount();<br>    &#125;<br><br>    <span class="hljs-meta">@EventSourcingHandler</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">on</span><span class="hljs-params">(OrderConfirmedEvent event)</span> &#123;<br>        <span class="hljs-built_in">this</span>.status = OrderStatus.CONFIRMED;<br>    &#125;<br><br>    <span class="hljs-keyword">protected</span> <span class="hljs-title function_">OrderAggregate</span><span class="hljs-params">()</span> &#123;&#125; <span class="hljs-comment">// Axon 需要无参构造器</span><br>&#125;<br><br><span class="hljs-comment">// Axon 查询端投影</span><br><span class="hljs-meta">@Component</span><br><span class="hljs-meta">@ProcessingGroup(&quot;order-projection&quot;)</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">OrderProjection</span> &#123;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> OrderViewRepository repository;<br><br>    <span class="hljs-meta">@EventHandler</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">on</span><span class="hljs-params">(OrderCreatedEvent event)</span> &#123;<br>        <span class="hljs-type">OrderView</span> <span class="hljs-variable">view</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">OrderView</span>(<br>            event.getOrderId(),<br>            event.getCustomerId(),<br>            event.getTotalAmount(),<br>            <span class="hljs-string">&quot;PLACED&quot;</span><br>        );<br>        repository.save(view);<br>    &#125;<br><br>    <span class="hljs-meta">@EventHandler</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">on</span><span class="hljs-params">(OrderConfirmedEvent event)</span> &#123;<br>        repository.findById(event.getOrderId())<br>            .ifPresent(view -&gt; &#123;<br>                view.setStatus(<span class="hljs-string">&quot;CONFIRMED&quot;</span>);<br>                repository.save(view);<br>            &#125;);<br>    &#125;<br><br>    <span class="hljs-meta">@QueryHandler</span><br>    <span class="hljs-keyword">public</span> OrderView <span class="hljs-title function_">handle</span><span class="hljs-params">(FindOrderQuery query)</span> &#123;<br>        <span class="hljs-keyword">return</span> repository.findById(query.getOrderId())<br>            .orElseThrow();<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># Axon 配置 (application.yml)</span><br><span class="hljs-attr">axon:</span><br>  <span class="hljs-attr">axonserver:</span><br>    <span class="hljs-attr">servers:</span> <span class="hljs-string">localhost:8124</span><br>  <span class="hljs-attr">serializer:</span><br>    <span class="hljs-attr">general:</span> <span class="hljs-string">jackson</span><br>    <span class="hljs-attr">messages:</span> <span class="hljs-string">jackson</span><br>    <span class="hljs-attr">events:</span> <span class="hljs-string">jackson</span><br>  <span class="hljs-attr">eventhandling:</span><br>    <span class="hljs-attr">processors:</span><br>      <span class="hljs-attr">order-projection:</span><br>        <span class="hljs-attr">mode:</span> <span class="hljs-string">tracking</span><br>        <span class="hljs-attr">initial-segment-count:</span> <span class="hljs-number">2</span><br>        <span class="hljs-attr">batch-size:</span> <span class="hljs-number">100</span><br></code></pre></td></tr></table></figure>
+<h2 id="cqrs-event-sourcing-的数据流">CQRS + Event Sourcing
+的数据流</h2>
+<pre class="mermaid">graph TB
+    Client[客户端] --&gt;|Command| CmdBus[Command Bus]
+    CmdBus --&gt; CmdHandler[Command Handler]
+    CmdHandler --&gt; Aggregate[聚合根]
+    Aggregate --&gt;|产生事件| EventStore[(Event Store)]
+
+    EventStore --&gt;|发布事件| EventBus[Event Bus]
+    EventBus --&gt; Projection1[投影 1]
+    EventBus --&gt; Projection2[投影 2]
+    EventBus --&gt; Saga[Saga]
+
+    Projection1 --&gt; ReadDB1[(读数据库)]
+    Projection2 --&gt; ReadDB2[(搜索引擎)]
+
+    Client --&gt;|Query| QueryBus[Query Bus]
+    QueryBus --&gt; QueryHandler[Query Handler]
+    QueryHandler --&gt; ReadDB1
+    QueryHandler --&gt; ReadDB2</pre>
+<h2 id="优缺点分析">优缺点分析</h2>
+<h3 id="优势">优势</h3>
+<ol type="1">
+<li><strong>完整审计日志</strong>：事件流天然是审计日志，满足合规要求</li>
+<li><strong>时间旅行</strong>：可以重建任意时间点的状态</li>
+<li><strong>读写独立扩展</strong>：读模型和写模型可以独立优化和扩缩容</li>
+<li><strong>灵活的读模型</strong>：可以根据新的查询需求随时创建新的投影</li>
+<li><strong>事件驱动集成</strong>：事件流可以驱动其他系统的集成</li>
+</ol>
+<h3 id="挑战">挑战</h3>
+<ol type="1">
+<li><strong>最终一致性</strong>：读模型和写模型之间存在延迟，需要接受最终一致性</li>
+<li><strong>事件版本演进</strong>：事件 Schema
+变更需要谨慎处理（upcasting）</li>
+<li><strong>学习曲线</strong>：团队需要转变思维模式</li>
+<li><strong>查询复杂性</strong>：需要精心设计投影来满足查询需求</li>
+<li><strong>事件存储增长</strong>：事件不可删除，存储会持续增长</li>
+</ol>
+<h3 id="适用场景">适用场景</h3>
+<table>
+<thead>
+<tr class="header">
+<th>适合</th>
+<th>不适合</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>复杂业务领域</td>
+<td>简单 CRUD</td>
+</tr>
+<tr class="even">
+<td>需要审计日志</td>
+<td>数据量小</td>
+</tr>
+<tr class="odd">
+<td>读写比例差异大</td>
+<td>强一致性要求</td>
+</tr>
+<tr class="even">
+<td>需要事件驱动集成</td>
+<td>小团队 MVP</td>
+</tr>
+<tr class="odd">
+<td>金融交易系统</td>
+<td>实时查询要求极高</td>
+</tr>
+</tbody>
+</table>
+<h2 id="总结">总结</h2>
+<p>CQRS 和事件溯源是应对复杂业务领域的有力工具。CQRS
+通过分离读写关注点来简化模型设计，事件溯源通过存储事件而非状态来获得完整的变更历史。两者结合使用时威力最大，但也引入了显著的复杂性。建议从业务最复杂的核心域开始采用，而非在整个系统中全面铺开。在实施前，确保团队理解最终一致性的含义，并具备处理事件版本演进的能力。</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2023-12-06</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">3.1k 字 · 8 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/api-gateway-design/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">API网关设计与实现：Kong/APISIX对比</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/distributed-consensus/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">分布式共识算法：Raft与Paxos详解</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#cqrs-%E6%A8%A1%E5%BC%8F"><span class="toc-text">CQRS 模式</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BC%A0%E7%BB%9F-crud-%E7%9A%84%E9%97%AE%E9%A2%98"><span class="toc-text">传统 CRUD 的问题</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#cqrs-%E6%9E%B6%E6%9E%84"><span class="toc-text">CQRS 架构</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%8B%E4%BB%B6%E6%BA%AF%E6%BA%90event-sourcing"><span class="toc-text">事件溯源（Event Sourcing）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E7%90%86%E5%BF%B5"><span class="toc-text">核心理念</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BA%8B%E4%BB%B6%E5%AD%98%E5%82%A8%E8%AE%BE%E8%AE%A1"><span class="toc-text">事件存储设计</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#event-store-%E5%AE%9E%E7%8E%B0"><span class="toc-text">Event Store 实现</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%8A%95%E5%BD%B1projection"><span class="toc-text">投影（Projection）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BF%AB%E7%85%A7%E6%9C%BA%E5%88%B6"><span class="toc-text">快照机制</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#axon-framework-%E5%AE%9E%E6%88%98"><span class="toc-text">Axon Framework 实战</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#cqrs-event-sourcing-%E7%9A%84%E6%95%B0%E6%8D%AE%E6%B5%81"><span class="toc-text">CQRS + Event Sourcing
+的数据流</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BC%98%E7%BC%BA%E7%82%B9%E5%88%86%E6%9E%90"><span class="toc-text">优缺点分析</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BC%98%E5%8A%BF"><span class="toc-text">优势</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%8C%91%E6%88%98"><span class="toc-text">挑战</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%80%82%E7%94%A8%E5%9C%BA%E6%99%AF"><span class="toc-text">适用场景</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

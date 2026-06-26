@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rust WebAssembly开发实战 · zt&#39;s Blog</title>
+  <meta name="description" content="全面介绍Rust WebAssembly开发，涵盖wasm-pack工具链、wasm-bindgen互操作、web-sys DOM操作、内存管理和性能优化。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/rust-wasm-development/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Rust WebAssembly开发实战">
+  <meta property="og:description" content="全面介绍Rust WebAssembly开发，涵盖wasm-pack工具链、wasm-bindgen互操作、web-sys DOM操作、内存管理和性能优化。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/rust-wasm-development/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2025-08-12T16:00:00.000Z">
+  <meta property="article:modified_time" content="2025-08-12T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Rust WebAssembly开发实战">
+  <meta name="twitter:description" content="全面介绍Rust WebAssembly开发，涵盖wasm-pack工具链、wasm-bindgen互操作、web-sys DOM操作、内存管理和性能优化。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Rust WebAssembly开发实战","description":"全面介绍Rust WebAssembly开发，涵盖wasm-pack工具链、wasm-bindgen互操作、web-sys DOM操作、内存管理和性能优化。","datePublished":"2025-08-12T16:00:00.000Z","dateModified":"2025-08-12T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/rust-wasm-development/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Rust","item":"https://withesse.co/categories/Rust/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:18">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Rust/">Rust</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/rust/"><span class="hash">#</span>rust</a><a class="tag" href="/tags/wasm/"><span class="hash">#</span>wasm</a><a class="tag" href="/tags/webassembly/"><span class="hash">#</span>webassembly</a>
+        
+      </div>
+
+      <h1>Rust WebAssembly开发实战</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2025.08.13</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          <span class="row gap8" style="align-items:center"><span class="lang-dot" style="background:#DEA584"></span>Rust</span>
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 7 min</span>
+        </span>
+        <span class="wc"><span class="num">2.8k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#webassembly%E6%A6%82%E8%BF%B0"><span class="toc-text">WebAssembly概述</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%B7%A5%E5%85%B7%E9%93%BE%E6%90%AD%E5%BB%BA"><span class="toc-text">工具链搭建</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%AC%AC%E4%B8%80%E4%B8%AAwasm%E9%A1%B9%E7%9B%AE"><span class="toc-text">第一个Wasm项目</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#wasm-bindgen%E6%B7%B1%E5%85%A5"><span class="toc-text">wasm-bindgen深入</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#javascript%E4%BA%92%E6%93%8D%E4%BD%9C"><span class="toc-text">JavaScript互操作</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#web-sys-dom%E6%93%8D%E4%BD%9C"><span class="toc-text">web-sys DOM操作</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86"><span class="toc-text">内存管理</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96"><span class="toc-text">性能优化</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#wasm-opt%E4%BC%98%E5%8C%96"><span class="toc-text">wasm-opt优化</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%A4%A7%E5%B0%8F%E4%BC%98%E5%8C%96%E7%AD%96%E7%95%A5"><span class="toc-text">大小优化策略</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%AE%A1%E7%AE%97%E5%AF%86%E9%9B%86%E5%9E%8B%E4%BB%BB%E5%8A%A1%E6%80%A7%E8%83%BD"><span class="toc-text">计算密集型任务性能</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#component-model"><span class="toc-text">Component Model</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%8E%E5%89%8D%E7%AB%AF%E6%A1%86%E6%9E%B6%E9%9B%86%E6%88%90"><span class="toc-text">与前端框架集成</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%80%82%E7%94%A8%E5%9C%BA%E6%99%AF"><span class="toc-text">适用场景</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="前言">前言</h2>
+<p>WebAssembly（Wasm）为Web带来了接近原生的执行性能。Rust凭借其无GC、零成本抽象和优秀的工具链，成为编写WebAssembly的首选语言。本文将从工具链搭建到实战项目，全面介绍Rust
+WebAssembly开发。</p>
+<h2 id="webassembly概述">WebAssembly概述</h2>
+<pre class="mermaid">graph TB
+    subgraph "传统Web"
+        JS[JavaScript] --&gt; V8[V8/SpiderMonkey]
+        V8 --&gt; |JIT编译| MACHINE[Machine Code]
+    end
+
+    subgraph "WebAssembly"
+        RUST[Rust/C/C++] --&gt; |编译| WASM[.wasm Binary]
+        WASM --&gt; |加载| RUNTIME[Wasm Runtime]
+        RUNTIME --&gt; |接近原生速度| EXEC[Execution]
+    end
+
+    JS_BRIDGE[JavaScript] &lt;--&gt;|互操作| WASM
+
+    style WASM fill:#6a1b9a,color:#fff</pre>
+<p>WebAssembly的特点： -
+<strong>高性能</strong>：编译为紧凑的二进制格式，执行速度接近原生 -
+<strong>安全</strong>：运行在沙箱中，内存隔离 -
+<strong>跨平台</strong>：所有主流浏览器支持 -
+<strong>语言无关</strong>：C、C++、Rust、Go等都可以编译到Wasm</p>
+<h2 id="工具链搭建">工具链搭建</h2>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 安装Rust</span><br>curl --proto <span class="hljs-string">&#x27;=https&#x27;</span> --tlsv1.2 -sSf https://sh.rustup.rs | sh<br><br><span class="hljs-comment"># 添加wasm32目标</span><br>rustup target add wasm32-unknown-unknown<br><br><span class="hljs-comment"># 安装wasm-pack（Rust Wasm工具链核心）</span><br>cargo install wasm-pack<br><br><span class="hljs-comment"># 安装wasm-opt（优化工具，可选）</span><br><span class="hljs-comment"># 包含在binaryen中</span><br>brew install binaryen  <span class="hljs-comment"># macOS</span><br></code></pre></td></tr></table></figure>
+<pre class="mermaid">flowchart LR
+    RUST_SRC[Rust Source] --&gt; |rustc| WASM_RAW[.wasm]
+    WASM_RAW --&gt; |wasm-bindgen| WASM_JS[.wasm + .js glue]
+    WASM_JS --&gt; |wasm-opt| WASM_OPT[Optimized .wasm]
+    WASM_OPT --&gt; |webpack/vite| BUNDLE[Web App]
+
+    style RUST_SRC fill:#dcedc8
+    style BUNDLE fill:#bbdefb</pre>
+<h2 id="第一个wasm项目">第一个Wasm项目</h2>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 创建项目</span><br>cargo new --lib wasm-hello<br><span class="hljs-built_in">cd</span> wasm-hello<br></code></pre></td></tr></table></figure>
+<figure class="highlight toml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><code class="hljs toml"><span class="hljs-comment"># Cargo.toml</span><br><span class="hljs-section">[package]</span><br><span class="hljs-attr">name</span> = <span class="hljs-string">&quot;wasm-hello&quot;</span><br><span class="hljs-attr">version</span> = <span class="hljs-string">&quot;0.1.0&quot;</span><br><span class="hljs-attr">edition</span> = <span class="hljs-string">&quot;2021&quot;</span><br><br><span class="hljs-section">[lib]</span><br><span class="hljs-attr">crate-type</span> = [<span class="hljs-string">&quot;cdylib&quot;</span>, <span class="hljs-string">&quot;rlib&quot;</span>]<br><br><span class="hljs-section">[dependencies]</span><br><span class="hljs-attr">wasm-bindgen</span> = <span class="hljs-string">&quot;0.2&quot;</span><br><br><span class="hljs-section">[dependencies.web-sys]</span><br><span class="hljs-attr">version</span> = <span class="hljs-string">&quot;0.3&quot;</span><br><span class="hljs-attr">features</span> = [<br>    <span class="hljs-string">&quot;console&quot;</span>,<br>    <span class="hljs-string">&quot;Document&quot;</span>,<br>    <span class="hljs-string">&quot;Element&quot;</span>,<br>    <span class="hljs-string">&quot;HtmlElement&quot;</span>,<br>    <span class="hljs-string">&quot;Node&quot;</span>,<br>    <span class="hljs-string">&quot;Window&quot;</span>,<br>]<br><br><span class="hljs-section">[profile.release]</span><br><span class="hljs-attr">opt-level</span> = <span class="hljs-string">&quot;z&quot;</span>     <span class="hljs-comment"># 优化大小</span><br><span class="hljs-attr">lto</span> = <span class="hljs-literal">true</span>          <span class="hljs-comment"># 链接时优化</span><br><span class="hljs-attr">codegen-units</span> = <span class="hljs-number">1</span>   <span class="hljs-comment"># 单代码生成单元</span><br><span class="hljs-attr">strip</span> = <span class="hljs-literal">true</span>        <span class="hljs-comment"># 去除调试信息</span><br></code></pre></td></tr></table></figure>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br></pre></td><td class="code"><pre><code class="hljs rust"><span class="hljs-comment">// src/lib.rs</span><br><span class="hljs-keyword">use</span> wasm_bindgen::prelude::*;<br><br><span class="hljs-comment">// 导出到JavaScript</span><br><span class="hljs-meta">#[wasm_bindgen]</span><br><span class="hljs-keyword">pub</span> <span class="hljs-keyword">fn</span> <span class="hljs-title function_">greet</span>(name: &amp;<span class="hljs-type">str</span>) <span class="hljs-punctuation">-&gt;</span> <span class="hljs-type">String</span> &#123;<br>    <span class="hljs-built_in">format!</span>(<span class="hljs-string">&quot;Hello, &#123;&#125;! From Rust Wasm&quot;</span>, name)<br>&#125;<br><br><span class="hljs-comment">// 调用JavaScript函数</span><br><span class="hljs-meta">#[wasm_bindgen]</span><br><span class="hljs-keyword">extern</span> <span class="hljs-string">&quot;C&quot;</span> &#123;<br>    <span class="hljs-keyword">fn</span> <span class="hljs-title function_">alert</span>(s: &amp;<span class="hljs-type">str</span>);<br><br>    <span class="hljs-meta">#[wasm_bindgen(js_namespace = console)]</span><br>    <span class="hljs-keyword">fn</span> <span class="hljs-title function_">log</span>(s: &amp;<span class="hljs-type">str</span>);<br>&#125;<br><br><span class="hljs-meta">#[wasm_bindgen(start)]</span><br><span class="hljs-keyword">pub</span> <span class="hljs-keyword">fn</span> <span class="hljs-title function_">main</span>() &#123;<br>    <span class="hljs-title function_ invoke__">log</span>(<span class="hljs-string">&quot;Wasm module initialized!&quot;</span>);<br>&#125;<br><br><span class="hljs-comment">// 导出结构体</span><br><span class="hljs-meta">#[wasm_bindgen]</span><br><span class="hljs-keyword">pub</span> <span class="hljs-keyword">struct</span> <span class="hljs-title class_">Calculator</span> &#123;<br>    history: <span class="hljs-type">Vec</span>&lt;<span class="hljs-type">f64</span>&gt;,<br>&#125;<br><br><span class="hljs-meta">#[wasm_bindgen]</span><br><span class="hljs-keyword">impl</span> <span class="hljs-title class_">Calculator</span> &#123;<br>    <span class="hljs-meta">#[wasm_bindgen(constructor)]</span><br>    <span class="hljs-keyword">pub</span> <span class="hljs-keyword">fn</span> <span class="hljs-title function_">new</span>() <span class="hljs-punctuation">-&gt;</span> Calculator &#123;<br>        Calculator &#123;<br>            history: <span class="hljs-type">Vec</span>::<span class="hljs-title function_ invoke__">new</span>(),<br>        &#125;<br>    &#125;<br><br>    <span class="hljs-keyword">pub</span> <span class="hljs-keyword">fn</span> <span class="hljs-title function_">add</span>(&amp;<span class="hljs-keyword">mut</span> <span class="hljs-keyword">self</span>, a: <span class="hljs-type">f64</span>, b: <span class="hljs-type">f64</span>) <span class="hljs-punctuation">-&gt;</span> <span class="hljs-type">f64</span> &#123;<br>        <span class="hljs-keyword">let</span> <span class="hljs-variable">result</span> = a + b;<br>        <span class="hljs-keyword">self</span>.history.<span class="hljs-title function_ invoke__">push</span>(result);<br>        result<br>    &#125;<br><br>    <span class="hljs-keyword">pub</span> <span class="hljs-keyword">fn</span> <span class="hljs-title function_">get_history</span>(&amp;<span class="hljs-keyword">self</span>) <span class="hljs-punctuation">-&gt;</span> <span class="hljs-type">Vec</span>&lt;<span class="hljs-type">f64</span>&gt; &#123;<br>        <span class="hljs-keyword">self</span>.history.<span class="hljs-title function_ invoke__">clone</span>()<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 构建</span><br>wasm-pack build --target web<br><span class="hljs-comment"># 生成 pkg/ 目录:</span><br><span class="hljs-comment"># ├── wasm_hello_bg.wasm      (Wasm二进制)</span><br><span class="hljs-comment"># ├── wasm_hello_bg.wasm.d.ts (TypeScript类型)</span><br><span class="hljs-comment"># ├── wasm_hello.js           (JS绑定)</span><br><span class="hljs-comment"># ├── wasm_hello.d.ts         (TypeScript类型)</span><br><span class="hljs-comment"># └── package.json</span><br></code></pre></td></tr></table></figure>
+<figure class="highlight html"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><code class="hljs html"><span class="hljs-comment">&lt;!-- index.html --&gt;</span><br><span class="hljs-meta">&lt;!DOCTYPE <span class="hljs-keyword">html</span>&gt;</span><br><span class="hljs-tag">&lt;<span class="hljs-name">html</span>&gt;</span><br><span class="hljs-tag">&lt;<span class="hljs-name">body</span>&gt;</span><br>    <span class="hljs-tag">&lt;<span class="hljs-name">script</span> <span class="hljs-attr">type</span>=<span class="hljs-string">&quot;module&quot;</span>&gt;</span><span class="language-javascript"></span><br><span class="language-javascript">        <span class="hljs-keyword">import</span> init, &#123; greet, <span class="hljs-title class_">Calculator</span> &#125; <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;./pkg/wasm_hello.js&#x27;</span>;</span><br><span class="language-javascript"></span><br><span class="language-javascript">        <span class="hljs-keyword">async</span> <span class="hljs-keyword">function</span> <span class="hljs-title function_">main</span>(<span class="hljs-params"></span>) &#123;</span><br><span class="language-javascript">            <span class="hljs-keyword">await</span> <span class="hljs-title function_">init</span>();</span><br><span class="language-javascript"></span><br><span class="language-javascript">            <span class="hljs-comment">// 调用Rust函数</span></span><br><span class="language-javascript">            <span class="hljs-keyword">const</span> message = <span class="hljs-title function_">greet</span>(<span class="hljs-string">&#x27;World&#x27;</span>);</span><br><span class="language-javascript">            <span class="hljs-variable language_">document</span>.<span class="hljs-property">body</span>.<span class="hljs-property">textContent</span> = message;</span><br><span class="language-javascript"></span><br><span class="language-javascript">            <span class="hljs-comment">// 使用Rust结构体</span></span><br><span class="language-javascript">            <span class="hljs-keyword">const</span> calc = <span class="hljs-keyword">new</span> <span class="hljs-title class_">Calculator</span>();</span><br><span class="language-javascript">            <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(calc.<span class="hljs-title function_">add</span>(<span class="hljs-number">1</span>, <span class="hljs-number">2</span>));  <span class="hljs-comment">// 3</span></span><br><span class="language-javascript">            <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(calc.<span class="hljs-title function_">add</span>(<span class="hljs-number">3</span>, <span class="hljs-number">4</span>));  <span class="hljs-comment">// 7</span></span><br><span class="language-javascript">            <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(calc.<span class="hljs-title function_">get_history</span>()); <span class="hljs-comment">// [3, 7]</span></span><br><span class="language-javascript">        &#125;</span><br><span class="language-javascript"></span><br><span class="language-javascript">        <span class="hljs-title function_">main</span>();</span><br><span class="language-javascript">    </span><span class="hljs-tag">&lt;/<span class="hljs-name">script</span>&gt;</span><br><span class="hljs-tag">&lt;/<span class="hljs-name">body</span>&gt;</span><br><span class="hljs-tag">&lt;/<span class="hljs-name">html</span>&gt;</span><br></code></pre></td></tr></table></figure>
+<h2 id="wasm-bindgen深入">wasm-bindgen深入</h2>
+<h3 id="javascript互操作">JavaScript互操作</h3>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br></pre></td><td class="code"><pre><code class="hljs rust"><span class="hljs-keyword">use</span> wasm_bindgen::prelude::*;<br><span class="hljs-keyword">use</span> js_sys::&#123;Array, Date, Function, Object, Promise, Reflect&#125;;<br><span class="hljs-keyword">use</span> wasm_bindgen_futures::JsFuture;<br><br><span class="hljs-comment">// 1. 调用JavaScript全局函数</span><br><span class="hljs-meta">#[wasm_bindgen]</span><br><span class="hljs-keyword">extern</span> <span class="hljs-string">&quot;C&quot;</span> &#123;<br>    <span class="hljs-meta">#[wasm_bindgen(js_name = setTimeout)]</span><br>    <span class="hljs-keyword">fn</span> <span class="hljs-title function_">set_timeout</span>(closure: &amp;Closure&lt;<span class="hljs-keyword">dyn</span> <span class="hljs-title function_ invoke__">FnMut</span>()&gt;, millis: <span class="hljs-type">u32</span>) <span class="hljs-punctuation">-&gt;</span> <span class="hljs-type">i32</span>;<br>&#125;<br><br><span class="hljs-comment">// 2. 操作JavaScript对象</span><br><span class="hljs-meta">#[wasm_bindgen]</span><br><span class="hljs-keyword">pub</span> <span class="hljs-keyword">fn</span> <span class="hljs-title function_">create_object</span>() <span class="hljs-punctuation">-&gt;</span> JsValue &#123;<br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">obj</span> = Object::<span class="hljs-title function_ invoke__">new</span>();<br>    Reflect::<span class="hljs-title function_ invoke__">set</span>(&amp;obj, &amp;<span class="hljs-string">&quot;name&quot;</span>.<span class="hljs-title function_ invoke__">into</span>(), &amp;<span class="hljs-string">&quot;Rust&quot;</span>.<span class="hljs-title function_ invoke__">into</span>()).<span class="hljs-title function_ invoke__">unwrap</span>();<br>    Reflect::<span class="hljs-title function_ invoke__">set</span>(&amp;obj, &amp;<span class="hljs-string">&quot;version&quot;</span>.<span class="hljs-title function_ invoke__">into</span>(), &amp;JsValue::<span class="hljs-title function_ invoke__">from_f64</span>(<span class="hljs-number">1.0</span>)).<span class="hljs-title function_ invoke__">unwrap</span>();<br>    obj.<span class="hljs-title function_ invoke__">into</span>()<br>&#125;<br><br><span class="hljs-comment">// 3. 使用Promise（async/await）</span><br><span class="hljs-meta">#[wasm_bindgen]</span><br><span class="hljs-keyword">pub</span> <span class="hljs-keyword">async</span> <span class="hljs-keyword">fn</span> <span class="hljs-title function_">fetch_data</span>(url: &amp;<span class="hljs-type">str</span>) <span class="hljs-punctuation">-&gt;</span> <span class="hljs-type">Result</span>&lt;JsValue, JsValue&gt; &#123;<br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">window</span> = web_sys::<span class="hljs-title function_ invoke__">window</span>().<span class="hljs-title function_ invoke__">unwrap</span>();<br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">resp_value</span> = JsFuture::<span class="hljs-title function_ invoke__">from</span>(window.<span class="hljs-title function_ invoke__">fetch_with_str</span>(url)).<span class="hljs-keyword">await</span>?;<br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">resp</span>: web_sys::Response = resp_value.<span class="hljs-title function_ invoke__">dyn_into</span>()?;<br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">json</span> = JsFuture::<span class="hljs-title function_ invoke__">from</span>(resp.<span class="hljs-title function_ invoke__">json</span>()?).<span class="hljs-keyword">await</span>?;<br>    <span class="hljs-title function_ invoke__">Ok</span>(json)<br>&#125;<br><br><span class="hljs-comment">// 4. 回调函数</span><br><span class="hljs-meta">#[wasm_bindgen]</span><br><span class="hljs-keyword">pub</span> <span class="hljs-keyword">fn</span> <span class="hljs-title function_">set_callback</span>(callback: &amp;js_sys::Function) &#123;<br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">result</span> = JsValue::<span class="hljs-title function_ invoke__">from_str</span>(<span class="hljs-string">&quot;data from Rust&quot;</span>);<br>    callback.<span class="hljs-title function_ invoke__">call1</span>(&amp;JsValue::NULL, &amp;result).<span class="hljs-title function_ invoke__">unwrap</span>();<br>&#125;<br><br><span class="hljs-comment">// 5. 闭包（Closure）</span><br><span class="hljs-meta">#[wasm_bindgen]</span><br><span class="hljs-keyword">pub</span> <span class="hljs-keyword">fn</span> <span class="hljs-title function_">create_timer</span>() &#123;<br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">closure</span> = Closure::<span class="hljs-title function_ invoke__">wrap</span>(<span class="hljs-type">Box</span>::<span class="hljs-title function_ invoke__">new</span>(|| &#123;<br>        web_sys::console::<span class="hljs-title function_ invoke__">log_1</span>(&amp;<span class="hljs-string">&quot;Timer fired!&quot;</span>.<span class="hljs-title function_ invoke__">into</span>());<br>    &#125;) <span class="hljs-keyword">as</span> <span class="hljs-type">Box</span>&lt;<span class="hljs-keyword">dyn</span> <span class="hljs-title function_ invoke__">FnMut</span>()&gt;);<br><br>    web_sys::<span class="hljs-title function_ invoke__">window</span>()<br>        .<span class="hljs-title function_ invoke__">unwrap</span>()<br>        .<span class="hljs-title function_ invoke__">set_timeout_with_callback_and_timeout_and_arguments_0</span>(<br>            closure.<span class="hljs-title function_ invoke__">as_ref</span>().<span class="hljs-title function_ invoke__">unchecked_ref</span>(),<br>            <span class="hljs-number">1000</span>,<br>        )<br>        .<span class="hljs-title function_ invoke__">unwrap</span>();<br><br>    closure.forget(); <span class="hljs-comment">// 防止闭包被drop</span><br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="web-sys-dom操作">web-sys DOM操作</h3>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br></pre></td><td class="code"><pre><code class="hljs rust"><span class="hljs-keyword">use</span> wasm_bindgen::prelude::*;<br><span class="hljs-keyword">use</span> web_sys::&#123;Document, Element, HtmlElement&#125;;<br><br><span class="hljs-meta">#[wasm_bindgen]</span><br><span class="hljs-keyword">pub</span> <span class="hljs-keyword">fn</span> <span class="hljs-title function_">setup_ui</span>() <span class="hljs-punctuation">-&gt;</span> <span class="hljs-type">Result</span>&lt;(), JsValue&gt; &#123;<br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">window</span> = web_sys::<span class="hljs-title function_ invoke__">window</span>().<span class="hljs-title function_ invoke__">unwrap</span>();<br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">document</span> = window.<span class="hljs-title function_ invoke__">document</span>().<span class="hljs-title function_ invoke__">unwrap</span>();<br><br>    <span class="hljs-comment">// 创建元素</span><br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">container</span> = document.<span class="hljs-title function_ invoke__">create_element</span>(<span class="hljs-string">&quot;div&quot;</span>)?;<br>    container.<span class="hljs-title function_ invoke__">set_id</span>(<span class="hljs-string">&quot;app&quot;</span>);<br>    container.<span class="hljs-title function_ invoke__">set_class_name</span>(<span class="hljs-string">&quot;container&quot;</span>);<br><br>    <span class="hljs-comment">// 创建标题</span><br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">title</span> = document.<span class="hljs-title function_ invoke__">create_element</span>(<span class="hljs-string">&quot;h1&quot;</span>)?;<br>    title.<span class="hljs-title function_ invoke__">set_text_content</span>(<span class="hljs-title function_ invoke__">Some</span>(<span class="hljs-string">&quot;Rust Wasm App&quot;</span>));<br><br>    <span class="hljs-comment">// 创建按钮</span><br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">button</span> = document.<span class="hljs-title function_ invoke__">create_element</span>(<span class="hljs-string">&quot;button&quot;</span>)?;<br>    button.<span class="hljs-title function_ invoke__">set_text_content</span>(<span class="hljs-title function_ invoke__">Some</span>(<span class="hljs-string">&quot;Click me!&quot;</span>));<br><br>    <span class="hljs-comment">// 添加事件监听器</span><br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">click_count</span> = std::cell::Cell::<span class="hljs-title function_ invoke__">new</span>(<span class="hljs-number">0u32</span>);<br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">output</span> = document.<span class="hljs-title function_ invoke__">create_element</span>(<span class="hljs-string">&quot;p&quot;</span>)?;<br>    output.<span class="hljs-title function_ invoke__">set_id</span>(<span class="hljs-string">&quot;output&quot;</span>);<br><br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">output_clone</span> = output.<span class="hljs-title function_ invoke__">clone</span>();<br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">closure</span> = Closure::<span class="hljs-title function_ invoke__">wrap</span>(<span class="hljs-type">Box</span>::<span class="hljs-title function_ invoke__">new</span>(<span class="hljs-keyword">move</span> || &#123;<br>        <span class="hljs-keyword">let</span> <span class="hljs-variable">count</span> = click_count.<span class="hljs-title function_ invoke__">get</span>() + <span class="hljs-number">1</span>;<br>        click_count.<span class="hljs-title function_ invoke__">set</span>(count);<br>        output_clone.<span class="hljs-title function_ invoke__">set_text_content</span>(<br>            <span class="hljs-title function_ invoke__">Some</span>(&amp;<span class="hljs-built_in">format!</span>(<span class="hljs-string">&quot;Clicked &#123;&#125; times&quot;</span>, count))<br>        );<br>    &#125;) <span class="hljs-keyword">as</span> <span class="hljs-type">Box</span>&lt;<span class="hljs-keyword">dyn</span> <span class="hljs-title function_ invoke__">FnMut</span>()&gt;);<br><br>    button.<span class="hljs-title function_ invoke__">add_event_listener_with_callback</span>(<br>        <span class="hljs-string">&quot;click&quot;</span>,<br>        closure.<span class="hljs-title function_ invoke__">as_ref</span>().<span class="hljs-title function_ invoke__">unchecked_ref</span>(),<br>    )?;<br>    closure.forget();<br><br>    <span class="hljs-comment">// 组装DOM</span><br>    container.<span class="hljs-title function_ invoke__">append_child</span>(&amp;title)?;<br>    container.<span class="hljs-title function_ invoke__">append_child</span>(&amp;button)?;<br>    container.<span class="hljs-title function_ invoke__">append_child</span>(&amp;output)?;<br><br>    document.<span class="hljs-title function_ invoke__">body</span>().<span class="hljs-title function_ invoke__">unwrap</span>().<span class="hljs-title function_ invoke__">append_child</span>(&amp;container)?;<br><br>    <span class="hljs-title function_ invoke__">Ok</span>(())<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="内存管理">内存管理</h2>
+<pre class="mermaid">graph TB
+    subgraph "JavaScript"
+        JS_MEM[JS Heap&lt;br&gt;GC管理]
+        JS_REF[JsValue引用]
+    end
+
+    subgraph "WebAssembly"
+        WASM_MEM[Linear Memory&lt;br&gt;连续字节数组]
+        RUST_ALLOC[Rust Allocator&lt;br&gt;手动管理]
+    end
+
+    JS_REF &lt;--&gt;|wasm-bindgen| WASM_MEM
+    RUST_ALLOC --&gt; WASM_MEM
+
+    style WASM_MEM fill:#6a1b9a,color:#fff</pre>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br></pre></td><td class="code"><pre><code class="hljs rust"><span class="hljs-comment">// 内存传递模式</span><br><br><span class="hljs-comment">// 1. 传递字符串（自动处理）</span><br><span class="hljs-meta">#[wasm_bindgen]</span><br><span class="hljs-keyword">pub</span> <span class="hljs-keyword">fn</span> <span class="hljs-title function_">process_string</span>(input: &amp;<span class="hljs-type">str</span>) <span class="hljs-punctuation">-&gt;</span> <span class="hljs-type">String</span> &#123;<br>    <span class="hljs-comment">// wasm-bindgen自动在JS堆和Wasm内存之间复制字符串</span><br>    input.<span class="hljs-title function_ invoke__">to_uppercase</span>()<br>&#125;<br><br><span class="hljs-comment">// 2. 传递二进制数据</span><br><span class="hljs-meta">#[wasm_bindgen]</span><br><span class="hljs-keyword">pub</span> <span class="hljs-keyword">fn</span> <span class="hljs-title function_">process_bytes</span>(data: &amp;[<span class="hljs-type">u8</span>]) <span class="hljs-punctuation">-&gt;</span> <span class="hljs-type">Vec</span>&lt;<span class="hljs-type">u8</span>&gt; &#123;<br>    <span class="hljs-comment">// 自动处理内存复制</span><br>    data.<span class="hljs-title function_ invoke__">iter</span>().<span class="hljs-title function_ invoke__">map</span>(|b| b.<span class="hljs-title function_ invoke__">wrapping_add</span>(<span class="hljs-number">1</span>)).<span class="hljs-title function_ invoke__">collect</span>()<br>&#125;<br><br><span class="hljs-comment">// 3. 零拷贝方式（高性能场景）</span><br><span class="hljs-meta">#[wasm_bindgen]</span><br><span class="hljs-keyword">pub</span> <span class="hljs-keyword">fn</span> <span class="hljs-title function_">process_image</span>(width: <span class="hljs-type">u32</span>, height: <span class="hljs-type">u32</span>) <span class="hljs-punctuation">-&gt;</span> <span class="hljs-type">Vec</span>&lt;<span class="hljs-type">u8</span>&gt; &#123;<br>    <span class="hljs-keyword">let</span> <span class="hljs-variable">size</span> = (width * height * <span class="hljs-number">4</span>) <span class="hljs-keyword">as</span> <span class="hljs-type">usize</span>;<br>    <span class="hljs-keyword">let</span> <span class="hljs-keyword">mut </span><span class="hljs-variable">pixels</span> = <span class="hljs-built_in">vec!</span>[<span class="hljs-number">0u8</span>; size];<br><br>    <span class="hljs-comment">// 直接操作像素数据</span><br>    <span class="hljs-keyword">for</span> <span class="hljs-variable">i</span> <span class="hljs-keyword">in</span> (<span class="hljs-number">0</span>..size).<span class="hljs-title function_ invoke__">step_by</span>(<span class="hljs-number">4</span>) &#123;<br>        pixels[i] = <span class="hljs-number">255</span>;     <span class="hljs-comment">// R</span><br>        pixels[i + <span class="hljs-number">1</span>] = <span class="hljs-number">0</span>;   <span class="hljs-comment">// G</span><br>        pixels[i + <span class="hljs-number">2</span>] = <span class="hljs-number">0</span>;   <span class="hljs-comment">// B</span><br>        pixels[i + <span class="hljs-number">3</span>] = <span class="hljs-number">255</span>; <span class="hljs-comment">// A</span><br>    &#125;<br><br>    pixels<br>&#125;<br></code></pre></td></tr></table></figure>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-comment">// JavaScript端的零拷贝访问</span><br><span class="hljs-keyword">const</span> memory = <span class="hljs-keyword">new</span> <span class="hljs-title class_">WebAssembly</span>.<span class="hljs-title class_">Memory</span>(&#123; <span class="hljs-attr">initial</span>: <span class="hljs-number">256</span> &#125;);<br><span class="hljs-keyword">const</span> buffer = <span class="hljs-keyword">new</span> <span class="hljs-title class_">Uint8Array</span>(memory.<span class="hljs-property">buffer</span>);<br><br><span class="hljs-comment">// 直接访问Wasm线性内存（适合大数据）</span><br><span class="hljs-keyword">const</span> ptr = wasm_module.<span class="hljs-title function_">allocate</span>(<span class="hljs-number">1024</span>);<br><span class="hljs-keyword">const</span> view = <span class="hljs-keyword">new</span> <span class="hljs-title class_">Uint8Array</span>(memory.<span class="hljs-property">buffer</span>, ptr, <span class="hljs-number">1024</span>);<br><span class="hljs-comment">// 直接修改view，Rust侧可以看到变化</span><br></code></pre></td></tr></table></figure>
+<h2 id="性能优化">性能优化</h2>
+<h3 id="wasm-opt优化">wasm-opt优化</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 使用wasm-opt优化</span><br>wasm-opt -Oz input.wasm -o output.wasm<br><span class="hljs-comment"># -Oz: 优化大小（最激进）</span><br><span class="hljs-comment"># -O3: 优化速度</span><br><span class="hljs-comment"># -O2: 平衡优化</span><br><br><span class="hljs-comment"># wasm-pack自动调用wasm-opt</span><br>wasm-pack build --release<br></code></pre></td></tr></table></figure>
+<h3 id="大小优化策略">大小优化策略</h3>
+<figure class="highlight toml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><code class="hljs toml"><span class="hljs-comment"># Cargo.toml - 优化Wasm大小</span><br><span class="hljs-section">[profile.release]</span><br><span class="hljs-attr">opt-level</span> = <span class="hljs-string">&quot;z&quot;</span>       <span class="hljs-comment"># 优化大小</span><br><span class="hljs-attr">lto</span> = <span class="hljs-literal">true</span>            <span class="hljs-comment"># 链接时优化</span><br><span class="hljs-attr">codegen-units</span> = <span class="hljs-number">1</span>     <span class="hljs-comment"># 单代码生成单元</span><br><span class="hljs-attr">strip</span> = <span class="hljs-literal">true</span>          <span class="hljs-comment"># 去除符号</span><br><span class="hljs-attr">panic</span> = <span class="hljs-string">&quot;abort&quot;</span>       <span class="hljs-comment"># abort而非unwind，减小体积</span><br></code></pre></td></tr></table></figure>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><code class="hljs rust"><span class="hljs-comment">// 使用wee_alloc替代默认分配器（减小约10KB）</span><br><span class="hljs-meta">#[global_allocator]</span><br><span class="hljs-keyword">static</span> ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;<br></code></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 分析Wasm大小</span><br>cargo install twiggy<br>twiggy top pkg/wasm_hello_bg.wasm<br><span class="hljs-comment"># 显示各函数占用的大小</span><br><br>twiggy dominators pkg/wasm_hello_bg.wasm<br><span class="hljs-comment"># 显示调用树和大小影响</span><br></code></pre></td></tr></table></figure>
+<h3 id="计算密集型任务性能">计算密集型任务性能</h3>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><code class="hljs rust"><span class="hljs-comment">// 图像处理示例 - 灰度转换</span><br><span class="hljs-meta">#[wasm_bindgen]</span><br><span class="hljs-keyword">pub</span> <span class="hljs-keyword">fn</span> <span class="hljs-title function_">grayscale</span>(pixels: &amp;<span class="hljs-keyword">mut</span> [<span class="hljs-type">u8</span>]) &#123;<br>    <span class="hljs-keyword">for</span> <span class="hljs-variable">chunk</span> <span class="hljs-keyword">in</span> pixels.<span class="hljs-title function_ invoke__">chunks_exact_mut</span>(<span class="hljs-number">4</span>) &#123;<br>        <span class="hljs-keyword">let</span> <span class="hljs-variable">r</span> = chunk[<span class="hljs-number">0</span>] <span class="hljs-keyword">as</span> <span class="hljs-type">f32</span>;<br>        <span class="hljs-keyword">let</span> <span class="hljs-variable">g</span> = chunk[<span class="hljs-number">1</span>] <span class="hljs-keyword">as</span> <span class="hljs-type">f32</span>;<br>        <span class="hljs-keyword">let</span> <span class="hljs-variable">b</span> = chunk[<span class="hljs-number">2</span>] <span class="hljs-keyword">as</span> <span class="hljs-type">f32</span>;<br>        <span class="hljs-keyword">let</span> <span class="hljs-variable">gray</span> = (<span class="hljs-number">0.299</span> * r + <span class="hljs-number">0.587</span> * g + <span class="hljs-number">0.114</span> * b) <span class="hljs-keyword">as</span> <span class="hljs-type">u8</span>;<br>        chunk[<span class="hljs-number">0</span>] = gray;<br>        chunk[<span class="hljs-number">1</span>] = gray;<br>        chunk[<span class="hljs-number">2</span>] = gray;<br>        <span class="hljs-comment">// chunk[3] (alpha) 保持不变</span><br>    &#125;<br>&#125;<br><br><span class="hljs-comment">// 使用SIMD加速（需要simd128 feature）</span><br><span class="hljs-comment">// #[target_feature(enable = &quot;simd128&quot;)]</span><br><span class="hljs-comment">// pub fn grayscale_simd(pixels: &amp;mut [u8]) &#123; ... &#125;</span><br></code></pre></td></tr></table></figure>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-comment">// JavaScript端性能对比</span><br><span class="hljs-keyword">import</span> init, &#123; grayscale &#125; <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;./pkg/image_processor.js&#x27;</span>;<br><br><span class="hljs-keyword">await</span> <span class="hljs-title function_">init</span>();<br><br><span class="hljs-keyword">const</span> canvas = <span class="hljs-variable language_">document</span>.<span class="hljs-title function_">getElementById</span>(<span class="hljs-string">&#x27;canvas&#x27;</span>);<br><span class="hljs-keyword">const</span> ctx = canvas.<span class="hljs-title function_">getContext</span>(<span class="hljs-string">&#x27;2d&#x27;</span>);<br><span class="hljs-keyword">const</span> imageData = ctx.<span class="hljs-title function_">getImageData</span>(<span class="hljs-number">0</span>, <span class="hljs-number">0</span>, canvas.<span class="hljs-property">width</span>, canvas.<span class="hljs-property">height</span>);<br><br><span class="hljs-comment">// Wasm处理</span><br><span class="hljs-variable language_">console</span>.<span class="hljs-title function_">time</span>(<span class="hljs-string">&#x27;wasm&#x27;</span>);<br><span class="hljs-title function_">grayscale</span>(imageData.<span class="hljs-property">data</span>);<br><span class="hljs-variable language_">console</span>.<span class="hljs-title function_">timeEnd</span>(<span class="hljs-string">&#x27;wasm&#x27;</span>); <span class="hljs-comment">// ~2ms for 1920x1080</span><br><br><span class="hljs-comment">// JS处理</span><br><span class="hljs-variable language_">console</span>.<span class="hljs-title function_">time</span>(<span class="hljs-string">&#x27;js&#x27;</span>);<br><span class="hljs-keyword">for</span> (<span class="hljs-keyword">let</span> i = <span class="hljs-number">0</span>; i &lt; imageData.<span class="hljs-property">data</span>.<span class="hljs-property">length</span>; i += <span class="hljs-number">4</span>) &#123;<br>    <span class="hljs-keyword">const</span> gray = <span class="hljs-number">0.299</span> * imageData.<span class="hljs-property">data</span>[i] +<br>                 <span class="hljs-number">0.587</span> * imageData.<span class="hljs-property">data</span>[i+<span class="hljs-number">1</span>] +<br>                 <span class="hljs-number">0.114</span> * imageData.<span class="hljs-property">data</span>[i+<span class="hljs-number">2</span>];<br>    imageData.<span class="hljs-property">data</span>[i] = imageData.<span class="hljs-property">data</span>[i+<span class="hljs-number">1</span>] = imageData.<span class="hljs-property">data</span>[i+<span class="hljs-number">2</span>] = gray;<br>&#125;<br><span class="hljs-variable language_">console</span>.<span class="hljs-title function_">timeEnd</span>(<span class="hljs-string">&#x27;js&#x27;</span>); <span class="hljs-comment">// ~15ms for 1920x1080</span><br><br>ctx.<span class="hljs-title function_">putImageData</span>(imageData, <span class="hljs-number">0</span>, <span class="hljs-number">0</span>);<br></code></pre></td></tr></table></figure>
+<h2 id="component-model">Component Model</h2>
+<p>WebAssembly Component
+Model是下一代Wasm接口标准，支持更丰富的类型系统和组件间互操作。</p>
+<pre class="mermaid">graph TB
+    subgraph "Component Model"
+        WIT[WIT Interface&lt;br&gt;WebAssembly Interface Types] --&gt; COMP1[Rust Component]
+        WIT --&gt; COMP2[Go Component]
+        WIT --&gt; COMP3[JS Component]
+
+        COMP1 &lt;--&gt;|标准化接口| COMP2
+        COMP2 &lt;--&gt;|标准化接口| COMP3
+    end</pre>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><code class="hljs wit">// hello.wit - WIT接口定义<br>package example:hello;<br><br>interface greet &#123;<br>    greet: func(name: string) -&gt; string;<br>&#125;<br><br>world hello-world &#123;<br>    export greet;<br>&#125;<br></code></pre></td></tr></table></figure>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><code class="hljs rust"><span class="hljs-comment">// 使用wit-bindgen实现Component</span><br><span class="hljs-comment">// Cargo.toml: wit-bindgen = &quot;0.24&quot;</span><br><br>wit_bindgen::generate!(&#123;<br>    world: <span class="hljs-string">&quot;hello-world&quot;</span>,<br>&#125;);<br><br><span class="hljs-keyword">struct</span> <span class="hljs-title class_">MyComponent</span>;<br><br><span class="hljs-keyword">impl</span> <span class="hljs-title class_">Guest</span> <span class="hljs-keyword">for</span> <span class="hljs-title class_">MyComponent</span> &#123;<br>    <span class="hljs-keyword">fn</span> <span class="hljs-title function_">greet</span>(name: <span class="hljs-type">String</span>) <span class="hljs-punctuation">-&gt;</span> <span class="hljs-type">String</span> &#123;<br>        <span class="hljs-built_in">format!</span>(<span class="hljs-string">&quot;Hello, &#123;&#125;!&quot;</span>, name)<br>    &#125;<br>&#125;<br><br>export!(MyComponent);<br></code></pre></td></tr></table></figure>
+<h2 id="与前端框架集成">与前端框架集成</h2>
+<figure class="highlight typescript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></td><td class="code"><pre><code class="hljs typescript"><span class="hljs-comment">// Vite + React集成</span><br><span class="hljs-comment">// vite.config.ts</span><br><span class="hljs-keyword">import</span> &#123; defineConfig &#125; <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;vite&#x27;</span>;<br><span class="hljs-keyword">import</span> wasm <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;vite-plugin-wasm&#x27;</span>;<br><br><span class="hljs-keyword">export</span> <span class="hljs-keyword">default</span> <span class="hljs-title function_">defineConfig</span>(&#123;<br>    <span class="hljs-attr">plugins</span>: [<span class="hljs-title function_">wasm</span>()],<br>&#125;);<br><br><span class="hljs-comment">// React组件中使用</span><br><span class="hljs-keyword">import</span> &#123; useState, useEffect &#125; <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;react&#x27;</span>;<br><span class="hljs-keyword">import</span> init, &#123; <span class="hljs-title class_">Calculator</span> &#125; <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;../pkg/wasm_hello&#x27;</span>;<br><br><span class="hljs-keyword">function</span> <span class="hljs-title function_">App</span>(<span class="hljs-params"></span>) &#123;<br>    <span class="hljs-keyword">const</span> [calc, setCalc] = useState&lt;<span class="hljs-title class_">Calculator</span> | <span class="hljs-literal">null</span>&gt;(<span class="hljs-literal">null</span>);<br>    <span class="hljs-keyword">const</span> [result, setResult] = <span class="hljs-title function_">useState</span>(<span class="hljs-number">0</span>);<br><br>    <span class="hljs-title function_">useEffect</span>(<span class="hljs-function">() =&gt;</span> &#123;<br>        <span class="hljs-title function_">init</span>().<span class="hljs-title function_">then</span>(<span class="hljs-function">() =&gt;</span> &#123;<br>            <span class="hljs-title function_">setCalc</span>(<span class="hljs-keyword">new</span> <span class="hljs-title class_">Calculator</span>());<br>        &#125;);<br>    &#125;, []);<br><br>    <span class="hljs-keyword">const</span> <span class="hljs-title function_">handleAdd</span> = (<span class="hljs-params"></span>) =&gt; &#123;<br>        <span class="hljs-keyword">if</span> (calc) &#123;<br>            <span class="hljs-keyword">const</span> r = calc.<span class="hljs-title function_">add</span>(<span class="hljs-title class_">Math</span>.<span class="hljs-title function_">random</span>() * <span class="hljs-number">100</span>, <span class="hljs-title class_">Math</span>.<span class="hljs-title function_">random</span>() * <span class="hljs-number">100</span>);<br>            <span class="hljs-title function_">setResult</span>(r);<br>        &#125;<br>    &#125;;<br><br>    <span class="hljs-keyword">return</span> (<br>        <span class="language-xml"><span class="hljs-tag">&lt;<span class="hljs-name">div</span>&gt;</span></span><br><span class="language-xml">            <span class="hljs-tag">&lt;<span class="hljs-name">button</span> <span class="hljs-attr">onClick</span>=<span class="hljs-string">&#123;handleAdd&#125;</span>&gt;</span>Add Random Numbers<span class="hljs-tag">&lt;/<span class="hljs-name">button</span>&gt;</span></span><br><span class="language-xml">            <span class="hljs-tag">&lt;<span class="hljs-name">p</span>&gt;</span>Result: &#123;result&#125;<span class="hljs-tag">&lt;/<span class="hljs-name">p</span>&gt;</span></span><br><span class="language-xml">        <span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span></span><br>    );<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="适用场景">适用场景</h2>
+<pre class="mermaid">graph LR
+    subgraph "适合Wasm的场景"
+        A[图像/视频处理]
+        B[密码学计算]
+        C[游戏引擎]
+        D[科学计算]
+        E[编解码器]
+        F[CAD/设计工具]
+    end
+
+    subgraph "不适合Wasm的场景"
+        X[简单DOM操作]
+        Y[表单验证]
+        Z[普通API调用]
+    end
+
+    style A fill:#388e3c,color:#fff
+    style X fill:#d32f2f,color:#fff</pre>
+<h2 id="总结">总结</h2>
+<p>Rust WebAssembly开发的核心要点：</p>
+<ol type="1">
+<li><strong>wasm-pack</strong>是核心工具链，集成了编译、绑定生成和优化</li>
+<li><strong>wasm-bindgen</strong>提供Rust和JavaScript的无缝互操作</li>
+<li><strong>web-sys</strong>提供Web API的Rust绑定，可以直接操作DOM</li>
+<li><strong>内存管理</strong>需要理解Wasm线性内存和JS堆的交互</li>
+<li><strong>大小优化</strong>：使用<code>opt-level = "z"</code>、LTO、wasm-opt等手段</li>
+<li><strong>适用于计算密集型任务</strong>：图像处理、密码学、游戏引擎等</li>
+<li><strong>Component
+Model</strong>是未来方向，提供跨语言的标准化接口</li>
+</ol>
+<p>Rust +
+WebAssembly的组合为Web平台带来了接近原生的性能，是对JavaScript的有力补充，而非替代。</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2025-08-13</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">2.8k 字 · 7 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/rust-error-handling/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Rust错误处理：Result/Option模式详解</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/rust-async-programming/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Rust异步编程：从Future到Tokio</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#webassembly%E6%A6%82%E8%BF%B0"><span class="toc-text">WebAssembly概述</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%B7%A5%E5%85%B7%E9%93%BE%E6%90%AD%E5%BB%BA"><span class="toc-text">工具链搭建</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%AC%AC%E4%B8%80%E4%B8%AAwasm%E9%A1%B9%E7%9B%AE"><span class="toc-text">第一个Wasm项目</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#wasm-bindgen%E6%B7%B1%E5%85%A5"><span class="toc-text">wasm-bindgen深入</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#javascript%E4%BA%92%E6%93%8D%E4%BD%9C"><span class="toc-text">JavaScript互操作</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#web-sys-dom%E6%93%8D%E4%BD%9C"><span class="toc-text">web-sys DOM操作</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86"><span class="toc-text">内存管理</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96"><span class="toc-text">性能优化</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#wasm-opt%E4%BC%98%E5%8C%96"><span class="toc-text">wasm-opt优化</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%A4%A7%E5%B0%8F%E4%BC%98%E5%8C%96%E7%AD%96%E7%95%A5"><span class="toc-text">大小优化策略</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%AE%A1%E7%AE%97%E5%AF%86%E9%9B%86%E5%9E%8B%E4%BB%BB%E5%8A%A1%E6%80%A7%E8%83%BD"><span class="toc-text">计算密集型任务性能</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#component-model"><span class="toc-text">Component Model</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%8E%E5%89%8D%E7%AB%AF%E6%A1%86%E6%9E%B6%E9%9B%86%E6%88%90"><span class="toc-text">与前端框架集成</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%80%82%E7%94%A8%E5%9C%BA%E6%99%AF"><span class="toc-text">适用场景</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

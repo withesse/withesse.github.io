@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>本地LLM部署方案：vLLM与Ollama进阶 · zt&#39;s Blog</title>
+  <meta name="description" content="深入探讨本地LLM部署方案，包括vLLM的PagedAttention、Ollama进阶用法、量化技术与GPU优化">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/local-llm-deployment/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="本地LLM部署方案：vLLM与Ollama进阶">
+  <meta property="og:description" content="深入探讨本地LLM部署方案，包括vLLM的PagedAttention、Ollama进阶用法、量化技术与GPU优化">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/local-llm-deployment/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2025-11-11T16:00:00.000Z">
+  <meta property="article:modified_time" content="2025-11-11T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="本地LLM部署方案：vLLM与Ollama进阶">
+  <meta name="twitter:description" content="深入探讨本地LLM部署方案，包括vLLM的PagedAttention、Ollama进阶用法、量化技术与GPU优化">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"本地LLM部署方案：vLLM与Ollama进阶","description":"深入探讨本地LLM部署方案，包括vLLM的PagedAttention、Ollama进阶用法、量化技术与GPU优化","datePublished":"2025-11-11T16:00:00.000Z","dateModified":"2025-11-11T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/local-llm-deployment/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"AI","item":"https://withesse.co/categories/AI/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:280">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/AI/">AI</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/llm/"><span class="hash">#</span>llm</a><a class="tag" href="/tags/vllm/"><span class="hash">#</span>vllm</a><a class="tag" href="/tags/ollama/"><span class="hash">#</span>ollama</a><a class="tag" href="/tags/deployment/"><span class="hash">#</span>deployment</a>
+        
+      </div>
+
+      <h1>本地LLM部署方案：vLLM与Ollama进阶</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2025.11.12</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 8 min</span>
+        </span>
+        <span class="wc"><span class="num">3.2k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%83%A8%E7%BD%B2%E6%96%B9%E6%A1%88%E5%85%A8%E6%99%AF"><span class="toc-text">部署方案全景</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#vllm-%E6%B7%B1%E5%85%A5"><span class="toc-text">vLLM 深入</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#pagedattention-%E5%8E%9F%E7%90%86"><span class="toc-text">PagedAttention 原理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#continuous-batching"><span class="toc-text">Continuous Batching</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#vllm-%E7%94%9F%E4%BA%A7%E9%83%A8%E7%BD%B2"><span class="toc-text">vLLM 生产部署</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#vllm-openai-%E5%85%BC%E5%AE%B9-api"><span class="toc-text">vLLM + OpenAI 兼容 API</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#ollama-%E8%BF%9B%E9%98%B6"><span class="toc-text">Ollama 进阶</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9F%BA%E7%A1%80%E4%BD%BF%E7%94%A8"><span class="toc-text">基础使用</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#modelfile-%E8%87%AA%E5%AE%9A%E4%B9%89"><span class="toc-text">Modelfile 自定义</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#ollama-rest-api"><span class="toc-text">Ollama REST API</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%87%8F%E5%8C%96%E6%8A%80%E6%9C%AF%E5%AF%B9%E6%AF%94"><span class="toc-text">量化技术对比</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%87%8F%E5%8C%96%E7%BA%A7%E5%88%AB%E8%AF%A6%E8%A7%A3"><span class="toc-text">量化级别详解</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#gguf-%E9%87%8F%E5%8C%96%E5%AE%9E%E8%B7%B5"><span class="toc-text">GGUF 量化实践</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#awq-%E9%87%8F%E5%8C%96"><span class="toc-text">AWQ 量化</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#gpu-%E5%86%85%E5%AD%98%E4%BC%98%E5%8C%96"><span class="toc-text">GPU 内存优化</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%86%85%E5%AD%98%E4%BC%B0%E7%AE%97%E5%85%AC%E5%BC%8F"><span class="toc-text">内存估算公式</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#tensor-parallelism"><span class="toc-text">Tensor Parallelism</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%A7%E8%83%BD%E5%9F%BA%E5%87%86%E6%B5%8B%E8%AF%95"><span class="toc-text">性能基准测试</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%90%84%E6%96%B9%E6%A1%88%E6%80%A7%E8%83%BD%E5%8F%82%E8%80%83"><span class="toc-text">各方案性能参考</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%80%89%E5%9E%8B%E5%86%B3%E7%AD%96"><span class="toc-text">选型决策</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="引言">引言</h2>
+<p>随着开源 LLM 的蓬勃发展（Llama、Qwen、Mistral、DeepSeek），本地部署
+LLM 成为越来越多团队的选择——数据隐私可控、无 API
+费用、可深度定制。本文将深入两大主流部署方案：vLLM（面向高性能生产环境）和
+Ollama（面向个人开发和原型验证），涵盖 PagedAttention
+原理、连续批处理、量化技术（GGUF/GPTQ/AWQ）、GPU
+内存优化和性能基准测试。</p>
+<h2 id="部署方案全景">部署方案全景</h2>
+<pre class="mermaid">graph TB
+    A[本地 LLM 部署] --&gt; B[生产级方案]
+    A --&gt; C[开发级方案]
+    A --&gt; D[边缘部署]
+
+    B --&gt; B1[vLLM&lt;br/&gt;PagedAttention&lt;br/&gt;高吞吐量]
+    B --&gt; B2[TGI&lt;br/&gt;HuggingFace&lt;br/&gt;Text Generation Inference]
+    B --&gt; B3[TensorRT-LLM&lt;br/&gt;NVIDIA 优化]
+
+    C --&gt; C1[Ollama&lt;br/&gt;一键运行&lt;br/&gt;最简单]
+    C --&gt; C2[llama.cpp&lt;br/&gt;CPU/GPU 推理&lt;br/&gt;量化模型]
+
+    D --&gt; D1[MLC-LLM&lt;br/&gt;手机/IoT]
+
+    style B1 fill:#e74c3c,color:#fff
+    style C1 fill:#2ecc71,color:#fff
+    style B3 fill:#76b900,color:#fff</pre>
+<h2 id="vllm-深入">vLLM 深入</h2>
+<h3 id="pagedattention-原理">PagedAttention 原理</h3>
+<p>PagedAttention 是 vLLM
+的核心创新——借鉴操作系统的虚拟内存和分页机制来管理 KV-Cache：</p>
+<pre class="mermaid">graph TB
+    subgraph "传统方案: 连续内存分配"
+        A1["Request 1 KV-Cache&lt;br/&gt;预分配 max_seq_len"] --&gt; B1[大量内部碎片&lt;br/&gt;浪费 60-80%]
+    end
+
+    subgraph "PagedAttention: 分页管理"
+        A2["Request 1"] --&gt; C1["Block 1"]
+        A2 --&gt; C2["Block 2"]
+        A2 --&gt; C3["Block 3"]
+        A3["Request 2"] --&gt; C4["Block 4"]
+        A3 --&gt; C5["Block 5"]
+        C1 --&gt; D[Block Table&lt;br/&gt;映射逻辑块到物理块]
+        C2 --&gt; D
+        C4 --&gt; D
+        D --&gt; E[GPU Memory&lt;br/&gt;按需分配&lt;br/&gt;接近 0 浪费]
+    end
+
+    style B1 fill:#e74c3c,color:#fff
+    style E fill:#2ecc71,color:#fff</pre>
+<p><strong>传统方案的问题：</strong> 每个请求需要为最大序列长度预分配
+KV-Cache 内存。如果 <code>max_seq_len=2048</code>，但实际只用了 200
+tokens，90% 的内存被浪费。</p>
+<p><strong>PagedAttention 的解决：</strong> 将 KV-Cache 分成固定大小的
+Block（如每块 16 tokens），像操作系统的虚拟内存页一样按需分配。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-comment"># PagedAttention key concepts</span><br><span class="hljs-comment"># 1. Block: fixed-size KV-Cache unit (e.g., 16 tokens)</span><br><span class="hljs-comment"># 2. Block Table: maps logical blocks to physical GPU memory blocks</span><br><span class="hljs-comment"># 3. Copy-on-Write: for parallel sampling, share blocks until modification</span><br><br><span class="hljs-comment"># Memory savings example:</span><br><span class="hljs-comment"># Model: Llama-2-7B, max_seq_len=2048, batch_size=32</span><br><span class="hljs-comment"># Traditional: 32 * 2048 * 2 * 32 * 128 * 2 bytes = ~32 GB</span><br><span class="hljs-comment"># PagedAttention: only allocate for actual tokens, ~5-8 GB typical</span><br></code></pre></td></tr></table></figure>
+<h3 id="continuous-batching">Continuous Batching</h3>
+<pre class="mermaid">sequenceDiagram
+    participant S as Server
+    participant R1 as Request 1 (Short)
+    participant R2 as Request 2 (Long)
+    participant R3 as Request 3 (New)
+
+    Note over S: Iteration 1
+    S-&gt;&gt;R1: Generate token
+    S-&gt;&gt;R2: Generate token
+
+    Note over S: Iteration 2
+    S-&gt;&gt;R1: Generate token (DONE)
+    S-&gt;&gt;R2: Generate token
+
+    Note over S: Iteration 3 - R1 finished, R3 fills slot
+    S-&gt;&gt;R3: Generate token (NEW - immediate)
+    S-&gt;&gt;R2: Generate token
+
+    Note over S: No waiting for batch to complete!</pre>
+<p><strong>传统 Static Batching：</strong> 必须等待 batch
+中所有请求完成才能接受新请求。 <strong>Continuous Batching：</strong>
+请求完成后立即释放资源，新请求无需等待。</p>
+<h3 id="vllm-生产部署">vLLM 生产部署</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># Install vLLM</span><br>pip install vllm<br><br><span class="hljs-comment"># Start OpenAI-compatible API server</span><br>vllm serve Qwen/Qwen2.5-7B-Instruct \<br>  --host 0.0.0.0 \<br>  --port 8000 \<br>  --tensor-parallel-size 2 \        <span class="hljs-comment"># Multi-GPU parallelism</span><br>  --max-model-len 8192 \            <span class="hljs-comment"># Max context length</span><br>  --gpu-memory-utilization 0.9 \    <span class="hljs-comment"># Use 90% of GPU memory</span><br>  --enable-prefix-caching \         <span class="hljs-comment"># Cache common prompt prefixes</span><br>  --quantization awq                <span class="hljs-comment"># Use AWQ quantization</span><br></code></pre></td></tr></table></figure>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-comment"># vLLM Python API for batch inference</span><br><span class="hljs-keyword">from</span> vllm <span class="hljs-keyword">import</span> LLM, SamplingParams<br><br>llm = LLM(<br>    model=<span class="hljs-string">&quot;Qwen/Qwen2.5-7B-Instruct&quot;</span>,<br>    tensor_parallel_size=<span class="hljs-number">2</span>,<br>    gpu_memory_utilization=<span class="hljs-number">0.9</span>,<br>    max_model_len=<span class="hljs-number">8192</span>,<br>)<br><br>sampling_params = SamplingParams(<br>    temperature=<span class="hljs-number">0.7</span>,<br>    top_p=<span class="hljs-number">0.9</span>,<br>    max_tokens=<span class="hljs-number">1024</span>,<br>    repetition_penalty=<span class="hljs-number">1.1</span>,<br>    stop=[<span class="hljs-string">&quot;&lt;|endoftext|&gt;&quot;</span>],<br>)<br><br><span class="hljs-comment"># Batch inference</span><br>prompts = [<br>    <span class="hljs-string">&quot;Explain quantum computing in simple terms.&quot;</span>,<br>    <span class="hljs-string">&quot;Write a Python function to sort a list.&quot;</span>,<br>    <span class="hljs-string">&quot;What are the benefits of microservices?&quot;</span>,<br>]<br><br>outputs = llm.generate(prompts, sampling_params)<br><br><span class="hljs-keyword">for</span> output <span class="hljs-keyword">in</span> outputs:<br>    <span class="hljs-built_in">print</span>(<span class="hljs-string">f&quot;Prompt: <span class="hljs-subst">&#123;output.prompt[:<span class="hljs-number">50</span>]&#125;</span>...&quot;</span>)<br>    <span class="hljs-built_in">print</span>(<span class="hljs-string">f&quot;Generated: <span class="hljs-subst">&#123;output.outputs[<span class="hljs-number">0</span>].text&#125;</span>&quot;</span>)<br>    <span class="hljs-built_in">print</span>(<span class="hljs-string">f&quot;Tokens/s: <span class="hljs-subst">&#123;<span class="hljs-built_in">len</span>(output.outputs[<span class="hljs-number">0</span>].token_ids) / output.metrics.finished_time:<span class="hljs-number">.1</span>f&#125;</span>&quot;</span>)<br>    <span class="hljs-built_in">print</span>(<span class="hljs-string">&quot;---&quot;</span>)<br></code></pre></td></tr></table></figure>
+<h3 id="vllm-openai-兼容-api">vLLM + OpenAI 兼容 API</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-comment"># Client code — fully compatible with OpenAI SDK</span><br><span class="hljs-keyword">from</span> openai <span class="hljs-keyword">import</span> OpenAI<br><br>client = OpenAI(<br>    base_url=<span class="hljs-string">&quot;http://localhost:8000/v1&quot;</span>,<br>    api_key=<span class="hljs-string">&quot;dummy&quot;</span>,  <span class="hljs-comment"># vLLM doesn&#x27;t require a real key</span><br>)<br><br><span class="hljs-comment"># Chat completion</span><br>response = client.chat.completions.create(<br>    model=<span class="hljs-string">&quot;Qwen/Qwen2.5-7B-Instruct&quot;</span>,<br>    messages=[<br>        &#123;<span class="hljs-string">&quot;role&quot;</span>: <span class="hljs-string">&quot;system&quot;</span>, <span class="hljs-string">&quot;content&quot;</span>: <span class="hljs-string">&quot;你是一个专业的技术顾问。&quot;</span>&#125;,<br>        &#123;<span class="hljs-string">&quot;role&quot;</span>: <span class="hljs-string">&quot;user&quot;</span>, <span class="hljs-string">&quot;content&quot;</span>: <span class="hljs-string">&quot;如何设计一个高可用的微服务架构？&quot;</span>&#125;,<br>    ],<br>    temperature=<span class="hljs-number">0.7</span>,<br>    max_tokens=<span class="hljs-number">1024</span>,<br>    stream=<span class="hljs-literal">True</span>,<br>)<br><br><span class="hljs-keyword">for</span> chunk <span class="hljs-keyword">in</span> response:<br>    <span class="hljs-keyword">if</span> chunk.choices[<span class="hljs-number">0</span>].delta.content:<br>        <span class="hljs-built_in">print</span>(chunk.choices[<span class="hljs-number">0</span>].delta.content, end=<span class="hljs-string">&quot;&quot;</span>, flush=<span class="hljs-literal">True</span>)<br></code></pre></td></tr></table></figure>
+<h2 id="ollama-进阶">Ollama 进阶</h2>
+<h3 id="基础使用">基础使用</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># Install Ollama (macOS/Linux)</span><br>curl -fsSL https://ollama.ai/install.sh | sh<br><br><span class="hljs-comment"># Pull and run a model</span><br>ollama pull qwen2.5:7b<br>ollama run qwen2.5:7b <span class="hljs-string">&quot;什么是Transformer?&quot;</span><br><br><span class="hljs-comment"># List available models</span><br>ollama list<br><br><span class="hljs-comment"># Show model details</span><br>ollama show qwen2.5:7b<br></code></pre></td></tr></table></figure>
+<h3 id="modelfile-自定义">Modelfile 自定义</h3>
+<figure class="highlight dockerfile"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><code class="hljs dockerfile"><span class="hljs-comment"># Modelfile — custom model configuration</span><br><span class="hljs-keyword">FROM</span> qwen2.<span class="hljs-number">5</span>:<span class="hljs-number">7</span>b<br><br><span class="hljs-comment"># System prompt</span><br>SYSTEM <span class="hljs-string">&quot;&quot;</span><span class="hljs-string">&quot;你是一个Python编程专家，专注于后端开发。</span><br><span class="hljs-string">你的回答应该：</span><br><span class="hljs-string">1. 包含可运行的代码示例</span><br><span class="hljs-string">2. 使用Python 3.10+语法</span><br><span class="hljs-string">3. 遵循PEP 8规范</span><br><span class="hljs-string">4. 解释关键设计决策&quot;</span><span class="hljs-string">&quot;&quot;</span><br><br><span class="hljs-comment"># Parameter customization</span><br>PARAMETER temperature <span class="hljs-number">0.7</span><br>PARAMETER top_p <span class="hljs-number">0.9</span><br>PARAMETER num_ctx <span class="hljs-number">8192</span><br>PARAMETER repeat_penalty <span class="hljs-number">1.1</span><br>PARAMETER stop <span class="hljs-string">&quot;&lt;|endoftext|&gt;&quot;</span><br><br><span class="hljs-comment"># Template customization (Jinja-like)</span><br>TEMPLATE <span class="hljs-string">&quot;&quot;</span><span class="hljs-string">&quot;&#123;&#123; if .System &#125;&#125;&lt;|im_start|&gt;system</span><br><span class="hljs-string">&#123;&#123; .System &#125;&#125;&lt;|im_end|&gt;</span><br><span class="hljs-string">&#123;&#123; end &#125;&#125;&#123;&#123; if .Prompt &#125;&#125;&lt;|im_start|&gt;user</span><br><span class="hljs-string">&#123;&#123; .Prompt &#125;&#125;&lt;|im_end|&gt;</span><br><span class="hljs-string">&#123;&#123; end &#125;&#125;&lt;|im_start|&gt;assistant</span><br><span class="hljs-string">&#123;&#123; .Response &#125;&#125;&lt;|im_end|&gt;</span><br><span class="hljs-string">&quot;</span><span class="hljs-string">&quot;&quot;</span><br></code></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># Build custom model</span><br>ollama create python-expert -f ./Modelfile<br><br><span class="hljs-comment"># Run custom model</span><br>ollama run python-expert <span class="hljs-string">&quot;如何用FastAPI实现JWT认证?&quot;</span><br></code></pre></td></tr></table></figure>
+<h3 id="ollama-rest-api">Ollama REST API</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">import</span> httpx<br><br>OLLAMA_BASE = <span class="hljs-string">&quot;http://localhost:11434&quot;</span><br><br><span class="hljs-comment"># Generate completion</span><br>response = httpx.post(<br>    <span class="hljs-string">f&quot;<span class="hljs-subst">&#123;OLLAMA_BASE&#125;</span>/api/generate&quot;</span>,<br>    json=&#123;<br>        <span class="hljs-string">&quot;model&quot;</span>: <span class="hljs-string">&quot;qwen2.5:7b&quot;</span>,<br>        <span class="hljs-string">&quot;prompt&quot;</span>: <span class="hljs-string">&quot;Explain Docker in 3 sentences.&quot;</span>,<br>        <span class="hljs-string">&quot;stream&quot;</span>: <span class="hljs-literal">False</span>,<br>        <span class="hljs-string">&quot;options&quot;</span>: &#123;<br>            <span class="hljs-string">&quot;temperature&quot;</span>: <span class="hljs-number">0.7</span>,<br>            <span class="hljs-string">&quot;num_ctx&quot;</span>: <span class="hljs-number">4096</span>,<br>        &#125;,<br>    &#125;,<br>    timeout=<span class="hljs-number">60.0</span>,<br>)<br><br><span class="hljs-built_in">print</span>(response.json()[<span class="hljs-string">&quot;response&quot;</span>])<br><br><span class="hljs-comment"># Chat API</span><br>response = httpx.post(<br>    <span class="hljs-string">f&quot;<span class="hljs-subst">&#123;OLLAMA_BASE&#125;</span>/api/chat&quot;</span>,<br>    json=&#123;<br>        <span class="hljs-string">&quot;model&quot;</span>: <span class="hljs-string">&quot;qwen2.5:7b&quot;</span>,<br>        <span class="hljs-string">&quot;messages&quot;</span>: [<br>            &#123;<span class="hljs-string">&quot;role&quot;</span>: <span class="hljs-string">&quot;system&quot;</span>, <span class="hljs-string">&quot;content&quot;</span>: <span class="hljs-string">&quot;You are a helpful assistant.&quot;</span>&#125;,<br>            &#123;<span class="hljs-string">&quot;role&quot;</span>: <span class="hljs-string">&quot;user&quot;</span>, <span class="hljs-string">&quot;content&quot;</span>: <span class="hljs-string">&quot;What is Kubernetes?&quot;</span>&#125;,<br>        ],<br>        <span class="hljs-string">&quot;stream&quot;</span>: <span class="hljs-literal">False</span>,<br>    &#125;,<br>    timeout=<span class="hljs-number">60.0</span>,<br>)<br><br><span class="hljs-built_in">print</span>(response.json()[<span class="hljs-string">&quot;message&quot;</span>][<span class="hljs-string">&quot;content&quot;</span>])<br><br><span class="hljs-comment"># Embeddings</span><br>response = httpx.post(<br>    <span class="hljs-string">f&quot;<span class="hljs-subst">&#123;OLLAMA_BASE&#125;</span>/api/embed&quot;</span>,<br>    json=&#123;<br>        <span class="hljs-string">&quot;model&quot;</span>: <span class="hljs-string">&quot;nomic-embed-text&quot;</span>,<br>        <span class="hljs-string">&quot;input&quot;</span>: [<span class="hljs-string">&quot;Hello world&quot;</span>, <span class="hljs-string">&quot;Machine learning is great&quot;</span>],<br>    &#125;,<br>)<br><br>embeddings = response.json()[<span class="hljs-string">&quot;embeddings&quot;</span>]<br><span class="hljs-built_in">print</span>(<span class="hljs-string">f&quot;Embedding dimension: <span class="hljs-subst">&#123;<span class="hljs-built_in">len</span>(embeddings[<span class="hljs-number">0</span>])&#125;</span>&quot;</span>)<br></code></pre></td></tr></table></figure>
+<h2 id="量化技术对比">量化技术对比</h2>
+<pre class="mermaid">graph TB
+    A[模型量化] --&gt; B[GGUF&lt;br/&gt;llama.cpp 格式]
+    A --&gt; C[GPTQ&lt;br/&gt;GPU 量化]
+    A --&gt; D[AWQ&lt;br/&gt;Activation-aware]
+    A --&gt; E[GGML Legacy]
+
+    B --&gt; B1["CPU + GPU 混合推理&lt;br/&gt;灵活的量化级别&lt;br/&gt;Q4_K_M / Q5_K_M / Q8_0"]
+
+    C --&gt; C1["纯 GPU 推理&lt;br/&gt;4-bit 量化&lt;br/&gt;需要校准数据"]
+
+    D --&gt; D1["纯 GPU 推理&lt;br/&gt;基于激活值的量化&lt;br/&gt;精度优于 GPTQ"]
+
+    style B fill:#3498db,color:#fff
+    style C fill:#e74c3c,color:#fff
+    style D fill:#2ecc71,color:#fff</pre>
+<h3 id="量化级别详解">量化级别详解</h3>
+<table>
+<thead>
+<tr class="header">
+<th>量化格式</th>
+<th>每参数 Bits</th>
+<th>7B 模型大小</th>
+<th>速度</th>
+<th>精度损失</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>FP16</td>
+<td>16</td>
+<td>~14 GB</td>
+<td>基准</td>
+<td>无</td>
+</tr>
+<tr class="even">
+<td>Q8_0</td>
+<td>8</td>
+<td>~7 GB</td>
+<td>快</td>
+<td>极小</td>
+</tr>
+<tr class="odd">
+<td>Q5_K_M</td>
+<td>5.5</td>
+<td>~5 GB</td>
+<td>快</td>
+<td>小</td>
+</tr>
+<tr class="even">
+<td>Q4_K_M</td>
+<td>4.5</td>
+<td>~4.4 GB</td>
+<td>快</td>
+<td>小-中</td>
+</tr>
+<tr class="odd">
+<td>Q4_0</td>
+<td>4</td>
+<td>~4 GB</td>
+<td>最快</td>
+<td>中</td>
+</tr>
+<tr class="even">
+<td>Q3_K_M</td>
+<td>3.5</td>
+<td>~3.3 GB</td>
+<td>快</td>
+<td>中-大</td>
+</tr>
+<tr class="odd">
+<td>Q2_K</td>
+<td>2.5</td>
+<td>~2.7 GB</td>
+<td>快</td>
+<td>大</td>
+</tr>
+<tr class="even">
+<td>GPTQ 4-bit</td>
+<td>4</td>
+<td>~4 GB</td>
+<td>GPU 快</td>
+<td>小</td>
+</tr>
+<tr class="odd">
+<td>AWQ 4-bit</td>
+<td>4</td>
+<td>~4 GB</td>
+<td>GPU 快</td>
+<td>极小</td>
+</tr>
+</tbody>
+</table>
+<h3 id="gguf-量化实践">GGUF 量化实践</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># Using llama.cpp to quantize a model</span><br><span class="hljs-comment"># 1. Convert HuggingFace model to GGUF</span><br>python convert_hf_to_gguf.py ./Qwen2.5-7B --outfile qwen2.5-7b-f16.gguf --outtype f16<br><br><span class="hljs-comment"># 2. Quantize to Q4_K_M</span><br>./llama-quantize qwen2.5-7b-f16.gguf qwen2.5-7b-q4_k_m.gguf Q4_K_M<br><br><span class="hljs-comment"># 3. Run with llama.cpp</span><br>./llama-server \<br>  -m qwen2.5-7b-q4_k_m.gguf \<br>  --host 0.0.0.0 \<br>  --port 8080 \<br>  -ngl 35 \           <span class="hljs-comment"># Offload 35 layers to GPU</span><br>  -c 8192 \            <span class="hljs-comment"># Context length</span><br>  --threads 8          <span class="hljs-comment"># CPU threads</span><br></code></pre></td></tr></table></figure>
+<h3 id="awq-量化">AWQ 量化</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">from</span> awq <span class="hljs-keyword">import</span> AutoAWQForCausalLM<br><span class="hljs-keyword">from</span> transformers <span class="hljs-keyword">import</span> AutoTokenizer<br><br>model_path = <span class="hljs-string">&quot;Qwen/Qwen2.5-7B-Instruct&quot;</span><br>quant_path = <span class="hljs-string">&quot;qwen2.5-7b-awq&quot;</span><br><br><span class="hljs-comment"># Load model</span><br>model = AutoAWQForCausalLM.from_pretrained(model_path)<br>tokenizer = AutoTokenizer.from_pretrained(model_path)<br><br><span class="hljs-comment"># Quantize</span><br>quant_config = &#123;<br>    <span class="hljs-string">&quot;zero_point&quot;</span>: <span class="hljs-literal">True</span>,<br>    <span class="hljs-string">&quot;q_group_size&quot;</span>: <span class="hljs-number">128</span>,<br>    <span class="hljs-string">&quot;w_bit&quot;</span>: <span class="hljs-number">4</span>,<br>    <span class="hljs-string">&quot;version&quot;</span>: <span class="hljs-string">&quot;GEMM&quot;</span>,  <span class="hljs-comment"># or &quot;GEMV&quot; for batch_size=1</span><br>&#125;<br><br>model.quantize(<br>    tokenizer,<br>    quant_config=quant_config,<br>    calib_data=<span class="hljs-string">&quot;wikitext&quot;</span>,  <span class="hljs-comment"># Calibration dataset</span><br>)<br><br><span class="hljs-comment"># Save quantized model</span><br>model.save_quantized(quant_path)<br>tokenizer.save_pretrained(quant_path)<br><br><span class="hljs-comment"># Deploy with vLLM</span><br><span class="hljs-comment"># vllm serve ./qwen2.5-7b-awq --quantization awq</span><br></code></pre></td></tr></table></figure>
+<h2 id="gpu-内存优化">GPU 内存优化</h2>
+<pre class="mermaid">graph TD
+    A[GPU 内存分配] --&gt; B[模型权重&lt;br/&gt;Weights]
+    A --&gt; C[KV Cache&lt;br/&gt;注意力缓存]
+    A --&gt; D[激活值&lt;br/&gt;Activations]
+
+    B --&gt; B1["7B FP16: ~14GB&lt;br/&gt;7B INT4: ~4GB"]
+    C --&gt; C1["取决于 batch_size&lt;br/&gt;和 seq_len"]
+    D --&gt; D1["前向推理时&lt;br/&gt;临时分配"]
+
+    style B fill:#e74c3c,color:#fff
+    style C fill:#3498db,color:#fff
+    style D fill:#f39c12,color:#000</pre>
+<h3 id="内存估算公式">内存估算公式</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">def</span> <span class="hljs-title function_">estimate_gpu_memory</span>(<span class="hljs-params"></span><br><span class="hljs-params">    num_params_billion: <span class="hljs-built_in">float</span>,</span><br><span class="hljs-params">    precision_bits: <span class="hljs-built_in">int</span> = <span class="hljs-number">16</span>,</span><br><span class="hljs-params">    batch_size: <span class="hljs-built_in">int</span> = <span class="hljs-number">1</span>,</span><br><span class="hljs-params">    seq_len: <span class="hljs-built_in">int</span> = <span class="hljs-number">2048</span>,</span><br><span class="hljs-params">    num_layers: <span class="hljs-built_in">int</span> = <span class="hljs-number">32</span>,</span><br><span class="hljs-params">    hidden_size: <span class="hljs-built_in">int</span> = <span class="hljs-number">4096</span>,</span><br><span class="hljs-params">    num_kv_heads: <span class="hljs-built_in">int</span> = <span class="hljs-number">8</span>,</span><br><span class="hljs-params">    head_dim: <span class="hljs-built_in">int</span> = <span class="hljs-number">128</span>,</span><br><span class="hljs-params"></span>):<br>    <span class="hljs-string">&quot;&quot;&quot;Estimate GPU memory requirements for LLM inference.&quot;&quot;&quot;</span><br><br>    <span class="hljs-comment"># Model weights</span><br>    weight_bytes = num_params_billion * <span class="hljs-number">1e9</span> * (precision_bits / <span class="hljs-number">8</span>)<br><br>    <span class="hljs-comment"># KV Cache (per token per layer: 2 * num_kv_heads * head_dim * precision_bytes)</span><br>    kv_per_token = <span class="hljs-number">2</span> * num_kv_heads * head_dim * (precision_bits / <span class="hljs-number">8</span>)<br>    kv_cache_bytes = batch_size * seq_len * num_layers * kv_per_token<br><br>    <span class="hljs-comment"># Activation memory (rough estimate)</span><br>    activation_bytes = batch_size * seq_len * hidden_size * <span class="hljs-number">4</span>  <span class="hljs-comment"># FP32 activations</span><br><br>    total_gb = (weight_bytes + kv_cache_bytes + activation_bytes) / (<span class="hljs-number">1024</span>**<span class="hljs-number">3</span>)<br><br>    <span class="hljs-built_in">print</span>(<span class="hljs-string">f&quot;Model weights: <span class="hljs-subst">&#123;weight_bytes / (<span class="hljs-number">1024</span>**<span class="hljs-number">3</span>):<span class="hljs-number">.1</span>f&#125;</span> GB&quot;</span>)<br>    <span class="hljs-built_in">print</span>(<span class="hljs-string">f&quot;KV Cache: <span class="hljs-subst">&#123;kv_cache_bytes / (<span class="hljs-number">1024</span>**<span class="hljs-number">3</span>):<span class="hljs-number">.1</span>f&#125;</span> GB&quot;</span>)<br>    <span class="hljs-built_in">print</span>(<span class="hljs-string">f&quot;Activations: <span class="hljs-subst">&#123;activation_bytes / (<span class="hljs-number">1024</span>**<span class="hljs-number">3</span>):<span class="hljs-number">.1</span>f&#125;</span> GB&quot;</span>)<br>    <span class="hljs-built_in">print</span>(<span class="hljs-string">f&quot;Total estimate: <span class="hljs-subst">&#123;total_gb:<span class="hljs-number">.1</span>f&#125;</span> GB&quot;</span>)<br><br>    <span class="hljs-keyword">return</span> total_gb<br><br><span class="hljs-comment"># Example: Qwen2.5-7B with INT4 quantization</span><br>estimate_gpu_memory(<br>    num_params_billion=<span class="hljs-number">7</span>,<br>    precision_bits=<span class="hljs-number">4</span>,<br>    batch_size=<span class="hljs-number">8</span>,<br>    seq_len=<span class="hljs-number">4096</span>,<br>)<br><span class="hljs-comment"># Model weights: 3.3 GB</span><br><span class="hljs-comment"># KV Cache: 2.0 GB</span><br><span class="hljs-comment"># Activations: 0.5 GB</span><br><span class="hljs-comment"># Total estimate: 5.8 GB</span><br></code></pre></td></tr></table></figure>
+<h3 id="tensor-parallelism">Tensor Parallelism</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># Split model across multiple GPUs</span><br><span class="hljs-comment"># vLLM: automatic tensor parallelism</span><br>vllm serve Qwen/Qwen2.5-72B-Instruct \<br>  --tensor-parallel-size 4 \     <span class="hljs-comment"># Use 4 GPUs</span><br>  --max-model-len 32768 \<br>  --gpu-memory-utilization 0.95<br></code></pre></td></tr></table></figure>
+<pre class="mermaid">graph LR
+    subgraph "Tensor Parallelism (4 GPUs)"
+        A[Input] --&gt; G1[GPU 0&lt;br/&gt;Layers 0-19&lt;br/&gt;Column Split]
+        A --&gt; G2[GPU 1&lt;br/&gt;Layers 0-19&lt;br/&gt;Column Split]
+        A --&gt; G3[GPU 2&lt;br/&gt;Layers 20-39&lt;br/&gt;Column Split]
+        A --&gt; G4[GPU 3&lt;br/&gt;Layers 20-39&lt;br/&gt;Column Split]
+
+        G1 --&gt; R[AllReduce&lt;br/&gt;Sync]
+        G2 --&gt; R
+        G3 --&gt; R
+        G4 --&gt; R
+        R --&gt; O[Output]
+    end
+
+    style G1 fill:#3498db,color:#fff
+    style G2 fill:#e74c3c,color:#fff
+    style G3 fill:#2ecc71,color:#fff
+    style G4 fill:#f39c12,color:#000</pre>
+<h2 id="性能基准测试">性能基准测试</h2>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">import</span> time<br><span class="hljs-keyword">import</span> httpx<br><br><span class="hljs-keyword">def</span> <span class="hljs-title function_">benchmark_throughput</span>(<span class="hljs-params"></span><br><span class="hljs-params">    base_url: <span class="hljs-built_in">str</span>,</span><br><span class="hljs-params">    model: <span class="hljs-built_in">str</span>,</span><br><span class="hljs-params">    num_requests: <span class="hljs-built_in">int</span> = <span class="hljs-number">100</span>,</span><br><span class="hljs-params">    prompt_tokens: <span class="hljs-built_in">int</span> = <span class="hljs-number">128</span>,</span><br><span class="hljs-params">    max_tokens: <span class="hljs-built_in">int</span> = <span class="hljs-number">256</span>,</span><br><span class="hljs-params"></span>):<br>    <span class="hljs-string">&quot;&quot;&quot;Benchmark LLM serving throughput.&quot;&quot;&quot;</span><br>    prompt = <span class="hljs-string">&quot;Explain the concept of &quot;</span> * (prompt_tokens // <span class="hljs-number">5</span>)<br><br>    start = time.perf_counter()<br>    total_output_tokens = <span class="hljs-number">0</span><br><br>    <span class="hljs-keyword">for</span> i <span class="hljs-keyword">in</span> <span class="hljs-built_in">range</span>(num_requests):<br>        response = httpx.post(<br>            <span class="hljs-string">f&quot;<span class="hljs-subst">&#123;base_url&#125;</span>/v1/completions&quot;</span>,<br>            json=&#123;<br>                <span class="hljs-string">&quot;model&quot;</span>: model,<br>                <span class="hljs-string">&quot;prompt&quot;</span>: prompt,<br>                <span class="hljs-string">&quot;max_tokens&quot;</span>: max_tokens,<br>                <span class="hljs-string">&quot;temperature&quot;</span>: <span class="hljs-number">0.7</span>,<br>            &#125;,<br>            timeout=<span class="hljs-number">120.0</span>,<br>        )<br>        data = response.json()<br>        total_output_tokens += data[<span class="hljs-string">&quot;usage&quot;</span>][<span class="hljs-string">&quot;completion_tokens&quot;</span>]<br><br>    elapsed = time.perf_counter() - start<br><br>    <span class="hljs-built_in">print</span>(<span class="hljs-string">f&quot;Total time: <span class="hljs-subst">&#123;elapsed:<span class="hljs-number">.1</span>f&#125;</span>s&quot;</span>)<br>    <span class="hljs-built_in">print</span>(<span class="hljs-string">f&quot;Requests/s: <span class="hljs-subst">&#123;num_requests / elapsed:<span class="hljs-number">.1</span>f&#125;</span>&quot;</span>)<br>    <span class="hljs-built_in">print</span>(<span class="hljs-string">f&quot;Output tokens/s: <span class="hljs-subst">&#123;total_output_tokens / elapsed:<span class="hljs-number">.1</span>f&#125;</span>&quot;</span>)<br>    <span class="hljs-built_in">print</span>(<span class="hljs-string">f&quot;Avg latency: <span class="hljs-subst">&#123;elapsed / num_requests * <span class="hljs-number">1000</span>:<span class="hljs-number">.0</span>f&#125;</span>ms&quot;</span>)<br><br><span class="hljs-comment"># Benchmark</span><br>benchmark_throughput(<br>    base_url=<span class="hljs-string">&quot;http://localhost:8000&quot;</span>,<br>    model=<span class="hljs-string">&quot;Qwen/Qwen2.5-7B-Instruct&quot;</span>,<br>    num_requests=<span class="hljs-number">50</span>,<br>)<br></code></pre></td></tr></table></figure>
+<h3 id="各方案性能参考">各方案性能参考</h3>
+<table>
+<thead>
+<tr class="header">
+<th>方案</th>
+<th>7B Q4 吞吐量</th>
+<th>TTFT</th>
+<th>部署复杂度</th>
+<th>适用场景</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>vLLM</td>
+<td>~3000 tok/s</td>
+<td>~50ms</td>
+<td>中</td>
+<td>生产API服务</td>
+</tr>
+<tr class="even">
+<td>TGI</td>
+<td>~2500 tok/s</td>
+<td>~60ms</td>
+<td>中</td>
+<td>生产API服务</td>
+</tr>
+<tr class="odd">
+<td>Ollama</td>
+<td>~80 tok/s</td>
+<td>~200ms</td>
+<td>低</td>
+<td>开发/个人使用</td>
+</tr>
+<tr class="even">
+<td>llama.cpp</td>
+<td>~100 tok/s</td>
+<td>~150ms</td>
+<td>低</td>
+<td>CPU推理/边缘</td>
+</tr>
+<tr class="odd">
+<td>TensorRT-LLM</td>
+<td>~4000 tok/s</td>
+<td>~30ms</td>
+<td>高</td>
+<td>NVIDIA最优化</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>以上数据基于单 A100 80GB GPU 的参考值，实际取决于硬件和配置。</p>
+</blockquote>
+<h2 id="选型决策">选型决策</h2>
+<pre class="mermaid">flowchart TD
+    A[本地LLM部署需求] --&gt; B{使用场景?}
+
+    B --&gt;|个人开发/原型| C[Ollama&lt;br/&gt;一键安装, 最简单]
+    B --&gt;|生产API服务| D{GPU?}
+    D --&gt;|NVIDIA| E{预算?}
+    E --&gt;|多卡 A100/H100| F[vLLM + Tensor Parallel&lt;br/&gt;最高吞吐]
+    E --&gt;|单卡 消费级| G[vLLM + AWQ 量化&lt;br/&gt;性价比最高]
+    D --&gt;|无GPU / Apple Silicon| H[Ollama / llama.cpp&lt;br/&gt;CPU + Metal]
+
+    B --&gt;|最高性能| I[TensorRT-LLM&lt;br/&gt;NVIDIA 深度优化]
+
+    style C fill:#2ecc71,color:#fff
+    style F fill:#e74c3c,color:#fff
+    style G fill:#3498db,color:#fff
+    style H fill:#f39c12,color:#000</pre>
+<h2 id="总结">总结</h2>
+<p>本地 LLM 部署方案的选择取决于场景需求：</p>
+<ol type="1">
+<li><strong>快速上手</strong>：Ollama 一键安装，支持
+macOS/Linux/Windows，适合开发和实验</li>
+<li><strong>生产部署</strong>：vLLM 的 PagedAttention 和 Continuous
+Batching 提供最佳吞吐量</li>
+<li><strong>量化选择</strong>：AWQ &gt; GPTQ &gt; GGUF Q4_K_M（GPU
+场景下 AWQ 精度损失最小）</li>
+<li><strong>内存优化</strong>：4-bit 量化将 7B 模型从 14GB 压缩到
+4GB，单卡即可部署</li>
+<li><strong>多 GPU</strong>：70B+ 模型使用 Tensor Parallelism
+分布到多卡</li>
+<li><strong>Apple Silicon</strong>：Ollama 原生支持 Metal 加速，M2/M3
+Max 可流畅运行 7B-14B 模型</li>
+</ol>
+<p>始终先做基准测试（TTFT、吞吐量、内存占用），根据实际业务的延迟和 QPS
+要求选择合适的方案。</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2025-11-12</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">3.2k 字 · 8 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/technical-writing-guide/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">技术写作指南：如何写好技术博客</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/tmux-productivity/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Tmux高效终端管理</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%83%A8%E7%BD%B2%E6%96%B9%E6%A1%88%E5%85%A8%E6%99%AF"><span class="toc-text">部署方案全景</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#vllm-%E6%B7%B1%E5%85%A5"><span class="toc-text">vLLM 深入</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#pagedattention-%E5%8E%9F%E7%90%86"><span class="toc-text">PagedAttention 原理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#continuous-batching"><span class="toc-text">Continuous Batching</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#vllm-%E7%94%9F%E4%BA%A7%E9%83%A8%E7%BD%B2"><span class="toc-text">vLLM 生产部署</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#vllm-openai-%E5%85%BC%E5%AE%B9-api"><span class="toc-text">vLLM + OpenAI 兼容 API</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#ollama-%E8%BF%9B%E9%98%B6"><span class="toc-text">Ollama 进阶</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9F%BA%E7%A1%80%E4%BD%BF%E7%94%A8"><span class="toc-text">基础使用</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#modelfile-%E8%87%AA%E5%AE%9A%E4%B9%89"><span class="toc-text">Modelfile 自定义</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#ollama-rest-api"><span class="toc-text">Ollama REST API</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%87%8F%E5%8C%96%E6%8A%80%E6%9C%AF%E5%AF%B9%E6%AF%94"><span class="toc-text">量化技术对比</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%87%8F%E5%8C%96%E7%BA%A7%E5%88%AB%E8%AF%A6%E8%A7%A3"><span class="toc-text">量化级别详解</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#gguf-%E9%87%8F%E5%8C%96%E5%AE%9E%E8%B7%B5"><span class="toc-text">GGUF 量化实践</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#awq-%E9%87%8F%E5%8C%96"><span class="toc-text">AWQ 量化</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#gpu-%E5%86%85%E5%AD%98%E4%BC%98%E5%8C%96"><span class="toc-text">GPU 内存优化</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%86%85%E5%AD%98%E4%BC%B0%E7%AE%97%E5%85%AC%E5%BC%8F"><span class="toc-text">内存估算公式</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#tensor-parallelism"><span class="toc-text">Tensor Parallelism</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%A7%E8%83%BD%E5%9F%BA%E5%87%86%E6%B5%8B%E8%AF%95"><span class="toc-text">性能基准测试</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%90%84%E6%96%B9%E6%A1%88%E6%80%A7%E8%83%BD%E5%8F%82%E8%80%83"><span class="toc-text">各方案性能参考</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%80%89%E5%9E%8B%E5%86%B3%E7%AD%96"><span class="toc-text">选型决策</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

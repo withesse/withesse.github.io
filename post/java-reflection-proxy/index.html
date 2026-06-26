@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Java反射与动态代理深入解析 · zt&#39;s Blog</title>
+  <meta name="description" content="深入解析Java反射API的核心用法、JDK动态代理与CGLIB代理的实现原理及对比，剖析Spring AOP的代理选择策略与性能考量。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/java-reflection-proxy/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Java反射与动态代理深入解析">
+  <meta property="og:description" content="深入解析Java反射API的核心用法、JDK动态代理与CGLIB代理的实现原理及对比，剖析Spring AOP的代理选择策略与性能考量。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/java-reflection-proxy/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2025-02-18T16:00:00.000Z">
+  <meta property="article:modified_time" content="2025-02-18T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Java反射与动态代理深入解析">
+  <meta name="twitter:description" content="深入解析Java反射API的核心用法、JDK动态代理与CGLIB代理的实现原理及对比，剖析Spring AOP的代理选择策略与性能考量。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Java反射与动态代理深入解析","description":"深入解析Java反射API的核心用法、JDK动态代理与CGLIB代理的实现原理及对比，剖析Spring AOP的代理选择策略与性能考量。","datePublished":"2025-02-18T16:00:00.000Z","dateModified":"2025-02-18T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/java-reflection-proxy/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Java","item":"https://withesse.co/categories/Java/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:25">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Java/">Java</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/java/"><span class="hash">#</span>java</a><a class="tag" href="/tags/reflection/"><span class="hash">#</span>reflection</a><a class="tag" href="/tags/dynamic-proxy/"><span class="hash">#</span>dynamic-proxy</a><a class="tag" href="/tags/cglib/"><span class="hash">#</span>cglib</a>
+        
+      </div>
+
+      <h1>Java反射与动态代理深入解析</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2025.02.19</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          <span class="row gap8" style="align-items:center"><span class="lang-dot" style="background:#E76F00"></span>Java</span>
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 9 min</span>
+        </span>
+        <span class="wc"><span class="num">3.5k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8F%8D%E5%B0%84%E7%9A%84%E6%A0%B8%E5%BF%83%E6%A6%82%E5%BF%B5"><span class="toc-text">反射的核心概念</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8F%8D%E5%B0%84api%E8%AF%A6%E8%A7%A3"><span class="toc-text">反射API详解</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%8E%B7%E5%8F%96class%E5%AF%B9%E8%B1%A1"><span class="toc-text">获取Class对象</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%93%8D%E4%BD%9Cfieldmethodconstructor"><span class="toc-text">操作Field、Method、Constructor</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%9E%E7%94%A8%E5%B7%A5%E5%85%B7%E9%80%9A%E7%94%A8bean%E6%8B%B7%E8%B4%9D%E5%99%A8"><span class="toc-text">实用工具：通用Bean拷贝器</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#jdk%E5%8A%A8%E6%80%81%E4%BB%A3%E7%90%86"><span class="toc-text">JDK动态代理</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#jdk%E5%8A%A8%E6%80%81%E4%BB%A3%E7%90%86%E5%AE%9E%E7%8E%B0"><span class="toc-text">JDK动态代理实现</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#cglib%E4%BB%A3%E7%90%86"><span class="toc-text">CGLIB代理</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#cglib%E4%BB%A3%E7%90%86%E5%AE%9E%E7%8E%B0"><span class="toc-text">CGLIB代理实现</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%A4%9A%E4%B8%AA%E6%8B%A6%E6%88%AA%E5%99%A8%E7%9A%84callbackfilter"><span class="toc-text">多个拦截器的CallbackFilter</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#spring-aop%E4%B8%AD%E7%9A%84%E4%BB%A3%E7%90%86%E9%80%89%E6%8B%A9"><span class="toc-text">Spring AOP中的代理选择</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%A7%E8%83%BD%E5%AF%B9%E6%AF%94"><span class="toc-text">性能对比</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96%E5%BB%BA%E8%AE%AE"><span class="toc-text">性能优化建议</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="引言">引言</h2>
+<p>反射（Reflection）和动态代理（Dynamic
+Proxy）是Java语言中最强大的元编程特性，也是Spring、MyBatis、Hibernate等主流框架的底层基石。反射让程序可以在运行时检查和操作类的结构，动态代理则允许在不修改目标代码的前提下对方法调用进行拦截和增强。</p>
+<p>本文将系统性地讲解反射API的核心用法、JDK动态代理与CGLIB代理的实现原理，并深入分析Spring
+AOP中的代理选择策略。</p>
+<h2 id="反射的核心概念">反射的核心概念</h2>
+<pre class="mermaid">graph TD
+    ClassLoader[ClassLoader 加载字节码] --&gt; ClassObj[Class 对象]
+    ClassObj --&gt; Fields[Field 字段]
+    ClassObj --&gt; Methods[Method 方法]
+    ClassObj --&gt; Constructors[Constructor 构造器]
+    ClassObj --&gt; Annotations[Annotation 注解]
+    ClassObj --&gt; Interfaces[Interface 接口]
+    ClassObj --&gt; SuperClass[SuperClass 父类]
+
+    Fields --&gt; GetSet[get/set 字段值]
+    Methods --&gt; Invoke[invoke 调用方法]
+    Constructors --&gt; NewInstance[newInstance 创建实例]
+
+    style ClassObj fill:#e3f2fd</pre>
+<p>Java反射的一切操作都围绕<code>java.lang.Class</code>对象展开。每个类在JVM中有且仅有一个Class对象，它包含了该类的完整元信息。</p>
+<h2 id="反射api详解">反射API详解</h2>
+<h3 id="获取class对象">获取Class对象</h3>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">ReflectionBasics</span> &#123;<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">main</span><span class="hljs-params">(String[] args)</span> <span class="hljs-keyword">throws</span> Exception &#123;<br>        <span class="hljs-comment">// 方式1: 通过类名直接获取</span><br>        Class&lt;String&gt; clazz1 = String.class;<br><br>        <span class="hljs-comment">// 方式2: 通过实例的getClass()</span><br>        <span class="hljs-type">String</span> <span class="hljs-variable">str</span> <span class="hljs-operator">=</span> <span class="hljs-string">&quot;hello&quot;</span>;<br>        Class&lt;? <span class="hljs-keyword">extends</span> <span class="hljs-title class_">String</span>&gt; clazz2 = str.getClass();<br><br>        <span class="hljs-comment">// 方式3: 通过全限定类名动态加载（最常用于框架）</span><br>        Class&lt;?&gt; clazz3 = Class.forName(<span class="hljs-string">&quot;java.lang.String&quot;</span>);<br><br>        <span class="hljs-comment">// 三种方式获取的是同一个Class对象</span><br>        System.out.println(clazz1 == clazz2); <span class="hljs-comment">// true</span><br>        System.out.println(clazz2 == clazz3); <span class="hljs-comment">// true</span><br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="操作fieldmethodconstructor">操作Field、Method、Constructor</h3>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">ReflectionAdvanced</span> &#123;<br><br>    <span class="hljs-keyword">static</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">User</span> &#123;<br>        <span class="hljs-keyword">private</span> Long id;<br>        <span class="hljs-keyword">private</span> String name;<br>        <span class="hljs-keyword">private</span> <span class="hljs-type">int</span> age;<br><br>        <span class="hljs-keyword">private</span> <span class="hljs-title function_">User</span><span class="hljs-params">()</span> &#123;&#125;<br><br>        <span class="hljs-keyword">public</span> <span class="hljs-title function_">User</span><span class="hljs-params">(Long id, String name, <span class="hljs-type">int</span> age)</span> &#123;<br>            <span class="hljs-built_in">this</span>.id = id;<br>            <span class="hljs-built_in">this</span>.name = name;<br>            <span class="hljs-built_in">this</span>.age = age;<br>        &#125;<br><br>        <span class="hljs-keyword">private</span> String <span class="hljs-title function_">formatInfo</span><span class="hljs-params">()</span> &#123;<br>            <span class="hljs-keyword">return</span> String.format(<span class="hljs-string">&quot;User&#123;id=%d, name=&#x27;%s&#x27;, age=%d&#125;&quot;</span>, id, name, age);<br>        &#125;<br><br>        <span class="hljs-keyword">public</span> String <span class="hljs-title function_">getName</span><span class="hljs-params">()</span> &#123; <span class="hljs-keyword">return</span> name; &#125;<br>    &#125;<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">main</span><span class="hljs-params">(String[] args)</span> <span class="hljs-keyword">throws</span> Exception &#123;<br>        Class&lt;User&gt; clazz = User.class;<br><br>        <span class="hljs-comment">// ===== Constructor操作 =====</span><br>        <span class="hljs-comment">// 获取私有无参构造器</span><br>        Constructor&lt;User&gt; privateConstructor = clazz.getDeclaredConstructor();<br>        privateConstructor.setAccessible(<span class="hljs-literal">true</span>); <span class="hljs-comment">// 突破访问权限</span><br>        <span class="hljs-type">User</span> <span class="hljs-variable">user</span> <span class="hljs-operator">=</span> privateConstructor.newInstance();<br><br>        <span class="hljs-comment">// 获取公有带参构造器</span><br>        Constructor&lt;User&gt; publicConstructor = clazz.getDeclaredConstructor(<br>                Long.class, String.class, <span class="hljs-type">int</span>.class);<br>        <span class="hljs-type">User</span> <span class="hljs-variable">user2</span> <span class="hljs-operator">=</span> publicConstructor.newInstance(<span class="hljs-number">1L</span>, <span class="hljs-string">&quot;张三&quot;</span>, <span class="hljs-number">28</span>);<br><br>        <span class="hljs-comment">// ===== Field操作 =====</span><br>        <span class="hljs-comment">// 获取私有字段并设值</span><br>        <span class="hljs-type">Field</span> <span class="hljs-variable">nameField</span> <span class="hljs-operator">=</span> clazz.getDeclaredField(<span class="hljs-string">&quot;name&quot;</span>);<br>        nameField.setAccessible(<span class="hljs-literal">true</span>);<br>        nameField.set(user, <span class="hljs-string">&quot;李四&quot;</span>);<br>        System.out.println(nameField.get(user)); <span class="hljs-comment">// &quot;李四&quot;</span><br><br>        <span class="hljs-comment">// 遍历所有字段</span><br>        <span class="hljs-keyword">for</span> (Field field : clazz.getDeclaredFields()) &#123;<br>            field.setAccessible(<span class="hljs-literal">true</span>);<br>            System.out.printf(<span class="hljs-string">&quot;字段名: %s, 类型: %s, 值: %s%n&quot;</span>,<br>                    field.getName(),<br>                    field.getType().getSimpleName(),<br>                    field.get(user2));<br>        &#125;<br><br>        <span class="hljs-comment">// ===== Method操作 =====</span><br>        <span class="hljs-comment">// 调用私有方法</span><br>        <span class="hljs-type">Method</span> <span class="hljs-variable">formatInfo</span> <span class="hljs-operator">=</span> clazz.getDeclaredMethod(<span class="hljs-string">&quot;formatInfo&quot;</span>);<br>        formatInfo.setAccessible(<span class="hljs-literal">true</span>);<br>        <span class="hljs-type">String</span> <span class="hljs-variable">info</span> <span class="hljs-operator">=</span> (String) formatInfo.invoke(user2);<br>        System.out.println(info); <span class="hljs-comment">// User&#123;id=1, name=&#x27;张三&#x27;, age=28&#125;</span><br><br>        <span class="hljs-comment">// 调用带参方法</span><br>        <span class="hljs-type">Method</span> <span class="hljs-variable">getName</span> <span class="hljs-operator">=</span> clazz.getMethod(<span class="hljs-string">&quot;getName&quot;</span>);<br>        <span class="hljs-type">String</span> <span class="hljs-variable">name</span> <span class="hljs-operator">=</span> (String) getName.invoke(user2);<br>        System.out.println(name); <span class="hljs-comment">// &quot;张三&quot;</span><br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="实用工具通用bean拷贝器">实用工具：通用Bean拷贝器</h3>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">/**</span><br><span class="hljs-comment"> * 基于反射的通用Bean属性拷贝工具</span><br><span class="hljs-comment"> * 将源对象的同名同类型字段值拷贝到目标对象</span><br><span class="hljs-comment"> */</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">BeanCopier</span> &#123;<br><br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">final</span> Map&lt;Class&lt;?&gt;, Map&lt;String, Field&gt;&gt; FIELD_CACHE =<br>            <span class="hljs-keyword">new</span> <span class="hljs-title class_">ConcurrentHashMap</span>&lt;&gt;();<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> &lt;S, T&gt; T <span class="hljs-title function_">copyProperties</span><span class="hljs-params">(S source, Class&lt;T&gt; targetClass)</span> &#123;<br>        <span class="hljs-keyword">try</span> &#123;<br>            <span class="hljs-type">T</span> <span class="hljs-variable">target</span> <span class="hljs-operator">=</span> targetClass.getDeclaredConstructor().newInstance();<br>            copyProperties(source, target);<br>            <span class="hljs-keyword">return</span> target;<br>        &#125; <span class="hljs-keyword">catch</span> (ReflectiveOperationException e) &#123;<br>            <span class="hljs-keyword">throw</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">RuntimeException</span>(<span class="hljs-string">&quot;Bean拷贝失败&quot;</span>, e);<br>        &#125;<br>    &#125;<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">copyProperties</span><span class="hljs-params">(Object source, Object target)</span> &#123;<br>        Map&lt;String, Field&gt; sourceFields = getFields(source.getClass());<br>        Map&lt;String, Field&gt; targetFields = getFields(target.getClass());<br><br>        <span class="hljs-keyword">for</span> (Map.Entry&lt;String, Field&gt; entry : sourceFields.entrySet()) &#123;<br>            <span class="hljs-type">String</span> <span class="hljs-variable">fieldName</span> <span class="hljs-operator">=</span> entry.getKey();<br>            <span class="hljs-type">Field</span> <span class="hljs-variable">sourceField</span> <span class="hljs-operator">=</span> entry.getValue();<br>            <span class="hljs-type">Field</span> <span class="hljs-variable">targetField</span> <span class="hljs-operator">=</span> targetFields.get(fieldName);<br><br>            <span class="hljs-keyword">if</span> (targetField != <span class="hljs-literal">null</span><br>                    &amp;&amp; targetField.getType().isAssignableFrom(sourceField.getType())) &#123;<br>                <span class="hljs-keyword">try</span> &#123;<br>                    targetField.set(target, sourceField.get(source));<br>                &#125; <span class="hljs-keyword">catch</span> (IllegalAccessException e) &#123;<br>                    <span class="hljs-keyword">throw</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">RuntimeException</span>(<span class="hljs-string">&quot;字段赋值失败: &quot;</span> + fieldName, e);<br>                &#125;<br>            &#125;<br>        &#125;<br>    &#125;<br><br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">static</span> Map&lt;String, Field&gt; <span class="hljs-title function_">getFields</span><span class="hljs-params">(Class&lt;?&gt; clazz)</span> &#123;<br>        <span class="hljs-keyword">return</span> FIELD_CACHE.computeIfAbsent(clazz, c -&gt; &#123;<br>            Map&lt;String, Field&gt; fieldMap = <span class="hljs-keyword">new</span> <span class="hljs-title class_">LinkedHashMap</span>&lt;&gt;();<br>            Class&lt;?&gt; current = c;<br>            <span class="hljs-keyword">while</span> (current != <span class="hljs-literal">null</span> &amp;&amp; current != Object.class) &#123;<br>                <span class="hljs-keyword">for</span> (Field field : current.getDeclaredFields()) &#123;<br>                    field.setAccessible(<span class="hljs-literal">true</span>);<br>                    fieldMap.putIfAbsent(field.getName(), field);<br>                &#125;<br>                current = current.getSuperclass();<br>            &#125;<br>            <span class="hljs-keyword">return</span> fieldMap;<br>        &#125;);<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="jdk动态代理">JDK动态代理</h2>
+<p>JDK动态代理是Java标准库提供的代理机制，它要求目标对象必须实现接口。代理对象会实现相同的接口，并将方法调用委托给<code>InvocationHandler</code>。</p>
+<pre class="mermaid">sequenceDiagram
+    participant Client as 调用方
+    participant Proxy as 代理对象 $Proxy0
+    participant Handler as InvocationHandler
+    participant Target as 目标对象
+
+    Client-&gt;&gt;Proxy: 调用接口方法
+    Proxy-&gt;&gt;Handler: invoke(proxy, method, args)
+    Handler-&gt;&gt;Handler: 前置增强（日志/鉴权等）
+    Handler-&gt;&gt;Target: method.invoke(target, args)
+    Target--&gt;&gt;Handler: 返回结果
+    Handler-&gt;&gt;Handler: 后置增强（日志/异常处理等）
+    Handler--&gt;&gt;Proxy: 返回最终结果
+    Proxy--&gt;&gt;Client: 返回结果</pre>
+<h3 id="jdk动态代理实现">JDK动态代理实现</h3>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">// 定义接口</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">interface</span> <span class="hljs-title class_">UserService</span> &#123;<br>    User <span class="hljs-title function_">findById</span><span class="hljs-params">(Long id)</span>;<br>    List&lt;User&gt; <span class="hljs-title function_">findAll</span><span class="hljs-params">()</span>;<br>    <span class="hljs-keyword">void</span> <span class="hljs-title function_">save</span><span class="hljs-params">(User user)</span>;<br>&#125;<br><br><span class="hljs-comment">// 实现类</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">UserServiceImpl</span> <span class="hljs-keyword">implements</span> <span class="hljs-title class_">UserService</span> &#123;<br>    <span class="hljs-meta">@Override</span><br>    <span class="hljs-keyword">public</span> User <span class="hljs-title function_">findById</span><span class="hljs-params">(Long id)</span> &#123;<br>        <span class="hljs-comment">// 模拟数据库查询</span><br>        <span class="hljs-keyword">return</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">User</span>(id, <span class="hljs-string">&quot;张三&quot;</span>, <span class="hljs-number">28</span>);<br>    &#125;<br><br>    <span class="hljs-meta">@Override</span><br>    <span class="hljs-keyword">public</span> List&lt;User&gt; <span class="hljs-title function_">findAll</span><span class="hljs-params">()</span> &#123;<br>        <span class="hljs-keyword">return</span> List.of(<span class="hljs-keyword">new</span> <span class="hljs-title class_">User</span>(<span class="hljs-number">1L</span>, <span class="hljs-string">&quot;张三&quot;</span>, <span class="hljs-number">28</span>), <span class="hljs-keyword">new</span> <span class="hljs-title class_">User</span>(<span class="hljs-number">2L</span>, <span class="hljs-string">&quot;李四&quot;</span>, <span class="hljs-number">35</span>));<br>    &#125;<br><br>    <span class="hljs-meta">@Override</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">save</span><span class="hljs-params">(User user)</span> &#123;<br>        System.out.println(<span class="hljs-string">&quot;保存用户: &quot;</span> + user);<br>    &#125;<br>&#125;<br><br><span class="hljs-comment">// InvocationHandler实现</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">LoggingInvocationHandler</span> <span class="hljs-keyword">implements</span> <span class="hljs-title class_">InvocationHandler</span> &#123;<br><br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> Object target;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">final</span> <span class="hljs-type">Logger</span> <span class="hljs-variable">log</span> <span class="hljs-operator">=</span> LoggerFactory.getLogger(LoggingInvocationHandler.class);<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-title function_">LoggingInvocationHandler</span><span class="hljs-params">(Object target)</span> &#123;<br>        <span class="hljs-built_in">this</span>.target = target;<br>    &#125;<br><br>    <span class="hljs-meta">@Override</span><br>    <span class="hljs-keyword">public</span> Object <span class="hljs-title function_">invoke</span><span class="hljs-params">(Object proxy, Method method, Object[] args)</span> <span class="hljs-keyword">throws</span> Throwable &#123;<br>        <span class="hljs-type">String</span> <span class="hljs-variable">methodName</span> <span class="hljs-operator">=</span> method.getDeclaringClass().getSimpleName() + <span class="hljs-string">&quot;.&quot;</span> + method.getName();<br>        <span class="hljs-type">String</span> <span class="hljs-variable">params</span> <span class="hljs-operator">=</span> args == <span class="hljs-literal">null</span> ? <span class="hljs-string">&quot;&quot;</span> : Arrays.toString(args);<br><br>        log.info(<span class="hljs-string">&quot;[BEFORE] &#123;&#125; 参数: &#123;&#125;&quot;</span>, methodName, params);<br>        <span class="hljs-type">long</span> <span class="hljs-variable">start</span> <span class="hljs-operator">=</span> System.nanoTime();<br><br>        <span class="hljs-keyword">try</span> &#123;<br>            <span class="hljs-type">Object</span> <span class="hljs-variable">result</span> <span class="hljs-operator">=</span> method.invoke(target, args);<br>            <span class="hljs-type">long</span> <span class="hljs-variable">elapsed</span> <span class="hljs-operator">=</span> (System.nanoTime() - start) / <span class="hljs-number">1_000_000</span>;<br>            log.info(<span class="hljs-string">&quot;[AFTER] &#123;&#125; 耗时: &#123;&#125;ms 返回: &#123;&#125;&quot;</span>, methodName, elapsed, result);<br>            <span class="hljs-keyword">return</span> result;<br>        &#125; <span class="hljs-keyword">catch</span> (InvocationTargetException e) &#123;<br>            <span class="hljs-type">Throwable</span> <span class="hljs-variable">cause</span> <span class="hljs-operator">=</span> e.getCause();<br>            log.error(<span class="hljs-string">&quot;[ERROR] &#123;&#125; 异常: &#123;&#125;&quot;</span>, methodName, cause.getMessage());<br>            <span class="hljs-keyword">throw</span> cause;<br>        &#125;<br>    &#125;<br>&#125;<br><br><span class="hljs-comment">// 创建代理</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">ProxyFactory</span> &#123;<br><br>    <span class="hljs-meta">@SuppressWarnings(&quot;unchecked&quot;)</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> &lt;T&gt; T <span class="hljs-title function_">createJdkProxy</span><span class="hljs-params">(T target)</span> &#123;<br>        <span class="hljs-keyword">return</span> (T) Proxy.newProxyInstance(<br>                target.getClass().getClassLoader(),<br>                target.getClass().getInterfaces(),<br>                <span class="hljs-keyword">new</span> <span class="hljs-title class_">LoggingInvocationHandler</span>(target)<br>        );<br>    &#125;<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">main</span><span class="hljs-params">(String[] args)</span> &#123;<br>        <span class="hljs-type">UserService</span> <span class="hljs-variable">realService</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">UserServiceImpl</span>();<br>        <span class="hljs-type">UserService</span> <span class="hljs-variable">proxyService</span> <span class="hljs-operator">=</span> createJdkProxy(realService);<br><br>        <span class="hljs-comment">// 通过代理调用方法，会自动添加日志</span><br>        <span class="hljs-type">User</span> <span class="hljs-variable">user</span> <span class="hljs-operator">=</span> proxyService.findById(<span class="hljs-number">1L</span>);<br>        <span class="hljs-comment">// 输出: [BEFORE] UserService.findById 参数: [1]</span><br>        <span class="hljs-comment">// 输出: [AFTER] UserService.findById 耗时: 2ms 返回: User&#123;id=1, name=&#x27;张三&#x27;, age=28&#125;</span><br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="cglib代理">CGLIB代理</h2>
+<p>CGLIB（Code Generation
+Library）通过生成目标类的子类来实现代理，因此不要求目标类实现接口，但无法代理<code>final</code>类和<code>final</code>方法。</p>
+<pre class="mermaid">graph TD
+    subgraph JDK动态代理
+        Interface[接口定义] --&gt; ProxyClass["$Proxy0 实现接口"]
+        ProxyClass --&gt; IH[InvocationHandler]
+        IH --&gt; TargetA[目标对象]
+    end
+
+    subgraph CGLIB代理
+        TargetClass[目标类] --&gt; SubClass["Target$$EnhancerByCGLIB 子类"]
+        SubClass --&gt; MI[MethodInterceptor]
+        MI --&gt; TargetB[目标对象&lt;br/&gt;通过super调用]
+    end
+
+    style Interface fill:#e3f2fd
+    style TargetClass fill:#fff3e0</pre>
+<h3 id="cglib代理实现">CGLIB代理实现</h3>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">// 目标类，不需要实现接口</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">OrderService</span> &#123;<br><br>    <span class="hljs-keyword">public</span> Order <span class="hljs-title function_">createOrder</span><span class="hljs-params">(String productName, <span class="hljs-type">int</span> quantity)</span> &#123;<br>        <span class="hljs-type">Order</span> <span class="hljs-variable">order</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">Order</span>();<br>        order.setOrderNo(UUID.randomUUID().toString());<br>        order.setProductName(productName);<br>        order.setQuantity(quantity);<br>        System.out.println(<span class="hljs-string">&quot;创建订单: &quot;</span> + order.getOrderNo());<br>        <span class="hljs-keyword">return</span> order;<br>    &#125;<br><br>    <span class="hljs-comment">// final方法不会被代理</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">final</span> String <span class="hljs-title function_">getServiceName</span><span class="hljs-params">()</span> &#123;<br>        <span class="hljs-keyword">return</span> <span class="hljs-string">&quot;OrderService&quot;</span>;<br>    &#125;<br>&#125;<br><br><span class="hljs-comment">// CGLIB MethodInterceptor</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">TransactionInterceptor</span> <span class="hljs-keyword">implements</span> <span class="hljs-title class_">MethodInterceptor</span> &#123;<br><br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">final</span> <span class="hljs-type">Logger</span> <span class="hljs-variable">log</span> <span class="hljs-operator">=</span> LoggerFactory.getLogger(TransactionInterceptor.class);<br><br>    <span class="hljs-comment">/**</span><br><span class="hljs-comment">     * <span class="hljs-doctag">@param</span> obj       代理对象实例（CGLIB生成的子类实例）</span><br><span class="hljs-comment">     * <span class="hljs-doctag">@param</span> method    被拦截的方法</span><br><span class="hljs-comment">     * <span class="hljs-doctag">@param</span> args      方法参数</span><br><span class="hljs-comment">     * <span class="hljs-doctag">@param</span> proxy     方法代理，用于调用父类方法</span><br><span class="hljs-comment">     */</span><br>    <span class="hljs-meta">@Override</span><br>    <span class="hljs-keyword">public</span> Object <span class="hljs-title function_">intercept</span><span class="hljs-params">(Object obj, Method method, Object[] args,</span><br><span class="hljs-params">                            MethodProxy proxy)</span> <span class="hljs-keyword">throws</span> Throwable &#123;<br>        log.info(<span class="hljs-string">&quot;[TX] 开启事务&quot;</span>);<br>        <span class="hljs-keyword">try</span> &#123;<br>            <span class="hljs-comment">// invokeSuper调用父类（原始类）的方法，不会再次触发拦截</span><br>            <span class="hljs-type">Object</span> <span class="hljs-variable">result</span> <span class="hljs-operator">=</span> proxy.invokeSuper(obj, args);<br>            log.info(<span class="hljs-string">&quot;[TX] 提交事务&quot;</span>);<br>            <span class="hljs-keyword">return</span> result;<br>        &#125; <span class="hljs-keyword">catch</span> (Exception e) &#123;<br>            log.error(<span class="hljs-string">&quot;[TX] 回滚事务, 原因: &#123;&#125;&quot;</span>, e.getMessage());<br>            <span class="hljs-keyword">throw</span> e;<br>        &#125;<br>    &#125;<br>&#125;<br><br><span class="hljs-comment">// 创建CGLIB代理</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">CglibProxyFactory</span> &#123;<br><br>    <span class="hljs-meta">@SuppressWarnings(&quot;unchecked&quot;)</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> &lt;T&gt; T <span class="hljs-title function_">createCglibProxy</span><span class="hljs-params">(Class&lt;T&gt; targetClass)</span> &#123;<br>        <span class="hljs-type">Enhancer</span> <span class="hljs-variable">enhancer</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">Enhancer</span>();<br>        enhancer.setSuperclass(targetClass);<br>        enhancer.setCallback(<span class="hljs-keyword">new</span> <span class="hljs-title class_">TransactionInterceptor</span>());<br>        <span class="hljs-keyword">return</span> (T) enhancer.create();<br>    &#125;<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">main</span><span class="hljs-params">(String[] args)</span> &#123;<br>        <span class="hljs-type">OrderService</span> <span class="hljs-variable">proxy</span> <span class="hljs-operator">=</span> createCglibProxy(OrderService.class);<br><br>        <span class="hljs-comment">// 普通方法会被拦截</span><br>        proxy.createOrder(<span class="hljs-string">&quot;iPhone&quot;</span>, <span class="hljs-number">1</span>);<br>        <span class="hljs-comment">// 输出: [TX] 开启事务</span><br>        <span class="hljs-comment">// 输出: 创建订单: xxx-xxx</span><br>        <span class="hljs-comment">// 输出: [TX] 提交事务</span><br><br>        <span class="hljs-comment">// final方法不会被拦截，直接调用原始方法</span><br>        <span class="hljs-type">String</span> <span class="hljs-variable">name</span> <span class="hljs-operator">=</span> proxy.getServiceName(); <span class="hljs-comment">// &quot;OrderService&quot;</span><br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="多个拦截器的callbackfilter">多个拦截器的CallbackFilter</h3>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">MultiCallbackExample</span> &#123;<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> &lt;T&gt; T <span class="hljs-title function_">createProxy</span><span class="hljs-params">(Class&lt;T&gt; targetClass)</span> &#123;<br>        <span class="hljs-type">Enhancer</span> <span class="hljs-variable">enhancer</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">Enhancer</span>();<br>        enhancer.setSuperclass(targetClass);<br><br>        <span class="hljs-comment">// 定义多个回调</span><br>        Callback[] callbacks = &#123;<br>                <span class="hljs-keyword">new</span> <span class="hljs-title class_">TransactionInterceptor</span>(),  <span class="hljs-comment">// index 0: 事务拦截</span><br>                <span class="hljs-keyword">new</span> <span class="hljs-title class_">LoggingInterceptor</span>(),       <span class="hljs-comment">// index 1: 日志拦截</span><br>                NoOp.INSTANCE                   <span class="hljs-comment">// index 2: 不拦截</span><br>        &#125;;<br>        enhancer.setCallbacks(callbacks);<br><br>        <span class="hljs-comment">// 根据方法选择不同的回调</span><br>        enhancer.setCallbackFilter(method -&gt; &#123;<br>            <span class="hljs-keyword">if</span> (method.isAnnotationPresent(Transactional.class)) &#123;<br>                <span class="hljs-keyword">return</span> <span class="hljs-number">0</span>; <span class="hljs-comment">// 使用事务拦截器</span><br>            &#125; <span class="hljs-keyword">else</span> <span class="hljs-keyword">if</span> (method.getName().startsWith(<span class="hljs-string">&quot;find&quot;</span>)<br>                    || method.getName().startsWith(<span class="hljs-string">&quot;get&quot;</span>)) &#123;<br>                <span class="hljs-keyword">return</span> <span class="hljs-number">1</span>; <span class="hljs-comment">// 使用日志拦截器</span><br>            &#125;<br>            <span class="hljs-keyword">return</span> <span class="hljs-number">2</span>; <span class="hljs-comment">// 不拦截</span><br>        &#125;);<br><br>        <span class="hljs-keyword">return</span> (T) enhancer.create();<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="spring-aop中的代理选择">Spring AOP中的代理选择</h2>
+<p>Spring AOP会根据目标对象的特征自动选择代理策略：</p>
+<pre class="mermaid">flowchart TD
+    Start[Spring创建Bean] --&gt; HasInterface{目标类是否&lt;br/&gt;实现了接口?}
+
+    HasInterface --&gt;|是| CheckConfig{proxyTargetClass&lt;br/&gt;=true?}
+    HasInterface --&gt;|否| CGLIB[使用CGLIB代理]
+
+    CheckConfig --&gt;|否| JDK[使用JDK动态代理]
+    CheckConfig --&gt;|是| CGLIB
+
+    JDK --&gt; ProxyObj1[代理对象&lt;br/&gt;实现相同接口]
+    CGLIB --&gt; IsFinal{目标类是final?}
+
+    IsFinal --&gt;|否| ProxyObj2[代理对象&lt;br/&gt;目标类的子类]
+    IsFinal --&gt;|是| Error[抛出异常&lt;br/&gt;无法代理]
+
+    style JDK fill:#e3f2fd
+    style CGLIB fill:#fff3e0
+    style Error fill:#ffcdd2</pre>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">// Spring Boot中的代理配置</span><br><span class="hljs-meta">@Configuration</span><br><span class="hljs-meta">@EnableAspectJAutoProxy(proxyTargetClass = true)</span> <span class="hljs-comment">// 强制使用CGLIB</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">AopConfig</span> &#123;<br>&#125;<br><br><span class="hljs-comment">// 自定义切面</span><br><span class="hljs-meta">@Aspect</span><br><span class="hljs-meta">@Component</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">PerformanceAspect</span> &#123;<br><br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">final</span> <span class="hljs-type">Logger</span> <span class="hljs-variable">log</span> <span class="hljs-operator">=</span> LoggerFactory.getLogger(PerformanceAspect.class);<br><br>    <span class="hljs-meta">@Around(&quot;@annotation(com.example.annotation.Monitored)&quot;)</span><br>    <span class="hljs-keyword">public</span> Object <span class="hljs-title function_">monitor</span><span class="hljs-params">(ProceedingJoinPoint joinPoint)</span> <span class="hljs-keyword">throws</span> Throwable &#123;<br>        <span class="hljs-type">String</span> <span class="hljs-variable">signature</span> <span class="hljs-operator">=</span> joinPoint.getSignature().toShortString();<br>        <span class="hljs-type">long</span> <span class="hljs-variable">start</span> <span class="hljs-operator">=</span> System.nanoTime();<br><br>        <span class="hljs-keyword">try</span> &#123;<br>            <span class="hljs-type">Object</span> <span class="hljs-variable">result</span> <span class="hljs-operator">=</span> joinPoint.proceed();<br>            <span class="hljs-type">long</span> <span class="hljs-variable">elapsed</span> <span class="hljs-operator">=</span> (System.nanoTime() - start) / <span class="hljs-number">1_000_000</span>;<br>            log.info(<span class="hljs-string">&quot;&#123;&#125; 执行成功, 耗时 &#123;&#125;ms&quot;</span>, signature, elapsed);<br>            <span class="hljs-keyword">return</span> result;<br>        &#125; <span class="hljs-keyword">catch</span> (Throwable e) &#123;<br>            <span class="hljs-type">long</span> <span class="hljs-variable">elapsed</span> <span class="hljs-operator">=</span> (System.nanoTime() - start) / <span class="hljs-number">1_000_000</span>;<br>            log.error(<span class="hljs-string">&quot;&#123;&#125; 执行失败, 耗时 &#123;&#125;ms, 异常: &#123;&#125;&quot;</span>, signature, elapsed, e.getMessage());<br>            <span class="hljs-keyword">throw</span> e;<br>        &#125;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="性能对比">性能对比</h2>
+<p>反射和动态代理相比直接调用有性能开销，以下是关键数据和优化建议：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-meta">@BenchmarkMode(Mode.AverageTime)</span><br><span class="hljs-meta">@OutputTimeUnit(TimeUnit.NANOSECONDS)</span><br><span class="hljs-meta">@State(Scope.Benchmark)</span><br><span class="hljs-meta">@Warmup(iterations = 5, time = 1)</span><br><span class="hljs-meta">@Measurement(iterations = 10, time = 1)</span><br><span class="hljs-meta">@Fork(2)</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">ProxyBenchmark</span> &#123;<br><br>    <span class="hljs-keyword">private</span> UserService directService;<br>    <span class="hljs-keyword">private</span> UserService jdkProxy;<br>    <span class="hljs-keyword">private</span> UserService cglibProxy;<br>    <span class="hljs-keyword">private</span> Method cachedMethod;<br><br>    <span class="hljs-meta">@Setup</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">setup</span><span class="hljs-params">()</span> <span class="hljs-keyword">throws</span> Exception &#123;<br>        directService = <span class="hljs-keyword">new</span> <span class="hljs-title class_">UserServiceImpl</span>();<br><br>        jdkProxy = (UserService) Proxy.newProxyInstance(<br>                UserService.class.getClassLoader(),<br>                <span class="hljs-keyword">new</span> <span class="hljs-title class_">Class</span>[]&#123;UserService.class&#125;,<br>                (proxy, method, args) -&gt; method.invoke(directService, args)<br>        );<br><br>        <span class="hljs-type">Enhancer</span> <span class="hljs-variable">enhancer</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">Enhancer</span>();<br>        enhancer.setSuperclass(UserServiceImpl.class);<br>        enhancer.setCallback((MethodInterceptor) (obj, method, args, methodProxy) -&gt;<br>                methodProxy.invokeSuper(obj, args));<br>        cglibProxy = (UserService) enhancer.create();<br><br>        cachedMethod = UserService.class.getMethod(<span class="hljs-string">&quot;findById&quot;</span>, Long.class);<br>        cachedMethod.setAccessible(<span class="hljs-literal">true</span>);<br>    &#125;<br><br>    <span class="hljs-meta">@Benchmark</span><br>    <span class="hljs-keyword">public</span> User <span class="hljs-title function_">directCall</span><span class="hljs-params">()</span> &#123;<br>        <span class="hljs-keyword">return</span> directService.findById(<span class="hljs-number">1L</span>);<br>    &#125;<br><br>    <span class="hljs-meta">@Benchmark</span><br>    <span class="hljs-keyword">public</span> User <span class="hljs-title function_">jdkProxyCall</span><span class="hljs-params">()</span> &#123;<br>        <span class="hljs-keyword">return</span> jdkProxy.findById(<span class="hljs-number">1L</span>);<br>    &#125;<br><br>    <span class="hljs-meta">@Benchmark</span><br>    <span class="hljs-keyword">public</span> User <span class="hljs-title function_">cglibProxyCall</span><span class="hljs-params">()</span> &#123;<br>        <span class="hljs-keyword">return</span> cglibProxy.findById(<span class="hljs-number">1L</span>);<br>    &#125;<br><br>    <span class="hljs-meta">@Benchmark</span><br>    <span class="hljs-keyword">public</span> User <span class="hljs-title function_">reflectionCall</span><span class="hljs-params">()</span> <span class="hljs-keyword">throws</span> Exception &#123;<br>        <span class="hljs-keyword">return</span> (User) cachedMethod.invoke(directService, <span class="hljs-number">1L</span>);<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<p>典型性能对比（数据仅供参考）：</p>
+<table>
+<thead>
+<tr class="header">
+<th>调用方式</th>
+<th>平均耗时 (ns)</th>
+<th>相对开销</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>直接调用</td>
+<td>~5</td>
+<td>1x</td>
+</tr>
+<tr class="even">
+<td>反射调用（缓存Method）</td>
+<td>~20</td>
+<td>4x</td>
+</tr>
+<tr class="odd">
+<td>JDK动态代理</td>
+<td>~25</td>
+<td>5x</td>
+</tr>
+<tr class="even">
+<td>CGLIB代理</td>
+<td>~15</td>
+<td>3x</td>
+</tr>
+<tr class="odd">
+<td>反射调用（未缓存）</td>
+<td>~500</td>
+<td>100x</td>
+</tr>
+</tbody>
+</table>
+<h3 id="性能优化建议">性能优化建议</h3>
+<ol type="1">
+<li><strong>缓存反射对象</strong>：<code>Class.forName()</code>、<code>getMethod()</code>、<code>getDeclaredField()</code>等调用代价高，结果应缓存复用。</li>
+<li><strong>使用<code>setAccessible(true)</code></strong>：跳过访问权限检查可以显著提升反射调用速度。</li>
+<li><strong>优先使用MethodHandle</strong>：Java
+7引入的<code>MethodHandle</code>在JIT优化后性能接近直接调用。</li>
+<li><strong>CGLIB的<code>MethodProxy.invokeSuper</code></strong>：比<code>Method.invoke</code>快，因为它直接调用生成的子类方法，避免了反射。</li>
+<li><strong>生产环境考虑编译时增强</strong>：如Lombok的<code>@Delegate</code>、MapStruct等编译时代码生成方案，零运行时开销。</li>
+</ol>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">// MethodHandle示例：JIT优化后性能接近直接调用</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">MethodHandleExample</span> &#123;<br><br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">final</span> MethodHandle FIND_BY_ID;<br><br>    <span class="hljs-keyword">static</span> &#123;<br>        <span class="hljs-keyword">try</span> &#123;<br>            MethodHandles.<span class="hljs-type">Lookup</span> <span class="hljs-variable">lookup</span> <span class="hljs-operator">=</span> MethodHandles.lookup();<br>            FIND_BY_ID = lookup.findVirtual(<br>                    UserServiceImpl.class,<br>                    <span class="hljs-string">&quot;findById&quot;</span>,<br>                    MethodType.methodType(User.class, Long.class)<br>            );<br>        &#125; <span class="hljs-keyword">catch</span> (NoSuchMethodException | IllegalAccessException e) &#123;<br>            <span class="hljs-keyword">throw</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">ExceptionInInitializerError</span>(e);<br>        &#125;<br>    &#125;<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> User <span class="hljs-title function_">callViaMethodHandle</span><span class="hljs-params">(UserServiceImpl service, Long id)</span> <span class="hljs-keyword">throws</span> Throwable &#123;<br>        <span class="hljs-keyword">return</span> (User) FIND_BY_ID.invoke(service, id);<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="总结">总结</h2>
+<p>反射和动态代理是Java元编程的两大核心能力：</p>
+<ol type="1">
+<li><p><strong>反射API</strong>提供了运行时类信息访问和动态调用的能力，是框架开发的基础。核心操作围绕<code>Class</code>、<code>Field</code>、<code>Method</code>、<code>Constructor</code>四个类展开。</p></li>
+<li><p><strong>JDK动态代理</strong>基于接口生成代理类，通过<code>InvocationHandler</code>拦截方法调用。它是Java标准库的一部分，无需额外依赖，但要求目标对象实现接口。</p></li>
+<li><p><strong>CGLIB代理</strong>通过字节码生成目标类的子类实现代理，不要求接口但无法代理<code>final</code>类/方法。Spring默认在Boot
+2.x+中使用CGLIB作为AOP代理。</p></li>
+<li><p><strong>性能方面</strong>，缓存反射对象、使用<code>setAccessible(true)</code>、考虑<code>MethodHandle</code>替代是关键优化手段。在性能极敏感的场景，编译时增强方案（如APT、字节码插桩）是更好的选择。</p></li>
+<li><p><strong>Spring
+AOP的代理选择</strong>遵循明确的规则：有接口默认JDK代理，无接口或配置<code>proxyTargetClass=true</code>时使用CGLIB。理解这一机制有助于排查自注入、类型转换等常见问题。</p></li>
+</ol>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2025-02-19</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">3.5k 字 · 9 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/database-sharding-strategies/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">数据库分库分表策略与实践</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/mongodb-schema-design/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">MongoDB Schema设计最佳实践</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8F%8D%E5%B0%84%E7%9A%84%E6%A0%B8%E5%BF%83%E6%A6%82%E5%BF%B5"><span class="toc-text">反射的核心概念</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8F%8D%E5%B0%84api%E8%AF%A6%E8%A7%A3"><span class="toc-text">反射API详解</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%8E%B7%E5%8F%96class%E5%AF%B9%E8%B1%A1"><span class="toc-text">获取Class对象</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%93%8D%E4%BD%9Cfieldmethodconstructor"><span class="toc-text">操作Field、Method、Constructor</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%9E%E7%94%A8%E5%B7%A5%E5%85%B7%E9%80%9A%E7%94%A8bean%E6%8B%B7%E8%B4%9D%E5%99%A8"><span class="toc-text">实用工具：通用Bean拷贝器</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#jdk%E5%8A%A8%E6%80%81%E4%BB%A3%E7%90%86"><span class="toc-text">JDK动态代理</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#jdk%E5%8A%A8%E6%80%81%E4%BB%A3%E7%90%86%E5%AE%9E%E7%8E%B0"><span class="toc-text">JDK动态代理实现</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#cglib%E4%BB%A3%E7%90%86"><span class="toc-text">CGLIB代理</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#cglib%E4%BB%A3%E7%90%86%E5%AE%9E%E7%8E%B0"><span class="toc-text">CGLIB代理实现</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%A4%9A%E4%B8%AA%E6%8B%A6%E6%88%AA%E5%99%A8%E7%9A%84callbackfilter"><span class="toc-text">多个拦截器的CallbackFilter</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#spring-aop%E4%B8%AD%E7%9A%84%E4%BB%A3%E7%90%86%E9%80%89%E6%8B%A9"><span class="toc-text">Spring AOP中的代理选择</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%A7%E8%83%BD%E5%AF%B9%E6%AF%94"><span class="toc-text">性能对比</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96%E5%BB%BA%E8%AE%AE"><span class="toc-text">性能优化建议</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

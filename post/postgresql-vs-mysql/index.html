@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PostgreSQL vs MySQL深度对比分析 · zt&#39;s Blog</title>
+  <meta name="description" content="从架构设计、MVCC实现、索引类型、JSON支持、全文搜索、复制机制等多维度深度对比PostgreSQL与MySQL的差异。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/postgresql-vs-mysql/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="PostgreSQL vs MySQL深度对比分析">
+  <meta property="og:description" content="从架构设计、MVCC实现、索引类型、JSON支持、全文搜索、复制机制等多维度深度对比PostgreSQL与MySQL的差异。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/postgresql-vs-mysql/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2025-01-14T16:00:00.000Z">
+  <meta property="article:modified_time" content="2025-01-14T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="PostgreSQL vs MySQL深度对比分析">
+  <meta name="twitter:description" content="从架构设计、MVCC实现、索引类型、JSON支持、全文搜索、复制机制等多维度深度对比PostgreSQL与MySQL的差异。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"PostgreSQL vs MySQL深度对比分析","description":"从架构设计、MVCC实现、索引类型、JSON支持、全文搜索、复制机制等多维度深度对比PostgreSQL与MySQL的差异。","datePublished":"2025-01-14T16:00:00.000Z","dateModified":"2025-01-14T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/postgresql-vs-mysql/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Database","item":"https://withesse.co/categories/Database/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:330">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Database/">Database</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/mysql/"><span class="hash">#</span>mysql</a><a class="tag" href="/tags/postgresql/"><span class="hash">#</span>postgresql</a><a class="tag" href="/tags/comparison/"><span class="hash">#</span>comparison</a>
+        
+      </div>
+
+      <h1>PostgreSQL vs MySQL深度对比分析</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2025.01.15</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 10 min</span>
+        </span>
+        <span class="wc"><span class="num">3.9k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9E%B6%E6%9E%84%E5%B7%AE%E5%BC%82"><span class="toc-text">架构差异</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BF%9B%E7%A8%8B%E6%A8%A1%E5%9E%8B-vs-%E7%BA%BF%E7%A8%8B%E6%A8%A1%E5%9E%8B"><span class="toc-text">进程模型 vs 线程模型</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AD%98%E5%82%A8%E5%BC%95%E6%93%8E"><span class="toc-text">存储引擎</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#mvcc-%E5%AE%9E%E7%8E%B0%E5%B7%AE%E5%BC%82"><span class="toc-text">MVCC 实现差异</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#postgresql-%E5%A4%9A%E7%89%88%E6%9C%AC%E5%AD%98%E5%82%A8%E5%9C%A8%E5%A0%86%E8%A1%A8%E4%B8%AD"><span class="toc-text">PostgreSQL:
+多版本存储在堆表中</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#mysql-innodb-undo-log-%E7%89%88%E6%9C%AC%E9%93%BE"><span class="toc-text">MySQL InnoDB: Undo Log 版本链</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#mvcc-%E5%AF%B9%E6%AF%94%E5%BD%B1%E5%93%8D"><span class="toc-text">MVCC 对比影响</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%B4%A2%E5%BC%95%E7%B1%BB%E5%9E%8B%E5%AF%B9%E6%AF%94"><span class="toc-text">索引类型对比</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#postgresql-%E7%89%B9%E8%89%B2%E7%B4%A2%E5%BC%95%E7%A4%BA%E4%BE%8B"><span class="toc-text">PostgreSQL 特色索引示例</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#mysql-%E7%B4%A2%E5%BC%95%E7%89%B9%E6%80%A7"><span class="toc-text">MySQL 索引特性</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#json-%E6%94%AF%E6%8C%81%E5%AF%B9%E6%AF%94"><span class="toc-text">JSON 支持对比</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#postgresql-jsonb"><span class="toc-text">PostgreSQL JSONB</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#mysql-json"><span class="toc-text">MySQL JSON</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#json-%E5%8A%9F%E8%83%BD%E5%AF%B9%E6%AF%94"><span class="toc-text">JSON 功能对比</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%A8%E6%96%87%E6%90%9C%E7%B4%A2"><span class="toc-text">全文搜索</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#postgresql-%E5%86%85%E7%BD%AE%E5%85%A8%E6%96%87%E6%90%9C%E7%B4%A2"><span class="toc-text">PostgreSQL 内置全文搜索</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#mysql-%E5%85%A8%E6%96%87%E6%90%9C%E7%B4%A2"><span class="toc-text">MySQL 全文搜索</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%A4%8D%E5%88%B6%E4%B8%8E%E9%AB%98%E5%8F%AF%E7%94%A8"><span class="toc-text">复制与高可用</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%A7%E8%83%BD%E5%AF%B9%E6%AF%94"><span class="toc-text">性能对比</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9F%BA%E5%87%86%E6%B5%8B%E8%AF%95%E5%9C%BA%E6%99%AF"><span class="toc-text">基准测试场景</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%B8%E5%9E%8B%E6%80%A7%E8%83%BD%E6%95%B0%E6%8D%AE"><span class="toc-text">典型性能数据</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#postgresql-%E7%8B%AC%E6%9C%89%E7%89%B9%E6%80%A7"><span class="toc-text">PostgreSQL 独有特性</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BD%BF%E7%94%A8%E5%9C%BA%E6%99%AF%E6%8E%A8%E8%8D%90"><span class="toc-text">使用场景推荐</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="引言">引言</h2>
+<p>PostgreSQL和MySQL是当今最流行的两款开源关系型数据库。MySQL以简单易用和高性能著称，在Web应用领域占据主导地位；PostgreSQL则以功能丰富、标准符合度高和可扩展性强闻名，在复杂查询和数据完整性方面有着独特优势。本文将从多个维度深入对比两者的差异，帮助读者根据实际场景做出合理选择。</p>
+<h2 id="架构差异">架构差异</h2>
+<h3 id="进程模型-vs-线程模型">进程模型 vs 线程模型</h3>
+<pre class="mermaid">graph TD
+    subgraph "PostgreSQL: 进程模型"
+        PM[Postmaster&lt;br/&gt;主进程] --&gt; W1[Backend&lt;br/&gt;Worker 1]
+        PM --&gt; W2[Backend&lt;br/&gt;Worker 2]
+        PM --&gt; W3[Backend&lt;br/&gt;Worker N]
+        PM --&gt; BW[Background Writer]
+        PM --&gt; WW[WAL Writer]
+        PM --&gt; AP[Autovacuum]
+        PM --&gt; CK[Checkpointer]
+        W1 --&gt; SM[Shared Memory&lt;br/&gt;Shared Buffers / WAL Buffers]
+        W2 --&gt; SM
+        W3 --&gt; SM
+    end
+
+    subgraph "MySQL InnoDB: 线程模型"
+        MS[mysqld&lt;br/&gt;单进程] --&gt; T1[Connection Thread 1]
+        MS --&gt; T2[Connection Thread 2]
+        MS --&gt; T3[Connection Thread N]
+        MS --&gt; BP[Buffer Pool]
+        MS --&gt; RT[Redo Thread]
+        MS --&gt; PT[Purge Thread]
+        MS --&gt; IO[IO Threads]
+    end</pre>
+<table>
+<thead>
+<tr class="header">
+<th>维度</th>
+<th>PostgreSQL</th>
+<th>MySQL (InnoDB)</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>并发模型</td>
+<td>多进程（一连接一进程）</td>
+<td>多线程（线程池）</td>
+</tr>
+<tr class="even">
+<td>内存共享</td>
+<td>Shared Memory</td>
+<td>进程内共享</td>
+</tr>
+<tr class="odd">
+<td>连接开销</td>
+<td>较大（fork进程）</td>
+<td>较小（创建线程）</td>
+</tr>
+<tr class="even">
+<td>连接池</td>
+<td>通常需要PgBouncer</td>
+<td>内置线程池（企业版）</td>
+</tr>
+<tr class="odd">
+<td>崩溃隔离</td>
+<td>一个连接崩溃不影响其他</td>
+<td>一个线程崩溃可能影响整个进程</td>
+</tr>
+</tbody>
+</table>
+<h3 id="存储引擎">存储引擎</h3>
+<pre class="mermaid">graph LR
+    subgraph MySQL
+        A[SQL Layer] --&gt; B[InnoDB]
+        A --&gt; C[MyISAM]
+        A --&gt; D[Memory]
+        A --&gt; E[NDB Cluster]
+        A --&gt; F[...]
+    end
+
+    subgraph PostgreSQL
+        G[SQL Layer] --&gt; H[Heap Storage&lt;br/&gt;统一的存储管理]
+        H --&gt; I[Table AM API&lt;br/&gt;可扩展接口]
+        I --&gt; J[Heap AM&lt;br/&gt;默认]
+        I --&gt; K[zheap&lt;br/&gt;实验性]
+        I --&gt; L[Columnar&lt;br/&gt;Citus扩展]
+    end</pre>
+<p>MySQL的可插拔存储引擎是其标志性特点，不同表可以使用不同的存储引擎。PostgreSQL传统上只有一种存储方式（heap），但从12版本开始引入了Table
+Access Method API，允许扩展存储方式。</p>
+<h2 id="mvcc-实现差异">MVCC 实现差异</h2>
+<p>这是两者最本质的架构差异之一。</p>
+<h3 id="postgresql-多版本存储在堆表中">PostgreSQL:
+多版本存储在堆表中</h3>
+<pre class="mermaid">graph TD
+    subgraph "PostgreSQL MVCC"
+        A["Heap Page"] --&gt; B["Tuple v1 (xmin=100, xmax=200)&lt;br/&gt;name='Alice', DEAD"]
+        A --&gt; C["Tuple v2 (xmin=200, xmax=300)&lt;br/&gt;name='Bob', DEAD"]
+        A --&gt; D["Tuple v3 (xmin=300, xmax=0)&lt;br/&gt;name='Carol', LIVE"]
+    end
+
+    subgraph "需要VACUUM清理死元组"
+        E[VACUUM] -.-&gt;|清理| B
+        E -.-&gt;|清理| C
+    end</pre>
+<p>PostgreSQL的MVCC特点： - 旧版本（dead
+tuples）存储在堆表中，与活跃数据混在一起 - 更新操作实际上是”删除旧行 +
+插入新行” - 需要<strong>VACUUM</strong>进程定期清理dead tuples，回收空间
+-
+每行有<code>xmin</code>（创建事务ID）和<code>xmax</code>（删除事务ID）两个系统列</p>
+<h3 id="mysql-innodb-undo-log-版本链">MySQL InnoDB: Undo Log 版本链</h3>
+<pre class="mermaid">graph LR
+    subgraph "InnoDB MVCC"
+        A["Clustered Index&lt;br/&gt;当前最新版本&lt;br/&gt;name='Carol'&lt;br/&gt;DB_TRX_ID=300"] --&gt; B["Undo Log&lt;br/&gt;name='Bob'&lt;br/&gt;DB_TRX_ID=200"]
+        B --&gt; C["Undo Log&lt;br/&gt;name='Alice'&lt;br/&gt;DB_TRX_ID=100"]
+    end
+
+    subgraph "Purge线程清理"
+        D[Purge Thread] -.-&gt;|清理不再需要的| C
+    end</pre>
+<p>InnoDB的MVCC特点： - 聚簇索引中只保留最新版本 -
+旧版本通过回滚指针（DB_ROLL_PTR）链接到Undo Log -
+Purge线程负责清理不再需要的undo log -
+不需要像PostgreSQL那样的VACUUM操作</p>
+<h3 id="mvcc-对比影响">MVCC 对比影响</h3>
+<table>
+<thead>
+<tr class="header">
+<th>维度</th>
+<th>PostgreSQL</th>
+<th>MySQL InnoDB</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>UPDATE性能</td>
+<td>较慢（写新行+维护索引）</td>
+<td>较快（原地更新+undo log）</td>
+</tr>
+<tr class="even">
+<td>表膨胀</td>
+<td>需要VACUUM防止膨胀</td>
+<td>无膨胀问题</td>
+</tr>
+<tr class="odd">
+<td>读取性能</td>
+<td>可能因死元组影响</td>
+<td>稳定（通过版本链回溯）</td>
+</tr>
+<tr class="even">
+<td>索引维护</td>
+<td>HOT优化减少索引更新</td>
+<td>二级索引不变（指向主键）</td>
+</tr>
+<tr class="odd">
+<td>运维复杂度</td>
+<td>需要调优autovacuum</td>
+<td>相对简单</td>
+</tr>
+</tbody>
+</table>
+<h2 id="索引类型对比">索引类型对比</h2>
+<pre class="mermaid">graph TD
+    subgraph PostgreSQL索引
+        P1[B-Tree] --&gt; P1a[默认索引类型&lt;br/&gt;等值和范围查询]
+        P2[Hash] --&gt; P2a[等值查询]
+        P3[GiST] --&gt; P3a[地理数据 全文搜索&lt;br/&gt;范围类型 几何类型]
+        P4[SP-GiST] --&gt; P4a[不平衡树结构&lt;br/&gt;IP地址 电话号码]
+        P5[GIN] --&gt; P5a[倒排索引&lt;br/&gt;全文搜索 JSONB数组]
+        P6[BRIN] --&gt; P6a[块范围索引&lt;br/&gt;时序数据 极小的索引体积]
+        P7[Bloom] --&gt; P7a[布隆过滤器索引&lt;br/&gt;多列等值查询]
+    end
+
+    subgraph MySQL索引
+        M1[B+Tree] --&gt; M1a[默认索引类型]
+        M2[Hash] --&gt; M2a[Memory引擎&lt;br/&gt;自适应Hash索引]
+        M3[Full-Text] --&gt; M3a[全文索引&lt;br/&gt;InnoDB 5.6+]
+        M4[R-Tree] --&gt; M4a[空间索引&lt;br/&gt;MyISAM/InnoDB]
+    end</pre>
+<h3 id="postgresql-特色索引示例">PostgreSQL 特色索引示例</h3>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 部分索引（Partial Index）: 只索引满足条件的行</span><br><span class="hljs-keyword">CREATE</span> INDEX idx_active_users <span class="hljs-keyword">ON</span> users (email)<br><span class="hljs-keyword">WHERE</span> status <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;active&#x27;</span>;<br><span class="hljs-comment">-- 只索引活跃用户，索引更小，查询更快</span><br><br><span class="hljs-comment">-- 表达式索引（Expression Index）</span><br><span class="hljs-keyword">CREATE</span> INDEX idx_lower_email <span class="hljs-keyword">ON</span> users (<span class="hljs-built_in">LOWER</span>(email));<br><span class="hljs-comment">-- 支持 WHERE LOWER(email) = &#x27;alice@example.com&#x27;</span><br><br><span class="hljs-comment">-- GIN索引用于JSONB</span><br><span class="hljs-keyword">CREATE</span> INDEX idx_profile_tags <span class="hljs-keyword">ON</span> users <span class="hljs-keyword">USING</span> gin (profile_data jsonb_path_ops);<br><span class="hljs-comment">-- 支持 WHERE profile_data @&gt; &#x27;&#123;&quot;tags&quot;: [&quot;developer&quot;]&#125;&#x27;</span><br><br><span class="hljs-comment">-- BRIN索引用于时序数据（极小的索引体积）</span><br><span class="hljs-keyword">CREATE</span> INDEX idx_logs_created <span class="hljs-keyword">ON</span> access_logs <span class="hljs-keyword">USING</span> brin (created_at);<br><span class="hljs-comment">-- 100GB的表，BRIN索引可能只有几百KB</span><br><br><span class="hljs-comment">-- GiST索引用于地理查询</span><br><span class="hljs-keyword">CREATE</span> INDEX idx_locations <span class="hljs-keyword">ON</span> places <span class="hljs-keyword">USING</span> gist (coordinates);<br><span class="hljs-comment">-- 支持 WHERE coordinates &lt;-&gt; point(116.4, 39.9) &lt; 0.01</span><br><br><span class="hljs-comment">-- 覆盖索引（INCLUDE语法，PostgreSQL 11+）</span><br><span class="hljs-keyword">CREATE</span> INDEX idx_user_email <span class="hljs-keyword">ON</span> users (email) INCLUDE (name, phone);<br><span class="hljs-comment">-- email用于查找，name和phone只存储不参与索引排序</span><br></code></pre></td></tr></table></figure>
+<h3 id="mysql-索引特性">MySQL 索引特性</h3>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 联合索引（最左前缀）</span><br><span class="hljs-keyword">ALTER</span> <span class="hljs-keyword">TABLE</span> orders <span class="hljs-keyword">ADD</span> INDEX idx_user_status(user_id, status, created_at);<br><br><span class="hljs-comment">-- 前缀索引</span><br><span class="hljs-keyword">ALTER</span> <span class="hljs-keyword">TABLE</span> articles <span class="hljs-keyword">ADD</span> INDEX idx_title(title(<span class="hljs-number">20</span>));<br><br><span class="hljs-comment">-- 全文索引（InnoDB 5.6+）</span><br><span class="hljs-keyword">ALTER</span> <span class="hljs-keyword">TABLE</span> articles <span class="hljs-keyword">ADD</span> FULLTEXT INDEX ft_content(title, content)<br><span class="hljs-keyword">WITH</span> PARSER ngram;  <span class="hljs-comment">-- 支持中文分词</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> articles <span class="hljs-keyword">WHERE</span> <span class="hljs-keyword">MATCH</span>(title, content) AGAINST(<span class="hljs-string">&#x27;数据库&#x27;</span> <span class="hljs-keyword">IN</span> <span class="hljs-type">BOOLEAN</span> MODE);<br><br><span class="hljs-comment">-- 不可见索引（MySQL 8.0+，用于测试删除索引的影响）</span><br><span class="hljs-keyword">ALTER</span> <span class="hljs-keyword">TABLE</span> orders <span class="hljs-keyword">ALTER</span> INDEX idx_status INVISIBLE;<br><span class="hljs-comment">-- 优化器不再使用此索引，但索引仍在维护</span><br><span class="hljs-comment">-- 确认无影响后再真正删除</span><br><span class="hljs-keyword">ALTER</span> <span class="hljs-keyword">TABLE</span> orders <span class="hljs-keyword">DROP</span> INDEX idx_status;<br><br><span class="hljs-comment">-- 降序索引（MySQL 8.0+）</span><br><span class="hljs-keyword">ALTER</span> <span class="hljs-keyword">TABLE</span> orders <span class="hljs-keyword">ADD</span> INDEX idx_user_time(user_id <span class="hljs-keyword">ASC</span>, created_at <span class="hljs-keyword">DESC</span>);<br></code></pre></td></tr></table></figure>
+<h2 id="json-支持对比">JSON 支持对比</h2>
+<h3 id="postgresql-jsonb">PostgreSQL JSONB</h3>
+<p>PostgreSQL的JSONB是真正的二进制JSON存储，支持丰富的运算符和索引。</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 创建含JSONB列的表</span><br><span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">TABLE</span> products (<br>    id SERIAL <span class="hljs-keyword">PRIMARY</span> KEY,<br>    name TEXT,<br>    attributes JSONB<br>);<br><br><span class="hljs-comment">-- 插入数据</span><br><span class="hljs-keyword">INSERT</span> <span class="hljs-keyword">INTO</span> products (name, attributes) <span class="hljs-keyword">VALUES</span><br>(<span class="hljs-string">&#x27;iPhone 15&#x27;</span>, <span class="hljs-string">&#x27;&#123;&quot;brand&quot;: &quot;Apple&quot;, &quot;specs&quot;: &#123;&quot;ram&quot;: 8, &quot;storage&quot;: 256&#125;, &quot;tags&quot;: [&quot;smartphone&quot;, &quot;5G&quot;]&#125;&#x27;</span>),<br>(<span class="hljs-string">&#x27;Galaxy S24&#x27;</span>, <span class="hljs-string">&#x27;&#123;&quot;brand&quot;: &quot;Samsung&quot;, &quot;specs&quot;: &#123;&quot;ram&quot;: 12, &quot;storage&quot;: 512&#125;, &quot;tags&quot;: [&quot;smartphone&quot;, &quot;AI&quot;]&#125;&#x27;</span>);<br><br><span class="hljs-comment">-- 丰富的查询运算符</span><br><span class="hljs-comment">-- 包含查询</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> products <span class="hljs-keyword">WHERE</span> attributes @<span class="hljs-operator">&gt;</span> <span class="hljs-string">&#x27;&#123;&quot;brand&quot;: &quot;Apple&quot;&#125;&#x27;</span>;<br><br><span class="hljs-comment">-- 路径查询</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> products <span class="hljs-keyword">WHERE</span> attributes <span class="hljs-operator">-</span><span class="hljs-operator">&gt;</span> <span class="hljs-string">&#x27;specs&#x27;</span> <span class="hljs-operator">-</span><span class="hljs-operator">&gt;&gt;</span> <span class="hljs-string">&#x27;ram&#x27;</span> <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;8&#x27;</span>;<br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> products <span class="hljs-keyword">WHERE</span> (attributes #<span class="hljs-operator">&gt;&gt;</span> <span class="hljs-string">&#x27;&#123;specs,storage&#125;&#x27;</span>)::<span class="hljs-type">int</span> <span class="hljs-operator">&gt;</span> <span class="hljs-number">128</span>;<br><br><span class="hljs-comment">-- 数组元素查询</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> products <span class="hljs-keyword">WHERE</span> attributes <span class="hljs-operator">-</span><span class="hljs-operator">&gt;</span> <span class="hljs-string">&#x27;tags&#x27;</span> ? <span class="hljs-string">&#x27;AI&#x27;</span>;<br><br><span class="hljs-comment">-- JSONPath查询（PostgreSQL 12+）</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> products <span class="hljs-keyword">WHERE</span> attributes @? <span class="hljs-string">&#x27;$.specs ? (@.ram &gt; 8)&#x27;</span>;<br><br><span class="hljs-comment">-- GIN索引加速JSON查询</span><br><span class="hljs-keyword">CREATE</span> INDEX idx_attrs <span class="hljs-keyword">ON</span> products <span class="hljs-keyword">USING</span> gin (attributes);<br><span class="hljs-keyword">CREATE</span> INDEX idx_attrs_path <span class="hljs-keyword">ON</span> products <span class="hljs-keyword">USING</span> gin (attributes jsonb_path_ops);<br><br><span class="hljs-comment">-- JSONB聚合</span><br><span class="hljs-keyword">SELECT</span><br>    attributes <span class="hljs-operator">-</span><span class="hljs-operator">&gt;&gt;</span> <span class="hljs-string">&#x27;brand&#x27;</span> <span class="hljs-keyword">AS</span> brand,<br>    <span class="hljs-built_in">AVG</span>((attributes #<span class="hljs-operator">&gt;&gt;</span> <span class="hljs-string">&#x27;&#123;specs,ram&#125;&#x27;</span>)::<span class="hljs-type">int</span>) <span class="hljs-keyword">AS</span> avg_ram<br><span class="hljs-keyword">FROM</span> products<br><span class="hljs-keyword">GROUP</span> <span class="hljs-keyword">BY</span> attributes <span class="hljs-operator">-</span><span class="hljs-operator">&gt;&gt;</span> <span class="hljs-string">&#x27;brand&#x27;</span>;<br><br><span class="hljs-comment">-- JSONB修改</span><br><span class="hljs-keyword">UPDATE</span> products <span class="hljs-keyword">SET</span> attributes <span class="hljs-operator">=</span> jsonb_set(<br>    attributes,<br>    <span class="hljs-string">&#x27;&#123;specs,ram&#125;&#x27;</span>,<br>    <span class="hljs-string">&#x27;16&#x27;</span><br>) <span class="hljs-keyword">WHERE</span> name <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;Galaxy S24&#x27;</span>;<br></code></pre></td></tr></table></figure>
+<h3 id="mysql-json">MySQL JSON</h3>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 创建含JSON列的表</span><br><span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">TABLE</span> products (<br>    id <span class="hljs-type">INT</span> AUTO_INCREMENT <span class="hljs-keyword">PRIMARY</span> KEY,<br>    name <span class="hljs-type">VARCHAR</span>(<span class="hljs-number">100</span>),<br>    attributes JSON<br>);<br><br><span class="hljs-comment">-- JSON函数查询</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> products<br><span class="hljs-keyword">WHERE</span> JSON_EXTRACT(attributes, <span class="hljs-string">&#x27;$.brand&#x27;</span>) <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;Apple&#x27;</span>;<br><span class="hljs-comment">-- 或使用简写</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> products<br><span class="hljs-keyword">WHERE</span> attributes <span class="hljs-operator">-</span><span class="hljs-operator">&gt;</span> <span class="hljs-string">&#x27;$.brand&#x27;</span> <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;&quot;Apple&quot;&#x27;</span>;<br><br><span class="hljs-comment">-- 虚拟生成列 + 索引（MySQL解决JSON索引的方式）</span><br><span class="hljs-keyword">ALTER</span> <span class="hljs-keyword">TABLE</span> products<br><span class="hljs-keyword">ADD</span> <span class="hljs-keyword">COLUMN</span> brand <span class="hljs-type">VARCHAR</span>(<span class="hljs-number">50</span>) GENERATED ALWAYS <span class="hljs-keyword">AS</span> (attributes <span class="hljs-operator">-</span><span class="hljs-operator">&gt;&gt;</span> <span class="hljs-string">&#x27;$.brand&#x27;</span>) VIRTUAL,<br><span class="hljs-keyword">ADD</span> INDEX idx_brand (brand);<br><br><span class="hljs-comment">-- JSON_TABLE: 将JSON数组展开为关系表（MySQL 8.0+）</span><br><span class="hljs-keyword">SELECT</span> p.name, t.tag<br><span class="hljs-keyword">FROM</span> products p,<br><span class="hljs-built_in">JSON_TABLE</span>(p.attributes, <span class="hljs-string">&#x27;$.tags[*]&#x27;</span> COLUMNS (<br>    tag <span class="hljs-type">VARCHAR</span>(<span class="hljs-number">50</span>) PATH <span class="hljs-string">&#x27;$&#x27;</span><br>)) t;<br><br><span class="hljs-comment">-- JSON修改</span><br><span class="hljs-keyword">UPDATE</span> products <span class="hljs-keyword">SET</span> attributes <span class="hljs-operator">=</span> JSON_SET(<br>    attributes,<br>    <span class="hljs-string">&#x27;$.specs.ram&#x27;</span>, <span class="hljs-number">16</span><br>) <span class="hljs-keyword">WHERE</span> name <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;Galaxy S24&#x27;</span>;<br></code></pre></td></tr></table></figure>
+<h3 id="json-功能对比">JSON 功能对比</h3>
+<table>
+<thead>
+<tr class="header">
+<th>特性</th>
+<th>PostgreSQL JSONB</th>
+<th>MySQL JSON</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>存储格式</td>
+<td>二进制，解析后存储</td>
+<td>二进制（MySQL 5.7.8+）</td>
+</tr>
+<tr class="even">
+<td>索引支持</td>
+<td>GIN原生索引</td>
+<td>需要生成列+B-Tree</td>
+</tr>
+<tr class="odd">
+<td>运算符</td>
+<td>丰富（@&gt;, ?, #&gt;, 等）</td>
+<td>较少（-&gt;，-&gt;&gt;）</td>
+</tr>
+<tr class="even">
+<td>JSONPath</td>
+<td>完整支持（12+）</td>
+<td>部分支持</td>
+</tr>
+<tr class="odd">
+<td>修改性能</td>
+<td>整体重写</td>
+<td>部分更新（8.0+优化）</td>
+</tr>
+<tr class="even">
+<td>验证</td>
+<td>JSONB自动验证格式</td>
+<td>JSON自动验证格式</td>
+</tr>
+</tbody>
+</table>
+<h2 id="全文搜索">全文搜索</h2>
+<h3 id="postgresql-内置全文搜索">PostgreSQL 内置全文搜索</h3>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 创建包含全文搜索向量的列</span><br><span class="hljs-keyword">ALTER</span> <span class="hljs-keyword">TABLE</span> articles <span class="hljs-keyword">ADD</span> <span class="hljs-keyword">COLUMN</span> tsv tsvector;<br><span class="hljs-keyword">UPDATE</span> articles <span class="hljs-keyword">SET</span> tsv <span class="hljs-operator">=</span> to_tsvector(<span class="hljs-string">&#x27;english&#x27;</span>, title <span class="hljs-operator">||</span> <span class="hljs-string">&#x27; &#x27;</span> <span class="hljs-operator">||</span> content);<br><span class="hljs-keyword">CREATE</span> INDEX idx_tsv <span class="hljs-keyword">ON</span> articles <span class="hljs-keyword">USING</span> gin(tsv);<br><br><span class="hljs-comment">-- 全文搜索查询</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> articles<br><span class="hljs-keyword">WHERE</span> tsv @@ to_tsquery(<span class="hljs-string">&#x27;english&#x27;</span>, <span class="hljs-string">&#x27;database &amp; optimization&#x27;</span>);<br><br><span class="hljs-comment">-- 搜索结果排序</span><br><span class="hljs-keyword">SELECT</span> title, ts_rank(tsv, query) <span class="hljs-keyword">AS</span> rank<br><span class="hljs-keyword">FROM</span> articles, to_tsquery(<span class="hljs-string">&#x27;english&#x27;</span>, <span class="hljs-string">&#x27;database | index&#x27;</span>) query<br><span class="hljs-keyword">WHERE</span> tsv @@ query<br><span class="hljs-keyword">ORDER</span> <span class="hljs-keyword">BY</span> rank <span class="hljs-keyword">DESC</span>;<br><br><span class="hljs-comment">-- 搜索结果高亮</span><br><span class="hljs-keyword">SELECT</span> title,<br>    ts_headline(<span class="hljs-string">&#x27;english&#x27;</span>, content, to_tsquery(<span class="hljs-string">&#x27;database&#x27;</span>), <span class="hljs-string">&#x27;StartSel=&lt;b&gt;, StopSel=&lt;/b&gt;&#x27;</span>)<br><span class="hljs-keyword">FROM</span> articles<br><span class="hljs-keyword">WHERE</span> tsv @@ to_tsquery(<span class="hljs-string">&#x27;database&#x27;</span>);<br><br><span class="hljs-comment">-- 中文全文搜索（需要安装 zhparser 扩展）</span><br><span class="hljs-keyword">CREATE</span> EXTENSION zhparser;<br><span class="hljs-keyword">CREATE</span> TEXT <span class="hljs-keyword">SEARCH</span> CONFIGURATION chinese (PARSER <span class="hljs-operator">=</span> zhparser);<br><span class="hljs-keyword">ALTER</span> TEXT <span class="hljs-keyword">SEARCH</span> CONFIGURATION chinese <span class="hljs-keyword">ADD</span> MAPPING <span class="hljs-keyword">FOR</span> n,v,a,i,e,l <span class="hljs-keyword">WITH</span> simple;<br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> articles <span class="hljs-keyword">WHERE</span> to_tsvector(<span class="hljs-string">&#x27;chinese&#x27;</span>, content) @@ to_tsquery(<span class="hljs-string">&#x27;chinese&#x27;</span>, <span class="hljs-string">&#x27;数据库&#x27;</span>);<br></code></pre></td></tr></table></figure>
+<h3 id="mysql-全文搜索">MySQL 全文搜索</h3>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 创建全文索引</span><br><span class="hljs-keyword">ALTER</span> <span class="hljs-keyword">TABLE</span> articles <span class="hljs-keyword">ADD</span> FULLTEXT INDEX ft_content(title, content) <span class="hljs-keyword">WITH</span> PARSER ngram;<br><br><span class="hljs-comment">-- 自然语言模式搜索</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> articles<br><span class="hljs-keyword">WHERE</span> <span class="hljs-keyword">MATCH</span>(title, content) AGAINST(<span class="hljs-string">&#x27;database optimization&#x27;</span> <span class="hljs-keyword">IN</span> <span class="hljs-keyword">NATURAL</span> <span class="hljs-keyword">LANGUAGE</span> MODE);<br><br><span class="hljs-comment">-- 布尔模式搜索</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> articles<br><span class="hljs-keyword">WHERE</span> <span class="hljs-keyword">MATCH</span>(title, content) AGAINST(<span class="hljs-string">&#x27;+database -mysql&#x27;</span> <span class="hljs-keyword">IN</span> <span class="hljs-type">BOOLEAN</span> MODE);<br><br><span class="hljs-comment">-- 查询扩展搜索</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> articles<br><span class="hljs-keyword">WHERE</span> <span class="hljs-keyword">MATCH</span>(title, content) AGAINST(<span class="hljs-string">&#x27;database&#x27;</span> <span class="hljs-keyword">WITH</span> QUERY EXPANSION);<br></code></pre></td></tr></table></figure>
+<p>对于生产环境的全文搜索需求，通常建议使用专门的搜索引擎（如Elasticsearch）。</p>
+<h2 id="复制与高可用">复制与高可用</h2>
+<pre class="mermaid">graph TD
+    subgraph "PostgreSQL 复制"
+        PA[Primary] --&gt;|WAL Streaming| PB[Standby 1&lt;br/&gt;同步复制]
+        PA --&gt;|WAL Streaming| PC[Standby 2&lt;br/&gt;异步复制]
+        PA --&gt;|Logical Replication| PD[Subscriber&lt;br/&gt;选择性复制]
+    end
+
+    subgraph "MySQL 复制"
+        MA[Source] --&gt;|Binlog&lt;br/&gt;异步/半同步/组复制| MB[Replica 1]
+        MA --&gt;|Binlog| MC[Replica 2]
+        subgraph "Group Replication"
+            MD[Node 1] &lt;--&gt;|Paxos| ME[Node 2]
+            ME &lt;--&gt;|Paxos| MF[Node 3]
+            MD &lt;--&gt;|Paxos| MF
+        end
+    end</pre>
+<table>
+<thead>
+<tr class="header">
+<th>特性</th>
+<th>PostgreSQL</th>
+<th>MySQL</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>物理复制</td>
+<td>WAL Streaming（默认）</td>
+<td>Binlog（Statement/Row/Mixed）</td>
+</tr>
+<tr class="even">
+<td>逻辑复制</td>
+<td>Logical Replication（10+）</td>
+<td>Binlog + GTID</td>
+</tr>
+<tr class="odd">
+<td>同步复制</td>
+<td>支持（synchronous_commit）</td>
+<td>半同步复制</td>
+</tr>
+<tr class="even">
+<td>多主复制</td>
+<td>BDR扩展</td>
+<td>Group Replication / NDB Cluster</td>
+</tr>
+<tr class="odd">
+<td>延迟复制</td>
+<td>recovery_min_apply_delay</td>
+<td>CHANGE MASTER TO MASTER_DELAY</td>
+</tr>
+<tr class="even">
+<td>级联复制</td>
+<td>支持</td>
+<td>支持</td>
+</tr>
+</tbody>
+</table>
+<h2 id="性能对比">性能对比</h2>
+<h3 id="基准测试场景">基准测试场景</h3>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 高并发简单查询（OLTP）</span><br><span class="hljs-comment">-- MySQL通常略优: 线程模型开销更小，连接管理更高效</span><br><br><span class="hljs-comment">-- 复杂分析查询（OLAP）</span><br><span class="hljs-comment">-- PostgreSQL通常优势明显:</span><br><span class="hljs-comment">--   1. 更强的查询优化器（支持Hash Join、Merge Join等多种策略）</span><br><span class="hljs-comment">--   2. 并行查询支持更完善</span><br><span class="hljs-comment">--   3. CTE（WITH语句）支持更好</span><br><span class="hljs-comment">--   4. 窗口函数更丰富</span><br><br><span class="hljs-comment">-- 窗口函数示例（PostgreSQL更丰富）</span><br><span class="hljs-keyword">SELECT</span><br>    user_id,<br>    amount,<br>    <span class="hljs-built_in">SUM</span>(amount) <span class="hljs-keyword">OVER</span> (<span class="hljs-keyword">PARTITION</span> <span class="hljs-keyword">BY</span> user_id <span class="hljs-keyword">ORDER</span> <span class="hljs-keyword">BY</span> created_at<br>        <span class="hljs-keyword">ROWS</span> <span class="hljs-keyword">BETWEEN</span> UNBOUNDED PRECEDING <span class="hljs-keyword">AND</span> <span class="hljs-keyword">CURRENT</span> <span class="hljs-type">ROW</span>) <span class="hljs-keyword">AS</span> running_total,<br>    <span class="hljs-built_in">PERCENT_RANK</span>() <span class="hljs-keyword">OVER</span> (<span class="hljs-keyword">PARTITION</span> <span class="hljs-keyword">BY</span> user_id <span class="hljs-keyword">ORDER</span> <span class="hljs-keyword">BY</span> amount) <span class="hljs-keyword">AS</span> pct_rank,<br>    <span class="hljs-built_in">LAG</span>(amount, <span class="hljs-number">1</span>) <span class="hljs-keyword">OVER</span> (<span class="hljs-keyword">PARTITION</span> <span class="hljs-keyword">BY</span> user_id <span class="hljs-keyword">ORDER</span> <span class="hljs-keyword">BY</span> created_at) <span class="hljs-keyword">AS</span> prev_amount<br><span class="hljs-keyword">FROM</span> orders;<br><br><span class="hljs-comment">-- PostgreSQL独有: LATERAL JOIN</span><br><span class="hljs-keyword">SELECT</span> u.<span class="hljs-operator">*</span>, recent_orders.<span class="hljs-operator">*</span><br><span class="hljs-keyword">FROM</span> users u,<br><span class="hljs-keyword">LATERAL</span> (<br>    <span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> orders o<br>    <span class="hljs-keyword">WHERE</span> o.user_id <span class="hljs-operator">=</span> u.id<br>    <span class="hljs-keyword">ORDER</span> <span class="hljs-keyword">BY</span> o.created_at <span class="hljs-keyword">DESC</span><br>    LIMIT <span class="hljs-number">5</span><br>) recent_orders;<br><br><span class="hljs-comment">-- PostgreSQL独有: FILTER子句</span><br><span class="hljs-keyword">SELECT</span><br>    <span class="hljs-built_in">COUNT</span>(<span class="hljs-operator">*</span>) <span class="hljs-keyword">AS</span> total,<br>    <span class="hljs-built_in">COUNT</span>(<span class="hljs-operator">*</span>) <span class="hljs-keyword">FILTER</span> (<span class="hljs-keyword">WHERE</span> status <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;paid&#x27;</span>) <span class="hljs-keyword">AS</span> paid_count,<br>    <span class="hljs-built_in">SUM</span>(amount) <span class="hljs-keyword">FILTER</span> (<span class="hljs-keyword">WHERE</span> status <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;shipped&#x27;</span>) <span class="hljs-keyword">AS</span> shipped_amount<br><span class="hljs-keyword">FROM</span> orders;<br></code></pre></td></tr></table></figure>
+<h3 id="典型性能数据">典型性能数据</h3>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><code class="hljs plaintext">场景                         | PostgreSQL | MySQL (InnoDB)<br>-----------------------------|-----------|---------------<br>简单主键查询 (QPS)           | ~80,000   | ~100,000<br>10表JOIN复杂查询 (QPS)       | ~2,000    | ~800<br>批量INSERT (行/秒)           | ~150,000  | ~200,000<br>JSONB查询 (QPS)              | ~50,000   | ~30,000<br>全文搜索 (QPS)               | ~10,000   | ~8,000<br>并行扫描大表 (GB/秒)         | ~2.5      | ~1.5<br><br>注: 以上数据仅为参考数量级，实际性能取决于硬件、配置和数据特征<br></code></pre></td></tr></table></figure>
+<h2 id="postgresql-独有特性">PostgreSQL 独有特性</h2>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 1. 丰富的数据类型</span><br><span class="hljs-comment">-- 数组</span><br><span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">TABLE</span> events (<br>    id SERIAL <span class="hljs-keyword">PRIMARY</span> KEY,<br>    tags TEXT[]<br>);<br><span class="hljs-keyword">INSERT</span> <span class="hljs-keyword">INTO</span> events (tags) <span class="hljs-keyword">VALUES</span> (<span class="hljs-keyword">ARRAY</span>[<span class="hljs-string">&#x27;tech&#x27;</span>, <span class="hljs-string">&#x27;database&#x27;</span>, <span class="hljs-string">&#x27;pg&#x27;</span>]);<br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> events <span class="hljs-keyword">WHERE</span> <span class="hljs-string">&#x27;database&#x27;</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">ANY</span>(tags);<br><br><span class="hljs-comment">-- 范围类型</span><br><span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">TABLE</span> reservations (<br>    room_id <span class="hljs-type">INT</span>,<br>    during TSTZRANGE,  <span class="hljs-comment">-- 时间范围</span><br>    EXCLUDE <span class="hljs-keyword">USING</span> gist (room_id <span class="hljs-keyword">WITH</span> <span class="hljs-operator">=</span>, during <span class="hljs-keyword">WITH</span> <span class="hljs-operator">&amp;&amp;</span>)  <span class="hljs-comment">-- 排他约束防止重叠</span><br>);<br><span class="hljs-keyword">INSERT</span> <span class="hljs-keyword">INTO</span> reservations <span class="hljs-keyword">VALUES</span> (<span class="hljs-number">1</span>, <span class="hljs-string">&#x27;[2025-01-01, 2025-01-05)&#x27;</span>);<br><span class="hljs-comment">-- 插入重叠时段会报错</span><br><br><span class="hljs-comment">-- 自定义类型</span><br><span class="hljs-keyword">CREATE</span> TYPE address <span class="hljs-keyword">AS</span> (<br>    street TEXT,<br>    city TEXT,<br>    zipcode TEXT<br>);<br><br><span class="hljs-comment">-- 2. 可扩展性</span><br><span class="hljs-comment">-- 自定义函数（多种语言）</span><br><span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">FUNCTION</span> fibonacci(n <span class="hljs-type">INT</span>) <span class="hljs-keyword">RETURNS</span> <span class="hljs-type">INT</span> <span class="hljs-keyword">AS</span> $$<br><span class="hljs-keyword">BEGIN</span><br>    IF n <span class="hljs-operator">&lt;=</span> <span class="hljs-number">1</span> <span class="hljs-keyword">THEN</span> <span class="hljs-keyword">RETURN</span> n; <span class="hljs-keyword">END</span> IF;<br>    <span class="hljs-keyword">RETURN</span> fibonacci(n<span class="hljs-number">-1</span>) <span class="hljs-operator">+</span> fibonacci(n<span class="hljs-number">-2</span>);<br><span class="hljs-keyword">END</span>;<br>$$ <span class="hljs-keyword">LANGUAGE</span> plpgsql;<br><br><span class="hljs-comment">-- PostGIS地理信息扩展</span><br><span class="hljs-keyword">CREATE</span> EXTENSION postgis;<br><span class="hljs-keyword">SELECT</span> ST_Distance(<br>    ST_Point(<span class="hljs-number">116.4</span>, <span class="hljs-number">39.9</span>)::geography,<br>    ST_Point(<span class="hljs-number">121.5</span>, <span class="hljs-number">31.2</span>)::geography<br>) <span class="hljs-operator">/</span> <span class="hljs-number">1000</span> <span class="hljs-keyword">AS</span> distance_km;<br><br><span class="hljs-comment">-- 3. 高级约束</span><br><span class="hljs-comment">-- CHECK约束</span><br><span class="hljs-keyword">ALTER</span> <span class="hljs-keyword">TABLE</span> products <span class="hljs-keyword">ADD</span> <span class="hljs-keyword">CONSTRAINT</span> price_positive <span class="hljs-keyword">CHECK</span> (price <span class="hljs-operator">&gt;</span> <span class="hljs-number">0</span>);<br><br><span class="hljs-comment">-- 排他约束</span><br><span class="hljs-comment">-- (上面的范围类型示例)</span><br><br><span class="hljs-comment">-- 4. 物化视图</span><br><span class="hljs-keyword">CREATE</span> MATERIALIZED <span class="hljs-keyword">VIEW</span> monthly_stats <span class="hljs-keyword">AS</span><br><span class="hljs-keyword">SELECT</span> date_trunc(<span class="hljs-string">&#x27;month&#x27;</span>, created_at) <span class="hljs-keyword">AS</span> <span class="hljs-keyword">month</span>,<br>       <span class="hljs-built_in">COUNT</span>(<span class="hljs-operator">*</span>) <span class="hljs-keyword">AS</span> order_count,<br>       <span class="hljs-built_in">SUM</span>(amount) <span class="hljs-keyword">AS</span> total_amount<br><span class="hljs-keyword">FROM</span> orders<br><span class="hljs-keyword">GROUP</span> <span class="hljs-keyword">BY</span> <span class="hljs-number">1</span>;<br><br><span class="hljs-comment">-- 刷新物化视图（支持并发刷新）</span><br>REFRESH MATERIALIZED <span class="hljs-keyword">VIEW</span> CONCURRENTLY monthly_stats;<br></code></pre></td></tr></table></figure>
+<h2 id="使用场景推荐">使用场景推荐</h2>
+<pre class="mermaid">flowchart TD
+    A[选择数据库] --&gt; B{应用类型?}
+
+    B --&gt;|Web应用&lt;br/&gt;高并发简单查询| C[MySQL]
+    B --&gt;|数据分析&lt;br/&gt;复杂查询| D[PostgreSQL]
+    B --&gt;|地理信息GIS| E[PostgreSQL + PostGIS]
+    B --&gt;|JSON文档存储| F[PostgreSQL JSONB]
+    B --&gt;|时序数据| G[PostgreSQL + TimescaleDB]
+
+    C --&gt; C1[优势: 成熟生态&lt;br/&gt;简单运维&lt;br/&gt;丰富的工具链]
+    D --&gt; D1[优势: 强大优化器&lt;br/&gt;丰富数据类型&lt;br/&gt;标准兼容性]
+
+    H{团队情况?}
+    H --&gt;|MySQL经验丰富| C
+    H --&gt;|需要高级SQL特性| D
+    H --&gt;|云原生首选| I["两者皆可&lt;br/&gt;AWS RDS / Cloud SQL"]</pre>
+<table>
+<thead>
+<tr class="header">
+<th>选择MySQL的场景</th>
+<th>选择PostgreSQL的场景</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Web后端，简单CRUD为主</td>
+<td>复杂业务逻辑，大量JOIN和分析</td>
+</tr>
+<tr class="even">
+<td>读多写少，需要读写分离</td>
+<td>需要JSONB存储半结构化数据</td>
+</tr>
+<tr class="odd">
+<td>已有MySQL技术栈和运维经验</td>
+<td>地理信息系统（GIS）</td>
+</tr>
+<tr class="even">
+<td>需要大量第三方工具支持</td>
+<td>需要自定义数据类型和函数</td>
+</tr>
+<tr class="odd">
+<td>互联网公司主流选择</td>
+<td>数据完整性要求极高的场景</td>
+</tr>
+</tbody>
+</table>
+<h2 id="总结">总结</h2>
+<p>PostgreSQL和MySQL各有所长，选择取决于具体场景：</p>
+<ul>
+<li><strong>架构层面</strong>：PostgreSQL的多进程模型提供更好的稳定性，MySQL的线程模型有更高的连接效率</li>
+<li><strong>MVCC实现</strong>：PostgreSQL的堆内多版本需要VACUUM维护，MySQL的Undo
+Log方案更简洁</li>
+<li><strong>索引能力</strong>：PostgreSQL的索引类型远比MySQL丰富，GIN、GiST、BRIN等为特殊场景提供了强力支持</li>
+<li><strong>JSON支持</strong>：PostgreSQL的JSONB功能显著强于MySQL的JSON</li>
+<li><strong>查询能力</strong>：PostgreSQL的优化器更强，对复杂查询（多表JOIN、窗口函数、CTE）的支持更好</li>
+<li><strong>生态和运维</strong>：MySQL的生态更广泛，运维工具链更成熟，社区更大</li>
+</ul>
+<p>在实际项目中，不必拘泥于一种数据库——很多公司同时使用MySQL和PostgreSQL，各取所长，服务于不同的业务场景。</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2025-01-15</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">3.9k 字 · 10 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/spring-cloud-microservices/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Spring Cloud微服务架构实战指南</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/spring-boot-auto-configuration/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Spring Boot自动配置原理深度剖析</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9E%B6%E6%9E%84%E5%B7%AE%E5%BC%82"><span class="toc-text">架构差异</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BF%9B%E7%A8%8B%E6%A8%A1%E5%9E%8B-vs-%E7%BA%BF%E7%A8%8B%E6%A8%A1%E5%9E%8B"><span class="toc-text">进程模型 vs 线程模型</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AD%98%E5%82%A8%E5%BC%95%E6%93%8E"><span class="toc-text">存储引擎</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#mvcc-%E5%AE%9E%E7%8E%B0%E5%B7%AE%E5%BC%82"><span class="toc-text">MVCC 实现差异</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#postgresql-%E5%A4%9A%E7%89%88%E6%9C%AC%E5%AD%98%E5%82%A8%E5%9C%A8%E5%A0%86%E8%A1%A8%E4%B8%AD"><span class="toc-text">PostgreSQL:
+多版本存储在堆表中</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#mysql-innodb-undo-log-%E7%89%88%E6%9C%AC%E9%93%BE"><span class="toc-text">MySQL InnoDB: Undo Log 版本链</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#mvcc-%E5%AF%B9%E6%AF%94%E5%BD%B1%E5%93%8D"><span class="toc-text">MVCC 对比影响</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%B4%A2%E5%BC%95%E7%B1%BB%E5%9E%8B%E5%AF%B9%E6%AF%94"><span class="toc-text">索引类型对比</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#postgresql-%E7%89%B9%E8%89%B2%E7%B4%A2%E5%BC%95%E7%A4%BA%E4%BE%8B"><span class="toc-text">PostgreSQL 特色索引示例</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#mysql-%E7%B4%A2%E5%BC%95%E7%89%B9%E6%80%A7"><span class="toc-text">MySQL 索引特性</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#json-%E6%94%AF%E6%8C%81%E5%AF%B9%E6%AF%94"><span class="toc-text">JSON 支持对比</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#postgresql-jsonb"><span class="toc-text">PostgreSQL JSONB</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#mysql-json"><span class="toc-text">MySQL JSON</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#json-%E5%8A%9F%E8%83%BD%E5%AF%B9%E6%AF%94"><span class="toc-text">JSON 功能对比</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%A8%E6%96%87%E6%90%9C%E7%B4%A2"><span class="toc-text">全文搜索</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#postgresql-%E5%86%85%E7%BD%AE%E5%85%A8%E6%96%87%E6%90%9C%E7%B4%A2"><span class="toc-text">PostgreSQL 内置全文搜索</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#mysql-%E5%85%A8%E6%96%87%E6%90%9C%E7%B4%A2"><span class="toc-text">MySQL 全文搜索</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%A4%8D%E5%88%B6%E4%B8%8E%E9%AB%98%E5%8F%AF%E7%94%A8"><span class="toc-text">复制与高可用</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%A7%E8%83%BD%E5%AF%B9%E6%AF%94"><span class="toc-text">性能对比</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9F%BA%E5%87%86%E6%B5%8B%E8%AF%95%E5%9C%BA%E6%99%AF"><span class="toc-text">基准测试场景</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%B8%E5%9E%8B%E6%80%A7%E8%83%BD%E6%95%B0%E6%8D%AE"><span class="toc-text">典型性能数据</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#postgresql-%E7%8B%AC%E6%9C%89%E7%89%B9%E6%80%A7"><span class="toc-text">PostgreSQL 独有特性</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BD%BF%E7%94%A8%E5%9C%BA%E6%99%AF%E6%8E%A8%E8%8D%90"><span class="toc-text">使用场景推荐</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

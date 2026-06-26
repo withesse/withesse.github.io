@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Redis Cluster集群架构与运维实战 · zt&#39;s Blog</title>
+  <meta name="description" content="全面解析Redis Cluster的Hash Slot分片机制、Gossip协议通信、故障转移流程，以及扩缩容和日常运维实践。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/redis-cluster-architecture/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Redis Cluster集群架构与运维实战">
+  <meta property="og:description" content="全面解析Redis Cluster的Hash Slot分片机制、Gossip协议通信、故障转移流程，以及扩缩容和日常运维实践。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/redis-cluster-architecture/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2024-12-24T16:00:00.000Z">
+  <meta property="article:modified_time" content="2024-12-24T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Redis Cluster集群架构与运维实战">
+  <meta name="twitter:description" content="全面解析Redis Cluster的Hash Slot分片机制、Gossip协议通信、故障转移流程，以及扩缩容和日常运维实践。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Redis Cluster集群架构与运维实战","description":"全面解析Redis Cluster的Hash Slot分片机制、Gossip协议通信、故障转移流程，以及扩缩容和日常运维实践。","datePublished":"2024-12-24T16:00:00.000Z","dateModified":"2024-12-24T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/redis-cluster-architecture/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Database","item":"https://withesse.co/categories/Database/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:330">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Database/">Database</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/redis/"><span class="hash">#</span>redis</a><a class="tag" href="/tags/sharding/"><span class="hash">#</span>sharding</a><a class="tag" href="/tags/cluster/"><span class="hash">#</span>cluster</a><a class="tag" href="/tags/high-availability/"><span class="hash">#</span>high-availability</a>
+        
+      </div>
+
+      <h1>Redis Cluster集群架构与运维实战</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2024.12.25</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 8 min</span>
+        </span>
+        <span class="wc"><span class="num">3.2k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#redis-cluster-%E6%9E%B6%E6%9E%84%E6%A6%82%E8%A7%88"><span class="toc-text">Redis Cluster 架构概览</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#hash-slot-%E5%88%86%E7%89%87%E6%9C%BA%E5%88%B6"><span class="toc-text">Hash Slot 分片机制</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#slot-%E8%AE%A1%E7%AE%97"><span class="toc-text">Slot 计算</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#hash-tag"><span class="toc-text">Hash Tag</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E6%98%AF-16384-%E4%B8%AA-slot"><span class="toc-text">为什么是 16384 个 Slot</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#gossip-%E5%8D%8F%E8%AE%AE%E4%B8%8E%E8%8A%82%E7%82%B9%E9%80%9A%E4%BF%A1"><span class="toc-text">Gossip 协议与节点通信</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%80%9A%E4%BF%A1%E6%9C%BA%E5%88%B6"><span class="toc-text">通信机制</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%B6%88%E6%81%AF%E7%B1%BB%E5%9E%8B"><span class="toc-text">消息类型</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#pfail-%E4%B8%8E-fail-%E7%9A%84%E5%8C%BA%E5%88%AB"><span class="toc-text">PFAIL 与 FAIL 的区别</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%95%85%E9%9A%9C%E8%BD%AC%E7%A7%BBfailover"><span class="toc-text">故障转移（Failover）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%95%85%E9%9A%9C%E8%BD%AC%E7%A7%BB%E6%B5%81%E7%A8%8B"><span class="toc-text">故障转移流程</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#slave-%E9%80%89%E4%B8%BE%E4%BC%98%E5%85%88%E7%BA%A7"><span class="toc-text">Slave 选举优先级</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#moved-%E4%B8%8E-ask-%E9%87%8D%E5%AE%9A%E5%90%91"><span class="toc-text">MOVED 与 ASK 重定向</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#moved-%E9%87%8D%E5%AE%9A%E5%90%91"><span class="toc-text">MOVED 重定向</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#ask-%E9%87%8D%E5%AE%9A%E5%90%91"><span class="toc-text">ASK 重定向</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%9B%86%E7%BE%A4%E6%90%AD%E5%BB%BA%E4%B8%8E%E7%AE%A1%E7%90%86"><span class="toc-text">集群搭建与管理</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%BF%AB%E9%80%9F%E6%90%AD%E5%BB%BA"><span class="toc-text">快速搭建</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%B8%B8%E7%94%A8%E9%9B%86%E7%BE%A4%E5%91%BD%E4%BB%A4"><span class="toc-text">常用集群命令</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9C%A8%E7%BA%BF%E6%89%A9%E5%AE%B9"><span class="toc-text">在线扩容</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9C%A8%E7%BA%BF%E7%BC%A9%E5%AE%B9"><span class="toc-text">在线缩容</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%89%8B%E5%8A%A8%E6%95%85%E9%9A%9C%E8%BD%AC%E7%A7%BB"><span class="toc-text">手动故障转移</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%B3%E9%94%AE%E9%85%8D%E7%BD%AE%E5%8F%82%E6%95%B0"><span class="toc-text">关键配置参数</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%9B%91%E6%8E%A7%E4%B8%8E%E8%BF%90%E7%BB%B4"><span class="toc-text">监控与运维</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%B3%E9%94%AE%E7%9B%91%E6%8E%A7%E6%8C%87%E6%A0%87"><span class="toc-text">关键监控指标</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%B8%B8%E8%A7%81%E9%97%AE%E9%A2%98%E4%B8%8E%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88"><span class="toc-text">常见问题与解决方案</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%A2%E6%88%B7%E7%AB%AF%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5"><span class="toc-text">客户端最佳实践</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="引言">引言</h2>
+<p>随着业务数据量和并发量的增长，单机Redis在内存容量和吞吐量上都会遇到瓶颈。Redis
+Cluster是Redis官方提供的分布式解决方案，它通过数据分片将数据分布到多个节点上，同时提供高可用和自动故障转移能力。本文将深入解析Redis
+Cluster的架构设计和运维实践。</p>
+<h2 id="redis-cluster-架构概览">Redis Cluster 架构概览</h2>
+<pre class="mermaid">graph TD
+    subgraph "Redis Cluster (6节点, 3主3从)"
+        M1["Master 1&lt;br/&gt;Slots: 0-5460"]
+        M2["Master 2&lt;br/&gt;Slots: 5461-10922"]
+        M3["Master 3&lt;br/&gt;Slots: 10923-16383"]
+        S1["Slave 1&lt;br/&gt;(Master 2的副本)"]
+        S2["Slave 2&lt;br/&gt;(Master 3的副本)"]
+        S3["Slave 3&lt;br/&gt;(Master 1的副本)"]
+
+        M1 &lt;--&gt;|Gossip| M2
+        M2 &lt;--&gt;|Gossip| M3
+        M1 &lt;--&gt;|Gossip| M3
+
+        M1 -.-&gt;|复制| S3
+        M2 -.-&gt;|复制| S1
+        M3 -.-&gt;|复制| S2
+    end
+
+    C[Client] --&gt; M1
+    C --&gt; M2
+    C --&gt; M3</pre>
+<p>Redis Cluster的核心特性： - <strong>数据分片</strong>：16384个Hash
+Slot分布在多个Master节点上 -
+<strong>高可用</strong>：每个Master有一个或多个Slave，Master故障时自动failover
+-
+<strong>去中心化</strong>：无代理层，客户端直连节点，节点间通过Gossip协议通信
+- <strong>线性扩展</strong>：可以在线添加/移除节点，数据自动迁移</p>
+<h2 id="hash-slot-分片机制">Hash Slot 分片机制</h2>
+<h3 id="slot-计算">Slot 计算</h3>
+<p>Redis Cluster使用CRC16算法将key映射到16384个slot中的一个：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs plaintext">SLOT = CRC16(key) % 16384<br></code></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 查看key属于哪个slot</span><br>redis-cli CLUSTER KEYSLOT mykey<br><span class="hljs-comment"># (integer) 14687</span><br><br>redis-cli CLUSTER KEYSLOT user:1001<br><span class="hljs-comment"># (integer) 5649</span><br></code></pre></td></tr></table></figure>
+<h3 id="hash-tag">Hash Tag</h3>
+<p>Hash
+Tag允许将相关的key映射到同一个slot，确保可以在同一个节点上执行多key操作：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 花括号内的部分用于计算slot</span><br><span class="hljs-comment"># 以下三个key都会根据 &quot;user:1001&quot; 计算slot</span><br>SET &#123;user:1001&#125;:name <span class="hljs-string">&quot;Alice&quot;</span><br>SET &#123;user:1001&#125;:age <span class="hljs-string">&quot;25&quot;</span><br>SET &#123;user:1001&#125;:email <span class="hljs-string">&quot;alice@example.com&quot;</span><br><br><span class="hljs-comment"># 现在可以在同一节点上执行MGET</span><br>MGET &#123;user:1001&#125;:name &#123;user:1001&#125;:age &#123;user:1001&#125;:email<br></code></pre></td></tr></table></figure>
+<h3 id="为什么是-16384-个-slot">为什么是 16384 个 Slot</h3>
+<p>Redis作者antirez解释了选择16384而非65536的原因：</p>
+<ol type="1">
+<li><strong>Gossip消息大小</strong>：每个节点发送的心跳包需要携带slot信息的bitmap，16384个slot只需2KB，而65536个slot需要8KB</li>
+<li><strong>集群规模</strong>：Redis
+Cluster建议不超过1000个节点，16384个slot完全够用</li>
+<li><strong>压缩率</strong>：16384个slot的bitmap在传输时压缩率更高</li>
+</ol>
+<h2 id="gossip-协议与节点通信">Gossip 协议与节点通信</h2>
+<h3 id="通信机制">通信机制</h3>
+<p>Redis
+Cluster节点间使用Gossip协议进行去中心化的信息交换，每个节点维护着集群的完整拓扑信息。</p>
+<pre class="mermaid">sequenceDiagram
+    participant N1 as Node 1
+    participant N2 as Node 2
+    participant N3 as Node 3
+
+    Note over N1, N3: 每秒随机选择节点发送PING
+
+    N1-&gt;&gt;N2: PING (携带自身信息 + 随机选择的其他节点信息)
+    N2-&gt;&gt;N1: PONG (携带自身信息 + 随机选择的其他节点信息)
+
+    Note over N1: 更新N2的状态信息
+    Note over N2: 更新N1的状态信息
+
+    N2-&gt;&gt;N3: PING
+    N3-&gt;&gt;N2: PONG
+
+    Note over N1, N3: 信息逐渐传播到所有节点</pre>
+<h3 id="消息类型">消息类型</h3>
+<table>
+<thead>
+<tr class="header">
+<th>消息</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>PING</td>
+<td>探测对方是否在线，携带集群状态信息</td>
+</tr>
+<tr class="even">
+<td>PONG</td>
+<td>回复PING，同样携带集群状态信息</td>
+</tr>
+<tr class="odd">
+<td>MEET</td>
+<td>邀请新节点加入集群</td>
+</tr>
+<tr class="even">
+<td>FAIL</td>
+<td>广播某节点已确认下线</td>
+</tr>
+<tr class="odd">
+<td>PUBLISH</td>
+<td>向集群中所有节点广播消息</td>
+</tr>
+<tr class="even">
+<td>UPDATE</td>
+<td>通知其他节点更新slot-node映射</td>
+</tr>
+</tbody>
+</table>
+<h3 id="pfail-与-fail-的区别">PFAIL 与 FAIL 的区别</h3>
+<pre class="mermaid">flowchart TD
+    A[Node A 向 Node B 发送PING] --&gt; B{Node B 响应?}
+    B --&gt;|是| C[正常]
+    B --&gt;|否,超过 cluster-node-timeout| D[Node A 标记 Node B 为 PFAIL&lt;br/&gt;主观下线]
+    D --&gt; E[Node A 通过 Gossip 传播 PFAIL 信息]
+    E --&gt; F{集群中过半Master&lt;br/&gt;标记 Node B 为 PFAIL?}
+    F --&gt;|是| G[Node B 被标记为 FAIL&lt;br/&gt;客观下线]
+    F --&gt;|否| H[继续等待更多节点确认]
+    G --&gt; I[广播 FAIL 消息到所有节点]
+    I --&gt; J[触发故障转移流程]</pre>
+<h2 id="故障转移failover">故障转移（Failover）</h2>
+<p>当Master节点被标记为FAIL后，其Slave节点会自动发起故障转移。</p>
+<h3 id="故障转移流程">故障转移流程</h3>
+<pre class="mermaid">sequenceDiagram
+    participant M as Master (故障)
+    participant S1 as Slave 1 (数据最新)
+    participant S2 as Slave 2
+    participant Others as 其他Master节点
+
+    Note over M: Master宕机
+
+    Others-&gt;&gt;Others: 检测到Master FAIL
+
+    Note over S1, S2: Slave发起选举
+
+    S1-&gt;&gt;Others: FAILOVER_AUTH_REQUEST (请求投票)
+    S2-&gt;&gt;Others: FAILOVER_AUTH_REQUEST (请求投票)
+
+    Note over Others: 每个Master只能投一票&lt;br/&gt;优先投给数据最新的Slave
+
+    Others-&gt;&gt;S1: FAILOVER_AUTH_ACK (投票给S1)
+
+    Note over S1: 获得过半Master投票
+
+    S1-&gt;&gt;S1: 1. 执行 SLAVEOF NO ONE
+    S1-&gt;&gt;S1: 2. 接管Master的所有Slot
+    S1-&gt;&gt;Others: 3. 广播新的配置纪元
+    S1-&gt;&gt;S2: 4. S2成为新Master(S1)的Slave
+
+    Note over S1: 故障转移完成,S1成为新Master</pre>
+<h3 id="slave-选举优先级">Slave 选举优先级</h3>
+<ol type="1">
+<li><strong>复制偏移量</strong>：数据最新（replication
+offset最大）的Slave优先</li>
+<li><strong>runid字典序</strong>：偏移量相同时，runid最小的Slave优先</li>
+<li><strong>slave-priority</strong>：配置值越小优先级越高（0表示不参与选举）</li>
+</ol>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 配置slave优先级</span><br>replica-priority 100  <span class="hljs-comment"># 默认值</span><br><span class="hljs-comment"># 设为0表示此Slave永远不会被选为Master</span><br></code></pre></td></tr></table></figure>
+<h2 id="moved-与-ask-重定向">MOVED 与 ASK 重定向</h2>
+<h3 id="moved-重定向">MOVED 重定向</h3>
+<p>当客户端请求的key不在当前节点负责的slot时，返回MOVED重定向：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 客户端连接到Node1，但key属于Node2负责的slot</span><br>redis-cli -c -h node1 -p 7000<br>&gt; SET user:5000 <span class="hljs-string">&quot;Alice&quot;</span><br>-&gt; Redirected to slot [4092] located at 192.168.1.102:7001<br>OK<br></code></pre></td></tr></table></figure>
+<pre class="mermaid">sequenceDiagram
+    participant C as Client
+    participant N1 as Node 1
+    participant N2 as Node 2
+
+    C-&gt;&gt;N1: SET user:5000 "Alice"
+    N1-&gt;&gt;C: MOVED 4092 192.168.1.102:7001
+    Note over C: 更新本地slot映射缓存
+    C-&gt;&gt;N2: SET user:5000 "Alice"
+    N2-&gt;&gt;C: OK</pre>
+<h3 id="ask-重定向">ASK 重定向</h3>
+<p>ASK重定向发生在slot迁移过程中，表示key可能正在迁移到目标节点：</p>
+<pre class="mermaid">sequenceDiagram
+    participant C as Client
+    participant Src as Source Node
+    participant Dst as Destination Node
+
+    Note over Src, Dst: Slot迁移进行中
+
+    C-&gt;&gt;Src: GET key1
+    Note over Src: key1已迁移到Dst
+    Src-&gt;&gt;C: ASK 4092 192.168.1.102:7001
+
+    Note over C: ASK是一次性重定向,不更新缓存
+
+    C-&gt;&gt;Dst: ASKING
+    Dst-&gt;&gt;C: OK
+    C-&gt;&gt;Dst: GET key1
+    Dst-&gt;&gt;C: "value1"</pre>
+<p><strong>MOVED vs ASK 的区别：</strong> -
+MOVED：slot已永久移动到新节点，客户端应更新缓存 -
+ASK：slot正在迁移中，仅本次请求重定向到目标节点，不更新缓存</p>
+<h2 id="集群搭建与管理">集群搭建与管理</h2>
+<h3 id="快速搭建">快速搭建</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 创建6个Redis实例的配置（3主3从）</span><br><span class="hljs-comment"># redis-7000.conf 示例</span><br>port 7000<br>cluster-enabled <span class="hljs-built_in">yes</span><br>cluster-config-file nodes-7000.conf<br>cluster-node-timeout 15000<br>appendonly <span class="hljs-built_in">yes</span><br><span class="hljs-built_in">dir</span> /data/redis/7000<br><br><span class="hljs-comment"># 启动6个实例</span><br>redis-server redis-7000.conf<br>redis-server redis-7001.conf<br>redis-server redis-7002.conf<br>redis-server redis-7003.conf<br>redis-server redis-7004.conf<br>redis-server redis-7005.conf<br><br><span class="hljs-comment"># 创建集群（3主3从）</span><br>redis-cli --cluster create \<br>    192.168.1.101:7000 \<br>    192.168.1.101:7001 \<br>    192.168.1.102:7002 \<br>    192.168.1.102:7003 \<br>    192.168.1.103:7004 \<br>    192.168.1.103:7005 \<br>    --cluster-replicas 1<br></code></pre></td></tr></table></figure>
+<h3 id="常用集群命令">常用集群命令</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 查看集群信息</span><br>redis-cli -c -p 7000 CLUSTER INFO<br><br><span class="hljs-comment"># 查看节点列表</span><br>redis-cli -c -p 7000 CLUSTER NODES<br><br><span class="hljs-comment"># 查看slot分配</span><br>redis-cli -c -p 7000 CLUSTER SLOTS<br><br><span class="hljs-comment"># 检查集群健康状态</span><br>redis-cli --cluster check 192.168.1.101:7000<br><br><span class="hljs-comment"># 查看集群信息摘要</span><br>redis-cli --cluster info 192.168.1.101:7000<br></code></pre></td></tr></table></figure>
+<h3 id="在线扩容">在线扩容</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 第一步: 添加新的Master节点</span><br>redis-cli --cluster add-node \<br>    192.168.1.104:7006 \     <span class="hljs-comment"># 新节点</span><br>    192.168.1.101:7000       <span class="hljs-comment"># 集群中任一已有节点</span><br><br><span class="hljs-comment"># 第二步: 为新Master迁移slot</span><br>redis-cli --cluster reshard 192.168.1.101:7000<br><span class="hljs-comment"># 交互式输入:</span><br><span class="hljs-comment"># How many slots do you want to move? 4096</span><br><span class="hljs-comment"># What is the receiving node ID? &lt;新节点ID&gt;</span><br><span class="hljs-comment"># Source node: all (从所有现有Master均匀迁移)</span><br><br><span class="hljs-comment"># 第三步: 添加新的Slave节点</span><br>redis-cli --cluster add-node \<br>    192.168.1.104:7007 \     <span class="hljs-comment"># 新Slave</span><br>    192.168.1.101:7000 \     <span class="hljs-comment"># 集群中任一已有节点</span><br>    --cluster-slave \<br>    --cluster-master-id &lt;新Master的ID&gt;<br></code></pre></td></tr></table></figure>
+<pre class="mermaid">flowchart LR
+    subgraph 扩容前
+        A["M1: 0-5460&lt;br/&gt;(5461 slots)"]
+        B["M2: 5461-10922&lt;br/&gt;(5462 slots)"]
+        C["M3: 10923-16383&lt;br/&gt;(5461 slots)"]
+    end
+
+    subgraph 扩容后
+        D["M1: 0-4095&lt;br/&gt;(4096 slots)"]
+        E["M2: 5461-9556&lt;br/&gt;(4096 slots)"]
+        F["M3: 10923-15018&lt;br/&gt;(4096 slots)"]
+        G["M4: 4096-5460&lt;br/&gt;9557-10922&lt;br/&gt;15019-16383&lt;br/&gt;(4096 slots)"]
+    end
+
+    A --&gt; D
+    B --&gt; E
+    C --&gt; F
+    A -.-&gt;|迁移| G
+    B -.-&gt;|迁移| G
+    C -.-&gt;|迁移| G</pre>
+<h3 id="在线缩容">在线缩容</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 第一步: 将待移除节点的slot迁移到其他节点</span><br>redis-cli --cluster reshard 192.168.1.101:7000<br><span class="hljs-comment"># 将所有slot从待移除节点迁出</span><br><br><span class="hljs-comment"># 第二步: 移除Slave节点</span><br>redis-cli --cluster del-node \<br>    192.168.1.101:7000 \     <span class="hljs-comment"># 集群中任一节点</span><br>    &lt;Slave节点ID&gt;<br><br><span class="hljs-comment"># 第三步: 移除Master节点（确保已无slot）</span><br>redis-cli --cluster del-node \<br>    192.168.1.101:7000 \<br>    &lt;Master节点ID&gt;<br></code></pre></td></tr></table></figure>
+<h3 id="手动故障转移">手动故障转移</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 在Slave上执行（用于计划内的主从切换）</span><br>redis-cli -p 7003 CLUSTER FAILOVER<br><br><span class="hljs-comment"># 强制故障转移（即使Master不可达）</span><br>redis-cli -p 7003 CLUSTER FAILOVER FORCE<br><br><span class="hljs-comment"># 强制接管（不经过选举，直接接管slot）</span><br>redis-cli -p 7003 CLUSTER FAILOVER TAKEOVER<br></code></pre></td></tr></table></figure>
+<h2 id="关键配置参数">关键配置参数</h2>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 集群超时时间（毫秒），节点无响应超过此时间被标记为PFAIL</span><br>cluster-node-timeout 15000<br><br><span class="hljs-comment"># 当负责的slot有部分不可用时，是否继续服务</span><br><span class="hljs-comment"># yes: 部分slot不可用时集群仍可用（默认no）</span><br>cluster-allow-reads-when-down no<br><br><span class="hljs-comment"># 当集群有slot未分配时，是否拒绝写入</span><br><span class="hljs-comment"># yes: 有未分配slot时拒绝所有写入（默认yes）</span><br>cluster-require-full-coverage <span class="hljs-built_in">yes</span><br><br><span class="hljs-comment"># Slave在与Master断开多长时间后不参与failover选举</span><br><span class="hljs-comment"># 0表示Slave总是参与选举</span><br>cluster-replica-validity-factor 10<br><span class="hljs-comment"># 实际超时 = cluster-node-timeout * cluster-replica-validity-factor</span><br><br><span class="hljs-comment"># 保证每个Master至少有N个Slave，否则不允许其Slave参与failover</span><br>cluster-allow-replica-migration <span class="hljs-built_in">yes</span><br></code></pre></td></tr></table></figure>
+<h2 id="监控与运维">监控与运维</h2>
+<h3 id="关键监控指标">关键监控指标</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 集群状态</span><br>redis-cli -p 7000 CLUSTER INFO<br><span class="hljs-comment"># cluster_state:ok              -- 集群状态(ok/fail)</span><br><span class="hljs-comment"># cluster_slots_assigned:16384  -- 已分配slot数</span><br><span class="hljs-comment"># cluster_slots_ok:16384        -- 正常slot数</span><br><span class="hljs-comment"># cluster_slots_pfail:0         -- PFAIL状态的slot数</span><br><span class="hljs-comment"># cluster_slots_fail:0          -- FAIL状态的slot数</span><br><span class="hljs-comment"># cluster_known_nodes:6         -- 已知节点数</span><br><span class="hljs-comment"># cluster_size:3                -- Master数量</span><br><br><span class="hljs-comment"># 内存使用</span><br>redis-cli -p 7000 INFO memory<br><span class="hljs-comment"># used_memory_human:2.50G</span><br><span class="hljs-comment"># maxmemory_human:4.00G</span><br><span class="hljs-comment"># mem_fragmentation_ratio:1.15</span><br><br><span class="hljs-comment"># 各节点QPS</span><br>redis-cli -p 7000 INFO stats<br><span class="hljs-comment"># instantaneous_ops_per_sec:25000</span><br><br><span class="hljs-comment"># 慢查询</span><br>redis-cli -p 7000 SLOWLOG GET 10<br></code></pre></td></tr></table></figure>
+<h3 id="常见问题与解决方案">常见问题与解决方案</h3>
+<p><strong>问题一：数据倾斜（Hot Spot）</strong></p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 查看各节点的key分布</span><br>redis-cli --cluster info 192.168.1.101:7000<br><br><span class="hljs-comment"># 解决方案:</span><br><span class="hljs-comment"># 1. 检查是否有大key</span><br>redis-cli --bigkeys -h 192.168.1.101 -p 7000<br><br><span class="hljs-comment"># 2. 使用Hash Tag时注意分散</span><br><span class="hljs-comment"># 避免所有数据都映射到同一个slot</span><br></code></pre></td></tr></table></figure>
+<p><strong>问题二：集群脑裂</strong></p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 网络分区可能导致脑裂</span><br><span class="hljs-comment"># 预防: 配置 min-replicas-to-write</span><br>min-replicas-to-write 1      <span class="hljs-comment"># Master至少有1个Slave才接受写入</span><br>min-replicas-max-lag 10       <span class="hljs-comment"># Slave延迟不超过10秒</span><br></code></pre></td></tr></table></figure>
+<p><strong>问题三：大Key迁移超时</strong></p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 大Key迁移可能导致阻塞</span><br><span class="hljs-comment"># 预防: 定期检查并拆分大Key</span><br><span class="hljs-comment"># cluster-migration-barrier 控制最少Slave数量</span><br></code></pre></td></tr></table></figure>
+<h2 id="客户端最佳实践">客户端最佳实践</h2>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">// Jedis集群客户端示例</span><br>Set&lt;HostAndPort&gt; nodes = <span class="hljs-keyword">new</span> <span class="hljs-title class_">HashSet</span>&lt;&gt;();<br>nodes.add(<span class="hljs-keyword">new</span> <span class="hljs-title class_">HostAndPort</span>(<span class="hljs-string">&quot;192.168.1.101&quot;</span>, <span class="hljs-number">7000</span>));<br>nodes.add(<span class="hljs-keyword">new</span> <span class="hljs-title class_">HostAndPort</span>(<span class="hljs-string">&quot;192.168.1.101&quot;</span>, <span class="hljs-number">7001</span>));<br>nodes.add(<span class="hljs-keyword">new</span> <span class="hljs-title class_">HostAndPort</span>(<span class="hljs-string">&quot;192.168.1.102&quot;</span>, <span class="hljs-number">7002</span>));<br><br><span class="hljs-type">JedisCluster</span> <span class="hljs-variable">jedisCluster</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">JedisCluster</span>(<br>    nodes,<br>    <span class="hljs-number">5000</span>,   <span class="hljs-comment">// connectionTimeout</span><br>    <span class="hljs-number">5000</span>,   <span class="hljs-comment">// soTimeout</span><br>    <span class="hljs-number">3</span>,      <span class="hljs-comment">// maxAttempts (MOVED/ASK重试次数)</span><br>    <span class="hljs-string">&quot;password&quot;</span>,<br>    <span class="hljs-keyword">new</span> <span class="hljs-title class_">GenericObjectPoolConfig</span>&lt;&gt;()<br>);<br><br><span class="hljs-comment">// Pipeline in Cluster: 需要按slot分组</span><br><span class="hljs-comment">// 使用Hash Tag确保相关key在同一slot</span><br>jedisCluster.set(<span class="hljs-string">&quot;&#123;order:1001&#125;:info&quot;</span>, <span class="hljs-string">&quot;...&quot;</span>);<br>jedisCluster.set(<span class="hljs-string">&quot;&#123;order:1001&#125;:items&quot;</span>, <span class="hljs-string">&quot;...&quot;</span>);<br></code></pre></td></tr></table></figure>
+<h2 id="总结">总结</h2>
+<p>Redis Cluster是一个设计精良的分布式系统：</p>
+<ul>
+<li><strong>Hash
+Slot分片</strong>提供了灵活的数据分布方式，16384个slot在集群节点间按需分配</li>
+<li><strong>Gossip协议</strong>实现了去中心化的节点间通信，自动传播集群拓扑变化</li>
+<li><strong>自动故障转移</strong>基于PFAIL/FAIL两阶段检测和Slave选举机制，保证了高可用性</li>
+<li><strong>在线扩缩容</strong>通过slot迁移实现，对业务透明</li>
+<li>运维中需要特别关注<strong>数据倾斜、网络分区和大Key问题</strong></li>
+<li>客户端需要正确处理<strong>MOVED和ASK重定向</strong>，并使用<strong>Hash
+Tag</strong>管理相关key的分布</li>
+</ul>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2024-12-25</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">3.2k 字 · 8 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/spring-boot-auto-configuration/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Spring Boot自动配置原理深度剖析</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/java-threadpool-best-practices/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Java线程池最佳实践与源码分析</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#redis-cluster-%E6%9E%B6%E6%9E%84%E6%A6%82%E8%A7%88"><span class="toc-text">Redis Cluster 架构概览</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#hash-slot-%E5%88%86%E7%89%87%E6%9C%BA%E5%88%B6"><span class="toc-text">Hash Slot 分片机制</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#slot-%E8%AE%A1%E7%AE%97"><span class="toc-text">Slot 计算</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#hash-tag"><span class="toc-text">Hash Tag</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E6%98%AF-16384-%E4%B8%AA-slot"><span class="toc-text">为什么是 16384 个 Slot</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#gossip-%E5%8D%8F%E8%AE%AE%E4%B8%8E%E8%8A%82%E7%82%B9%E9%80%9A%E4%BF%A1"><span class="toc-text">Gossip 协议与节点通信</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%80%9A%E4%BF%A1%E6%9C%BA%E5%88%B6"><span class="toc-text">通信机制</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%B6%88%E6%81%AF%E7%B1%BB%E5%9E%8B"><span class="toc-text">消息类型</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#pfail-%E4%B8%8E-fail-%E7%9A%84%E5%8C%BA%E5%88%AB"><span class="toc-text">PFAIL 与 FAIL 的区别</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%95%85%E9%9A%9C%E8%BD%AC%E7%A7%BBfailover"><span class="toc-text">故障转移（Failover）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%95%85%E9%9A%9C%E8%BD%AC%E7%A7%BB%E6%B5%81%E7%A8%8B"><span class="toc-text">故障转移流程</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#slave-%E9%80%89%E4%B8%BE%E4%BC%98%E5%85%88%E7%BA%A7"><span class="toc-text">Slave 选举优先级</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#moved-%E4%B8%8E-ask-%E9%87%8D%E5%AE%9A%E5%90%91"><span class="toc-text">MOVED 与 ASK 重定向</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#moved-%E9%87%8D%E5%AE%9A%E5%90%91"><span class="toc-text">MOVED 重定向</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#ask-%E9%87%8D%E5%AE%9A%E5%90%91"><span class="toc-text">ASK 重定向</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%9B%86%E7%BE%A4%E6%90%AD%E5%BB%BA%E4%B8%8E%E7%AE%A1%E7%90%86"><span class="toc-text">集群搭建与管理</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%BF%AB%E9%80%9F%E6%90%AD%E5%BB%BA"><span class="toc-text">快速搭建</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%B8%B8%E7%94%A8%E9%9B%86%E7%BE%A4%E5%91%BD%E4%BB%A4"><span class="toc-text">常用集群命令</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9C%A8%E7%BA%BF%E6%89%A9%E5%AE%B9"><span class="toc-text">在线扩容</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9C%A8%E7%BA%BF%E7%BC%A9%E5%AE%B9"><span class="toc-text">在线缩容</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%89%8B%E5%8A%A8%E6%95%85%E9%9A%9C%E8%BD%AC%E7%A7%BB"><span class="toc-text">手动故障转移</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%B3%E9%94%AE%E9%85%8D%E7%BD%AE%E5%8F%82%E6%95%B0"><span class="toc-text">关键配置参数</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%9B%91%E6%8E%A7%E4%B8%8E%E8%BF%90%E7%BB%B4"><span class="toc-text">监控与运维</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%B3%E9%94%AE%E7%9B%91%E6%8E%A7%E6%8C%87%E6%A0%87"><span class="toc-text">关键监控指标</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%B8%B8%E8%A7%81%E9%97%AE%E9%A2%98%E4%B8%8E%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88"><span class="toc-text">常见问题与解决方案</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%A2%E6%88%B7%E7%AB%AF%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5"><span class="toc-text">客户端最佳实践</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

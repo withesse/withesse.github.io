@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TiDB分布式数据库架构解析 · zt&#39;s Blog</title>
+  <meta name="description" content="深入解析TiDB分布式数据库的整体架构，包括TiDB/TiKV/PD三大组件、Raft复制、HTAP能力、TiFlash列存引擎等核心设计。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/tidb-distributed-database/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="TiDB分布式数据库架构解析">
+  <meta property="og:description" content="深入解析TiDB分布式数据库的整体架构，包括TiDB/TiKV/PD三大组件、Raft复制、HTAP能力、TiFlash列存引擎等核心设计。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/tidb-distributed-database/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2025-03-11T16:00:00.000Z">
+  <meta property="article:modified_time" content="2025-03-11T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="TiDB分布式数据库架构解析">
+  <meta name="twitter:description" content="深入解析TiDB分布式数据库的整体架构，包括TiDB/TiKV/PD三大组件、Raft复制、HTAP能力、TiFlash列存引擎等核心设计。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"TiDB分布式数据库架构解析","description":"深入解析TiDB分布式数据库的整体架构，包括TiDB/TiKV/PD三大组件、Raft复制、HTAP能力、TiFlash列存引擎等核心设计。","datePublished":"2025-03-11T16:00:00.000Z","dateModified":"2025-03-11T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/tidb-distributed-database/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Database","item":"https://withesse.co/categories/Database/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:330">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Database/">Database</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/tidb/"><span class="hash">#</span>tidb</a><a class="tag" href="/tags/distributed-database/"><span class="hash">#</span>distributed-database</a><a class="tag" href="/tags/newsql/"><span class="hash">#</span>newsql</a>
+        
+      </div>
+
+      <h1>TiDB分布式数据库架构解析</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2025.03.12</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 8 min</span>
+        </span>
+        <span class="wc"><span class="num">3.1k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#tidb-%E6%95%B4%E4%BD%93%E6%9E%B6%E6%9E%84"><span class="toc-text">TiDB 整体架构</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#tidb-serversql-%E8%AE%A1%E7%AE%97%E5%B1%82"><span class="toc-text">TiDB Server：SQL 计算层</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8A%9F%E8%83%BD%E8%81%8C%E8%B4%A3"><span class="toc-text">功能职责</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#sql-%E5%85%BC%E5%AE%B9%E6%80%A7"><span class="toc-text">SQL 兼容性</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%AE%A1%E7%AE%97%E4%B8%8B%E6%8E%A8"><span class="toc-text">计算下推</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#tikv%E5%88%86%E5%B8%83%E5%BC%8F%E5%AD%98%E5%82%A8%E5%B1%82"><span class="toc-text">TiKV：分布式存储层</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#region-%E5%88%86%E7%89%87"><span class="toc-text">Region 分片</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E7%BC%96%E7%A0%81"><span class="toc-text">数据编码</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#raft-%E5%A4%8D%E5%88%B6"><span class="toc-text">Raft 复制</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#multi-raft"><span class="toc-text">Multi-Raft</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#pd%E8%B0%83%E5%BA%A6%E4%B8%AD%E5%BF%83"><span class="toc-text">PD：调度中心</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#pd-%E7%9A%84%E6%A0%B8%E5%BF%83%E8%81%8C%E8%B4%A3"><span class="toc-text">PD 的核心职责</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#tsotimestamp-oracle"><span class="toc-text">TSO（Timestamp Oracle）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%B0%83%E5%BA%A6%E7%AD%96%E7%95%A5"><span class="toc-text">调度策略</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1"><span class="toc-text">分布式事务</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BA%8B%E5%8A%A1%E6%89%A7%E8%A1%8C%E6%B5%81%E7%A8%8B"><span class="toc-text">事务执行流程</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B9%90%E8%A7%82%E4%BA%8B%E5%8A%A1-vs-%E6%82%B2%E8%A7%82%E4%BA%8B%E5%8A%A1"><span class="toc-text">乐观事务 vs 悲观事务</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#htap-%E4%B8%8E-tiflash"><span class="toc-text">HTAP 与 TiFlash</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#htap-%E6%9E%B6%E6%9E%84"><span class="toc-text">HTAP 架构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#tiflash-%E9%85%8D%E7%BD%AE"><span class="toc-text">TiFlash 配置</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#tiflash-vs-tikv-%E5%AF%B9%E6%AF%94"><span class="toc-text">TiFlash vs TiKV 对比</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#tidb-vs-cockroachdb"><span class="toc-text">TiDB vs CockroachDB</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%BF%90%E7%BB%B4%E4%B8%8E%E7%9B%91%E6%8E%A7"><span class="toc-text">运维与监控</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%B3%E9%94%AE%E7%9B%91%E6%8E%A7%E6%8C%87%E6%A0%87"><span class="toc-text">关键监控指标</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%89%A9%E7%BC%A9%E5%AE%B9%E6%93%8D%E4%BD%9C"><span class="toc-text">扩缩容操作</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="引言">引言</h2>
+<p>传统的分库分表方案虽然解决了单机数据库的容量和性能瓶颈，但引入了大量的业务复杂性：跨分片查询、分布式事务、数据迁移等问题让开发和运维成本居高不下。NewSQL数据库的出现正是为了在不牺牲SQL能力的前提下，提供原生的分布式存储和计算能力。TiDB是国内最具代表性的NewSQL数据库，由PingCAP公司开发，兼容MySQL协议，提供水平扩展、强一致性和HTAP能力。</p>
+<h2 id="tidb-整体架构">TiDB 整体架构</h2>
+<pre class="mermaid">graph TD
+    Client[客户端&lt;br/&gt;MySQL协议兼容] --&gt; TiDB1[TiDB Server 1&lt;br/&gt;SQL Layer]
+    Client --&gt; TiDB2[TiDB Server 2&lt;br/&gt;SQL Layer]
+    Client --&gt; TiDB3[TiDB Server N&lt;br/&gt;SQL Layer]
+
+    TiDB1 --&gt; PD[PD Cluster&lt;br/&gt;Placement Driver&lt;br/&gt;元数据 + 调度]
+    TiDB2 --&gt; PD
+    TiDB3 --&gt; PD
+
+    TiDB1 --&gt; TiKV1[TiKV Node 1&lt;br/&gt;Region 1, Region 5]
+    TiDB1 --&gt; TiKV2[TiKV Node 2&lt;br/&gt;Region 2, Region 6]
+    TiDB2 --&gt; TiKV3[TiKV Node 3&lt;br/&gt;Region 3, Region 7]
+    TiDB3 --&gt; TiKV4[TiKV Node N&lt;br/&gt;Region 4, Region 8]
+
+    TiDB1 --&gt; TiFlash1[TiFlash Node&lt;br/&gt;列式存储副本]
+
+    PD --&gt; TiKV1
+    PD --&gt; TiKV2
+    PD --&gt; TiKV3
+    PD --&gt; TiKV4
+
+    TiKV1 &lt;--&gt;|Raft| TiKV2
+    TiKV2 &lt;--&gt;|Raft| TiKV3
+    TiKV3 &lt;--&gt;|Raft| TiKV4</pre>
+<p>TiDB的架构由三个核心组件组成：</p>
+<table>
+<thead>
+<tr class="header">
+<th>组件</th>
+<th>角色</th>
+<th>特点</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>TiDB Server</td>
+<td>SQL计算层</td>
+<td>无状态，水平扩展，MySQL协议兼容</td>
+</tr>
+<tr class="even">
+<td>TiKV</td>
+<td>分布式存储层</td>
+<td>有状态，KV存储，Raft复制</td>
+</tr>
+<tr class="odd">
+<td>PD (Placement Driver)</td>
+<td>调度中心</td>
+<td>元数据管理，TSO时钟，负载均衡</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tidb-serversql-计算层">TiDB Server：SQL 计算层</h2>
+<h3 id="功能职责">功能职责</h3>
+<p>TiDB
+Server是无状态的SQL计算节点，负责接收SQL请求、解析优化、生成执行计划并从TiKV获取数据。</p>
+<pre class="mermaid">flowchart TD
+    A[Client SQL] --&gt; B[Protocol Layer&lt;br/&gt;MySQL协议解析]
+    B --&gt; C[Parser&lt;br/&gt;SQL解析为AST]
+    C --&gt; D[Planner&lt;br/&gt;逻辑优化 + 物理优化]
+    D --&gt; E[Executor&lt;br/&gt;火山模型/向量化执行]
+    E --&gt; F{DistSQL API}
+    F --&gt; G[TiKV Coprocessor&lt;br/&gt;下推计算]
+    F --&gt; H[TiFlash&lt;br/&gt;OLAP查询]</pre>
+<h3 id="sql-兼容性">SQL 兼容性</h3>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- TiDB高度兼容MySQL语法</span><br><span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">TABLE</span> orders (<br>    id <span class="hljs-type">BIGINT</span> <span class="hljs-keyword">PRIMARY</span> KEY AUTO_INCREMENT,<br>    user_id <span class="hljs-type">BIGINT</span> <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span>,<br>    amount <span class="hljs-type">DECIMAL</span>(<span class="hljs-number">10</span>, <span class="hljs-number">2</span>),<br>    status <span class="hljs-type">VARCHAR</span>(<span class="hljs-number">20</span>),<br>    created_at DATETIME <span class="hljs-keyword">DEFAULT</span> <span class="hljs-built_in">CURRENT_TIMESTAMP</span>,<br>    INDEX idx_user_id (user_id),<br>    INDEX idx_status_time (status, created_at)<br>);<br><br><span class="hljs-comment">-- 支持MySQL的大部分功能</span><br><span class="hljs-comment">-- 事务</span><br><span class="hljs-keyword">BEGIN</span>;<br><span class="hljs-keyword">UPDATE</span> accounts <span class="hljs-keyword">SET</span> balance <span class="hljs-operator">=</span> balance <span class="hljs-operator">-</span> <span class="hljs-number">100</span> <span class="hljs-keyword">WHERE</span> id <span class="hljs-operator">=</span> <span class="hljs-number">1</span>;<br><span class="hljs-keyword">UPDATE</span> accounts <span class="hljs-keyword">SET</span> balance <span class="hljs-operator">=</span> balance <span class="hljs-operator">+</span> <span class="hljs-number">100</span> <span class="hljs-keyword">WHERE</span> id <span class="hljs-operator">=</span> <span class="hljs-number">2</span>;<br><span class="hljs-keyword">COMMIT</span>;<br><br><span class="hljs-comment">-- 窗口函数</span><br><span class="hljs-keyword">SELECT</span> user_id, amount,<br>    <span class="hljs-built_in">ROW_NUMBER</span>() <span class="hljs-keyword">OVER</span> (<span class="hljs-keyword">PARTITION</span> <span class="hljs-keyword">BY</span> user_id <span class="hljs-keyword">ORDER</span> <span class="hljs-keyword">BY</span> amount <span class="hljs-keyword">DESC</span>) <span class="hljs-keyword">AS</span> rn<br><span class="hljs-keyword">FROM</span> orders;<br><br><span class="hljs-comment">-- CTE</span><br><span class="hljs-keyword">WITH</span> <span class="hljs-keyword">RECURSIVE</span> cte <span class="hljs-keyword">AS</span> (<br>    <span class="hljs-keyword">SELECT</span> <span class="hljs-number">1</span> <span class="hljs-keyword">AS</span> n<br>    <span class="hljs-keyword">UNION</span> <span class="hljs-keyword">ALL</span><br>    <span class="hljs-keyword">SELECT</span> n <span class="hljs-operator">+</span> <span class="hljs-number">1</span> <span class="hljs-keyword">FROM</span> cte <span class="hljs-keyword">WHERE</span> n <span class="hljs-operator">&lt;</span> <span class="hljs-number">10</span><br>)<br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> cte;<br><br><span class="hljs-comment">-- JSON支持</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> products <span class="hljs-keyword">WHERE</span> JSON_EXTRACT(attributes, <span class="hljs-string">&#x27;$.brand&#x27;</span>) <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;Apple&#x27;</span>;<br><br><span class="hljs-comment">-- 视图</span><br><span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">VIEW</span> active_orders <span class="hljs-keyword">AS</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> orders <span class="hljs-keyword">WHERE</span> status <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;active&#x27;</span>;<br></code></pre></td></tr></table></figure>
+<h3 id="计算下推">计算下推</h3>
+<p>TiDB会将部分计算下推到TiKV的Coprocessor执行，减少网络传输：</p>
+<pre class="mermaid">sequenceDiagram
+    participant TiDB as TiDB Server
+    participant TiKV1 as TiKV Region 1
+    participant TiKV2 as TiKV Region 2
+    participant TiKV3 as TiKV Region 3
+
+    Note over TiDB: SELECT COUNT(*) FROM orders WHERE status='paid'
+
+    TiDB-&gt;&gt;TiKV1: Coprocessor请求&lt;br/&gt;过滤 status='paid' 并 COUNT
+    TiDB-&gt;&gt;TiKV2: Coprocessor请求
+    TiDB-&gt;&gt;TiKV3: Coprocessor请求
+
+    TiKV1-&gt;&gt;TiDB: count=1500
+    TiKV2-&gt;&gt;TiDB: count=2300
+    TiKV3-&gt;&gt;TiDB: count=1800
+
+    Note over TiDB: 汇总: 1500+2300+1800=5600
+    TiDB-&gt;&gt;TiDB: 返回 COUNT=5600</pre>
+<p>可下推的操作： - 过滤条件（WHERE） - 聚合函数（COUNT, SUM, AVG, MIN,
+MAX） - TopN（ORDER BY + LIMIT） - 表达式计算</p>
+<h2 id="tikv分布式存储层">TiKV：分布式存储层</h2>
+<h3 id="region-分片">Region 分片</h3>
+<p>TiKV将整个Key-Value空间按Key的范围划分为多个Region，每个Region默认大小96MB。</p>
+<pre class="mermaid">graph LR
+    subgraph "Key Space"
+        R1["Region 1&lt;br/&gt;[Key_a, Key_d)"]
+        R2["Region 2&lt;br/&gt;[Key_d, Key_h)"]
+        R3["Region 3&lt;br/&gt;[Key_h, Key_m)"]
+        R4["Region 4&lt;br/&gt;[Key_m, Key_z)"]
+    end
+
+    subgraph "TiKV Nodes"
+        N1[Node 1]
+        N2[Node 2]
+        N3[Node 3]
+    end
+
+    R1 --&gt;|Leader| N1
+    R1 --&gt;|Follower| N2
+    R1 --&gt;|Follower| N3
+    R2 --&gt;|Leader| N2
+    R3 --&gt;|Leader| N3
+    R4 --&gt;|Leader| N1</pre>
+<h3 id="数据编码">数据编码</h3>
+<p>TiDB将SQL表数据编码为KV对存储在TiKV中：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><code class="hljs plaintext">行数据编码:<br>Key:   tablePrefix&#123;tableID&#125;_recordPrefixSep&#123;rowID&#125;<br>Value: [col1, col2, col3, ...]<br><br>索引数据编码:<br>唯一索引:<br>Key:   tablePrefix&#123;tableID&#125;_indexPrefixSep&#123;indexID&#125;&#123;indexColumnValues&#125;<br>Value: rowID<br><br>非唯一索引:<br>Key:   tablePrefix&#123;tableID&#125;_indexPrefixSep&#123;indexID&#125;&#123;indexColumnValues&#125;&#123;rowID&#125;<br>Value: null<br><br>示例: 表ID=10, 索引ID=1<br>行记录:  t10_r1 -&gt; [&quot;Alice&quot;, 25, &quot;alice@example.com&quot;]<br>索引记录: t10_i1_Alice -&gt; 1  (name索引)<br></code></pre></td></tr></table></figure>
+<h3 id="raft-复制">Raft 复制</h3>
+<p>每个Region使用Raft协议在多个TiKV节点间复制，保证数据的强一致性。</p>
+<pre class="mermaid">sequenceDiagram
+    participant C as TiDB
+    participant L as Leader
+    participant F1 as Follower 1
+    participant F2 as Follower 2
+
+    C-&gt;&gt;L: Write Request
+    L-&gt;&gt;L: 写入Raft Log
+    L-&gt;&gt;F1: Append Entries
+    L-&gt;&gt;F2: Append Entries
+
+    F1-&gt;&gt;L: ACK
+    F2-&gt;&gt;L: ACK
+
+    Note over L: 过半数确认(Quorum)&lt;br/&gt;提交日志
+
+    L-&gt;&gt;L: Apply to RocksDB
+    L-&gt;&gt;C: Write Success
+
+    Note over F1, F2: 异步Apply to RocksDB</pre>
+<p><strong>Raft的关键特性：</strong> -
+<strong>Leader选举</strong>：每个Region的Raft
+Group选举一个Leader，所有读写请求由Leader处理 -
+<strong>日志复制</strong>：写入必须在过半数节点（Quorum）确认后才提交 -
+<strong>Leader
+Transfer</strong>：PD可以调度Leader在节点间迁移，实现负载均衡</p>
+<h3 id="multi-raft">Multi-Raft</h3>
+<p>TiKV采用Multi-Raft架构，每个Region是一个独立的Raft Group：</p>
+<pre class="mermaid">graph TD
+    subgraph "Node 1"
+        A1["Region 1 (Leader)"]
+        A2["Region 3 (Follower)"]
+        A3["Region 5 (Leader)"]
+    end
+
+    subgraph "Node 2"
+        B1["Region 1 (Follower)"]
+        B2["Region 3 (Leader)"]
+        B3["Region 5 (Follower)"]
+    end
+
+    subgraph "Node 3"
+        C1["Region 1 (Follower)"]
+        C2["Region 3 (Follower)"]
+        C3["Region 5 (Follower)"]
+    end
+
+    A1 &lt;--&gt;|Raft| B1
+    A1 &lt;--&gt;|Raft| C1
+    A2 &lt;--&gt;|Raft| B2
+    A2 &lt;--&gt;|Raft| C2
+    A3 &lt;--&gt;|Raft| B3
+    A3 &lt;--&gt;|Raft| C3</pre>
+<h2 id="pd调度中心">PD：调度中心</h2>
+<h3 id="pd-的核心职责">PD 的核心职责</h3>
+<pre class="mermaid">graph TD
+    PD[PD Cluster&lt;br/&gt;基于etcd] --&gt; F1[TSO时钟分配&lt;br/&gt;全局唯一递增时间戳]
+    PD --&gt; F2[元数据存储&lt;br/&gt;Region -&gt; Store映射]
+    PD --&gt; F3[Region调度&lt;br/&gt;负载均衡 热点打散]
+    PD --&gt; F4[Label调度&lt;br/&gt;跨机房/跨AZ部署]</pre>
+<h3 id="tsotimestamp-oracle">TSO（Timestamp Oracle）</h3>
+<p>PD负责分配全局唯一的时间戳（TSO），用于MVCC和事务排序：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><code class="hljs plaintext">TSO格式 (64 bits):<br>+----------------------------------+------------------+<br>|     物理时间 (ms)                 |   逻辑计数器      |<br>|     高46位                        |   低18位         |<br>+----------------------------------+------------------+<br><br>每毫秒可分配 2^18 = 262,144 个时间戳<br></code></pre></td></tr></table></figure>
+<h3 id="调度策略">调度策略</h3>
+<pre class="mermaid">flowchart TD
+    A[PD调度器] --&gt; B[Region均衡调度]
+    A --&gt; C[Leader均衡调度]
+    A --&gt; D[热点调度]
+    A --&gt; E[Region分裂/合并]
+
+    B --&gt; B1["当节点间Region数量差异过大&lt;br/&gt;迁移Region到负载低的节点"]
+    C --&gt; C1["当节点间Leader数量差异过大&lt;br/&gt;Transfer Leader到负载低的节点"]
+    D --&gt; D1["检测热点Region&lt;br/&gt;分裂热点Region&lt;br/&gt;调度Leader到不同节点"]
+    E --&gt; E1["Region &gt; 96MB: 分裂为两个Region&lt;br/&gt;Region &lt; 20MB且相邻: 合并"]</pre>
+<h2 id="分布式事务">分布式事务</h2>
+<p>TiDB实现了Percolator模型的分布式事务，支持Snapshot Isolation。</p>
+<h3 id="事务执行流程">事务执行流程</h3>
+<pre class="mermaid">sequenceDiagram
+    participant C as TiDB
+    participant PD as PD (TSO)
+    participant TiKV as TiKV
+
+    Note over C: BEGIN TRANSACTION
+
+    C-&gt;&gt;PD: 获取 start_ts
+    PD-&gt;&gt;C: start_ts = 100
+
+    Note over C: 执行SQL读写操作...
+    C-&gt;&gt;TiKV: 读取数据 (snapshot at ts=100)
+    TiKV-&gt;&gt;C: 返回数据
+    C-&gt;&gt;C: 在内存缓存写入
+
+    Note over C: COMMIT
+
+    Note over C, TiKV: Phase 1: Prewrite
+    C-&gt;&gt;TiKV: Prewrite (选择一个key作为Primary)
+    TiKV-&gt;&gt;TiKV: 检查冲突, 写入Lock + Data
+    TiKV-&gt;&gt;C: Prewrite OK
+
+    C-&gt;&gt;PD: 获取 commit_ts
+    PD-&gt;&gt;C: commit_ts = 105
+
+    Note over C, TiKV: Phase 2: Commit
+    C-&gt;&gt;TiKV: Commit Primary Key (commit_ts=105)
+    TiKV-&gt;&gt;TiKV: 清除Lock, 写入Commit记录
+    TiKV-&gt;&gt;C: Commit OK
+
+    Note over C: 事务成功, 异步清理Secondary Locks
+    C-&gt;&gt;TiKV: 异步Commit Secondary Keys</pre>
+<h3 id="乐观事务-vs-悲观事务">乐观事务 vs 悲观事务</h3>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- TiDB默认使用悲观事务（与MySQL行为一致）</span><br><span class="hljs-comment">-- tidb_txn_mode = &#x27;pessimistic&#x27; (默认)</span><br><br><span class="hljs-comment">-- 悲观事务：在执行DML时立即加锁</span><br><span class="hljs-keyword">BEGIN</span>;<br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> accounts <span class="hljs-keyword">WHERE</span> id <span class="hljs-operator">=</span> <span class="hljs-number">1</span> <span class="hljs-keyword">FOR</span> <span class="hljs-keyword">UPDATE</span>;  <span class="hljs-comment">-- 立即加悲观锁</span><br><span class="hljs-keyword">UPDATE</span> accounts <span class="hljs-keyword">SET</span> balance <span class="hljs-operator">=</span> balance <span class="hljs-operator">-</span> <span class="hljs-number">100</span> <span class="hljs-keyword">WHERE</span> id <span class="hljs-operator">=</span> <span class="hljs-number">1</span>;<br><span class="hljs-keyword">COMMIT</span>;<br><br><span class="hljs-comment">-- 乐观事务：只在Commit时检查冲突</span><br><span class="hljs-keyword">SET</span> tidb_txn_mode <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;optimistic&#x27;</span>;<br><span class="hljs-keyword">BEGIN</span>;<br><span class="hljs-keyword">UPDATE</span> accounts <span class="hljs-keyword">SET</span> balance <span class="hljs-operator">=</span> balance <span class="hljs-operator">-</span> <span class="hljs-number">100</span> <span class="hljs-keyword">WHERE</span> id <span class="hljs-operator">=</span> <span class="hljs-number">1</span>;<br><span class="hljs-comment">-- 不加锁，只在Commit时检查</span><br><span class="hljs-keyword">COMMIT</span>;  <span class="hljs-comment">-- 如果有冲突，事务会失败，需要重试</span><br></code></pre></td></tr></table></figure>
+<table>
+<thead>
+<tr class="header">
+<th>维度</th>
+<th>悲观事务</th>
+<th>乐观事务</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>冲突检测时机</td>
+<td>DML执行时</td>
+<td>Commit时</td>
+</tr>
+<tr class="even">
+<td>冲突处理</td>
+<td>等待锁释放</td>
+<td>事务重试</td>
+</tr>
+<tr class="odd">
+<td>适用场景</td>
+<td>高冲突（默认推荐）</td>
+<td>低冲突，高吞吐</td>
+</tr>
+<tr class="even">
+<td>MySQL兼容性</td>
+<td>行为一致</td>
+<td>需要应用层重试逻辑</td>
+</tr>
+</tbody>
+</table>
+<h2 id="htap-与-tiflash">HTAP 与 TiFlash</h2>
+<h3 id="htap-架构">HTAP 架构</h3>
+<p>TiDB通过TiFlash列式存储引擎实现了HTAP（混合事务分析处理）能力。</p>
+<pre class="mermaid">graph TD
+    subgraph "OLTP Path"
+        TiDB1[TiDB] --&gt; TiKV1[TiKV&lt;br/&gt;行存储&lt;br/&gt;事务处理]
+    end
+
+    subgraph "OLAP Path"
+        TiDB2[TiDB] --&gt; TiFlash1[TiFlash&lt;br/&gt;列存储&lt;br/&gt;分析查询]
+    end
+
+    TiKV1 --&gt;|Raft Learner&lt;br/&gt;异步复制| TiFlash1
+
+    subgraph "智能路由"
+        TiDB3[TiDB优化器] --&gt; R{查询类型?}
+        R --&gt;|点查/事务| TiKV1
+        R --&gt;|分析/聚合| TiFlash1
+        R --&gt;|混合| TiKV1
+        R --&gt;|混合| TiFlash1
+    end</pre>
+<h3 id="tiflash-配置">TiFlash 配置</h3>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 为表创建TiFlash副本</span><br><span class="hljs-keyword">ALTER</span> <span class="hljs-keyword">TABLE</span> orders <span class="hljs-keyword">SET</span> TIFLASH REPLICA <span class="hljs-number">1</span>;<br><br><span class="hljs-comment">-- 查看TiFlash副本进度</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> information_schema.tiflash_replica;<br><br><span class="hljs-comment">-- TiDB优化器自动选择行存还是列存</span><br><span class="hljs-comment">-- 也可以通过Hint强制指定</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-comment">/*+ READ_FROM_STORAGE(TIFLASH[orders]) */</span><br>    DATE_FORMAT(created_at, <span class="hljs-string">&#x27;%Y-%m&#x27;</span>) <span class="hljs-keyword">AS</span> <span class="hljs-keyword">month</span>,<br>    <span class="hljs-built_in">COUNT</span>(<span class="hljs-operator">*</span>) <span class="hljs-keyword">AS</span> order_count,<br>    <span class="hljs-built_in">SUM</span>(amount) <span class="hljs-keyword">AS</span> total_amount<br><span class="hljs-keyword">FROM</span> orders<br><span class="hljs-keyword">WHERE</span> created_at <span class="hljs-operator">&gt;=</span> <span class="hljs-string">&#x27;2025-01-01&#x27;</span><br><span class="hljs-keyword">GROUP</span> <span class="hljs-keyword">BY</span> <span class="hljs-keyword">month</span><br><span class="hljs-keyword">ORDER</span> <span class="hljs-keyword">BY</span> <span class="hljs-keyword">month</span>;<br><br><span class="hljs-comment">-- 强制使用TiKV</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-comment">/*+ READ_FROM_STORAGE(TIKV[orders]) */</span><br>    <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> orders <span class="hljs-keyword">WHERE</span> id <span class="hljs-operator">=</span> <span class="hljs-number">12345</span>;<br></code></pre></td></tr></table></figure>
+<h3 id="tiflash-vs-tikv-对比">TiFlash vs TiKV 对比</h3>
+<table>
+<thead>
+<tr class="header">
+<th>维度</th>
+<th>TiKV</th>
+<th>TiFlash</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>存储格式</td>
+<td>行存（RocksDB）</td>
+<td>列存（Delta Tree）</td>
+</tr>
+<tr class="even">
+<td>适用查询</td>
+<td>点查、小范围查询</td>
+<td>聚合、扫描、分析</td>
+</tr>
+<tr class="odd">
+<td>数据一致性</td>
+<td>Raft Leader读</td>
+<td>Raft Learner，强一致读</td>
+</tr>
+<tr class="even">
+<td>压缩率</td>
+<td>一般</td>
+<td>高（列式压缩）</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tidb-vs-cockroachdb">TiDB vs CockroachDB</h2>
+<pre class="mermaid">graph LR
+    subgraph "TiDB"
+        TA[MySQL协议兼容] --&gt; TB[TiKV: Rust实现]
+        TB --&gt; TC[RocksDB存储引擎]
+        TA --&gt; TD[Percolator事务模型]
+        TA --&gt; TE[TiFlash HTAP]
+    end
+
+    subgraph "CockroachDB"
+        CA[PostgreSQL协议兼容] --&gt; CB[Go实现&lt;br/&gt;计算存储一体]
+        CB --&gt; CC[Pebble存储引擎]
+        CA --&gt; CD[Serializable隔离级别]
+        CA --&gt; CE[原生多区域部署]
+    end</pre>
+<table>
+<thead>
+<tr class="header">
+<th>维度</th>
+<th>TiDB</th>
+<th>CockroachDB</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>协议兼容</td>
+<td>MySQL</td>
+<td>PostgreSQL</td>
+</tr>
+<tr class="even">
+<td>实现语言</td>
+<td>Go (TiDB) + Rust (TiKV)</td>
+<td>Go</td>
+</tr>
+<tr class="odd">
+<td>架构</td>
+<td>计算存储分离</td>
+<td>计算存储一体</td>
+</tr>
+<tr class="even">
+<td>默认隔离级别</td>
+<td>Snapshot Isolation</td>
+<td>Serializable</td>
+</tr>
+<tr class="odd">
+<td>HTAP</td>
+<td>TiFlash列存</td>
+<td>无专门列存</td>
+</tr>
+<tr class="even">
+<td>多区域</td>
+<td>TiDB 6.0+ Placement Rules</td>
+<td>原生支持</td>
+</tr>
+<tr class="odd">
+<td>开源协议</td>
+<td>Apache 2.0</td>
+<td>BSL (核心功能)</td>
+</tr>
+<tr class="even">
+<td>生态</td>
+<td>国内生态更好</td>
+<td>海外生态更好</td>
+</tr>
+</tbody>
+</table>
+<h2 id="运维与监控">运维与监控</h2>
+<h3 id="关键监控指标">关键监控指标</h3>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- TiDB Dashboard (内置Web UI)</span><br><span class="hljs-comment">-- 访问: http://&lt;pd-address&gt;:2379/dashboard</span><br><br><span class="hljs-comment">-- 关键SQL查询</span><br><span class="hljs-comment">-- 查看集群版本</span><br><span class="hljs-keyword">SELECT</span> tidb_version();<br><br><span class="hljs-comment">-- 查看Region分布</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> information_schema.tikv_region_status<br><span class="hljs-keyword">WHERE</span> db_name <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;mydb&#x27;</span> <span class="hljs-keyword">AND</span> table_name <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;orders&#x27;</span><br>LIMIT <span class="hljs-number">10</span>;<br><br><span class="hljs-comment">-- 查看热点Region</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> information_schema.tidb_hot_regions<br><span class="hljs-keyword">ORDER</span> <span class="hljs-keyword">BY</span> flow_bytes <span class="hljs-keyword">DESC</span> LIMIT <span class="hljs-number">10</span>;<br><br><span class="hljs-comment">-- 慢查询日志</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> information_schema.slow_query<br><span class="hljs-keyword">WHERE</span> <span class="hljs-type">time</span> <span class="hljs-operator">&gt;</span> <span class="hljs-string">&#x27;2025-03-15 00:00:00&#x27;</span><br><span class="hljs-keyword">ORDER</span> <span class="hljs-keyword">BY</span> query_time <span class="hljs-keyword">DESC</span> LIMIT <span class="hljs-number">10</span>;<br><br><span class="hljs-comment">-- 查看执行计划</span><br>EXPLAIN ANALYZE<br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> orders <span class="hljs-keyword">WHERE</span> user_id <span class="hljs-operator">=</span> <span class="hljs-number">1</span> <span class="hljs-keyword">AND</span> status <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;paid&#x27;</span>;<br></code></pre></td></tr></table></figure>
+<h3 id="扩缩容操作">扩缩容操作</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 使用tiup管理TiDB集群</span><br><br><span class="hljs-comment"># 扩容TiKV节点</span><br>tiup cluster scale-out &lt;cluster-name&gt; scale-out.yaml<br><br><span class="hljs-comment"># scale-out.yaml</span><br><span class="hljs-comment"># tikv_servers:</span><br><span class="hljs-comment">#   - host: 192.168.1.104</span><br><span class="hljs-comment">#     port: 20160</span><br><span class="hljs-comment">#     deploy_dir: /data/tikv</span><br><br><span class="hljs-comment"># 缩容TiKV节点</span><br>tiup cluster scale-in &lt;cluster-name&gt; --node 192.168.1.104:20160<br><br><span class="hljs-comment"># PD会自动将该节点的Region调度到其他节点</span><br><span class="hljs-comment"># 数据迁移完成后节点自动下线</span><br><br><span class="hljs-comment"># 查看集群状态</span><br>tiup cluster display &lt;cluster-name&gt;<br><br><span class="hljs-comment"># 升级集群</span><br>tiup cluster upgrade &lt;cluster-name&gt; v7.5.0<br></code></pre></td></tr></table></figure>
+<h2 id="总结">总结</h2>
+<p>TiDB作为NewSQL数据库的代表，在很多场景下可以替代传统的分库分表方案：</p>
+<ul>
+<li><strong>架构设计精巧</strong>：TiDB（无状态SQL层）+
+TiKV（Raft分布式存储）+ PD（智能调度）三层分离</li>
+<li><strong>MySQL高度兼容</strong>：大部分MySQL应用可以低成本迁移</li>
+<li><strong>Raft保证强一致性</strong>：数据不会丢失，读取一致</li>
+<li><strong>分布式事务</strong>支持悲观和乐观两种模式，默认悲观事务与MySQL行为一致</li>
+<li><strong>HTAP能力</strong>：TiFlash列存引擎让同一份数据同时服务于OLTP和OLAP</li>
+<li><strong>自动运维</strong>：Region自动分裂/合并/调度，扩缩容对业务透明</li>
+<li>但也有<strong>局限性</strong>：单行事务延迟高于单机MySQL（网络RTT），不适合延迟要求极高的场景；运维复杂度高于单机数据库</li>
+</ul>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2025-03-12</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">3.1k 字 · 8 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/java-design-patterns/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Java设计模式实战：23种模式在项目中的应用</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/mybatis-source-analysis/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">MyBatis核心源码分析与插件开发</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#tidb-%E6%95%B4%E4%BD%93%E6%9E%B6%E6%9E%84"><span class="toc-text">TiDB 整体架构</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#tidb-serversql-%E8%AE%A1%E7%AE%97%E5%B1%82"><span class="toc-text">TiDB Server：SQL 计算层</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8A%9F%E8%83%BD%E8%81%8C%E8%B4%A3"><span class="toc-text">功能职责</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#sql-%E5%85%BC%E5%AE%B9%E6%80%A7"><span class="toc-text">SQL 兼容性</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%AE%A1%E7%AE%97%E4%B8%8B%E6%8E%A8"><span class="toc-text">计算下推</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#tikv%E5%88%86%E5%B8%83%E5%BC%8F%E5%AD%98%E5%82%A8%E5%B1%82"><span class="toc-text">TiKV：分布式存储层</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#region-%E5%88%86%E7%89%87"><span class="toc-text">Region 分片</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E7%BC%96%E7%A0%81"><span class="toc-text">数据编码</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#raft-%E5%A4%8D%E5%88%B6"><span class="toc-text">Raft 复制</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#multi-raft"><span class="toc-text">Multi-Raft</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#pd%E8%B0%83%E5%BA%A6%E4%B8%AD%E5%BF%83"><span class="toc-text">PD：调度中心</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#pd-%E7%9A%84%E6%A0%B8%E5%BF%83%E8%81%8C%E8%B4%A3"><span class="toc-text">PD 的核心职责</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#tsotimestamp-oracle"><span class="toc-text">TSO（Timestamp Oracle）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%B0%83%E5%BA%A6%E7%AD%96%E7%95%A5"><span class="toc-text">调度策略</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1"><span class="toc-text">分布式事务</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BA%8B%E5%8A%A1%E6%89%A7%E8%A1%8C%E6%B5%81%E7%A8%8B"><span class="toc-text">事务执行流程</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B9%90%E8%A7%82%E4%BA%8B%E5%8A%A1-vs-%E6%82%B2%E8%A7%82%E4%BA%8B%E5%8A%A1"><span class="toc-text">乐观事务 vs 悲观事务</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#htap-%E4%B8%8E-tiflash"><span class="toc-text">HTAP 与 TiFlash</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#htap-%E6%9E%B6%E6%9E%84"><span class="toc-text">HTAP 架构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#tiflash-%E9%85%8D%E7%BD%AE"><span class="toc-text">TiFlash 配置</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#tiflash-vs-tikv-%E5%AF%B9%E6%AF%94"><span class="toc-text">TiFlash vs TiKV 对比</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#tidb-vs-cockroachdb"><span class="toc-text">TiDB vs CockroachDB</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%BF%90%E7%BB%B4%E4%B8%8E%E7%9B%91%E6%8E%A7"><span class="toc-text">运维与监控</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%B3%E9%94%AE%E7%9B%91%E6%8E%A7%E6%8C%87%E6%A0%87"><span class="toc-text">关键监控指标</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%89%A9%E7%BC%A9%E5%AE%B9%E6%93%8D%E4%BD%9C"><span class="toc-text">扩缩容操作</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Java并发编程深入解析：从synchronized到Lock · zt&#39;s Blog</title>
+  <meta name="description" content="深入剖析Java并发编程中的锁机制，从synchronized底层原理到JUC Lock体系，涵盖ReentrantLock、ReadWriteLock、StampedLock等核心组件">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/java-concurrency-in-depth/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Java并发编程深入解析：从synchronized到Lock">
+  <meta property="og:description" content="深入剖析Java并发编程中的锁机制，从synchronized底层原理到JUC Lock体系，涵盖ReentrantLock、ReadWriteLock、StampedLock等核心组件">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/java-concurrency-in-depth/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2019-11-14T16:00:00.000Z">
+  <meta property="article:modified_time" content="2019-11-14T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Java并发编程深入解析：从synchronized到Lock">
+  <meta name="twitter:description" content="深入剖析Java并发编程中的锁机制，从synchronized底层原理到JUC Lock体系，涵盖ReentrantLock、ReadWriteLock、StampedLock等核心组件">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Java并发编程深入解析：从synchronized到Lock","description":"深入剖析Java并发编程中的锁机制，从synchronized底层原理到JUC Lock体系，涵盖ReentrantLock、ReadWriteLock、StampedLock等核心组件","datePublished":"2019-11-14T16:00:00.000Z","dateModified":"2019-11-14T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/java-concurrency-in-depth/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Java","item":"https://withesse.co/categories/Java/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:25">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Java/">Java</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/concurrency/"><span class="hash">#</span>concurrency</a><a class="tag" href="/tags/java/"><span class="hash">#</span>java</a><a class="tag" href="/tags/synchronized/"><span class="hash">#</span>synchronized</a><a class="tag" href="/tags/lock/"><span class="hash">#</span>lock</a><a class="tag" href="/tags/juc/"><span class="hash">#</span>juc</a>
+        
+      </div>
+
+      <h1>Java并发编程深入解析：从synchronized到Lock</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2019.11.15</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          <span class="row gap8" style="align-items:center"><span class="lang-dot" style="background:#E76F00"></span>Java</span>
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 8 min</span>
+        </span>
+        <span class="wc"><span class="num">3.4k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">1. 引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#synchronized%E5%BA%95%E5%B1%82%E5%8E%9F%E7%90%86"><span class="toc-text">2. synchronized底层原理</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#monitor%E6%9C%BA%E5%88%B6"><span class="toc-text">2.1 Monitor机制</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#monitorenter%E4%B8%8Emonitorexit"><span class="toc-text">2.2 monitorenter与monitorexit</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%94%81%E5%8D%87%E7%BA%A7%E8%BF%87%E7%A8%8B"><span class="toc-text">2.3 锁升级过程</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#reentrantlock%E8%AF%A6%E8%A7%A3"><span class="toc-text">3. ReentrantLock详解</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9F%BA%E6%9C%AC%E7%94%A8%E6%B3%95"><span class="toc-text">3.1 基本用法</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%AC%E5%B9%B3%E9%94%81%E4%B8%8E%E9%9D%9E%E5%85%AC%E5%B9%B3%E9%94%81"><span class="toc-text">3.2 公平锁与非公平锁</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#condition%E6%9D%A1%E4%BB%B6%E5%8F%98%E9%87%8F"><span class="toc-text">3.3 Condition条件变量</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#readwritelock%E8%AF%BB%E5%86%99%E9%94%81"><span class="toc-text">4. ReadWriteLock读写锁</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#stampedlock%E4%B9%90%E8%A7%82%E8%AF%BB"><span class="toc-text">5. StampedLock乐观读</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%A7%E8%83%BD%E5%AF%B9%E6%AF%94%E4%B8%8E%E9%80%89%E5%9E%8B%E5%BB%BA%E8%AE%AE"><span class="toc-text">6. 性能对比与选型建议</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5"><span class="toc-text">最佳实践</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">7. 总结</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%B8%A9%E5%9D%91%E8%AE%B0%E5%BD%95"><span class="toc-text">踩坑记录</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E6%B5%8B%E7%BB%93%E6%9E%9C"><span class="toc-text">实测结果</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%88%91%E7%9A%84%E7%9C%8B%E6%B3%95"><span class="toc-text">我的看法</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="引言">1. 引言</h2>
+<p>在多核处理器成为标配的今天，并发编程已经是Java开发者的必备技能。Java从1.0版本就提供了<code>synchronized</code>关键字来解决线程同步问题，而在JDK
+1.5中引入的<code>java.util.concurrent</code>(JUC)包则提供了更灵活、更强大的锁机制。</p>
+<p>本文将从<code>synchronized</code>的底层实现原理出发，逐步深入到<code>ReentrantLock</code>、<code>ReadWriteLock</code>和<code>StampedLock</code>，帮助读者全面理解Java中的锁机制，并在实际开发中做出正确的选择。</p>
+<pre class="mermaid">graph TB
+    A[Java锁机制] --&gt; B[内置锁 synchronized]
+    A --&gt; C[显式锁 Lock]
+    B --&gt; B1[对象锁]
+    B --&gt; B2[类锁]
+    C --&gt; C1[ReentrantLock]
+    C --&gt; C2[ReadWriteLock]
+    C --&gt; C3[StampedLock]
+    C1 --&gt; C1a[公平锁]
+    C1 --&gt; C1b[非公平锁]
+    C2 --&gt; C2a[ReentrantReadWriteLock]
+    style A fill:#f9f,stroke:#333,stroke-width:2px</pre>
+<h2 id="synchronized底层原理">2. synchronized底层原理</h2>
+<h3 id="monitor机制">2.1 Monitor机制</h3>
+<p><code>synchronized</code>的实现依赖于JVM的Monitor（管程/监视器）机制。每个Java对象都可以关联一个Monitor对象，当线程执行<code>synchronized</code>代码块时，必须先获取该对象的Monitor。</p>
+<pre class="mermaid">stateDiagram-v2
+    [*] --&gt; EntryList: 线程请求锁
+    EntryList --&gt; Owner: 获取Monitor成功
+    Owner --&gt; WaitSet: 调用wait()
+    WaitSet --&gt; EntryList: 被notify()/notifyAll()唤醒
+    Owner --&gt; [*]: 释放Monitor
+    EntryList --&gt; EntryList: 竞争失败,继续等待</pre>
+<p>在HotSpot虚拟机中，Monitor由C++的<code>ObjectMonitor</code>实现，其核心数据结构包括：</p>
+<ul>
+<li>**_owner**: 指向持有Monitor的线程</li>
+<li>**_EntryList**: 等待获取锁的线程队列（阻塞队列）</li>
+<li>**_WaitSet**:
+调用了<code>wait()</code>方法后等待被唤醒的线程集合</li>
+<li>**_count**: 重入计数器</li>
+</ul>
+<h3 id="monitorenter与monitorexit">2.2 monitorenter与monitorexit</h3>
+<p>当<code>synchronized</code>修饰代码块时，编译后会生成<code>monitorenter</code>和<code>monitorexit</code>字节码指令。我们通过一个例子来查看：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">SyncDemo</span> &#123;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> <span class="hljs-type">Object</span> <span class="hljs-variable">lock</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">Object</span>();<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">syncBlock</span><span class="hljs-params">()</span> &#123;<br>        <span class="hljs-keyword">synchronized</span> (lock) &#123;<br>            System.out.println(<span class="hljs-string">&quot;inside synchronized block&quot;</span>);<br>        &#125;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<p>使用<code>javap -c SyncDemo.class</code>反编译后，关键字节码如下：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><code class="hljs plaintext">public void syncBlock();<br>  Code:<br>     0: aload_0<br>     1: getfield      #3    // Field lock:Ljava/lang/Object;<br>     4: dup<br>     5: astore_1<br>     6: monitorenter          // 进入同步块，获取Monitor<br>     7: getstatic     #4    // Field java/lang/System.out<br>    10: ldc           #5    // String inside synchronized block<br>    12: invokevirtual #6    // Method java/io/PrintStream.println<br>    15: aload_1<br>    16: monitorexit           // 退出同步块，释放Monitor<br>    17: goto          25<br>    20: astore_2<br>    21: aload_1<br>    22: monitorexit           // 异常路径也需要释放Monitor<br>    23: aload_2<br>    24: athrow<br>    25: return<br></code></pre></td></tr></table></figure>
+<p>注意编译器生成了两条<code>monitorexit</code>指令：一条在正常退出路径，另一条在异常处理路径，确保任何情况下Monitor都能被正确释放。</p>
+<h3 id="锁升级过程">2.3 锁升级过程</h3>
+<p>JDK
+1.6之后，HotSpot对<code>synchronized</code>做了大量优化，引入了偏向锁、轻量级锁和重量级锁的升级机制：</p>
+<pre class="mermaid">graph LR
+    A[无锁状态] --&gt;|同一线程访问| B[偏向锁]
+    B --&gt;|其他线程竞争| C[轻量级锁/CAS]
+    C --&gt;|CAS自旋失败| D[重量级锁/Monitor]
+    style A fill:#90EE90
+    style B fill:#87CEEB
+    style C fill:#FFD700
+    style D fill:#FF6347</pre>
+<table>
+<thead>
+<tr class="header">
+<th>锁状态</th>
+<th>适用场景</th>
+<th>实现方式</th>
+<th>性能开销</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>偏向锁</td>
+<td>只有一个线程访问</td>
+<td>对象头Mark Word记录线程ID</td>
+<td>极低</td>
+</tr>
+<tr class="even">
+<td>轻量级锁</td>
+<td>多线程交替执行，无竞争</td>
+<td>CAS操作 + 自旋</td>
+<td>低</td>
+</tr>
+<tr class="odd">
+<td>重量级锁</td>
+<td>多线程同时竞争</td>
+<td>操作系统Mutex Lock</td>
+<td>高</td>
+</tr>
+</tbody>
+</table>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">/**</span><br><span class="hljs-comment"> * 演示synchronized在不同竞争条件下的锁升级</span><br><span class="hljs-comment"> * 可通过JOL (Java Object Layout)工具观察对象头变化</span><br><span class="hljs-comment"> */</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">LockEscalationDemo</span> &#123;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">final</span> <span class="hljs-type">Object</span> <span class="hljs-variable">lock</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">Object</span>();<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">main</span><span class="hljs-params">(String[] args)</span> <span class="hljs-keyword">throws</span> InterruptedException &#123;<br>        <span class="hljs-comment">// Phase 1: 偏向锁 - 单线程重复获取</span><br>        <span class="hljs-keyword">for</span> (<span class="hljs-type">int</span> <span class="hljs-variable">i</span> <span class="hljs-operator">=</span> <span class="hljs-number">0</span>; i &lt; <span class="hljs-number">5</span>; i++) &#123;<br>            <span class="hljs-keyword">synchronized</span> (lock) &#123;<br>                <span class="hljs-comment">// 只有main线程访问，保持偏向锁状态</span><br>            &#125;<br>        &#125;<br><br>        <span class="hljs-comment">// Phase 2: 轻量级锁 - 两个线程交替访问</span><br>        <span class="hljs-type">Thread</span> <span class="hljs-variable">t1</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">Thread</span>(() -&gt; &#123;<br>            <span class="hljs-keyword">for</span> (<span class="hljs-type">int</span> <span class="hljs-variable">i</span> <span class="hljs-operator">=</span> <span class="hljs-number">0</span>; i &lt; <span class="hljs-number">1000</span>; i++) &#123;<br>                <span class="hljs-keyword">synchronized</span> (lock) &#123;<br>                    <span class="hljs-comment">// 交替执行，CAS竞争</span><br>                &#125;<br>            &#125;<br>        &#125;);<br>        t1.start();<br>        t1.join();<br><br>        <span class="hljs-comment">// Phase 3: 重量级锁 - 多线程同时竞争</span><br>        <span class="hljs-keyword">for</span> (<span class="hljs-type">int</span> <span class="hljs-variable">i</span> <span class="hljs-operator">=</span> <span class="hljs-number">0</span>; i &lt; <span class="hljs-number">10</span>; i++) &#123;<br>            <span class="hljs-keyword">new</span> <span class="hljs-title class_">Thread</span>(() -&gt; &#123;<br>                <span class="hljs-keyword">synchronized</span> (lock) &#123;<br>                    <span class="hljs-keyword">try</span> &#123;<br>                        Thread.sleep(<span class="hljs-number">100</span>);<br>                    &#125; <span class="hljs-keyword">catch</span> (InterruptedException e) &#123;<br>                        Thread.currentThread().interrupt();<br>                    &#125;<br>                &#125;<br>            &#125;).start();<br>        &#125;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="reentrantlock详解">3. ReentrantLock详解</h2>
+<h3 id="基本用法">3.1 基本用法</h3>
+<p><code>ReentrantLock</code>是JUC包中最核心的锁实现，相比<code>synchronized</code>提供了更丰富的功能：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-keyword">import</span> java.util.concurrent.locks.ReentrantLock;<br><span class="hljs-keyword">import</span> java.util.concurrent.TimeUnit;<br><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">ReentrantLockDemo</span> &#123;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> <span class="hljs-type">ReentrantLock</span> <span class="hljs-variable">lock</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">ReentrantLock</span>();<br>    <span class="hljs-keyword">private</span> <span class="hljs-type">int</span> <span class="hljs-variable">count</span> <span class="hljs-operator">=</span> <span class="hljs-number">0</span>;<br><br>    <span class="hljs-comment">/**</span><br><span class="hljs-comment">     * 标准用法：try-finally确保释放锁</span><br><span class="hljs-comment">     */</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">increment</span><span class="hljs-params">()</span> &#123;<br>        lock.lock();<br>        <span class="hljs-keyword">try</span> &#123;<br>            count++;<br>        &#125; <span class="hljs-keyword">finally</span> &#123;<br>            lock.unlock(); <span class="hljs-comment">// 必须在finally中释放锁</span><br>        &#125;<br>    &#125;<br><br>    <span class="hljs-comment">/**</span><br><span class="hljs-comment">     * 可超时获取锁，避免死锁</span><br><span class="hljs-comment">     */</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-type">boolean</span> <span class="hljs-title function_">tryIncrement</span><span class="hljs-params">(<span class="hljs-type">long</span> timeout)</span> <span class="hljs-keyword">throws</span> InterruptedException &#123;<br>        <span class="hljs-keyword">if</span> (lock.tryLock(timeout, TimeUnit.MILLISECONDS)) &#123;<br>            <span class="hljs-keyword">try</span> &#123;<br>                count++;<br>                <span class="hljs-keyword">return</span> <span class="hljs-literal">true</span>;<br>            &#125; <span class="hljs-keyword">finally</span> &#123;<br>                lock.unlock();<br>            &#125;<br>        &#125;<br>        <span class="hljs-keyword">return</span> <span class="hljs-literal">false</span>; <span class="hljs-comment">// 超时未获取到锁</span><br>    &#125;<br><br>    <span class="hljs-comment">/**</span><br><span class="hljs-comment">     * 可中断获取锁</span><br><span class="hljs-comment">     */</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">interruptibleIncrement</span><span class="hljs-params">()</span> <span class="hljs-keyword">throws</span> InterruptedException &#123;<br>        lock.lockInterruptibly(); <span class="hljs-comment">// 等待过程中可被中断</span><br>        <span class="hljs-keyword">try</span> &#123;<br>            count++;<br>        &#125; <span class="hljs-keyword">finally</span> &#123;<br>            lock.unlock();<br>        &#125;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="公平锁与非公平锁">3.2 公平锁与非公平锁</h3>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">// 非公平锁（默认）- 允许插队，吞吐量更高</span><br><span class="hljs-type">ReentrantLock</span> <span class="hljs-variable">unfairLock</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">ReentrantLock</span>(<span class="hljs-literal">false</span>);<br><br><span class="hljs-comment">// 公平锁 - 按请求顺序获取锁，避免饥饿</span><br><span class="hljs-type">ReentrantLock</span> <span class="hljs-variable">fairLock</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">ReentrantLock</span>(<span class="hljs-literal">true</span>);<br></code></pre></td></tr></table></figure>
+<pre class="mermaid">sequenceDiagram
+    participant T1 as 线程1
+    participant T2 as 线程2
+    participant T3 as 线程3
+    participant L as Lock
+
+    Note over L: 非公平锁场景
+    T1-&gt;&gt;L: lock() 获取成功
+    T2-&gt;&gt;L: lock() 进入等待队列
+    T1-&gt;&gt;L: unlock() 释放锁
+    T3-&gt;&gt;L: lock() 此时刚好请求锁
+    Note over T3,L: T3可能插队成功&lt;br/&gt;比T2先获取到锁
+    T3-&gt;&gt;L: 获取成功（插队）
+    T3-&gt;&gt;L: unlock()
+    T2-&gt;&gt;L: 获取成功</pre>
+<h3 id="condition条件变量">3.3 Condition条件变量</h3>
+<p><code>Condition</code>是<code>synchronized</code>中<code>wait/notify</code>机制的增强版，允许创建多个等待队列：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-keyword">import</span> java.util.LinkedList;<br><span class="hljs-keyword">import</span> java.util.Queue;<br><span class="hljs-keyword">import</span> java.util.concurrent.locks.Condition;<br><span class="hljs-keyword">import</span> java.util.concurrent.locks.ReentrantLock;<br><br><span class="hljs-comment">/**</span><br><span class="hljs-comment"> * 使用Condition实现生产者-消费者模式</span><br><span class="hljs-comment"> * 相比wait/notify，Condition支持多个等待队列，逻辑更清晰</span><br><span class="hljs-comment"> */</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">BoundedBuffer</span>&lt;T&gt; &#123;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> Queue&lt;T&gt; queue = <span class="hljs-keyword">new</span> <span class="hljs-title class_">LinkedList</span>&lt;&gt;();<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> <span class="hljs-type">int</span> capacity;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> <span class="hljs-type">ReentrantLock</span> <span class="hljs-variable">lock</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">ReentrantLock</span>();<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> <span class="hljs-type">Condition</span> <span class="hljs-variable">notFull</span> <span class="hljs-operator">=</span> lock.newCondition();  <span class="hljs-comment">// 队列未满条件</span><br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> <span class="hljs-type">Condition</span> <span class="hljs-variable">notEmpty</span> <span class="hljs-operator">=</span> lock.newCondition(); <span class="hljs-comment">// 队列非空条件</span><br><br>    <span class="hljs-keyword">public</span> <span class="hljs-title function_">BoundedBuffer</span><span class="hljs-params">(<span class="hljs-type">int</span> capacity)</span> &#123;<br>        <span class="hljs-built_in">this</span>.capacity = capacity;<br>    &#125;<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">put</span><span class="hljs-params">(T item)</span> <span class="hljs-keyword">throws</span> InterruptedException &#123;<br>        lock.lock();<br>        <span class="hljs-keyword">try</span> &#123;<br>            <span class="hljs-keyword">while</span> (queue.size() == capacity) &#123;<br>                notFull.await(); <span class="hljs-comment">// 队列满了，等待消费者消费</span><br>            &#125;<br>            queue.offer(item);<br>            notEmpty.signal(); <span class="hljs-comment">// 通知消费者可以消费了</span><br>        &#125; <span class="hljs-keyword">finally</span> &#123;<br>            lock.unlock();<br>        &#125;<br>    &#125;<br><br>    <span class="hljs-keyword">public</span> T <span class="hljs-title function_">take</span><span class="hljs-params">()</span> <span class="hljs-keyword">throws</span> InterruptedException &#123;<br>        lock.lock();<br>        <span class="hljs-keyword">try</span> &#123;<br>            <span class="hljs-keyword">while</span> (queue.isEmpty()) &#123;<br>                notEmpty.await(); <span class="hljs-comment">// 队列空了，等待生产者生产</span><br>            &#125;<br>            <span class="hljs-type">T</span> <span class="hljs-variable">item</span> <span class="hljs-operator">=</span> queue.poll();<br>            notFull.signal(); <span class="hljs-comment">// 通知生产者可以生产了</span><br>            <span class="hljs-keyword">return</span> item;<br>        &#125; <span class="hljs-keyword">finally</span> &#123;<br>            lock.unlock();<br>        &#125;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="readwritelock读写锁">4. ReadWriteLock读写锁</h2>
+<p>在读多写少的场景下，使用独占锁会严重影响性能。<code>ReadWriteLock</code>允许多个读线程同时访问，但写操作是排他的：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-keyword">import</span> java.util.HashMap;<br><span class="hljs-keyword">import</span> java.util.Map;<br><span class="hljs-keyword">import</span> java.util.concurrent.locks.ReadWriteLock;<br><span class="hljs-keyword">import</span> java.util.concurrent.locks.ReentrantReadWriteLock;<br><br><span class="hljs-comment">/**</span><br><span class="hljs-comment"> * 基于ReadWriteLock实现的线程安全缓存</span><br><span class="hljs-comment"> * 读操作并发执行，写操作独占访问</span><br><span class="hljs-comment"> */</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">ReadWriteCache</span>&lt;K, V&gt; &#123;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> Map&lt;K, V&gt; cache = <span class="hljs-keyword">new</span> <span class="hljs-title class_">HashMap</span>&lt;&gt;();<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> <span class="hljs-type">ReadWriteLock</span> <span class="hljs-variable">rwLock</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">ReentrantReadWriteLock</span>();<br><br>    <span class="hljs-keyword">public</span> V <span class="hljs-title function_">get</span><span class="hljs-params">(K key)</span> &#123;<br>        rwLock.readLock().lock();<br>        <span class="hljs-keyword">try</span> &#123;<br>            <span class="hljs-keyword">return</span> cache.get(key);<br>        &#125; <span class="hljs-keyword">finally</span> &#123;<br>            rwLock.readLock().unlock();<br>        &#125;<br>    &#125;<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">put</span><span class="hljs-params">(K key, V value)</span> &#123;<br>        rwLock.writeLock().lock();<br>        <span class="hljs-keyword">try</span> &#123;<br>            cache.put(key, value);<br>        &#125; <span class="hljs-keyword">finally</span> &#123;<br>            rwLock.writeLock().unlock();<br>        &#125;<br>    &#125;<br><br>    <span class="hljs-comment">/**</span><br><span class="hljs-comment">     * 锁降级：写锁 -&gt; 读锁（安全的）</span><br><span class="hljs-comment">     * 先获取写锁修改数据，然后降级为读锁继续使用数据</span><br><span class="hljs-comment">     */</span><br>    <span class="hljs-keyword">public</span> V <span class="hljs-title function_">computeIfAbsent</span><span class="hljs-params">(K key, java.util.function.Function&lt;K, V&gt; mappingFunction)</span> &#123;<br>        rwLock.readLock().lock();<br>        <span class="hljs-keyword">try</span> &#123;<br>            <span class="hljs-type">V</span> <span class="hljs-variable">value</span> <span class="hljs-operator">=</span> cache.get(key);<br>            <span class="hljs-keyword">if</span> (value != <span class="hljs-literal">null</span>) &#123;<br>                <span class="hljs-keyword">return</span> value;<br>            &#125;<br>        &#125; <span class="hljs-keyword">finally</span> &#123;<br>            rwLock.readLock().unlock();<br>        &#125;<br><br>        <span class="hljs-comment">// 读锁中未命中，升级为写锁</span><br>        rwLock.writeLock().lock();<br>        <span class="hljs-keyword">try</span> &#123;<br>            <span class="hljs-comment">// double-check: 可能其他线程已经写入</span><br>            <span class="hljs-type">V</span> <span class="hljs-variable">value</span> <span class="hljs-operator">=</span> cache.get(key);<br>            <span class="hljs-keyword">if</span> (value == <span class="hljs-literal">null</span>) &#123;<br>                value = mappingFunction.apply(key);<br>                cache.put(key, value);<br>            &#125;<br>            <span class="hljs-comment">// 锁降级：在释放写锁前先获取读锁</span><br>            rwLock.readLock().lock();<br>            <span class="hljs-keyword">return</span> value;<br>        &#125; <span class="hljs-keyword">finally</span> &#123;<br>            rwLock.writeLock().unlock();<br>            <span class="hljs-comment">// 此时仍持有读锁，可以安全使用数据</span><br>            rwLock.readLock().unlock();<br>        &#125;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="stampedlock乐观读">5. StampedLock乐观读</h2>
+<p>JDK
+8引入的<code>StampedLock</code>在<code>ReadWriteLock</code>的基础上增加了乐观读模式，在读多写少的场景下性能更优：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-keyword">import</span> java.util.concurrent.locks.StampedLock;<br><br><span class="hljs-comment">/**</span><br><span class="hljs-comment"> * StampedLock实现的二维点坐标</span><br><span class="hljs-comment"> * 演示乐观读、悲观读和写锁的使用</span><br><span class="hljs-comment"> */</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">Point</span> &#123;<br>    <span class="hljs-keyword">private</span> <span class="hljs-type">double</span> x, y;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> <span class="hljs-type">StampedLock</span> <span class="hljs-variable">sl</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">StampedLock</span>();<br><br>    <span class="hljs-comment">/**</span><br><span class="hljs-comment">     * 写操作：独占锁</span><br><span class="hljs-comment">     */</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">move</span><span class="hljs-params">(<span class="hljs-type">double</span> deltaX, <span class="hljs-type">double</span> deltaY)</span> &#123;<br>        <span class="hljs-type">long</span> <span class="hljs-variable">stamp</span> <span class="hljs-operator">=</span> sl.writeLock();<br>        <span class="hljs-keyword">try</span> &#123;<br>            x += deltaX;<br>            y += deltaY;<br>        &#125; <span class="hljs-keyword">finally</span> &#123;<br>            sl.unlockWrite(stamp);<br>        &#125;<br>    &#125;<br><br>    <span class="hljs-comment">/**</span><br><span class="hljs-comment">     * 乐观读：不阻塞写操作，性能最优</span><br><span class="hljs-comment">     * 如果在读取过程中发生了写操作，则回退到悲观读锁</span><br><span class="hljs-comment">     */</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-type">double</span> <span class="hljs-title function_">distanceFromOrigin</span><span class="hljs-params">()</span> &#123;<br>        <span class="hljs-type">long</span> <span class="hljs-variable">stamp</span> <span class="hljs-operator">=</span> sl.tryOptimisticRead(); <span class="hljs-comment">// 获取乐观读stamp，不加锁</span><br>        <span class="hljs-type">double</span> <span class="hljs-variable">currentX</span> <span class="hljs-operator">=</span> x, currentY = y;   <span class="hljs-comment">// 读取共享变量到局部变量</span><br><br>        <span class="hljs-keyword">if</span> (!sl.validate(stamp)) &#123;           <span class="hljs-comment">// 检查读取期间是否有写操作</span><br>            stamp = sl.readLock();           <span class="hljs-comment">// 回退到悲观读锁</span><br>            <span class="hljs-keyword">try</span> &#123;<br>                currentX = x;<br>                currentY = y;<br>            &#125; <span class="hljs-keyword">finally</span> &#123;<br>                sl.unlockRead(stamp);<br>            &#125;<br>        &#125;<br>        <span class="hljs-keyword">return</span> Math.sqrt(currentX * currentX + currentY * currentY);<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="性能对比与选型建议">6. 性能对比与选型建议</h2>
+<pre class="mermaid">graph TB
+    subgraph 选型决策树
+        Q1{需要锁吗?} --&gt;|是| Q2{读写比例?}
+        Q1 --&gt;|否| A1[无锁方案&lt;br/&gt;CAS/Atomic]
+        Q2 --&gt;|读多写少| Q3{能容忍乐观读失败重试?}
+        Q2 --&gt;|读写均衡| Q4{需要tryLock/中断?}
+        Q2 --&gt;|写多| Q4
+        Q3 --&gt;|是| A2[StampedLock]
+        Q3 --&gt;|否| A3[ReadWriteLock]
+        Q4 --&gt;|是| A4[ReentrantLock]
+        Q4 --&gt;|否| A5[synchronized]
+    end
+    style Q1 fill:#FFE4B5
+    style A1 fill:#90EE90
+    style A2 fill:#90EE90
+    style A3 fill:#90EE90
+    style A4 fill:#90EE90
+    style A5 fill:#90EE90</pre>
+<table>
+<thead>
+<tr class="header">
+<th>特性</th>
+<th>synchronized</th>
+<th>ReentrantLock</th>
+<th>ReadWriteLock</th>
+<th>StampedLock</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>可重入</td>
+<td>是</td>
+<td>是</td>
+<td>是</td>
+<td>否</td>
+</tr>
+<tr class="even">
+<td>公平性选择</td>
+<td>否</td>
+<td>是</td>
+<td>是</td>
+<td>否</td>
+</tr>
+<tr class="odd">
+<td>可中断</td>
+<td>否</td>
+<td>是</td>
+<td>是</td>
+<td>是</td>
+</tr>
+<tr class="even">
+<td>超时获取</td>
+<td>否</td>
+<td>是</td>
+<td>是</td>
+<td>是</td>
+</tr>
+<tr class="odd">
+<td>条件变量</td>
+<td>1个(wait/notify)</td>
+<td>多个Condition</td>
+<td>多个Condition</td>
+<td>不支持</td>
+</tr>
+<tr class="even">
+<td>乐观读</td>
+<td>否</td>
+<td>否</td>
+<td>否</td>
+<td>是</td>
+</tr>
+<tr class="odd">
+<td>自动释放</td>
+<td>是</td>
+<td>否(需手动)</td>
+<td>否(需手动)</td>
+<td>否(需手动)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="最佳实践">最佳实践</h3>
+<ol type="1">
+<li><strong>优先考虑synchronized</strong>：JDK
+6之后性能已大幅优化，语法简洁且自动释放锁，能满足大多数场景。</li>
+<li><strong>需要高级特性时用ReentrantLock</strong>：可中断、可超时、公平锁、多Condition等场景。</li>
+<li><strong>读多写少用ReadWriteLock</strong>：典型场景如缓存、配置读取。</li>
+<li><strong>极致读性能用StampedLock</strong>：注意它不可重入且不支持Condition，需谨慎使用。</li>
+<li><strong>务必在finally中释放锁</strong>：Lock不像synchronized会自动释放，遗漏<code>unlock()</code>会导致死锁。</li>
+<li><strong>避免在锁内执行耗时操作</strong>：减小临界区范围，降低锁竞争。</li>
+</ol>
+<h2 id="总结">7. 总结</h2>
+<p>Java的锁机制从<code>synchronized</code>的简洁到JUC
+Lock体系的灵活，为开发者提供了丰富的并发控制工具。理解每种锁的底层原理和适用场景，才能在实际项目中做出正确的选型：</p>
+<ul>
+<li><code>synchronized</code>经过JVM不断优化，在低竞争场景下性能优异，且使用最简单</li>
+<li><code>ReentrantLock</code>提供了丰富的API，是需要高级锁特性时的首选</li>
+<li><code>ReadWriteLock</code>通过读写分离提升了并发读的性能</li>
+<li><code>StampedLock</code>的乐观读模式在读远多于写的场景下能获得最佳性能</li>
+</ul>
+<p>选择合适的锁不仅要考虑功能需求，还要结合具体的并发场景、竞争程度以及代码维护成本综合判断。</p>
+<hr />
+<h2 id="踩坑记录">踩坑记录</h2>
+<p>参与公司第一个高并发项目——双十一大促秒杀系统时，我们用
+<code>synchronized</code> 锁住了库存扣减方法。压测到 500 并发时 TPS
+急剧下降，GC 日志里 STW 时间飙到 800ms。排查后发现是
+<code>synchronized</code> 的偏向锁在高竞争场景下频繁撤销，JVM
+升级为重量级锁的开销远超预期。最终改用 <code>ReentrantLock</code> +
+<code>tryLock(timeout)</code> 后，同等压力下 TPS 提升了 2.3 倍。</p>
+<p>另一个坑是死锁排查。有一次线上服务卡死，<code>jstack</code> 看到 30
+多个线程都处于 BLOCKED
+状态，两个锁对象互相等待。根本原因是两个业务方法锁获取顺序不一致：方法 A
+先锁 userLock 再锁 orderLock，方法 B 反过来。这种问题在 code review
+很难发现，上线后才暴露。后来统一规定：多个锁必须按固定顺序获取，并写进开发规范文档。</p>
+<h2 id="实测结果">实测结果</h2>
+<p>测试环境：4 核 8G，JDK 8，500 并发，秒杀场景压测</p>
+<table>
+<thead>
+<tr class="header">
+<th>方案</th>
+<th>TPS</th>
+<th>P99 延迟</th>
+<th>GC STW 均值</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>synchronized</code></td>
+<td>1,200</td>
+<td>420ms</td>
+<td>650ms</td>
+</tr>
+<tr class="even">
+<td><code>ReentrantLock</code></td>
+<td>2,760</td>
+<td>180ms</td>
+<td>90ms</td>
+</tr>
+</tbody>
+</table>
+<p>结论：低竞争场景两者差距不大；高竞争短临界区场景下
+<code>ReentrantLock</code> 的 <code>tryLock</code>
+机制能避免线程阻塞挂起，优势非常明显。</p>
+<h2 id="我的看法">我的看法</h2>
+<p>网上很多文章说 JDK 6 之后 <code>synchronized</code> 性能和
+<code>Lock</code>
+差不多了，但这个结论有前提：<strong>低竞争场景</strong>。在高竞争 +
+短临界区的场景下，<code>ReentrantLock</code> 的优势依然显著。</p>
+<p>我现在的选型原则是：先用
+<code>synchronized</code>，遇到性能瓶颈或需要超时/中断/多 Condition
+时再换 <code>ReentrantLock</code>。不要一上来就用
+Lock，维护成本更高，忘记 <code>finally</code> 里 <code>unlock</code>
+就是定时炸弹。</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2019-11-15</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">3.4k 字 · 8 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/jvm-overview-guide/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">JVM 内部机制：我在排查线上问题时真正用到的那些</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/grpc-dotnet-core/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">gRPC in .NET Core：高性能服务间通信实践</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">1. 引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#synchronized%E5%BA%95%E5%B1%82%E5%8E%9F%E7%90%86"><span class="toc-text">2. synchronized底层原理</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#monitor%E6%9C%BA%E5%88%B6"><span class="toc-text">2.1 Monitor机制</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#monitorenter%E4%B8%8Emonitorexit"><span class="toc-text">2.2 monitorenter与monitorexit</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%94%81%E5%8D%87%E7%BA%A7%E8%BF%87%E7%A8%8B"><span class="toc-text">2.3 锁升级过程</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#reentrantlock%E8%AF%A6%E8%A7%A3"><span class="toc-text">3. ReentrantLock详解</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9F%BA%E6%9C%AC%E7%94%A8%E6%B3%95"><span class="toc-text">3.1 基本用法</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%AC%E5%B9%B3%E9%94%81%E4%B8%8E%E9%9D%9E%E5%85%AC%E5%B9%B3%E9%94%81"><span class="toc-text">3.2 公平锁与非公平锁</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#condition%E6%9D%A1%E4%BB%B6%E5%8F%98%E9%87%8F"><span class="toc-text">3.3 Condition条件变量</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#readwritelock%E8%AF%BB%E5%86%99%E9%94%81"><span class="toc-text">4. ReadWriteLock读写锁</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#stampedlock%E4%B9%90%E8%A7%82%E8%AF%BB"><span class="toc-text">5. StampedLock乐观读</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%A7%E8%83%BD%E5%AF%B9%E6%AF%94%E4%B8%8E%E9%80%89%E5%9E%8B%E5%BB%BA%E8%AE%AE"><span class="toc-text">6. 性能对比与选型建议</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5"><span class="toc-text">最佳实践</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">7. 总结</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%B8%A9%E5%9D%91%E8%AE%B0%E5%BD%95"><span class="toc-text">踩坑记录</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E6%B5%8B%E7%BB%93%E6%9E%9C"><span class="toc-text">实测结果</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%88%91%E7%9A%84%E7%9C%8B%E6%B3%95"><span class="toc-text">我的看法</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

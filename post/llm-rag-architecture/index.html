@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LLM RAG架构设计与实现 · zt&#39;s Blog</title>
+  <meta name="description" content="全面解析RAG架构设计，涵盖文档分块策略、Embedding生成、向量检索、Prompt构建、重排序与评估指标">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/llm-rag-architecture/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="LLM RAG架构设计与实现">
+  <meta property="og:description" content="全面解析RAG架构设计，涵盖文档分块策略、Embedding生成、向量检索、Prompt构建、重排序与评估指标">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/llm-rag-architecture/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2025-08-25T16:00:00.000Z">
+  <meta property="article:modified_time" content="2025-08-25T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="LLM RAG架构设计与实现">
+  <meta name="twitter:description" content="全面解析RAG架构设计，涵盖文档分块策略、Embedding生成、向量检索、Prompt构建、重排序与评估指标">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"LLM RAG架构设计与实现","description":"全面解析RAG架构设计，涵盖文档分块策略、Embedding生成、向量检索、Prompt构建、重排序与评估指标","datePublished":"2025-08-25T16:00:00.000Z","dateModified":"2025-08-25T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/llm-rag-architecture/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"AI","item":"https://withesse.co/categories/AI/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:280">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/AI/">AI</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/llm/"><span class="hash">#</span>llm</a><a class="tag" href="/tags/ai/"><span class="hash">#</span>ai</a><a class="tag" href="/tags/rag/"><span class="hash">#</span>rag</a><a class="tag" href="/tags/vector-database/"><span class="hash">#</span>vector-database</a>
+        
+      </div>
+
+      <h1>LLM RAG架构设计与实现</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2025.08.26</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 7 min</span>
+        </span>
+        <span class="wc"><span class="num">2.9k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#rag-%E6%95%B4%E4%BD%93%E6%9E%B6%E6%9E%84"><span class="toc-text">RAG 整体架构</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%96%87%E6%A1%A3%E5%88%86%E5%9D%97%E7%AD%96%E7%95%A5"><span class="toc-text">文档分块策略</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9B%BA%E5%AE%9A%E5%A4%A7%E5%B0%8F%E5%88%86%E5%9D%97"><span class="toc-text">固定大小分块</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%AF%AD%E4%B9%89%E5%88%86%E5%9D%97"><span class="toc-text">语义分块</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%B1%82%E6%AC%A1%E5%8C%96%E5%88%86%E5%9D%97parent-child"><span class="toc-text">层次化分块（Parent-Child）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%88%86%E5%9D%97%E7%AD%96%E7%95%A5%E5%AF%B9%E6%AF%94"><span class="toc-text">分块策略对比</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#embedding-%E7%94%9F%E6%88%90"><span class="toc-text">Embedding 生成</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#query-embedding-%E4%BC%98%E5%8C%96"><span class="toc-text">Query Embedding 优化</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%90%91%E9%87%8F%E6%A3%80%E7%B4%A2"><span class="toc-text">向量检索</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BD%BF%E7%94%A8-chromadb"><span class="toc-text">使用 ChromaDB</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%B7%B7%E5%90%88%E6%A3%80%E7%B4%A2hybrid-search"><span class="toc-text">混合检索（Hybrid Search）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%87%8D%E6%8E%92%E5%BA%8F-re-ranking"><span class="toc-text">重排序 (Re-ranking)</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#prompt-%E6%9E%84%E5%BB%BA"><span class="toc-text">Prompt 构建</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%8C%E6%95%B4-rag-pipeline"><span class="toc-text">完整 RAG Pipeline</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#query-%E9%87%8D%E5%86%99%E4%B8%8E%E6%89%A9%E5%B1%95"><span class="toc-text">Query 重写与扩展</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%AF%84%E4%BC%B0%E6%8C%87%E6%A0%87"><span class="toc-text">评估指标</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%94%9F%E4%BA%A7%E4%BC%98%E5%8C%96%E5%BB%BA%E8%AE%AE"><span class="toc-text">生产优化建议</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%B8%A9%E5%9D%91%E8%AE%B0%E5%BD%95"><span class="toc-text">踩坑记录</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E6%B5%8B%E7%BB%93%E6%9E%9C"><span class="toc-text">实测结果</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%88%91%E7%9A%84%E7%9C%8B%E6%B3%95"><span class="toc-text">我的看法</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="引言">引言</h2>
+<p>Retrieval-Augmented Generation（RAG）是目前将 LLM
+与外部知识库结合的主流范式。相比微调，RAG
+具有成本低、数据可更新、可溯源等优势。然而，构建一个生产级 RAG
+系统远不止”检索+生成”这么简单——文档分块策略、Embedding
+模型选择、检索算法、重排序、Prompt
+工程以及评估体系都是需要精心设计的环节。本文将系统性地介绍 RAG
+的完整架构和关键实现细节。</p>
+<h2 id="rag-整体架构">RAG 整体架构</h2>
+<pre class="mermaid">graph TB
+    subgraph "离线索引 (Indexing)"
+        A[原始文档] --&gt; B[文档解析&lt;br/&gt;PDF/HTML/Markdown]
+        B --&gt; C[文档分块&lt;br/&gt;Chunking]
+        C --&gt; D[Embedding 生成]
+        D --&gt; E[向量数据库&lt;br/&gt;存储索引]
+    end
+
+    subgraph "在线检索 (Retrieval)"
+        F[用户查询] --&gt; G[Query 重写/扩展]
+        G --&gt; H[Query Embedding]
+        H --&gt; I[向量相似度检索]
+        E --&gt; I
+        I --&gt; J[重排序 Re-ranking]
+    end
+
+    subgraph "生成 (Generation)"
+        J --&gt; K[Prompt 构建&lt;br/&gt;Context + Query]
+        K --&gt; L[LLM 生成回答]
+        L --&gt; M[引用溯源]
+    end
+
+    style A fill:#3498db,color:#fff
+    style E fill:#e74c3c,color:#fff
+    style L fill:#2ecc71,color:#fff</pre>
+<h2 id="文档分块策略">文档分块策略</h2>
+<p>分块质量直接影响检索精度和生成质量。不同的分块策略适用于不同场景：</p>
+<h3 id="固定大小分块">固定大小分块</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">from</span> langchain.text_splitter <span class="hljs-keyword">import</span> RecursiveCharacterTextSplitter<br><br><span class="hljs-comment"># Basic fixed-size chunking with overlap</span><br>text_splitter = RecursiveCharacterTextSplitter(<br>    chunk_size=<span class="hljs-number">512</span>,        <span class="hljs-comment"># Characters per chunk</span><br>    chunk_overlap=<span class="hljs-number">50</span>,      <span class="hljs-comment"># Overlap between chunks</span><br>    length_function=<span class="hljs-built_in">len</span>,<br>    separators=[<span class="hljs-string">&quot;\n\n&quot;</span>, <span class="hljs-string">&quot;\n&quot;</span>, <span class="hljs-string">&quot;. &quot;</span>, <span class="hljs-string">&quot; &quot;</span>, <span class="hljs-string">&quot;&quot;</span>],<br>)<br><br>chunks = text_splitter.split_text(document_text)<br></code></pre></td></tr></table></figure>
+<h3 id="语义分块">语义分块</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">from</span> langchain_experimental.text_splitter <span class="hljs-keyword">import</span> SemanticChunker<br><span class="hljs-keyword">from</span> langchain_openai <span class="hljs-keyword">import</span> OpenAIEmbeddings<br><br><span class="hljs-comment"># Semantic chunking: split at points where meaning shifts</span><br>semantic_splitter = SemanticChunker(<br>    OpenAIEmbeddings(),<br>    breakpoint_threshold_type=<span class="hljs-string">&quot;percentile&quot;</span>,  <span class="hljs-comment"># or &quot;standard_deviation&quot;</span><br>    breakpoint_threshold_amount=<span class="hljs-number">95</span>,<br>)<br><br>semantic_chunks = semantic_splitter.split_text(document_text)<br></code></pre></td></tr></table></figure>
+<h3 id="层次化分块parent-child">层次化分块（Parent-Child）</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">from</span> langchain.text_splitter <span class="hljs-keyword">import</span> RecursiveCharacterTextSplitter<br><br><span class="hljs-comment"># Parent chunks: larger context for generation</span><br>parent_splitter = RecursiveCharacterTextSplitter(chunk_size=<span class="hljs-number">2000</span>, chunk_overlap=<span class="hljs-number">200</span>)<br><br><span class="hljs-comment"># Child chunks: smaller for precise retrieval</span><br>child_splitter = RecursiveCharacterTextSplitter(chunk_size=<span class="hljs-number">400</span>, chunk_overlap=<span class="hljs-number">50</span>)<br><br>parent_chunks = parent_splitter.split_documents(documents)<br><br><span class="hljs-keyword">for</span> parent <span class="hljs-keyword">in</span> parent_chunks:<br>    children = child_splitter.split_documents([parent])<br>    <span class="hljs-keyword">for</span> child <span class="hljs-keyword">in</span> children:<br>        child.metadata[<span class="hljs-string">&quot;parent_id&quot;</span>] = parent.metadata.get(<span class="hljs-string">&quot;id&quot;</span>)<br>        <span class="hljs-comment"># Store child for retrieval, but use parent for context</span><br></code></pre></td></tr></table></figure>
+<pre class="mermaid">graph TD
+    A[原始文档] --&gt; B[Parent Chunk&lt;br/&gt;2000 tokens]
+    B --&gt; C1[Child 1&lt;br/&gt;400 tokens]
+    B --&gt; C2[Child 2&lt;br/&gt;400 tokens]
+    B --&gt; C3[Child 3&lt;br/&gt;400 tokens]
+
+    C2 --&gt;|检索命中| D[返回 Parent Chunk&lt;br/&gt;提供完整上下文]
+
+    style C2 fill:#e74c3c,color:#fff
+    style D fill:#2ecc71,color:#fff</pre>
+<h3 id="分块策略对比">分块策略对比</h3>
+<table>
+<thead>
+<tr class="header">
+<th>策略</th>
+<th>优点</th>
+<th>缺点</th>
+<th>适用场景</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>固定大小</td>
+<td>简单高效</td>
+<td>可能切断语义</td>
+<td>通用文档</td>
+</tr>
+<tr class="even">
+<td>按段落/标题</td>
+<td>保持语义完整</td>
+<td>长度不均</td>
+<td>结构化文档</td>
+</tr>
+<tr class="odd">
+<td>语义分块</td>
+<td>语义边界准确</td>
+<td>需要 Embedding 计算</td>
+<td>高质量需求</td>
+</tr>
+<tr class="even">
+<td>层次化</td>
+<td>检索精确+上下文丰富</td>
+<td>实现复杂</td>
+<td>长文档</td>
+</tr>
+</tbody>
+</table>
+<h2 id="embedding-生成">Embedding 生成</h2>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">from</span> sentence_transformers <span class="hljs-keyword">import</span> SentenceTransformer<br><span class="hljs-keyword">import</span> numpy <span class="hljs-keyword">as</span> np<br><br><span class="hljs-comment"># Local embedding model</span><br>model = SentenceTransformer(<span class="hljs-string">&#x27;BAAI/bge-large-zh-v1.5&#x27;</span>)<br><br><span class="hljs-comment"># Generate embeddings for chunks</span><br>chunks = [<span class="hljs-string">&quot;RAG是一种检索增强生成技术&quot;</span>, <span class="hljs-string">&quot;向量数据库存储文档的Embedding&quot;</span>]<br>embeddings = model.encode(chunks, normalize_embeddings=<span class="hljs-literal">True</span>)<br><br><span class="hljs-comment"># Similarity calculation</span><br>similarity = np.dot(embeddings[<span class="hljs-number">0</span>], embeddings[<span class="hljs-number">1</span>])<br><span class="hljs-built_in">print</span>(<span class="hljs-string">f&quot;Cosine similarity: <span class="hljs-subst">&#123;similarity:<span class="hljs-number">.4</span>f&#125;</span>&quot;</span>)<br><br><span class="hljs-comment"># Batch processing for large document sets</span><br><span class="hljs-keyword">def</span> <span class="hljs-title function_">batch_embed</span>(<span class="hljs-params">texts, batch_size=<span class="hljs-number">32</span></span>):<br>    all_embeddings = []<br>    <span class="hljs-keyword">for</span> i <span class="hljs-keyword">in</span> <span class="hljs-built_in">range</span>(<span class="hljs-number">0</span>, <span class="hljs-built_in">len</span>(texts), batch_size):<br>        batch = texts[i:i + batch_size]<br>        batch_embeddings = model.encode(batch, normalize_embeddings=<span class="hljs-literal">True</span>)<br>        all_embeddings.extend(batch_embeddings)<br>    <span class="hljs-keyword">return</span> np.array(all_embeddings)<br></code></pre></td></tr></table></figure>
+<h3 id="query-embedding-优化">Query Embedding 优化</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-comment"># Instruction-tuned embedding for queries vs documents</span><br><span class="hljs-comment"># BGE models use different prefixes for queries and documents</span><br><br>query_prefix = <span class="hljs-string">&quot;为这个句子生成表示以用于检索相关文章: &quot;</span><br>doc_prefix = <span class="hljs-string">&quot;&quot;</span><br><br>query_embedding = model.encode(query_prefix + <span class="hljs-string">&quot;什么是RAG?&quot;</span>)<br>doc_embedding = model.encode(doc_prefix + <span class="hljs-string">&quot;RAG是检索增强生成的缩写...&quot;</span>)<br><br><span class="hljs-comment"># This asymmetric encoding often improves retrieval quality</span><br></code></pre></td></tr></table></figure>
+<h2 id="向量检索">向量检索</h2>
+<h3 id="使用-chromadb">使用 ChromaDB</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">import</span> chromadb<br><span class="hljs-keyword">from</span> chromadb.utils <span class="hljs-keyword">import</span> embedding_functions<br><br><span class="hljs-comment"># Initialize client</span><br>client = chromadb.PersistentClient(path=<span class="hljs-string">&quot;./chroma_db&quot;</span>)<br><br><span class="hljs-comment"># Create collection with embedding function</span><br>embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(<br>    model_name=<span class="hljs-string">&quot;BAAI/bge-large-zh-v1.5&quot;</span><br>)<br><br>collection = client.get_or_create_collection(<br>    name=<span class="hljs-string">&quot;knowledge_base&quot;</span>,<br>    embedding_function=embedding_fn,<br>    metadata=&#123;<span class="hljs-string">&quot;hnsw:space&quot;</span>: <span class="hljs-string">&quot;cosine&quot;</span>&#125;,<br>)<br><br><span class="hljs-comment"># Add documents</span><br>collection.add(<br>    documents=chunks,<br>    metadatas=[&#123;<span class="hljs-string">&quot;source&quot;</span>: <span class="hljs-string">&quot;doc1.pdf&quot;</span>, <span class="hljs-string">&quot;page&quot;</span>: i&#125; <span class="hljs-keyword">for</span> i <span class="hljs-keyword">in</span> <span class="hljs-built_in">range</span>(<span class="hljs-built_in">len</span>(chunks))],<br>    ids=[<span class="hljs-string">f&quot;chunk_<span class="hljs-subst">&#123;i&#125;</span>&quot;</span> <span class="hljs-keyword">for</span> i <span class="hljs-keyword">in</span> <span class="hljs-built_in">range</span>(<span class="hljs-built_in">len</span>(chunks))],<br>)<br><br><span class="hljs-comment"># Query</span><br>results = collection.query(<br>    query_texts=[<span class="hljs-string">&quot;什么是向量数据库?&quot;</span>],<br>    n_results=<span class="hljs-number">5</span>,<br>    where=&#123;<span class="hljs-string">&quot;source&quot;</span>: <span class="hljs-string">&quot;doc1.pdf&quot;</span>&#125;,  <span class="hljs-comment"># Metadata filter</span><br>)<br></code></pre></td></tr></table></figure>
+<h3 id="混合检索hybrid-search">混合检索（Hybrid Search）</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">from</span> langchain.retrievers <span class="hljs-keyword">import</span> EnsembleRetriever<br><span class="hljs-keyword">from</span> langchain_community.retrievers <span class="hljs-keyword">import</span> BM25Retriever<br><span class="hljs-keyword">from</span> langchain_community.vectorstores <span class="hljs-keyword">import</span> Chroma<br><br><span class="hljs-comment"># Sparse retriever (keyword-based)</span><br>bm25_retriever = BM25Retriever.from_documents(documents)<br>bm25_retriever.k = <span class="hljs-number">5</span><br><br><span class="hljs-comment"># Dense retriever (vector-based)</span><br>vector_retriever = Chroma.from_documents(<br>    documents, embedding=embeddings<br>).as_retriever(search_kwargs=&#123;<span class="hljs-string">&quot;k&quot;</span>: <span class="hljs-number">5</span>&#125;)<br><br><span class="hljs-comment"># Ensemble: combine sparse + dense with weights</span><br>ensemble_retriever = EnsembleRetriever(<br>    retrievers=[bm25_retriever, vector_retriever],<br>    weights=[<span class="hljs-number">0.3</span>, <span class="hljs-number">0.7</span>],  <span class="hljs-comment"># Favor vector search</span><br>)<br><br>results = ensemble_retriever.invoke(<span class="hljs-string">&quot;RAG的工作原理是什么?&quot;</span>)<br></code></pre></td></tr></table></figure>
+<pre class="mermaid">graph LR
+    A[用户查询] --&gt; B[BM25 关键词检索]
+    A --&gt; C[向量相似度检索]
+
+    B --&gt; D[BM25 结果&lt;br/&gt;权重 0.3]
+    C --&gt; E[向量结果&lt;br/&gt;权重 0.7]
+
+    D --&gt; F[Reciprocal Rank Fusion&lt;br/&gt;结果合并]
+    E --&gt; F
+
+    F --&gt; G[Top-K 候选文档]
+
+    style B fill:#f39c12,color:#000
+    style C fill:#3498db,color:#fff
+    style F fill:#9b59b6,color:#fff</pre>
+<h2 id="重排序-re-ranking">重排序 (Re-ranking)</h2>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">from</span> sentence_transformers <span class="hljs-keyword">import</span> CrossEncoder<br><br><span class="hljs-comment"># Cross-encoder for re-ranking</span><br>reranker = CrossEncoder(<span class="hljs-string">&#x27;BAAI/bge-reranker-v2-m3&#x27;</span>)<br><br>query = <span class="hljs-string">&quot;RAG架构的核心组件有哪些?&quot;</span><br>candidates = [doc.page_content <span class="hljs-keyword">for</span> doc <span class="hljs-keyword">in</span> retrieved_docs]<br><br><span class="hljs-comment"># Score each (query, candidate) pair</span><br>pairs = [[query, candidate] <span class="hljs-keyword">for</span> candidate <span class="hljs-keyword">in</span> candidates]<br>scores = reranker.predict(pairs)<br><br><span class="hljs-comment"># Sort by relevance score</span><br>ranked_results = <span class="hljs-built_in">sorted</span>(<br>    <span class="hljs-built_in">zip</span>(retrieved_docs, scores),<br>    key=<span class="hljs-keyword">lambda</span> x: x[<span class="hljs-number">1</span>],<br>    reverse=<span class="hljs-literal">True</span>,<br>)<br><br><span class="hljs-comment"># Take top-k after re-ranking</span><br>top_k_docs = [doc <span class="hljs-keyword">for</span> doc, score <span class="hljs-keyword">in</span> ranked_results[:<span class="hljs-number">3</span>]]<br></code></pre></td></tr></table></figure>
+<h2 id="prompt-构建">Prompt 构建</h2>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">from</span> langchain.prompts <span class="hljs-keyword">import</span> ChatPromptTemplate<br><br>RAG_PROMPT = ChatPromptTemplate.from_messages([<br>    (<span class="hljs-string">&quot;system&quot;</span>, <span class="hljs-string">&quot;&quot;&quot;你是一个专业的技术问答助手。基于以下提供的上下文信息回答用户的问题。</span><br><span class="hljs-string"></span><br><span class="hljs-string">规则：</span><br><span class="hljs-string">1. 只基于提供的上下文回答，不要使用训练数据中的知识</span><br><span class="hljs-string">2. 如果上下文中没有相关信息，明确说明&quot;根据提供的资料，我无法回答这个问题&quot;</span><br><span class="hljs-string">3. 在回答中引用信息来源，格式为 [来源: 文档名, 页码]</span><br><span class="hljs-string">4. 保持回答简洁准确</span><br><span class="hljs-string"></span><br><span class="hljs-string">上下文信息：</span><br><span class="hljs-string">&#123;context&#125;&quot;&quot;&quot;</span>),<br>    (<span class="hljs-string">&quot;human&quot;</span>, <span class="hljs-string">&quot;&#123;question&#125;&quot;</span>),<br>])<br><br><span class="hljs-keyword">def</span> <span class="hljs-title function_">format_context</span>(<span class="hljs-params">documents</span>):<br>    <span class="hljs-string">&quot;&quot;&quot;Format retrieved documents into context string.&quot;&quot;&quot;</span><br>    context_parts = []<br>    <span class="hljs-keyword">for</span> i, doc <span class="hljs-keyword">in</span> <span class="hljs-built_in">enumerate</span>(documents):<br>        source = doc.metadata.get(<span class="hljs-string">&#x27;source&#x27;</span>, <span class="hljs-string">&#x27;unknown&#x27;</span>)<br>        page = doc.metadata.get(<span class="hljs-string">&#x27;page&#x27;</span>, <span class="hljs-string">&#x27;N/A&#x27;</span>)<br>        context_parts.append(<br>            <span class="hljs-string">f&quot;[文档<span class="hljs-subst">&#123;i+<span class="hljs-number">1</span>&#125;</span>] 来源: <span class="hljs-subst">&#123;source&#125;</span>, 页码: <span class="hljs-subst">&#123;page&#125;</span>\n<span class="hljs-subst">&#123;doc.page_content&#125;</span>&quot;</span><br>        )<br>    <span class="hljs-keyword">return</span> <span class="hljs-string">&quot;\n\n---\n\n&quot;</span>.join(context_parts)<br><br><span class="hljs-comment"># Build the prompt</span><br>context = format_context(top_k_docs)<br>prompt = RAG_PROMPT.format_messages(context=context, question=query)<br></code></pre></td></tr></table></figure>
+<h2 id="完整-rag-pipeline">完整 RAG Pipeline</h2>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">from</span> langchain_openai <span class="hljs-keyword">import</span> ChatOpenAI<br><span class="hljs-keyword">from</span> langchain_core.output_parsers <span class="hljs-keyword">import</span> StrOutputParser<br><span class="hljs-keyword">from</span> langchain_core.runnables <span class="hljs-keyword">import</span> RunnablePassthrough<br><br><span class="hljs-comment"># Initialize components</span><br>llm = ChatOpenAI(model=<span class="hljs-string">&quot;gpt-4o&quot;</span>, temperature=<span class="hljs-number">0</span>)<br>retriever = ensemble_retriever<br><br><span class="hljs-comment"># Build RAG chain</span><br>rag_chain = (<br>    &#123;<br>        <span class="hljs-string">&quot;context&quot;</span>: retriever | format_context,<br>        <span class="hljs-string">&quot;question&quot;</span>: RunnablePassthrough(),<br>    &#125;<br>    | RAG_PROMPT<br>    | llm<br>    | StrOutputParser()<br>)<br><br><span class="hljs-comment"># Invoke</span><br>answer = rag_chain.invoke(<span class="hljs-string">&quot;什么是RAG架构?&quot;</span>)<br><span class="hljs-built_in">print</span>(answer)<br></code></pre></td></tr></table></figure>
+<h2 id="query-重写与扩展">Query 重写与扩展</h2>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-comment"># Multi-query: generate multiple query variations</span><br><span class="hljs-keyword">from</span> langchain.retrievers.multi_query <span class="hljs-keyword">import</span> MultiQueryRetriever<br><br>multi_query_retriever = MultiQueryRetriever.from_llm(<br>    retriever=vector_retriever,<br>    llm=llm,<br>)<br><br><span class="hljs-comment"># HyDE: Hypothetical Document Embeddings</span><br><span class="hljs-keyword">def</span> <span class="hljs-title function_">hyde_transform</span>(<span class="hljs-params">query: <span class="hljs-built_in">str</span></span>) -&gt; <span class="hljs-built_in">str</span>:<br>    <span class="hljs-string">&quot;&quot;&quot;Generate a hypothetical answer, then use it for retrieval.&quot;&quot;&quot;</span><br>    prompt = <span class="hljs-string">f&quot;请写一段简短的文字来回答这个问题: <span class="hljs-subst">&#123;query&#125;</span>&quot;</span><br>    hypothetical_answer = llm.invoke(prompt).content<br>    <span class="hljs-keyword">return</span> hypothetical_answer<br><br><span class="hljs-comment"># Step-back prompting for abstract retrieval</span><br><span class="hljs-keyword">def</span> <span class="hljs-title function_">step_back_query</span>(<span class="hljs-params">query: <span class="hljs-built_in">str</span></span>) -&gt; <span class="hljs-built_in">str</span>:<br>    prompt = <span class="hljs-string">f&quot;这个问题背后更基础的概念是什么: <span class="hljs-subst">&#123;query&#125;</span>&quot;</span><br>    abstract_query = llm.invoke(prompt).content<br>    <span class="hljs-keyword">return</span> abstract_query<br></code></pre></td></tr></table></figure>
+<h2 id="评估指标">评估指标</h2>
+<pre class="mermaid">graph TD
+    A[RAG 评估维度] --&gt; B[检索质量]
+    A --&gt; C[生成质量]
+    A --&gt; D[端到端质量]
+
+    B --&gt; B1[Recall@K]
+    B --&gt; B2[MRR - Mean Reciprocal Rank]
+    B --&gt; B3[NDCG]
+
+    C --&gt; C1[Faithfulness 忠实度]
+    C --&gt; C2[Answer Relevancy 答案相关性]
+    C --&gt; C3[Hallucination 幻觉检测]
+
+    D --&gt; D1[RAGAS Score]
+    D --&gt; D2[Human Evaluation]
+
+    style B fill:#3498db,color:#fff
+    style C fill:#e74c3c,color:#fff
+    style D fill:#2ecc71,color:#fff</pre>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">from</span> ragas <span class="hljs-keyword">import</span> evaluate<br><span class="hljs-keyword">from</span> ragas.metrics <span class="hljs-keyword">import</span> (<br>    faithfulness,<br>    answer_relevancy,<br>    context_precision,<br>    context_recall,<br>)<br><br><span class="hljs-comment"># Evaluate RAG pipeline with RAGAS</span><br>result = evaluate(<br>    dataset=eval_dataset,<br>    metrics=[<br>        faithfulness,       <span class="hljs-comment"># Is the answer grounded in context?</span><br>        answer_relevancy,   <span class="hljs-comment"># Is the answer relevant to the question?</span><br>        context_precision,  <span class="hljs-comment"># Are retrieved docs relevant?</span><br>        context_recall,     <span class="hljs-comment"># Are all relevant docs retrieved?</span><br>    ],<br>)<br><br><span class="hljs-built_in">print</span>(result)<br><span class="hljs-comment"># &#123;&#x27;faithfulness&#x27;: 0.92, &#x27;answer_relevancy&#x27;: 0.88,</span><br><span class="hljs-comment">#  &#x27;context_precision&#x27;: 0.85, &#x27;context_recall&#x27;: 0.78&#125;</span><br></code></pre></td></tr></table></figure>
+<h2 id="生产优化建议">生产优化建议</h2>
+<ol type="1">
+<li><strong>分块大小调优</strong>：根据文档类型和查询模式实验不同的
+chunk_size（256-1024）</li>
+<li><strong>元数据过滤</strong>：利用文档元数据（来源、时间、类型）缩小检索范围</li>
+<li><strong>缓存层</strong>：对热门查询的检索结果和生成结果进行缓存</li>
+<li><strong>流式输出</strong>：使用 Streaming 提升用户感知速度</li>
+<li><strong>对话历史</strong>：将对话历史融入 query
+重写，实现多轮对话</li>
+<li><strong>监控体系</strong>：记录检索延迟、LLM
+延迟、用户反馈等指标</li>
+</ol>
+<h2 id="总结">总结</h2>
+<p>RAG 架构的核心在于”让 LLM
+基于准确的外部知识回答问题”。从文档分块到检索再到生成，每个环节都有优化空间。混合检索（BM25
++ 向量）配合重排序通常能显著提升检索质量；层次化分块和 query
+重写则能进一步提升端到端效果。最重要的是建立完善的评估体系（如
+RAGAS），用数据驱动优化迭代。</p>
+<hr />
+<h2 id="踩坑记录">踩坑记录</h2>
+<p>公司内部搭建技术知识库，把 5 年的技术文档和 Wiki 接入 LLM，供团队
+Q&amp;A
+查询。第一版用了最简单的方案：<code>chunk_size=500 tokens</code>，<code>top-k=5</code>，直接把检索结果拼进
+prompt。</p>
+<p>上线后用户反馈「文不对题」——问 K8s 相关问题，回答里全是 Redis
+内容。排查发现：向量检索只看语义相似度，「如何处理高并发」这类通用问法会召回各种技术主题的
+chunk，质量完全不可控。</p>
+<p>第一次优化：加了基于文档标签的 keyword filter
+做预过滤，把候选集从全库缩小到相关技术域，召回率从 52% 提升到 68%。</p>
+<p>第二次优化：引入 Rerank 模型（BGE-reranker-v2-m3），对 top-k=20
+的候选结果重排序后取 top-5，召回率进一步提升到 81%，用户满意度评分从 3.2
+升到 4.1（满分 5）。</p>
+<p>目前还在迭代的问题：chunk
+边界切割导致上下文断裂，比如一个代码示例被切成两个
+chunk，单独看都看不懂。正在试验按语义段落切分而非固定 token 数。</p>
+<h2 id="实测结果">实测结果</h2>
+<p>测试集：200 个内部技术问答，由 3 名工程师人工标注标准答案</p>
+<table>
+<thead>
+<tr class="header">
+<th>方案</th>
+<th>召回率</th>
+<th>答案相关性（1-5）</th>
+<th>幻觉率</th>
+<th>检索 P99 延迟</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>基础 RAG（top-k=5）</td>
+<td>52%</td>
+<td>3.2</td>
+<td>23%</td>
+<td>120ms</td>
+</tr>
+<tr class="even">
+<td>+ keyword filter</td>
+<td>68%</td>
+<td>3.6</td>
+<td>15%</td>
+<td>135ms</td>
+</tr>
+<tr class="odd">
+<td>+ Rerank（BGE）</td>
+<td>81%</td>
+<td>4.1</td>
+<td>9%</td>
+<td>380ms</td>
+</tr>
+</tbody>
+</table>
+<p>延迟增加 260ms（Rerank 的代价），但准确率提升明显，用户接受度高。</p>
+<h2 id="我的看法">我的看法</h2>
+<p>RAG
+不是「接个向量数据库就完事了」。在多个项目里见过的最大误区是过分相信向量检索的语义理解——向量模型对领域专有名词（特定产品名、版本号、错误码）非常不敏感，纯语义检索在技术知识库场景表现很差。</p>
+<p><strong>混合检索（向量 + BM25
+关键词）几乎在任何场景都比纯向量检索更稳</strong>，实现也不复杂，建议作为默认方案。Rerank
+是质量保障的最后一道防线，加上之后效果提升往往超预期，不要因为多 200ms
+延迟就省掉这一步。</p>
+<p>另外，RAG 系统一定要从第一天就建立评估体系，哪怕只是一个 50
+条问题的小测试集。没有量化指标，优化就是盲飞。</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2025-08-26</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">2.9k 字 · 7 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/prompt-engineering-advanced/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">高级Prompt Engineering技巧与模式</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/rust-error-handling/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Rust错误处理：Result/Option模式详解</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#rag-%E6%95%B4%E4%BD%93%E6%9E%B6%E6%9E%84"><span class="toc-text">RAG 整体架构</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%96%87%E6%A1%A3%E5%88%86%E5%9D%97%E7%AD%96%E7%95%A5"><span class="toc-text">文档分块策略</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9B%BA%E5%AE%9A%E5%A4%A7%E5%B0%8F%E5%88%86%E5%9D%97"><span class="toc-text">固定大小分块</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%AF%AD%E4%B9%89%E5%88%86%E5%9D%97"><span class="toc-text">语义分块</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%B1%82%E6%AC%A1%E5%8C%96%E5%88%86%E5%9D%97parent-child"><span class="toc-text">层次化分块（Parent-Child）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%88%86%E5%9D%97%E7%AD%96%E7%95%A5%E5%AF%B9%E6%AF%94"><span class="toc-text">分块策略对比</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#embedding-%E7%94%9F%E6%88%90"><span class="toc-text">Embedding 生成</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#query-embedding-%E4%BC%98%E5%8C%96"><span class="toc-text">Query Embedding 优化</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%90%91%E9%87%8F%E6%A3%80%E7%B4%A2"><span class="toc-text">向量检索</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BD%BF%E7%94%A8-chromadb"><span class="toc-text">使用 ChromaDB</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%B7%B7%E5%90%88%E6%A3%80%E7%B4%A2hybrid-search"><span class="toc-text">混合检索（Hybrid Search）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%87%8D%E6%8E%92%E5%BA%8F-re-ranking"><span class="toc-text">重排序 (Re-ranking)</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#prompt-%E6%9E%84%E5%BB%BA"><span class="toc-text">Prompt 构建</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%8C%E6%95%B4-rag-pipeline"><span class="toc-text">完整 RAG Pipeline</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#query-%E9%87%8D%E5%86%99%E4%B8%8E%E6%89%A9%E5%B1%95"><span class="toc-text">Query 重写与扩展</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%AF%84%E4%BC%B0%E6%8C%87%E6%A0%87"><span class="toc-text">评估指标</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%94%9F%E4%BA%A7%E4%BC%98%E5%8C%96%E5%BB%BA%E8%AE%AE"><span class="toc-text">生产优化建议</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%B8%A9%E5%9D%91%E8%AE%B0%E5%BD%95"><span class="toc-text">踩坑记录</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E6%B5%8B%E7%BB%93%E6%9E%9C"><span class="toc-text">实测结果</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%88%91%E7%9A%84%E7%9C%8B%E6%B3%95"><span class="toc-text">我的看法</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

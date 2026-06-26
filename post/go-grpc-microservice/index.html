@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Go gRPC微服务开发完全指南 · zt&#39;s Blog</title>
+  <meta name="description" content="全面介绍Go gRPC微服务开发，涵盖Protocol Buffers、四种RPC模式、拦截器与服务治理">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/go-grpc-microservice/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Go gRPC微服务开发完全指南">
+  <meta property="og:description" content="全面介绍Go gRPC微服务开发，涵盖Protocol Buffers、四种RPC模式、拦截器与服务治理">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/go-grpc-microservice/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2023-09-19T16:00:00.000Z">
+  <meta property="article:modified_time" content="2023-09-19T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Go gRPC微服务开发完全指南">
+  <meta name="twitter:description" content="全面介绍Go gRPC微服务开发，涵盖Protocol Buffers、四种RPC模式、拦截器与服务治理">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Go gRPC微服务开发完全指南","description":"全面介绍Go gRPC微服务开发，涵盖Protocol Buffers、四种RPC模式、拦截器与服务治理","datePublished":"2023-09-19T16:00:00.000Z","dateModified":"2023-09-19T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/go-grpc-microservice/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Go","item":"https://withesse.co/categories/Go/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:190">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Go/">Go</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/grpc/"><span class="hash">#</span>grpc</a><a class="tag" href="/tags/go/"><span class="hash">#</span>go</a><a class="tag" href="/tags/protobuf/"><span class="hash">#</span>protobuf</a><a class="tag" href="/tags/microservice/"><span class="hash">#</span>microservice</a>
+        
+      </div>
+
+      <h1>Go gRPC微服务开发完全指南</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2023.09.20</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          <span class="row gap8" style="align-items:center"><span class="lang-dot" style="background:#00ADD8"></span>Go</span>
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 9 min</span>
+        </span>
+        <span class="wc"><span class="num">3.8k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9E%B6%E6%9E%84%E6%A6%82%E8%A7%88"><span class="toc-text">架构概览</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#protocol-buffers"><span class="toc-text">Protocol Buffers</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%9A%E4%B9%89%E6%9C%8D%E5%8A%A1"><span class="toc-text">定义服务</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BB%A3%E7%A0%81%E7%94%9F%E6%88%90"><span class="toc-text">代码生成</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%9B%E7%A7%8Drpc%E6%A8%A1%E5%BC%8F"><span class="toc-text">四种RPC模式</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#unary-rpc%E4%B8%80%E5%85%83%E8%B0%83%E7%94%A8"><span class="toc-text">1. Unary RPC（一元调用）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#server-streaming-rpc%E6%9C%8D%E5%8A%A1%E7%AB%AF%E6%B5%81"><span class="toc-text">2. Server Streaming
+RPC（服务端流）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#client-streaming-rpc%E5%AE%A2%E6%88%B7%E7%AB%AF%E6%B5%81"><span class="toc-text">3. Client Streaming
+RPC（客户端流）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#bidirectional-streaming-rpc%E5%8F%8C%E5%90%91%E6%B5%81"><span class="toc-text">4. Bidirectional Streaming
+RPC（双向流）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%8B%A6%E6%88%AA%E5%99%A8interceptor"><span class="toc-text">拦截器（Interceptor）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9C%8D%E5%8A%A1%E7%AB%AF%E4%B8%8E%E5%AE%A2%E6%88%B7%E7%AB%AF%E5%90%AF%E5%8A%A8"><span class="toc-text">服务端与客户端启动</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%9C%8D%E5%8A%A1%E7%AB%AF"><span class="toc-text">服务端</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%A2%E6%88%B7%E7%AB%AF"><span class="toc-text">客户端</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%94%99%E8%AF%AF%E5%A4%84%E7%90%86"><span class="toc-text">错误处理</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96"><span class="toc-text">性能优化</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BF%9E%E6%8E%A5%E7%AE%A1%E7%90%86"><span class="toc-text">连接管理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%B6%88%E6%81%AF%E5%A4%A7%E5%B0%8F%E4%BC%98%E5%8C%96"><span class="toc-text">消息大小优化</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="引言">引言</h2>
+<p>gRPC是Google开源的高性能、跨语言的RPC框架，基于HTTP/2协议和Protocol
+Buffers序列化格式。在微服务架构中，gRPC凭借其高效的二进制协议、强类型的接口定义、以及丰富的流式传输能力，已成为服务间通信的主流选择之一。</p>
+<p>本文将系统介绍Go语言中gRPC微服务的开发方法，从Protocol
+Buffers定义开始，覆盖四种RPC模式、拦截器、负载均衡、服务发现、错误处理和健康检查等核心主题。</p>
+<h2 id="架构概览">架构概览</h2>
+<pre class="mermaid">graph TB
+    subgraph "gRPC 架构"
+        CLIENT["gRPC Client"]
+        SERVER["gRPC Server"]
+
+        CLIENT --&gt;|"HTTP/2 + Protobuf"| SERVER
+
+        subgraph "Client Side"
+            STUB["Generated Stub"] --&gt; CC["ClientConn"]
+            CC --&gt; RESOLVER["Name Resolver"]
+            CC --&gt; BALANCER["Load Balancer"]
+            CC --&gt; INTERCEPTOR_C["Client Interceptors"]
+        end
+
+        subgraph "Server Side"
+            SVC["Service Implementation"]
+            INTERCEPTOR_S["Server Interceptors"]
+            INTERCEPTOR_S --&gt; SVC
+        end
+    end
+
+    CLIENT --&gt; STUB
+    SERVER --&gt; INTERCEPTOR_S</pre>
+<h2 id="protocol-buffers">Protocol Buffers</h2>
+<h3 id="定义服务">定义服务</h3>
+<figure class="highlight protobuf"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br></pre></td><td class="code"><pre><code class="hljs protobuf"><span class="hljs-comment">// proto/user/v1/user.proto</span><br>syntax = <span class="hljs-string">&quot;proto3&quot;</span>;<br><br><span class="hljs-keyword">package</span> user.v1;<br><br><span class="hljs-keyword">option</span> go_package = <span class="hljs-string">&quot;github.com/example/myapp/gen/user/v1;userv1&quot;</span>;<br><br><span class="hljs-keyword">import</span> <span class="hljs-string">&quot;google/protobuf/timestamp.proto&quot;</span>;<br><span class="hljs-keyword">import</span> <span class="hljs-string">&quot;google/protobuf/empty.proto&quot;</span>;<br><span class="hljs-keyword">import</span> <span class="hljs-string">&quot;google/protobuf/field_mask.proto&quot;</span>;<br><br><span class="hljs-comment">// 用户服务定义</span><br><span class="hljs-keyword">service </span><span class="hljs-title class_">UserService</span> &#123;<br>    <span class="hljs-comment">// Unary RPC - 一元调用</span><br>    <span class="hljs-function"><span class="hljs-keyword">rpc</span> GetUser(GetUserRequest) <span class="hljs-keyword">returns</span> (GetUserResponse)</span>;<br>    <span class="hljs-function"><span class="hljs-keyword">rpc</span> CreateUser(CreateUserRequest) <span class="hljs-keyword">returns</span> (CreateUserResponse)</span>;<br>    <span class="hljs-function"><span class="hljs-keyword">rpc</span> UpdateUser(UpdateUserRequest) <span class="hljs-keyword">returns</span> (UpdateUserResponse)</span>;<br>    <span class="hljs-function"><span class="hljs-keyword">rpc</span> DeleteUser(DeleteUserRequest) <span class="hljs-keyword">returns</span> (google.protobuf.Empty)</span>;<br><br>    <span class="hljs-comment">// Server Streaming RPC - 服务端流</span><br>    <span class="hljs-function"><span class="hljs-keyword">rpc</span> ListUsers(ListUsersRequest) <span class="hljs-keyword">returns</span> (stream User)</span>;<br><br>    <span class="hljs-comment">// Client Streaming RPC - 客户端流</span><br>    <span class="hljs-function"><span class="hljs-keyword">rpc</span> BatchCreateUsers(stream CreateUserRequest) <span class="hljs-keyword">returns</span> (BatchCreateUsersResponse)</span>;<br><br>    <span class="hljs-comment">// Bidirectional Streaming RPC - 双向流</span><br>    <span class="hljs-function"><span class="hljs-keyword">rpc</span> SyncUsers(stream SyncRequest) <span class="hljs-keyword">returns</span> (stream SyncResponse)</span>;<br>&#125;<br><br><span class="hljs-comment">// 消息定义</span><br><span class="hljs-keyword">message </span><span class="hljs-title class_">User</span> &#123;<br>    <span class="hljs-type">string</span> id = <span class="hljs-number">1</span>;<br>    <span class="hljs-type">string</span> name = <span class="hljs-number">2</span>;<br>    <span class="hljs-type">string</span> email = <span class="hljs-number">3</span>;<br>    <span class="hljs-type">int32</span> age = <span class="hljs-number">4</span>;<br>    UserStatus status = <span class="hljs-number">5</span>;<br>    google.protobuf.Timestamp created_at = <span class="hljs-number">6</span>;<br>    google.protobuf.Timestamp updated_at = <span class="hljs-number">7</span>;<br>&#125;<br><br><span class="hljs-keyword">enum </span><span class="hljs-title class_">UserStatus</span> &#123;<br>    USER_STATUS_UNSPECIFIED = <span class="hljs-number">0</span>;<br>    USER_STATUS_ACTIVE = <span class="hljs-number">1</span>;<br>    USER_STATUS_INACTIVE = <span class="hljs-number">2</span>;<br>    USER_STATUS_BANNED = <span class="hljs-number">3</span>;<br>&#125;<br><br><span class="hljs-keyword">message </span><span class="hljs-title class_">GetUserRequest</span> &#123;<br>    <span class="hljs-type">string</span> id = <span class="hljs-number">1</span>;<br>&#125;<br><br><span class="hljs-keyword">message </span><span class="hljs-title class_">GetUserResponse</span> &#123;<br>    User user = <span class="hljs-number">1</span>;<br>&#125;<br><br><span class="hljs-keyword">message </span><span class="hljs-title class_">CreateUserRequest</span> &#123;<br>    <span class="hljs-type">string</span> name = <span class="hljs-number">1</span>;<br>    <span class="hljs-type">string</span> email = <span class="hljs-number">2</span>;<br>    <span class="hljs-type">int32</span> age = <span class="hljs-number">3</span>;<br>&#125;<br><br><span class="hljs-keyword">message </span><span class="hljs-title class_">CreateUserResponse</span> &#123;<br>    User user = <span class="hljs-number">1</span>;<br>&#125;<br><br><span class="hljs-keyword">message </span><span class="hljs-title class_">UpdateUserRequest</span> &#123;<br>    User user = <span class="hljs-number">1</span>;<br>    google.protobuf.FieldMask update_mask = <span class="hljs-number">2</span>;<br>&#125;<br><br><span class="hljs-keyword">message </span><span class="hljs-title class_">UpdateUserResponse</span> &#123;<br>    User user = <span class="hljs-number">1</span>;<br>&#125;<br><br><span class="hljs-keyword">message </span><span class="hljs-title class_">DeleteUserRequest</span> &#123;<br>    <span class="hljs-type">string</span> id = <span class="hljs-number">1</span>;<br>&#125;<br><br><span class="hljs-keyword">message </span><span class="hljs-title class_">ListUsersRequest</span> &#123;<br>    <span class="hljs-type">int32</span> page_size = <span class="hljs-number">1</span>;<br>    <span class="hljs-type">string</span> page_token = <span class="hljs-number">2</span>;<br>    <span class="hljs-type">string</span> filter = <span class="hljs-number">3</span>;<br>&#125;<br><br><span class="hljs-keyword">message </span><span class="hljs-title class_">BatchCreateUsersResponse</span> &#123;<br>    <span class="hljs-type">int32</span> created_count = <span class="hljs-number">1</span>;<br>    <span class="hljs-keyword">repeated</span> <span class="hljs-type">string</span> user_ids = <span class="hljs-number">2</span>;<br>&#125;<br><br><span class="hljs-keyword">message </span><span class="hljs-title class_">SyncRequest</span> &#123;<br>    <span class="hljs-keyword">oneof</span> action &#123;<br>        User upsert = <span class="hljs-number">1</span>;<br>        <span class="hljs-type">string</span> delete_id = <span class="hljs-number">2</span>;<br>    &#125;<br>&#125;<br><br><span class="hljs-keyword">message </span><span class="hljs-title class_">SyncResponse</span> &#123;<br>    <span class="hljs-type">string</span> id = <span class="hljs-number">1</span>;<br>    <span class="hljs-type">string</span> status = <span class="hljs-number">2</span>;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="代码生成">代码生成</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 安装工具</span><br>go install google.golang.org/protobuf/cmd/protoc-gen-go@latest<br>go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest<br><br><span class="hljs-comment"># 生成Go代码</span><br>protoc --go_out=. --go_opt=paths=source_relative \<br>       --go-grpc_out=. --go-grpc_opt=paths=source_relative \<br>       proto/user/v1/user.proto<br></code></pre></td></tr></table></figure>
+<h2 id="四种rpc模式">四种RPC模式</h2>
+<h3 id="unary-rpc一元调用">1. Unary RPC（一元调用）</h3>
+<pre class="mermaid">sequenceDiagram
+    participant C as Client
+    participant S as Server
+    C-&gt;&gt;S: GetUserRequest
+    S--&gt;&gt;C: GetUserResponse
+    Note over C,S: 最简单的请求-响应模式</pre>
+<p>服务端实现：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-keyword">package</span> main<br><br><span class="hljs-keyword">import</span> (<br>    <span class="hljs-string">&quot;context&quot;</span><br>    <span class="hljs-string">&quot;fmt&quot;</span><br>    <span class="hljs-string">&quot;log&quot;</span><br>    <span class="hljs-string">&quot;net&quot;</span><br>    <span class="hljs-string">&quot;sync&quot;</span><br>    <span class="hljs-string">&quot;time&quot;</span><br><br>    <span class="hljs-string">&quot;google.golang.org/grpc&quot;</span><br>    <span class="hljs-string">&quot;google.golang.org/grpc/codes&quot;</span><br>    <span class="hljs-string">&quot;google.golang.org/grpc/status&quot;</span><br>    <span class="hljs-string">&quot;google.golang.org/protobuf/types/known/emptypb&quot;</span><br>    <span class="hljs-string">&quot;google.golang.org/protobuf/types/known/timestamppb&quot;</span><br><br>    userv1 <span class="hljs-string">&quot;github.com/example/myapp/gen/user/v1&quot;</span><br>)<br><br><span class="hljs-keyword">type</span> userServer <span class="hljs-keyword">struct</span> &#123;<br>    userv1.UnimplementedUserServiceServer<br>    mu    sync.RWMutex<br>    users <span class="hljs-keyword">map</span>[<span class="hljs-type">string</span>]*userv1.User<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">newUserServer</span><span class="hljs-params">()</span></span> *userServer &#123;<br>    <span class="hljs-keyword">return</span> &amp;userServer&#123;<br>        users: <span class="hljs-built_in">make</span>(<span class="hljs-keyword">map</span>[<span class="hljs-type">string</span>]*userv1.User),<br>    &#125;<br>&#125;<br><br><span class="hljs-comment">// Unary RPC: GetUser</span><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-params">(s *userServer)</span></span> GetUser(ctx context.Context, req *userv1.GetUserRequest) (*userv1.GetUserResponse, <span class="hljs-type">error</span>) &#123;<br>    <span class="hljs-keyword">if</span> req.Id == <span class="hljs-string">&quot;&quot;</span> &#123;<br>        <span class="hljs-keyword">return</span> <span class="hljs-literal">nil</span>, status.Error(codes.InvalidArgument, <span class="hljs-string">&quot;user id is required&quot;</span>)<br>    &#125;<br><br>    s.mu.RLock()<br>    <span class="hljs-keyword">defer</span> s.mu.RUnlock()<br><br>    user, ok := s.users[req.Id]<br>    <span class="hljs-keyword">if</span> !ok &#123;<br>        <span class="hljs-keyword">return</span> <span class="hljs-literal">nil</span>, status.Errorf(codes.NotFound, <span class="hljs-string">&quot;user %s not found&quot;</span>, req.Id)<br>    &#125;<br><br>    <span class="hljs-keyword">return</span> &amp;userv1.GetUserResponse&#123;User: user&#125;, <span class="hljs-literal">nil</span><br>&#125;<br><br><span class="hljs-comment">// Unary RPC: CreateUser</span><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-params">(s *userServer)</span></span> CreateUser(ctx context.Context, req *userv1.CreateUserRequest) (*userv1.CreateUserResponse, <span class="hljs-type">error</span>) &#123;<br>    <span class="hljs-keyword">if</span> req.Name == <span class="hljs-string">&quot;&quot;</span> || req.Email == <span class="hljs-string">&quot;&quot;</span> &#123;<br>        <span class="hljs-keyword">return</span> <span class="hljs-literal">nil</span>, status.Error(codes.InvalidArgument, <span class="hljs-string">&quot;name and email are required&quot;</span>)<br>    &#125;<br><br>    user := &amp;userv1.User&#123;<br>        Id:        generateID(),<br>        Name:      req.Name,<br>        Email:     req.Email,<br>        Age:       req.Age,<br>        Status:    userv1.UserStatus_USER_STATUS_ACTIVE,<br>        CreatedAt: timestamppb.Now(),<br>        UpdatedAt: timestamppb.Now(),<br>    &#125;<br><br>    s.mu.Lock()<br>    s.users[user.Id] = user<br>    s.mu.Unlock()<br><br>    <span class="hljs-keyword">return</span> &amp;userv1.CreateUserResponse&#123;User: user&#125;, <span class="hljs-literal">nil</span><br>&#125;<br><br><span class="hljs-comment">// Unary RPC: DeleteUser</span><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-params">(s *userServer)</span></span> DeleteUser(ctx context.Context, req *userv1.DeleteUserRequest) (*emptypb.Empty, <span class="hljs-type">error</span>) &#123;<br>    s.mu.Lock()<br>    <span class="hljs-keyword">defer</span> s.mu.Unlock()<br><br>    <span class="hljs-keyword">if</span> _, ok := s.users[req.Id]; !ok &#123;<br>        <span class="hljs-keyword">return</span> <span class="hljs-literal">nil</span>, status.Errorf(codes.NotFound, <span class="hljs-string">&quot;user %s not found&quot;</span>, req.Id)<br>    &#125;<br><br>    <span class="hljs-built_in">delete</span>(s.users, req.Id)<br>    <span class="hljs-keyword">return</span> &amp;emptypb.Empty&#123;&#125;, <span class="hljs-literal">nil</span><br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">generateID</span><span class="hljs-params">()</span></span> <span class="hljs-type">string</span> &#123;<br>    <span class="hljs-keyword">return</span> fmt.Sprintf(<span class="hljs-string">&quot;user-%d&quot;</span>, time.Now().UnixNano())<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="server-streaming-rpc服务端流">2. Server Streaming
+RPC（服务端流）</h3>
+<pre class="mermaid">sequenceDiagram
+    participant C as Client
+    participant S as Server
+    C-&gt;&gt;S: ListUsersRequest
+    S--&gt;&gt;C: User 1
+    S--&gt;&gt;C: User 2
+    S--&gt;&gt;C: User 3
+    S--&gt;&gt;C: (stream end)
+    Note over C,S: 服务端持续发送数据流</pre>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-comment">// Server Streaming: ListUsers</span><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-params">(s *userServer)</span></span> ListUsers(req *userv1.ListUsersRequest, stream userv1.UserService_ListUsersServer) <span class="hljs-type">error</span> &#123;<br>    s.mu.RLock()<br>    <span class="hljs-keyword">defer</span> s.mu.RUnlock()<br><br>    count := <span class="hljs-number">0</span><br>    <span class="hljs-keyword">for</span> _, user := <span class="hljs-keyword">range</span> s.users &#123;<br>        <span class="hljs-comment">// 检查context是否被取消</span><br>        <span class="hljs-keyword">if</span> err := stream.Context().Err(); err != <span class="hljs-literal">nil</span> &#123;<br>            <span class="hljs-keyword">return</span> status.Error(codes.Canceled, <span class="hljs-string">&quot;client cancelled&quot;</span>)<br>        &#125;<br><br>        <span class="hljs-keyword">if</span> err := stream.Send(user); err != <span class="hljs-literal">nil</span> &#123;<br>            <span class="hljs-keyword">return</span> status.Errorf(codes.Internal, <span class="hljs-string">&quot;failed to send user: %v&quot;</span>, err)<br>        &#125;<br>        count++<br><br>        <span class="hljs-comment">// 如果设置了分页大小</span><br>        <span class="hljs-keyword">if</span> req.PageSize &gt; <span class="hljs-number">0</span> &amp;&amp; <span class="hljs-type">int32</span>(count) &gt;= req.PageSize &#123;<br>            <span class="hljs-keyword">break</span><br>        &#125;<br>    &#125;<br><br>    <span class="hljs-keyword">return</span> <span class="hljs-literal">nil</span><br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="client-streaming-rpc客户端流">3. Client Streaming
+RPC（客户端流）</h3>
+<pre class="mermaid">sequenceDiagram
+    participant C as Client
+    participant S as Server
+    C-&gt;&gt;S: CreateUserRequest 1
+    C-&gt;&gt;S: CreateUserRequest 2
+    C-&gt;&gt;S: CreateUserRequest 3
+    C-&gt;&gt;S: (stream end)
+    S--&gt;&gt;C: BatchCreateUsersResponse
+    Note over C,S: 客户端持续发送，服务端最终响应</pre>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-comment">// Client Streaming: BatchCreateUsers</span><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-params">(s *userServer)</span></span> BatchCreateUsers(stream userv1.UserService_BatchCreateUsersServer) <span class="hljs-type">error</span> &#123;<br>    <span class="hljs-keyword">var</span> userIDs []<span class="hljs-type">string</span><br>    count := <span class="hljs-type">int32</span>(<span class="hljs-number">0</span>)<br><br>    <span class="hljs-keyword">for</span> &#123;<br>        req, err := stream.Recv()<br>        <span class="hljs-keyword">if</span> err != <span class="hljs-literal">nil</span> &#123;<br>            <span class="hljs-comment">// 客户端发送完毕</span><br>            <span class="hljs-keyword">if</span> err.Error() == <span class="hljs-string">&quot;EOF&quot;</span> &#123;<br>                <span class="hljs-keyword">break</span><br>            &#125;<br>            <span class="hljs-keyword">return</span> status.Errorf(codes.Internal, <span class="hljs-string">&quot;failed to receive: %v&quot;</span>, err)<br>        &#125;<br><br>        user := &amp;userv1.User&#123;<br>            Id:        generateID(),<br>            Name:      req.Name,<br>            Email:     req.Email,<br>            Age:       req.Age,<br>            Status:    userv1.UserStatus_USER_STATUS_ACTIVE,<br>            CreatedAt: timestamppb.Now(),<br>            UpdatedAt: timestamppb.Now(),<br>        &#125;<br><br>        s.mu.Lock()<br>        s.users[user.Id] = user<br>        s.mu.Unlock()<br><br>        userIDs = <span class="hljs-built_in">append</span>(userIDs, user.Id)<br>        count++<br>    &#125;<br><br>    <span class="hljs-keyword">return</span> stream.SendAndClose(&amp;userv1.BatchCreateUsersResponse&#123;<br>        CreatedCount: count,<br>        UserIds:      userIDs,<br>    &#125;)<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="bidirectional-streaming-rpc双向流">4. Bidirectional Streaming
+RPC（双向流）</h3>
+<pre class="mermaid">sequenceDiagram
+    participant C as Client
+    participant S as Server
+    C-&gt;&gt;S: SyncRequest (upsert user1)
+    S--&gt;&gt;C: SyncResponse (ok)
+    C-&gt;&gt;S: SyncRequest (delete user2)
+    C-&gt;&gt;S: SyncRequest (upsert user3)
+    S--&gt;&gt;C: SyncResponse (ok)
+    S--&gt;&gt;C: SyncResponse (ok)
+    Note over C,S: 双方独立发送和接收</pre>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-comment">// Bidirectional Streaming: SyncUsers</span><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-params">(s *userServer)</span></span> SyncUsers(stream userv1.UserService_SyncUsersServer) <span class="hljs-type">error</span> &#123;<br>    <span class="hljs-keyword">for</span> &#123;<br>        req, err := stream.Recv()<br>        <span class="hljs-keyword">if</span> err != <span class="hljs-literal">nil</span> &#123;<br>            <span class="hljs-keyword">if</span> err.Error() == <span class="hljs-string">&quot;EOF&quot;</span> &#123;<br>                <span class="hljs-keyword">return</span> <span class="hljs-literal">nil</span><br>            &#125;<br>            <span class="hljs-keyword">return</span> status.Errorf(codes.Internal, <span class="hljs-string">&quot;failed to receive: %v&quot;</span>, err)<br>        &#125;<br><br>        <span class="hljs-keyword">var</span> resp *userv1.SyncResponse<br><br>        <span class="hljs-keyword">switch</span> action := req.Action.(<span class="hljs-keyword">type</span>) &#123;<br>        <span class="hljs-keyword">case</span> *userv1.SyncRequest_Upsert:<br>            s.mu.Lock()<br>            action.Upsert.UpdatedAt = timestamppb.Now()<br>            s.users[action.Upsert.Id] = action.Upsert<br>            s.mu.Unlock()<br>            resp = &amp;userv1.SyncResponse&#123;<br>                Id:     action.Upsert.Id,<br>                Status: <span class="hljs-string">&quot;upserted&quot;</span>,<br>            &#125;<br><br>        <span class="hljs-keyword">case</span> *userv1.SyncRequest_DeleteId:<br>            s.mu.Lock()<br>            <span class="hljs-built_in">delete</span>(s.users, action.DeleteId)<br>            s.mu.Unlock()<br>            resp = &amp;userv1.SyncResponse&#123;<br>                Id:     action.DeleteId,<br>                Status: <span class="hljs-string">&quot;deleted&quot;</span>,<br>            &#125;<br>        &#125;<br><br>        <span class="hljs-keyword">if</span> err := stream.Send(resp); err != <span class="hljs-literal">nil</span> &#123;<br>            <span class="hljs-keyword">return</span> status.Errorf(codes.Internal, <span class="hljs-string">&quot;failed to send response: %v&quot;</span>, err)<br>        &#125;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="拦截器interceptor">拦截器（Interceptor）</h2>
+<p>拦截器是gRPC版的中间件，分为Unary和Stream两种类型。</p>
+<pre class="mermaid">flowchart LR
+    subgraph "Client Interceptors"
+        CI1["日志"] --&gt; CI2["认证"] --&gt; CI3["重试"]
+    end
+
+    CI3 --&gt;|gRPC Call| SI1
+
+    subgraph "Server Interceptors"
+        SI1["恢复"] --&gt; SI2["日志"] --&gt; SI3["认证"]
+    end
+
+    SI3 --&gt; HANDLER["Handler"]</pre>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br><span class="line">113</span><br><span class="line">114</span><br><span class="line">115</span><br><span class="line">116</span><br><span class="line">117</span><br><span class="line">118</span><br><span class="line">119</span><br><span class="line">120</span><br><span class="line">121</span><br><span class="line">122</span><br><span class="line">123</span><br><span class="line">124</span><br><span class="line">125</span><br><span class="line">126</span><br><span class="line">127</span><br><span class="line">128</span><br><span class="line">129</span><br><span class="line">130</span><br><span class="line">131</span><br><span class="line">132</span><br><span class="line">133</span><br><span class="line">134</span><br><span class="line">135</span><br><span class="line">136</span><br><span class="line">137</span><br><span class="line">138</span><br><span class="line">139</span><br><span class="line">140</span><br><span class="line">141</span><br><span class="line">142</span><br><span class="line">143</span><br><span class="line">144</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-keyword">package</span> main<br><br><span class="hljs-keyword">import</span> (<br>    <span class="hljs-string">&quot;context&quot;</span><br>    <span class="hljs-string">&quot;log&quot;</span><br>    <span class="hljs-string">&quot;time&quot;</span><br><br>    <span class="hljs-string">&quot;google.golang.org/grpc&quot;</span><br>    <span class="hljs-string">&quot;google.golang.org/grpc/codes&quot;</span><br>    <span class="hljs-string">&quot;google.golang.org/grpc/metadata&quot;</span><br>    <span class="hljs-string">&quot;google.golang.org/grpc/status&quot;</span><br>)<br><br><span class="hljs-comment">// 服务端日志拦截器</span><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">loggingUnaryInterceptor</span><span class="hljs-params">(</span></span><br><span class="hljs-params"><span class="hljs-function">    ctx context.Context,</span></span><br><span class="hljs-params"><span class="hljs-function">    req <span class="hljs-keyword">interface</span>&#123;&#125;,</span></span><br><span class="hljs-params"><span class="hljs-function">    info *grpc.UnaryServerInfo,</span></span><br><span class="hljs-params"><span class="hljs-function">    handler grpc.UnaryHandler,</span></span><br><span class="hljs-params"><span class="hljs-function">)</span></span> (<span class="hljs-keyword">interface</span>&#123;&#125;, <span class="hljs-type">error</span>) &#123;<br>    start := time.Now()<br><br>    <span class="hljs-comment">// 调用实际的handler</span><br>    resp, err := handler(ctx, req)<br><br>    <span class="hljs-comment">// 记录日志</span><br>    duration := time.Since(start)<br>    statusCode := codes.OK<br>    <span class="hljs-keyword">if</span> err != <span class="hljs-literal">nil</span> &#123;<br>        statusCode = status.Code(err)<br>    &#125;<br>    log.Printf(<span class="hljs-string">&quot;method=%s duration=%v status=%s error=%v&quot;</span>,<br>        info.FullMethod, duration, statusCode, err)<br><br>    <span class="hljs-keyword">return</span> resp, err<br>&#125;<br><br><span class="hljs-comment">// 服务端认证拦截器</span><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">authUnaryInterceptor</span><span class="hljs-params">(</span></span><br><span class="hljs-params"><span class="hljs-function">    ctx context.Context,</span></span><br><span class="hljs-params"><span class="hljs-function">    req <span class="hljs-keyword">interface</span>&#123;&#125;,</span></span><br><span class="hljs-params"><span class="hljs-function">    info *grpc.UnaryServerInfo,</span></span><br><span class="hljs-params"><span class="hljs-function">    handler grpc.UnaryHandler,</span></span><br><span class="hljs-params"><span class="hljs-function">)</span></span> (<span class="hljs-keyword">interface</span>&#123;&#125;, <span class="hljs-type">error</span>) &#123;<br>    <span class="hljs-comment">// 跳过不需要认证的方法</span><br>    <span class="hljs-keyword">if</span> info.FullMethod == <span class="hljs-string">&quot;/grpc.health.v1.Health/Check&quot;</span> &#123;<br>        <span class="hljs-keyword">return</span> handler(ctx, req)<br>    &#125;<br><br>    <span class="hljs-comment">// 从metadata中获取token</span><br>    md, ok := metadata.FromIncomingContext(ctx)<br>    <span class="hljs-keyword">if</span> !ok &#123;<br>        <span class="hljs-keyword">return</span> <span class="hljs-literal">nil</span>, status.Error(codes.Unauthenticated, <span class="hljs-string">&quot;missing metadata&quot;</span>)<br>    &#125;<br><br>    tokens := md.Get(<span class="hljs-string">&quot;authorization&quot;</span>)<br>    <span class="hljs-keyword">if</span> <span class="hljs-built_in">len</span>(tokens) == <span class="hljs-number">0</span> &#123;<br>        <span class="hljs-keyword">return</span> <span class="hljs-literal">nil</span>, status.Error(codes.Unauthenticated, <span class="hljs-string">&quot;missing authorization token&quot;</span>)<br>    &#125;<br><br>    <span class="hljs-comment">// 验证token</span><br>    userID, err := validateToken(tokens[<span class="hljs-number">0</span>])<br>    <span class="hljs-keyword">if</span> err != <span class="hljs-literal">nil</span> &#123;<br>        <span class="hljs-keyword">return</span> <span class="hljs-literal">nil</span>, status.Error(codes.Unauthenticated, <span class="hljs-string">&quot;invalid token&quot;</span>)<br>    &#125;<br><br>    <span class="hljs-comment">// 将用户信息添加到context</span><br>    newCtx := context.WithValue(ctx, <span class="hljs-string">&quot;userID&quot;</span>, userID)<br>    <span class="hljs-keyword">return</span> handler(newCtx, req)<br>&#125;<br><br><span class="hljs-comment">// 服务端恢复拦截器</span><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">recoveryUnaryInterceptor</span><span class="hljs-params">(</span></span><br><span class="hljs-params"><span class="hljs-function">    ctx context.Context,</span></span><br><span class="hljs-params"><span class="hljs-function">    req <span class="hljs-keyword">interface</span>&#123;&#125;,</span></span><br><span class="hljs-params"><span class="hljs-function">    info *grpc.UnaryServerInfo,</span></span><br><span class="hljs-params"><span class="hljs-function">    handler grpc.UnaryHandler,</span></span><br><span class="hljs-params"><span class="hljs-function">)</span></span> (resp <span class="hljs-keyword">interface</span>&#123;&#125;, err <span class="hljs-type">error</span>) &#123;<br>    <span class="hljs-keyword">defer</span> <span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">()</span></span> &#123;<br>        <span class="hljs-keyword">if</span> r := <span class="hljs-built_in">recover</span>(); r != <span class="hljs-literal">nil</span> &#123;<br>            log.Printf(<span class="hljs-string">&quot;panic recovered in %s: %v&quot;</span>, info.FullMethod, r)<br>            err = status.Errorf(codes.Internal, <span class="hljs-string">&quot;internal server error&quot;</span>)<br>        &#125;<br>    &#125;()<br>    <span class="hljs-keyword">return</span> handler(ctx, req)<br>&#125;<br><br><span class="hljs-comment">// 客户端超时拦截器</span><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">timeoutUnaryInterceptor</span><span class="hljs-params">(timeout time.Duration)</span></span> grpc.UnaryClientInterceptor &#123;<br>    <span class="hljs-keyword">return</span> <span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">(</span></span><br><span class="hljs-params"><span class="hljs-function">        ctx context.Context,</span></span><br><span class="hljs-params"><span class="hljs-function">        method <span class="hljs-type">string</span>,</span></span><br><span class="hljs-params"><span class="hljs-function">        req, reply <span class="hljs-keyword">interface</span>&#123;&#125;,</span></span><br><span class="hljs-params"><span class="hljs-function">        cc *grpc.ClientConn,</span></span><br><span class="hljs-params"><span class="hljs-function">        invoker grpc.UnaryInvoker,</span></span><br><span class="hljs-params"><span class="hljs-function">        opts ...grpc.CallOption,</span></span><br><span class="hljs-params"><span class="hljs-function">    )</span></span> <span class="hljs-type">error</span> &#123;<br>        ctx, cancel := context.WithTimeout(ctx, timeout)<br>        <span class="hljs-keyword">defer</span> cancel()<br>        <span class="hljs-keyword">return</span> invoker(ctx, method, req, reply, cc, opts...)<br>    &#125;<br>&#125;<br><br><span class="hljs-comment">// 客户端重试拦截器</span><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">retryUnaryInterceptor</span><span class="hljs-params">(maxRetries <span class="hljs-type">int</span>)</span></span> grpc.UnaryClientInterceptor &#123;<br>    <span class="hljs-keyword">return</span> <span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">(</span></span><br><span class="hljs-params"><span class="hljs-function">        ctx context.Context,</span></span><br><span class="hljs-params"><span class="hljs-function">        method <span class="hljs-type">string</span>,</span></span><br><span class="hljs-params"><span class="hljs-function">        req, reply <span class="hljs-keyword">interface</span>&#123;&#125;,</span></span><br><span class="hljs-params"><span class="hljs-function">        cc *grpc.ClientConn,</span></span><br><span class="hljs-params"><span class="hljs-function">        invoker grpc.UnaryInvoker,</span></span><br><span class="hljs-params"><span class="hljs-function">        opts ...grpc.CallOption,</span></span><br><span class="hljs-params"><span class="hljs-function">    )</span></span> <span class="hljs-type">error</span> &#123;<br>        <span class="hljs-keyword">var</span> lastErr <span class="hljs-type">error</span><br>        <span class="hljs-keyword">for</span> i := <span class="hljs-number">0</span>; i &lt;= maxRetries; i++ &#123;<br>            lastErr = invoker(ctx, method, req, reply, cc, opts...)<br>            <span class="hljs-keyword">if</span> lastErr == <span class="hljs-literal">nil</span> &#123;<br>                <span class="hljs-keyword">return</span> <span class="hljs-literal">nil</span><br>            &#125;<br><br>            <span class="hljs-comment">// 只重试特定错误码</span><br>            code := status.Code(lastErr)<br>            <span class="hljs-keyword">if</span> code != codes.Unavailable &amp;&amp; code != codes.DeadlineExceeded &#123;<br>                <span class="hljs-keyword">return</span> lastErr<br>            &#125;<br><br>            <span class="hljs-comment">// 指数退避</span><br>            backoff := time.Duration(<span class="hljs-number">1</span>&lt;&lt;<span class="hljs-type">uint</span>(i)) * <span class="hljs-number">100</span> * time.Millisecond<br>            <span class="hljs-keyword">select</span> &#123;<br>            <span class="hljs-keyword">case</span> &lt;-ctx.Done():<br>                <span class="hljs-keyword">return</span> ctx.Err()<br>            <span class="hljs-keyword">case</span> &lt;-time.After(backoff):<br>            &#125;<br>        &#125;<br>        <span class="hljs-keyword">return</span> lastErr<br>    &#125;<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">validateToken</span><span class="hljs-params">(token <span class="hljs-type">string</span>)</span></span> (<span class="hljs-type">string</span>, <span class="hljs-type">error</span>) &#123;<br>    <span class="hljs-keyword">if</span> token == <span class="hljs-string">&quot;valid-token&quot;</span> &#123;<br>        <span class="hljs-keyword">return</span> <span class="hljs-string">&quot;user-123&quot;</span>, <span class="hljs-literal">nil</span><br>    &#125;<br>    <span class="hljs-keyword">return</span> <span class="hljs-string">&quot;&quot;</span>, status.Error(codes.Unauthenticated, <span class="hljs-string">&quot;invalid token&quot;</span>)<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="服务端与客户端启动">服务端与客户端启动</h2>
+<h3 id="服务端">服务端</h3>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-keyword">package</span> main<br><br><span class="hljs-keyword">import</span> (<br>    <span class="hljs-string">&quot;log&quot;</span><br>    <span class="hljs-string">&quot;net&quot;</span><br><br>    <span class="hljs-string">&quot;google.golang.org/grpc&quot;</span><br>    <span class="hljs-string">&quot;google.golang.org/grpc/health&quot;</span><br>    healthpb <span class="hljs-string">&quot;google.golang.org/grpc/health/grpc_health_v1&quot;</span><br>    <span class="hljs-string">&quot;google.golang.org/grpc/reflection&quot;</span><br><br>    userv1 <span class="hljs-string">&quot;github.com/example/myapp/gen/user/v1&quot;</span><br>)<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">main</span><span class="hljs-params">()</span></span> &#123;<br>    lis, err := net.Listen(<span class="hljs-string">&quot;tcp&quot;</span>, <span class="hljs-string">&quot;:50051&quot;</span>)<br>    <span class="hljs-keyword">if</span> err != <span class="hljs-literal">nil</span> &#123;<br>        log.Fatalf(<span class="hljs-string">&quot;failed to listen: %v&quot;</span>, err)<br>    &#125;<br><br>    <span class="hljs-comment">// 创建gRPC服务器，链式拦截器</span><br>    server := grpc.NewServer(<br>        grpc.ChainUnaryInterceptor(<br>            recoveryUnaryInterceptor,<br>            loggingUnaryInterceptor,<br>            authUnaryInterceptor,<br>        ),<br>    )<br><br>    <span class="hljs-comment">// 注册用户服务</span><br>    userSvc := newUserServer()<br>    userv1.RegisterUserServiceServer(server, userSvc)<br><br>    <span class="hljs-comment">// 注册健康检查服务</span><br>    healthServer := health.NewServer()<br>    healthpb.RegisterHealthServer(server, healthServer)<br>    healthServer.SetServingStatus(<span class="hljs-string">&quot;user.v1.UserService&quot;</span>, healthpb.HealthCheckResponse_SERVING)<br><br>    <span class="hljs-comment">// 注册反射服务（开发环境用于grpcurl调试）</span><br>    reflection.Register(server)<br><br>    log.Printf(<span class="hljs-string">&quot;gRPC server listening on :50051&quot;</span>)<br>    <span class="hljs-keyword">if</span> err := server.Serve(lis); err != <span class="hljs-literal">nil</span> &#123;<br>        log.Fatalf(<span class="hljs-string">&quot;failed to serve: %v&quot;</span>, err)<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="客户端">客户端</h3>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-keyword">package</span> main<br><br><span class="hljs-keyword">import</span> (<br>    <span class="hljs-string">&quot;context&quot;</span><br>    <span class="hljs-string">&quot;fmt&quot;</span><br>    <span class="hljs-string">&quot;io&quot;</span><br>    <span class="hljs-string">&quot;log&quot;</span><br>    <span class="hljs-string">&quot;time&quot;</span><br><br>    <span class="hljs-string">&quot;google.golang.org/grpc&quot;</span><br>    <span class="hljs-string">&quot;google.golang.org/grpc/credentials/insecure&quot;</span><br>    <span class="hljs-string">&quot;google.golang.org/grpc/metadata&quot;</span><br><br>    userv1 <span class="hljs-string">&quot;github.com/example/myapp/gen/user/v1&quot;</span><br>)<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">main</span><span class="hljs-params">()</span></span> &#123;<br>    <span class="hljs-comment">// 建立连接</span><br>    conn, err := grpc.Dial(<span class="hljs-string">&quot;localhost:50051&quot;</span>,<br>        grpc.WithTransportCredentials(insecure.NewCredentials()),<br>        grpc.WithChainUnaryInterceptor(<br>            timeoutUnaryInterceptor(<span class="hljs-number">5</span>*time.Second),<br>            retryUnaryInterceptor(<span class="hljs-number">3</span>),<br>        ),<br>    )<br>    <span class="hljs-keyword">if</span> err != <span class="hljs-literal">nil</span> &#123;<br>        log.Fatalf(<span class="hljs-string">&quot;failed to dial: %v&quot;</span>, err)<br>    &#125;<br>    <span class="hljs-keyword">defer</span> conn.Close()<br><br>    client := userv1.NewUserServiceClient(conn)<br><br>    <span class="hljs-comment">// 添加认证metadata</span><br>    ctx := metadata.AppendToOutgoingContext(context.Background(),<br>        <span class="hljs-string">&quot;authorization&quot;</span>, <span class="hljs-string">&quot;valid-token&quot;</span>,<br>    )<br><br>    <span class="hljs-comment">// Unary调用</span><br>    createResp, err := client.CreateUser(ctx, &amp;userv1.CreateUserRequest&#123;<br>        Name:  <span class="hljs-string">&quot;Alice&quot;</span>,<br>        Email: <span class="hljs-string">&quot;alice@example.com&quot;</span>,<br>        Age:   <span class="hljs-number">30</span>,<br>    &#125;)<br>    <span class="hljs-keyword">if</span> err != <span class="hljs-literal">nil</span> &#123;<br>        log.Fatalf(<span class="hljs-string">&quot;CreateUser failed: %v&quot;</span>, err)<br>    &#125;<br>    fmt.Printf(<span class="hljs-string">&quot;Created user: %s\n&quot;</span>, createResp.User.Id)<br><br>    <span class="hljs-comment">// Server Streaming调用</span><br>    stream, err := client.ListUsers(ctx, &amp;userv1.ListUsersRequest&#123;<br>        PageSize: <span class="hljs-number">10</span>,<br>    &#125;)<br>    <span class="hljs-keyword">if</span> err != <span class="hljs-literal">nil</span> &#123;<br>        log.Fatalf(<span class="hljs-string">&quot;ListUsers failed: %v&quot;</span>, err)<br>    &#125;<br>    <span class="hljs-keyword">for</span> &#123;<br>        user, err := stream.Recv()<br>        <span class="hljs-keyword">if</span> err == io.EOF &#123;<br>            <span class="hljs-keyword">break</span><br>        &#125;<br>        <span class="hljs-keyword">if</span> err != <span class="hljs-literal">nil</span> &#123;<br>            log.Fatalf(<span class="hljs-string">&quot;stream recv failed: %v&quot;</span>, err)<br>        &#125;<br>        fmt.Printf(<span class="hljs-string">&quot;User: %s (%s)\n&quot;</span>, user.Name, user.Email)<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="错误处理">错误处理</h2>
+<p>gRPC使用标准的status/code体系进行错误处理：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-keyword">package</span> main<br><br><span class="hljs-keyword">import</span> (<br>    <span class="hljs-string">&quot;google.golang.org/genproto/googleapis/rpc/errdetails&quot;</span><br>    <span class="hljs-string">&quot;google.golang.org/grpc/codes&quot;</span><br>    <span class="hljs-string">&quot;google.golang.org/grpc/status&quot;</span><br>)<br><br><span class="hljs-comment">// 返回带详细信息的错误</span><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">createDetailedError</span><span class="hljs-params">()</span></span> <span class="hljs-type">error</span> &#123;<br>    st := status.New(codes.InvalidArgument, <span class="hljs-string">&quot;invalid user data&quot;</span>)<br><br>    <span class="hljs-comment">// 添加字段级别的错误详情</span><br>    details, err := st.WithDetails(<br>        &amp;errdetails.BadRequest&#123;<br>            FieldViolations: []*errdetails.BadRequest_FieldViolation&#123;<br>                &#123;<br>                    Field:       <span class="hljs-string">&quot;email&quot;</span>,<br>                    Description: <span class="hljs-string">&quot;invalid email format&quot;</span>,<br>                &#125;,<br>                &#123;<br>                    Field:       <span class="hljs-string">&quot;age&quot;</span>,<br>                    Description: <span class="hljs-string">&quot;age must be between 0 and 150&quot;</span>,<br>                &#125;,<br>            &#125;,<br>        &#125;,<br>    )<br>    <span class="hljs-keyword">if</span> err != <span class="hljs-literal">nil</span> &#123;<br>        <span class="hljs-keyword">return</span> st.Err()<br>    &#125;<br>    <span class="hljs-keyword">return</span> details.Err()<br>&#125;<br><br><span class="hljs-comment">// 客户端解析错误详情</span><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">handleError</span><span class="hljs-params">(err <span class="hljs-type">error</span>)</span></span> &#123;<br>    st := status.Convert(err)<br>    <span class="hljs-keyword">for</span> _, detail := <span class="hljs-keyword">range</span> st.Details() &#123;<br>        <span class="hljs-keyword">switch</span> d := detail.(<span class="hljs-keyword">type</span>) &#123;<br>        <span class="hljs-keyword">case</span> *errdetails.BadRequest:<br>            <span class="hljs-keyword">for</span> _, violation := <span class="hljs-keyword">range</span> d.FieldViolations &#123;<br>                log.Printf(<span class="hljs-string">&quot;Field %s: %s&quot;</span>, violation.Field, violation.Description)<br>            &#125;<br>        &#125;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<pre class="mermaid">graph LR
+    subgraph "gRPC 错误码映射"
+        OK["OK (0)"] --&gt; H200["HTTP 200"]
+        INVALID["InvalidArgument (3)"] --&gt; H400["HTTP 400"]
+        NOT_FOUND["NotFound (5)"] --&gt; H404["HTTP 404"]
+        ALREADY_EXISTS["AlreadyExists (6)"] --&gt; H409["HTTP 409"]
+        PERMISSION["PermissionDenied (7)"] --&gt; H403["HTTP 403"]
+        UNAUTH["Unauthenticated (16)"] --&gt; H401["HTTP 401"]
+        INTERNAL["Internal (13)"] --&gt; H500["HTTP 500"]
+        UNAVAILABLE["Unavailable (14)"] --&gt; H503["HTTP 503"]
+    end</pre>
+<h2 id="性能优化">性能优化</h2>
+<h3 id="连接管理">连接管理</h3>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-comment">// 使用连接池（gRPC内置HTTP/2多路复用）</span><br>conn, err := grpc.Dial(<span class="hljs-string">&quot;localhost:50051&quot;</span>,<br>    grpc.WithTransportCredentials(insecure.NewCredentials()),<br>    <span class="hljs-comment">// 设置连接参数</span><br>    grpc.WithKeepaliveParams(keepalive.ClientParameters&#123;<br>        Time:                <span class="hljs-number">10</span> * time.Second, <span class="hljs-comment">// 发送ping的间隔</span><br>        Timeout:             <span class="hljs-number">3</span> * time.Second,  <span class="hljs-comment">// 等待ping响应的超时</span><br>        PermitWithoutStream: <span class="hljs-literal">true</span>,             <span class="hljs-comment">// 无活跃stream时也发送ping</span><br>    &#125;),<br>    <span class="hljs-comment">// 设置最大消息大小</span><br>    grpc.WithDefaultCallOptions(<br>        grpc.MaxCallRecvMsgSize(<span class="hljs-number">10</span>*<span class="hljs-number">1024</span>*<span class="hljs-number">1024</span>), <span class="hljs-comment">// 10MB</span><br>        grpc.MaxCallSendMsgSize(<span class="hljs-number">10</span>*<span class="hljs-number">1024</span>*<span class="hljs-number">1024</span>),<br>    ),<br>)<br></code></pre></td></tr></table></figure>
+<h3 id="消息大小优化">消息大小优化</h3>
+<figure class="highlight protobuf"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><code class="hljs protobuf"><span class="hljs-comment">// 使用更紧凑的字段类型</span><br><span class="hljs-keyword">message </span><span class="hljs-title class_">CompactUser</span> &#123;<br>    <span class="hljs-type">fixed32</span> id = <span class="hljs-number">1</span>;        <span class="hljs-comment">// 固定4字节，比int32高效（对大数值）</span><br>    <span class="hljs-type">string</span> name = <span class="hljs-number">2</span>;<br>    <span class="hljs-type">bytes</span> avatar = <span class="hljs-number">3</span>;      <span class="hljs-comment">// 二进制数据用bytes</span><br>    <span class="hljs-type">sint32</span> score_delta = <span class="hljs-number">4</span>; <span class="hljs-comment">// 有符号整数用sint32（ZigZag编码）</span><br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="总结">总结</h2>
+<p>Go gRPC微服务开发的核心要点：</p>
+<ol type="1">
+<li><strong>Protocol
+Buffers</strong>提供强类型的接口定义，是服务间的契约</li>
+<li><strong>四种RPC模式</strong>覆盖了不同的通信场景：一元调用、服务端流、客户端流、双向流</li>
+<li><strong>拦截器</strong>提供了横切关注点的统一处理（日志、认证、重试、限流）</li>
+<li><strong>错误处理</strong>使用标准的status/code体系，支持携带详细的错误信息</li>
+<li><strong>健康检查</strong>是服务治理的基础，配合负载均衡和服务发现使用</li>
+<li><strong>性能优化</strong>重点关注连接管理、消息大小和序列化效率</li>
+</ol>
+<p>gRPC +
+Go的组合非常适合构建高性能的微服务系统。建议在生产环境中配合OpenTelemetry进行链路追踪，使用envoy或istio作为服务网格层，实现更完善的服务治理。</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2023-09-20</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">3.8k 字 · 9 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/go-testing-strategies/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Go测试策略：从单元测试到集成测试</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/go-gin-framework/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Gin框架源码分析与高性能Web开发</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9E%B6%E6%9E%84%E6%A6%82%E8%A7%88"><span class="toc-text">架构概览</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#protocol-buffers"><span class="toc-text">Protocol Buffers</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%9A%E4%B9%89%E6%9C%8D%E5%8A%A1"><span class="toc-text">定义服务</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BB%A3%E7%A0%81%E7%94%9F%E6%88%90"><span class="toc-text">代码生成</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%9B%E7%A7%8Drpc%E6%A8%A1%E5%BC%8F"><span class="toc-text">四种RPC模式</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#unary-rpc%E4%B8%80%E5%85%83%E8%B0%83%E7%94%A8"><span class="toc-text">1. Unary RPC（一元调用）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#server-streaming-rpc%E6%9C%8D%E5%8A%A1%E7%AB%AF%E6%B5%81"><span class="toc-text">2. Server Streaming
+RPC（服务端流）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#client-streaming-rpc%E5%AE%A2%E6%88%B7%E7%AB%AF%E6%B5%81"><span class="toc-text">3. Client Streaming
+RPC（客户端流）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#bidirectional-streaming-rpc%E5%8F%8C%E5%90%91%E6%B5%81"><span class="toc-text">4. Bidirectional Streaming
+RPC（双向流）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%8B%A6%E6%88%AA%E5%99%A8interceptor"><span class="toc-text">拦截器（Interceptor）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9C%8D%E5%8A%A1%E7%AB%AF%E4%B8%8E%E5%AE%A2%E6%88%B7%E7%AB%AF%E5%90%AF%E5%8A%A8"><span class="toc-text">服务端与客户端启动</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%9C%8D%E5%8A%A1%E7%AB%AF"><span class="toc-text">服务端</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%A2%E6%88%B7%E7%AB%AF"><span class="toc-text">客户端</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%94%99%E8%AF%AF%E5%A4%84%E7%90%86"><span class="toc-text">错误处理</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96"><span class="toc-text">性能优化</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BF%9E%E6%8E%A5%E7%AE%A1%E7%90%86"><span class="toc-text">连接管理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%B6%88%E6%81%AF%E5%A4%A7%E5%B0%8F%E4%BC%98%E5%8C%96"><span class="toc-text">消息大小优化</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

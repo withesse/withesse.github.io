@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ClickHouse OLAP引擎实战指南 · zt&#39;s Blog</title>
+  <meta name="description" content="全面介绍ClickHouse列式存储引擎的核心原理，包括MergeTree引擎族、物化视图、数据摄入策略、查询优化以及集群部署实战。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/clickhouse-olap/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="ClickHouse OLAP引擎实战指南">
+  <meta property="og:description" content="全面介绍ClickHouse列式存储引擎的核心原理，包括MergeTree引擎族、物化视图、数据摄入策略、查询优化以及集群部署实战。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/clickhouse-olap/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2025-03-25T16:00:00.000Z">
+  <meta property="article:modified_time" content="2025-03-25T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ClickHouse OLAP引擎实战指南">
+  <meta name="twitter:description" content="全面介绍ClickHouse列式存储引擎的核心原理，包括MergeTree引擎族、物化视图、数据摄入策略、查询优化以及集群部署实战。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"ClickHouse OLAP引擎实战指南","description":"全面介绍ClickHouse列式存储引擎的核心原理，包括MergeTree引擎族、物化视图、数据摄入策略、查询优化以及集群部署实战。","datePublished":"2025-03-25T16:00:00.000Z","dateModified":"2025-03-25T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/clickhouse-olap/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Database","item":"https://withesse.co/categories/Database/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:330">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Database/">Database</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/clickhouse/"><span class="hash">#</span>clickhouse</a><a class="tag" href="/tags/olap/"><span class="hash">#</span>olap</a><a class="tag" href="/tags/analytics/"><span class="hash">#</span>analytics</a>
+        
+      </div>
+
+      <h1>ClickHouse OLAP引擎实战指南</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2025.03.26</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 9 min</span>
+        </span>
+        <span class="wc"><span class="num">3.7k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%88%97%E5%BC%8F%E5%AD%98%E5%82%A8%E5%8E%9F%E7%90%86"><span class="toc-text">列式存储原理</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%A1%8C%E5%AD%98%E5%82%A8-vs-%E5%88%97%E5%AD%98%E5%82%A8"><span class="toc-text">行存储 vs 列存储</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E5%8E%8B%E7%BC%A9%E6%95%88%E6%9E%9C"><span class="toc-text">数据压缩效果</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#mergetree-%E5%BC%95%E6%93%8E%E6%97%8F"><span class="toc-text">MergeTree 引擎族</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#mergetree-%E5%9F%BA%E7%A1%80"><span class="toc-text">MergeTree 基础</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#mergetree-%E5%AD%98%E5%82%A8%E7%BB%93%E6%9E%84"><span class="toc-text">MergeTree 存储结构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%A8%80%E7%96%8F%E7%B4%A2%E5%BC%95%E5%B7%A5%E4%BD%9C%E5%8E%9F%E7%90%86"><span class="toc-text">稀疏索引工作原理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#mergetree-%E5%BC%95%E6%93%8E%E5%8F%98%E4%BD%93"><span class="toc-text">MergeTree 引擎变体</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%89%A9%E5%8C%96%E8%A7%86%E5%9B%BE"><span class="toc-text">物化视图</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E6%91%84%E5%85%A5"><span class="toc-text">数据摄入</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%89%B9%E9%87%8F%E6%8F%92%E5%85%A5%E7%9A%84%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5"><span class="toc-text">批量插入的最佳实践</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BB%8E%E5%A4%96%E9%83%A8%E7%B3%BB%E7%BB%9F%E5%AF%BC%E5%85%A5"><span class="toc-text">从外部系统导入</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9F%A5%E8%AF%A2%E4%BC%98%E5%8C%96"><span class="toc-text">查询优化</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#order-by-%E9%94%AE%E7%9A%84%E9%80%89%E6%8B%A9"><span class="toc-text">ORDER BY 键的选择</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%B7%B3%E6%95%B0%E7%B4%A2%E5%BC%95data-skipping-index"><span class="toc-text">跳数索引（Data Skipping
+Index）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%9F%A5%E8%AF%A2%E6%80%A7%E8%83%BD%E8%B0%83%E4%BC%98"><span class="toc-text">查询性能调优</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%9B%86%E7%BE%A4%E9%83%A8%E7%BD%B2"><span class="toc-text">集群部署</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%9B%86%E7%BE%A4%E6%9E%B6%E6%9E%84"><span class="toc-text">集群架构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%88%86%E5%B8%83%E5%BC%8F%E8%A1%A8"><span class="toc-text">分布式表</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%9B%86%E7%BE%A4%E9%85%8D%E7%BD%AE"><span class="toc-text">集群配置</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%B8%E5%9E%8B%E5%BA%94%E7%94%A8%E5%9C%BA%E6%99%AF"><span class="toc-text">典型应用场景</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9C%BA%E6%99%AF%E4%B8%80%E5%AE%9E%E6%97%B6%E6%97%A5%E5%BF%97%E5%88%86%E6%9E%90"><span class="toc-text">场景一：实时日志分析</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9C%BA%E6%99%AF%E4%BA%8C%E7%94%A8%E6%88%B7%E8%A1%8C%E4%B8%BA%E5%88%86%E6%9E%90"><span class="toc-text">场景二：用户行为分析</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="引言">引言</h2>
+<p>ClickHouse是由Yandex开发的开源列式OLAP数据库，以极致的查询性能著称。它能够在数十亿行数据上实现亚秒级的分析查询，广泛应用于日志分析、用户行为分析、实时报表、监控告警等场景。ClickHouse的核心设计哲学是：通过列式存储、向量化执行、数据压缩和并行处理，最大化地利用现代硬件的计算能力。</p>
+<h2 id="列式存储原理">列式存储原理</h2>
+<h3 id="行存储-vs-列存储">行存储 vs 列存储</h3>
+<pre class="mermaid">graph TD
+    subgraph "行存储（MySQL/PostgreSQL）"
+        direction LR
+        R1["Row 1: id=1, name=Alice, age=25, city=Beijing"]
+        R2["Row 2: id=2, name=Bob, age=30, city=Shanghai"]
+        R3["Row 3: id=3, name=Carol, age=28, city=Guangzhou"]
+    end
+
+    subgraph "列存储（ClickHouse）"
+        C1["id列:    [1, 2, 3, ...]"]
+        C2["name列:  [Alice, Bob, Carol, ...]"]
+        C3["age列:   [25, 30, 28, ...]"]
+        C4["city列:  [Beijing, Shanghai, Guangzhou, ...]"]
+    end</pre>
+<p><strong>列式存储的优势：</strong></p>
+<table>
+<thead>
+<tr class="header">
+<th>特性</th>
+<th>行存储</th>
+<th>列存储</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>读取特定列</td>
+<td>需要读取整行</td>
+<td>只读取需要的列</td>
+</tr>
+<tr class="even">
+<td>数据压缩</td>
+<td>压缩率一般</td>
+<td>同类型数据压缩率极高</td>
+</tr>
+<tr class="odd">
+<td>聚合查询</td>
+<td>需要扫描整行</td>
+<td>只扫描参与计算的列</td>
+</tr>
+<tr class="even">
+<td>SIMD向量化</td>
+<td>不适合</td>
+<td>同类型数据适合SIMD</td>
+</tr>
+<tr class="odd">
+<td>单行查询</td>
+<td>高效</td>
+<td>需要合并多列</td>
+</tr>
+<tr class="even">
+<td>事务写入</td>
+<td>高效</td>
+<td>低效（不适合频繁单行插入）</td>
+</tr>
+</tbody>
+</table>
+<h3 id="数据压缩效果">数据压缩效果</h3>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><code class="hljs plaintext">典型压缩比示例（LZ4压缩）:<br>- 整数列 (Int32): 原始 400MB -&gt; 压缩后 ~40MB (10:1)<br>- 时间戳列 (DateTime): 原始 800MB -&gt; 压缩后 ~30MB (27:1)<br>- 低基数字符串 (status): 原始 500MB -&gt; 压缩后 ~5MB (100:1)<br>- 高基数字符串 (uuid): 原始 1GB -&gt; 压缩后 ~400MB (2.5:1)<br><br>整体典型压缩比: 10:1 到 40:1<br>100GB原始数据可能只占用3-10GB磁盘空间<br></code></pre></td></tr></table></figure>
+<h2 id="mergetree-引擎族">MergeTree 引擎族</h2>
+<p>MergeTree是ClickHouse最核心的表引擎族，几乎所有生产环境的表都使用MergeTree或其变体。</p>
+<h3 id="mergetree-基础">MergeTree 基础</h3>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">TABLE</span> events (<br>    event_date <span class="hljs-type">Date</span>,<br>    event_time DateTime,<br>    user_id UInt64,<br>    event_type LowCardinality(String),<br>    page_url String,<br>    duration_ms UInt32,<br>    properties Map(String, String)<br>) ENGINE <span class="hljs-operator">=</span> MergeTree()<br><span class="hljs-keyword">PARTITION</span> <span class="hljs-keyword">BY</span> toYYYYMM(event_date)<br><span class="hljs-keyword">ORDER</span> <span class="hljs-keyword">BY</span> (user_id, event_time)<br>TTL event_date <span class="hljs-operator">+</span> <span class="hljs-type">INTERVAL</span> <span class="hljs-number">90</span> <span class="hljs-keyword">DAY</span><br>SETTINGS index_granularity <span class="hljs-operator">=</span> <span class="hljs-number">8192</span>;<br></code></pre></td></tr></table></figure>
+<h3 id="mergetree-存储结构">MergeTree 存储结构</h3>
+<pre class="mermaid">graph TD
+    subgraph "MergeTree表: events"
+        subgraph "Partition: 202503"
+            P1["Part: all_1_1_0"] --&gt; D1["primary.idx&lt;br/&gt;(稀疏索引)"]
+            P1 --&gt; D2["event_date.bin + .mrk2"]
+            P1 --&gt; D3["event_time.bin + .mrk2"]
+            P1 --&gt; D4["user_id.bin + .mrk2"]
+            P1 --&gt; D5["event_type.bin + .mrk2"]
+            P1 --&gt; D6["...其他列文件"]
+            P1 --&gt; D7["count.txt&lt;br/&gt;checksums.txt&lt;br/&gt;columns.txt"]
+
+            P2["Part: all_2_2_0"]
+            P3["Part: all_1_2_1&lt;br/&gt;(merged)"]
+        end
+
+        subgraph "Partition: 202504"
+            P4["Part: all_3_3_0"]
+        end
+    end</pre>
+<p><strong>核心概念：</strong></p>
+<ul>
+<li><strong>Partition（分区）</strong>：按分区键将数据物理隔离，便于数据管理（删除旧分区、分区级查询优化）</li>
+<li><strong>Part（数据片段）</strong>：每次INSERT生成一个新Part，后台异步合并（Merge）为更大的Part</li>
+<li><strong>Primary
+Index（主键索引）</strong>：稀疏索引，每8192行（index_granularity）记录一个索引条目</li>
+<li><strong>Column
+File（列文件）</strong>：每列独立存储为<code>.bin</code>（压缩数据）+
+<code>.mrk2</code>（标记文件，用于定位granule）</li>
+</ul>
+<h3 id="稀疏索引工作原理">稀疏索引工作原理</h3>
+<pre class="mermaid">graph LR
+    subgraph "Primary Index (稀疏索引)"
+        I1["Mark 0: user_id=100, event_time=2025-03-01"]
+        I2["Mark 1: user_id=100, event_time=2025-03-15"]
+        I3["Mark 2: user_id=200, event_time=2025-03-01"]
+        I4["Mark 3: user_id=300, event_time=2025-03-10"]
+    end
+
+    subgraph "Data Granules (每8192行)"
+        G0["Granule 0: rows 0-8191"]
+        G1["Granule 1: rows 8192-16383"]
+        G2["Granule 2: rows 16384-24575"]
+        G3["Granule 3: rows 24576-32767"]
+    end
+
+    I1 --&gt; G0
+    I2 --&gt; G1
+    I3 --&gt; G2
+    I4 --&gt; G3</pre>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 查询 user_id = 200 的数据</span><br><span class="hljs-comment">-- ClickHouse通过稀疏索引确定:</span><br><span class="hljs-comment">-- Mark 2 (user_id=200) &lt;= 200 &lt; Mark 3 (user_id=300)</span><br><span class="hljs-comment">-- 只需要读取 Granule 2，跳过其他所有数据块</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> events <span class="hljs-keyword">WHERE</span> user_id <span class="hljs-operator">=</span> <span class="hljs-number">200</span>;<br></code></pre></td></tr></table></figure>
+<h3 id="mergetree-引擎变体">MergeTree 引擎变体</h3>
+<pre class="mermaid">graph TD
+    MT[MergeTree] --&gt; RMT[ReplacingMergeTree&lt;br/&gt;去重 按主键保留最新版本]
+    MT --&gt; SMT[SummingMergeTree&lt;br/&gt;自动聚合 按主键合并SUM]
+    MT --&gt; AMT[AggregatingMergeTree&lt;br/&gt;增量聚合 存储中间状态]
+    MT --&gt; CMT[CollapsingMergeTree&lt;br/&gt;折叠 通过sign列实现变更]
+    MT --&gt; VCMT[VersionedCollapsingMergeTree&lt;br/&gt;带版本的折叠]
+
+    RMT --&gt; RRMT[ReplicatedReplacingMergeTree&lt;br/&gt;复制版本]
+    SMT --&gt; RSMT[ReplicatedSummingMergeTree]
+    AMT --&gt; RAMT[ReplicatedAggregatingMergeTree]</pre>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- ReplacingMergeTree: 最终去重（按主键保留ver最大的行）</span><br><span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">TABLE</span> users (<br>    user_id UInt64,<br>    name String,<br>    email String,<br>    ver UInt64<br>) ENGINE <span class="hljs-operator">=</span> ReplacingMergeTree(ver)<br><span class="hljs-keyword">ORDER</span> <span class="hljs-keyword">BY</span> user_id;<br><br><span class="hljs-comment">-- 注意: 去重发生在后台Merge时，查询时可能有重复</span><br><span class="hljs-comment">-- 使用FINAL关键字强制去重（有性能开销）</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> users <span class="hljs-keyword">FINAL</span> <span class="hljs-keyword">WHERE</span> user_id <span class="hljs-operator">=</span> <span class="hljs-number">12345</span>;<br><br><span class="hljs-comment">-- SummingMergeTree: 自动累加</span><br><span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">TABLE</span> daily_stats (<br>    <span class="hljs-type">date</span> <span class="hljs-type">Date</span>,<br>    page_url String,<br>    pv UInt64,<br>    uv UInt64,<br>    total_duration UInt64<br>) ENGINE <span class="hljs-operator">=</span> SummingMergeTree((pv, uv, total_duration))<br><span class="hljs-keyword">ORDER</span> <span class="hljs-keyword">BY</span> (<span class="hljs-type">date</span>, page_url);<br><br><span class="hljs-comment">-- 相同主键的行在Merge时自动累加pv, uv, total_duration</span><br><br><span class="hljs-comment">-- AggregatingMergeTree: 存储聚合中间状态</span><br><span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">TABLE</span> agg_stats (<br>    <span class="hljs-type">date</span> <span class="hljs-type">Date</span>,<br>    category LowCardinality(String),<br>    cnt AggregateFunction(count, UInt64),<br>    amount_sum AggregateFunction(sum, <span class="hljs-type">Decimal</span>(<span class="hljs-number">10</span>,<span class="hljs-number">2</span>)),<br>    user_uniq AggregateFunction(uniq, UInt64)<br>) ENGINE <span class="hljs-operator">=</span> AggregatingMergeTree()<br><span class="hljs-keyword">ORDER</span> <span class="hljs-keyword">BY</span> (<span class="hljs-type">date</span>, category);<br><br><span class="hljs-comment">-- 配合物化视图使用</span><br><span class="hljs-keyword">INSERT</span> <span class="hljs-keyword">INTO</span> agg_stats<br><span class="hljs-keyword">SELECT</span><br>    toDate(event_time) <span class="hljs-keyword">AS</span> <span class="hljs-type">date</span>,<br>    category,<br>    countState() <span class="hljs-keyword">AS</span> cnt,<br>    sumState(amount) <span class="hljs-keyword">AS</span> amount_sum,<br>    uniqState(user_id) <span class="hljs-keyword">AS</span> user_uniq<br><span class="hljs-keyword">FROM</span> raw_events<br><span class="hljs-keyword">GROUP</span> <span class="hljs-keyword">BY</span> <span class="hljs-type">date</span>, category;<br></code></pre></td></tr></table></figure>
+<h2 id="物化视图">物化视图</h2>
+<p>物化视图是ClickHouse中实现实时聚合的核心机制。</p>
+<pre class="mermaid">flowchart LR
+    A[原始数据表&lt;br/&gt;raw_events] --&gt;|INSERT触发| B[物化视图&lt;br/&gt;MV]
+    B --&gt;|增量聚合| C[目标表&lt;br/&gt;agg_events]
+
+    D[客户端] --&gt;|INSERT| A
+    D --&gt;|查询聚合结果| C</pre>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 原始事件表</span><br><span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">TABLE</span> raw_events (<br>    event_time DateTime,<br>    user_id UInt64,<br>    event_type LowCardinality(String),<br>    amount <span class="hljs-type">Decimal</span>(<span class="hljs-number">10</span>, <span class="hljs-number">2</span>),<br>    properties String<br>) ENGINE <span class="hljs-operator">=</span> MergeTree()<br><span class="hljs-keyword">PARTITION</span> <span class="hljs-keyword">BY</span> toYYYYMM(event_time)<br><span class="hljs-keyword">ORDER</span> <span class="hljs-keyword">BY</span> (event_type, event_time)<br>TTL event_time <span class="hljs-operator">+</span> <span class="hljs-type">INTERVAL</span> <span class="hljs-number">30</span> <span class="hljs-keyword">DAY</span>;<br><br><span class="hljs-comment">-- 聚合目标表</span><br><span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">TABLE</span> hourly_stats (<br>    <span class="hljs-keyword">hour</span> DateTime,<br>    event_type LowCardinality(String),<br>    event_count SimpleAggregateFunction(sum, UInt64),<br>    unique_users AggregateFunction(uniq, UInt64),<br>    total_amount SimpleAggregateFunction(sum, <span class="hljs-type">Decimal</span>(<span class="hljs-number">12</span>, <span class="hljs-number">2</span>))<br>) ENGINE <span class="hljs-operator">=</span> AggregatingMergeTree()<br><span class="hljs-keyword">ORDER</span> <span class="hljs-keyword">BY</span> (event_type, <span class="hljs-keyword">hour</span>);<br><br><span class="hljs-comment">-- 物化视图（增量更新）</span><br><span class="hljs-keyword">CREATE</span> MATERIALIZED <span class="hljs-keyword">VIEW</span> hourly_stats_mv<br><span class="hljs-keyword">TO</span> hourly_stats <span class="hljs-keyword">AS</span><br><span class="hljs-keyword">SELECT</span><br>    toStartOfHour(event_time) <span class="hljs-keyword">AS</span> <span class="hljs-keyword">hour</span>,<br>    event_type,<br>    <span class="hljs-built_in">count</span>() <span class="hljs-keyword">AS</span> event_count,<br>    uniqState(user_id) <span class="hljs-keyword">AS</span> unique_users,<br>    <span class="hljs-built_in">sum</span>(amount) <span class="hljs-keyword">AS</span> total_amount<br><span class="hljs-keyword">FROM</span> raw_events<br><span class="hljs-keyword">GROUP</span> <span class="hljs-keyword">BY</span> <span class="hljs-keyword">hour</span>, event_type;<br><br><span class="hljs-comment">-- 查询时从聚合表读取</span><br><span class="hljs-keyword">SELECT</span><br>    <span class="hljs-keyword">hour</span>,<br>    event_type,<br>    event_count,<br>    uniqMerge(unique_users) <span class="hljs-keyword">AS</span> uv,<br>    total_amount<br><span class="hljs-keyword">FROM</span> hourly_stats<br><span class="hljs-keyword">WHERE</span> <span class="hljs-keyword">hour</span> <span class="hljs-operator">&gt;=</span> <span class="hljs-string">&#x27;2025-03-15 00:00:00&#x27;</span><br><span class="hljs-keyword">GROUP</span> <span class="hljs-keyword">BY</span> <span class="hljs-keyword">hour</span>, event_type<br><span class="hljs-keyword">ORDER</span> <span class="hljs-keyword">BY</span> <span class="hljs-keyword">hour</span>;<br></code></pre></td></tr></table></figure>
+<h2 id="数据摄入">数据摄入</h2>
+<h3 id="批量插入的最佳实践">批量插入的最佳实践</h3>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 推荐: 大批量插入（每次至少数千行）</span><br><span class="hljs-keyword">INSERT</span> <span class="hljs-keyword">INTO</span> events FORMAT JSONEachRow<br>&#123;&quot;event_time&quot;: &quot;2025-03-15 10:00:00&quot;, &quot;user_id&quot;: <span class="hljs-number">1001</span>, &quot;event_type&quot;: &quot;page_view&quot;&#125;<br>&#123;&quot;event_time&quot;: &quot;2025-03-15 10:00:01&quot;, &quot;user_id&quot;: <span class="hljs-number">1002</span>, &quot;event_type&quot;: &quot;click&quot;&#125;<br>...<br><br><span class="hljs-comment">-- 不推荐: 频繁小批量插入（会产生大量小Part）</span><br><span class="hljs-comment">-- 如果必须实时插入，使用Buffer表缓冲</span><br><span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">TABLE</span> events_buffer <span class="hljs-keyword">AS</span> events<br>ENGINE <span class="hljs-operator">=</span> Buffer(currentDatabase(), events, <span class="hljs-number">16</span>, <span class="hljs-number">10</span>, <span class="hljs-number">100</span>, <span class="hljs-number">10000</span>, <span class="hljs-number">100000</span>, <span class="hljs-number">1000000</span>, <span class="hljs-number">10000000</span>);<br><span class="hljs-comment">-- 参数: num_layers, min_time, max_time, min_rows, max_rows, min_bytes, max_bytes</span><br><span class="hljs-comment">-- 数据先写入内存Buffer，满足条件后刷入底层表</span><br></code></pre></td></tr></table></figure>
+<h3 id="从外部系统导入">从外部系统导入</h3>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 从Kafka消费</span><br><span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">TABLE</span> events_kafka (<br>    event_time DateTime,<br>    user_id UInt64,<br>    event_type String,<br>    amount <span class="hljs-type">Decimal</span>(<span class="hljs-number">10</span>,<span class="hljs-number">2</span>)<br>) ENGINE <span class="hljs-operator">=</span> Kafka()<br>SETTINGS<br>    kafka_broker_list <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;kafka1:9092,kafka2:9092&#x27;</span>,<br>    kafka_topic_list <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;events&#x27;</span>,<br>    kafka_group_name <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;clickhouse_consumer&#x27;</span>,<br>    kafka_format <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;JSONEachRow&#x27;</span>,<br>    kafka_num_consumers <span class="hljs-operator">=</span> <span class="hljs-number">4</span>;<br><br><span class="hljs-comment">-- 创建物化视图将Kafka数据持久化到MergeTree</span><br><span class="hljs-keyword">CREATE</span> MATERIALIZED <span class="hljs-keyword">VIEW</span> events_kafka_mv <span class="hljs-keyword">TO</span> events <span class="hljs-keyword">AS</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> events_kafka;<br><br><span class="hljs-comment">-- 从MySQL导入</span><br><span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">TABLE</span> mysql_orders<br>ENGINE <span class="hljs-operator">=</span> MySQL(<span class="hljs-string">&#x27;mysql_host:3306&#x27;</span>, <span class="hljs-string">&#x27;mydb&#x27;</span>, <span class="hljs-string">&#x27;orders&#x27;</span>, <span class="hljs-string">&#x27;user&#x27;</span>, <span class="hljs-string">&#x27;password&#x27;</span>);<br><br><span class="hljs-keyword">INSERT</span> <span class="hljs-keyword">INTO</span> local_orders <span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> mysql_orders <span class="hljs-keyword">WHERE</span> created_at <span class="hljs-operator">&gt;=</span> <span class="hljs-string">&#x27;2025-01-01&#x27;</span>;<br><br><span class="hljs-comment">-- 从S3/HDFS导入</span><br><span class="hljs-keyword">INSERT</span> <span class="hljs-keyword">INTO</span> events<br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> s3(<br>    <span class="hljs-string">&#x27;https://bucket.s3.amazonaws.com/data/*.parquet&#x27;</span>,<br>    <span class="hljs-string">&#x27;access_key&#x27;</span>,<br>    <span class="hljs-string">&#x27;secret_key&#x27;</span>,<br>    <span class="hljs-string">&#x27;Parquet&#x27;</span><br>);<br></code></pre></td></tr></table></figure>
+<h2 id="查询优化">查询优化</h2>
+<h3 id="order-by-键的选择">ORDER BY 键的选择</h3>
+<p>ORDER BY键的选择直接决定了稀疏索引的效果：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 原则: 将过滤频率最高的列放在前面</span><br><br><span class="hljs-comment">-- 场景: 主要按用户+时间查询</span><br><span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">TABLE</span> user_events (...)<br>ENGINE <span class="hljs-operator">=</span> MergeTree()<br><span class="hljs-keyword">ORDER</span> <span class="hljs-keyword">BY</span> (user_id, event_time);<br><span class="hljs-comment">-- SELECT ... WHERE user_id = 123 AND event_time &gt; &#x27;2025-03-01&#x27;</span><br><span class="hljs-comment">-- 可以利用稀疏索引快速定位</span><br><br><span class="hljs-comment">-- 场景: 主要按事件类型+时间查询</span><br><span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">TABLE</span> analytics (...)<br>ENGINE <span class="hljs-operator">=</span> MergeTree()<br><span class="hljs-keyword">ORDER</span> <span class="hljs-keyword">BY</span> (event_type, event_date, user_id);<br><span class="hljs-comment">-- SELECT ... WHERE event_type = &#x27;purchase&#x27; AND event_date = &#x27;2025-03-15&#x27;</span><br><span class="hljs-comment">-- 同样可以利用稀疏索引</span><br><br><span class="hljs-comment">-- 查看查询是否利用了主键索引</span><br><span class="hljs-keyword">SET</span> send_logs_level <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;trace&#x27;</span>;<br><span class="hljs-keyword">SELECT</span> <span class="hljs-built_in">count</span>() <span class="hljs-keyword">FROM</span> events <span class="hljs-keyword">WHERE</span> user_id <span class="hljs-operator">=</span> <span class="hljs-number">12345</span>;<br><span class="hljs-comment">-- 日志中会显示: &quot;Selected N parts by partition key, M parts by primary key&quot;</span><br></code></pre></td></tr></table></figure>
+<h3 id="跳数索引data-skipping-index">跳数索引（Data Skipping
+Index）</h3>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 为非主键列创建跳数索引</span><br><span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">TABLE</span> logs (<br>    <span class="hljs-type">timestamp</span> DateTime,<br>    level LowCardinality(String),<br>    service LowCardinality(String),<br>    message String,<br>    trace_id String,<br>    INDEX idx_trace_id trace_id TYPE bloom_filter(<span class="hljs-number">0.01</span>) GRANULARITY <span class="hljs-number">4</span>,<br>    INDEX idx_service service TYPE <span class="hljs-keyword">set</span>(<span class="hljs-number">100</span>) GRANULARITY <span class="hljs-number">4</span>,<br>    INDEX idx_message message TYPE tokenbf_v1(<span class="hljs-number">10240</span>, <span class="hljs-number">3</span>, <span class="hljs-number">0</span>) GRANULARITY <span class="hljs-number">4</span><br>) ENGINE <span class="hljs-operator">=</span> MergeTree()<br><span class="hljs-keyword">PARTITION</span> <span class="hljs-keyword">BY</span> toYYYYMM(<span class="hljs-type">timestamp</span>)<br><span class="hljs-keyword">ORDER</span> <span class="hljs-keyword">BY</span> (level, <span class="hljs-type">timestamp</span>);<br><br><span class="hljs-comment">-- bloom_filter: 适合高基数列的等值查询</span><br><span class="hljs-comment">-- set: 适合低基数列（记录granule内所有不同值）</span><br><span class="hljs-comment">-- tokenbf_v1: 适合文本的token级布隆过滤器</span><br><span class="hljs-comment">-- minmax: 记录granule内的最大最小值（适合数值范围查询）</span><br><br><span class="hljs-comment">-- 查询可以利用跳数索引</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> logs <span class="hljs-keyword">WHERE</span> trace_id <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;abc-123-def&#x27;</span>;<br><span class="hljs-comment">-- 通过bloom_filter索引快速排除不包含该trace_id的granule</span><br></code></pre></td></tr></table></figure>
+<h3 id="查询性能调优">查询性能调优</h3>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 1. 使用 PREWHERE 替代 WHERE（ClickHouse通常自动优化）</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> events<br>PREWHERE user_id <span class="hljs-operator">=</span> <span class="hljs-number">12345</span>  <span class="hljs-comment">-- 先过滤，减少读取的列数据</span><br><span class="hljs-keyword">WHERE</span> event_type <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;click&#x27;</span>;<br><br><span class="hljs-comment">-- 2. 避免 SELECT *，只查需要的列</span><br><span class="hljs-comment">-- Bad</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> events <span class="hljs-keyword">WHERE</span> user_id <span class="hljs-operator">=</span> <span class="hljs-number">12345</span>;<br><span class="hljs-comment">-- Good</span><br><span class="hljs-keyword">SELECT</span> event_time, event_type, duration_ms <span class="hljs-keyword">FROM</span> events <span class="hljs-keyword">WHERE</span> user_id <span class="hljs-operator">=</span> <span class="hljs-number">12345</span>;<br><br><span class="hljs-comment">-- 3. 使用 LowCardinality 优化低基数字符串</span><br><span class="hljs-comment">-- 内部使用字典编码，大幅减少内存和IO</span><br><span class="hljs-keyword">ALTER</span> <span class="hljs-keyword">TABLE</span> events MODIFY <span class="hljs-keyword">COLUMN</span> event_type LowCardinality(String);<br><br><span class="hljs-comment">-- 4. 使用近似计算提升性能</span><br><span class="hljs-comment">-- 精确去重（慢）</span><br><span class="hljs-keyword">SELECT</span> uniqExact(user_id) <span class="hljs-keyword">FROM</span> events;<br><span class="hljs-comment">-- 近似去重（快，误差 &lt; 2%）</span><br><span class="hljs-keyword">SELECT</span> uniq(user_id) <span class="hljs-keyword">FROM</span> events;<br><span class="hljs-comment">-- HyperLogLog去重</span><br><span class="hljs-keyword">SELECT</span> uniqHLL12(user_id) <span class="hljs-keyword">FROM</span> events;<br><br><span class="hljs-comment">-- 5. 使用采样（Sampling）</span><br><span class="hljs-comment">-- 建表时指定采样键</span><br><span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">TABLE</span> events_sampled (<br>    event_time DateTime,<br>    user_id UInt64,<br>    event_type String<br>) ENGINE <span class="hljs-operator">=</span> MergeTree()<br><span class="hljs-keyword">ORDER</span> <span class="hljs-keyword">BY</span> (intHash32(user_id), event_time)<br>SAMPLE <span class="hljs-keyword">BY</span> intHash32(user_id);<br><br><span class="hljs-comment">-- 查询10%的数据（性能提升约10倍）</span><br><span class="hljs-keyword">SELECT</span> event_type, <span class="hljs-built_in">count</span>() <span class="hljs-operator">*</span> <span class="hljs-number">10</span> <span class="hljs-keyword">AS</span> estimated_count<br><span class="hljs-keyword">FROM</span> events_sampled SAMPLE <span class="hljs-number">0.1</span><br><span class="hljs-keyword">GROUP</span> <span class="hljs-keyword">BY</span> event_type;<br></code></pre></td></tr></table></figure>
+<h2 id="集群部署">集群部署</h2>
+<h3 id="集群架构">集群架构</h3>
+<pre class="mermaid">graph TD
+    subgraph "ClickHouse Cluster (2 Shards x 2 Replicas)"
+        subgraph "Shard 1"
+            S1R1["Replica 1-1&lt;br/&gt;Node: ch1"]
+            S1R2["Replica 1-2&lt;br/&gt;Node: ch2"]
+            S1R1 &lt;--&gt;|ZooKeeper复制| S1R2
+        end
+
+        subgraph "Shard 2"
+            S2R1["Replica 2-1&lt;br/&gt;Node: ch3"]
+            S2R2["Replica 2-2&lt;br/&gt;Node: ch4"]
+            S2R1 &lt;--&gt;|ZooKeeper复制| S2R2
+        end
+    end
+
+    ZK[ZooKeeper / ClickHouse Keeper&lt;br/&gt;协调复制]
+
+    S1R1 --&gt; ZK
+    S1R2 --&gt; ZK
+    S2R1 --&gt; ZK
+    S2R2 --&gt; ZK</pre>
+<h3 id="分布式表">分布式表</h3>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 本地表（每个节点上创建）</span><br><span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">TABLE</span> events_local <span class="hljs-keyword">ON</span> CLUSTER my_cluster (<br>    event_time DateTime,<br>    user_id UInt64,<br>    event_type LowCardinality(String),<br>    amount <span class="hljs-type">Decimal</span>(<span class="hljs-number">10</span>,<span class="hljs-number">2</span>)<br>) ENGINE <span class="hljs-operator">=</span> ReplicatedMergeTree(<span class="hljs-string">&#x27;/clickhouse/tables/&#123;shard&#125;/events&#x27;</span>, <span class="hljs-string">&#x27;&#123;replica&#125;&#x27;</span>)<br><span class="hljs-keyword">PARTITION</span> <span class="hljs-keyword">BY</span> toYYYYMM(event_time)<br><span class="hljs-keyword">ORDER</span> <span class="hljs-keyword">BY</span> (user_id, event_time);<br><br><span class="hljs-comment">-- 分布式表（逻辑层，路由到各个Shard）</span><br><span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">TABLE</span> events_distributed <span class="hljs-keyword">ON</span> CLUSTER my_cluster <span class="hljs-keyword">AS</span> events_local<br>ENGINE <span class="hljs-operator">=</span> Distributed(my_cluster, <span class="hljs-keyword">default</span>, events_local, sipHash64(user_id));<br><span class="hljs-comment">-- 参数: 集群名, 数据库名, 本地表名, 分片键表达式</span><br><br><span class="hljs-comment">-- 写入分布式表（自动路由到正确的Shard）</span><br><span class="hljs-keyword">INSERT</span> <span class="hljs-keyword">INTO</span> events_distributed <span class="hljs-keyword">VALUES</span><br>(<span class="hljs-string">&#x27;2025-03-15 10:00:00&#x27;</span>, <span class="hljs-number">1001</span>, <span class="hljs-string">&#x27;click&#x27;</span>, <span class="hljs-number">0.00</span>),<br>(<span class="hljs-string">&#x27;2025-03-15 10:00:01&#x27;</span>, <span class="hljs-number">2002</span>, <span class="hljs-string">&#x27;purchase&#x27;</span>, <span class="hljs-number">99.90</span>);<br><br><span class="hljs-comment">-- 查询分布式表（自动聚合所有Shard的结果）</span><br><span class="hljs-keyword">SELECT</span><br>    toStartOfHour(event_time) <span class="hljs-keyword">AS</span> <span class="hljs-keyword">hour</span>,<br>    event_type,<br>    <span class="hljs-built_in">count</span>() <span class="hljs-keyword">AS</span> cnt,<br>    uniq(user_id) <span class="hljs-keyword">AS</span> uv,<br>    <span class="hljs-built_in">sum</span>(amount) <span class="hljs-keyword">AS</span> total<br><span class="hljs-keyword">FROM</span> events_distributed<br><span class="hljs-keyword">WHERE</span> event_time <span class="hljs-operator">&gt;=</span> <span class="hljs-string">&#x27;2025-03-15&#x27;</span><br><span class="hljs-keyword">GROUP</span> <span class="hljs-keyword">BY</span> <span class="hljs-keyword">hour</span>, event_type<br><span class="hljs-keyword">ORDER</span> <span class="hljs-keyword">BY</span> <span class="hljs-keyword">hour</span>;<br></code></pre></td></tr></table></figure>
+<h3 id="集群配置">集群配置</h3>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br></pre></td><td class="code"><pre><code class="hljs xml"><span class="hljs-comment">&lt;!-- config.xml 集群配置 --&gt;</span><br><span class="hljs-tag">&lt;<span class="hljs-name">clickhouse</span>&gt;</span><br>    <span class="hljs-tag">&lt;<span class="hljs-name">remote_servers</span>&gt;</span><br>        <span class="hljs-tag">&lt;<span class="hljs-name">my_cluster</span>&gt;</span><br>            <span class="hljs-tag">&lt;<span class="hljs-name">shard</span>&gt;</span><br>                <span class="hljs-tag">&lt;<span class="hljs-name">replica</span>&gt;</span><br>                    <span class="hljs-tag">&lt;<span class="hljs-name">host</span>&gt;</span>ch1<span class="hljs-tag">&lt;/<span class="hljs-name">host</span>&gt;</span><br>                    <span class="hljs-tag">&lt;<span class="hljs-name">port</span>&gt;</span>9000<span class="hljs-tag">&lt;/<span class="hljs-name">port</span>&gt;</span><br>                <span class="hljs-tag">&lt;/<span class="hljs-name">replica</span>&gt;</span><br>                <span class="hljs-tag">&lt;<span class="hljs-name">replica</span>&gt;</span><br>                    <span class="hljs-tag">&lt;<span class="hljs-name">host</span>&gt;</span>ch2<span class="hljs-tag">&lt;/<span class="hljs-name">host</span>&gt;</span><br>                    <span class="hljs-tag">&lt;<span class="hljs-name">port</span>&gt;</span>9000<span class="hljs-tag">&lt;/<span class="hljs-name">port</span>&gt;</span><br>                <span class="hljs-tag">&lt;/<span class="hljs-name">replica</span>&gt;</span><br>            <span class="hljs-tag">&lt;/<span class="hljs-name">shard</span>&gt;</span><br>            <span class="hljs-tag">&lt;<span class="hljs-name">shard</span>&gt;</span><br>                <span class="hljs-tag">&lt;<span class="hljs-name">replica</span>&gt;</span><br>                    <span class="hljs-tag">&lt;<span class="hljs-name">host</span>&gt;</span>ch3<span class="hljs-tag">&lt;/<span class="hljs-name">host</span>&gt;</span><br>                    <span class="hljs-tag">&lt;<span class="hljs-name">port</span>&gt;</span>9000<span class="hljs-tag">&lt;/<span class="hljs-name">port</span>&gt;</span><br>                <span class="hljs-tag">&lt;/<span class="hljs-name">replica</span>&gt;</span><br>                <span class="hljs-tag">&lt;<span class="hljs-name">replica</span>&gt;</span><br>                    <span class="hljs-tag">&lt;<span class="hljs-name">host</span>&gt;</span>ch4<span class="hljs-tag">&lt;/<span class="hljs-name">host</span>&gt;</span><br>                    <span class="hljs-tag">&lt;<span class="hljs-name">port</span>&gt;</span>9000<span class="hljs-tag">&lt;/<span class="hljs-name">port</span>&gt;</span><br>                <span class="hljs-tag">&lt;/<span class="hljs-name">replica</span>&gt;</span><br>            <span class="hljs-tag">&lt;/<span class="hljs-name">shard</span>&gt;</span><br>        <span class="hljs-tag">&lt;/<span class="hljs-name">my_cluster</span>&gt;</span><br>    <span class="hljs-tag">&lt;/<span class="hljs-name">remote_servers</span>&gt;</span><br><br>    <span class="hljs-tag">&lt;<span class="hljs-name">macros</span>&gt;</span><br>        <span class="hljs-tag">&lt;<span class="hljs-name">shard</span>&gt;</span>01<span class="hljs-tag">&lt;/<span class="hljs-name">shard</span>&gt;</span>        <span class="hljs-comment">&lt;!-- 每个节点不同 --&gt;</span><br>        <span class="hljs-tag">&lt;<span class="hljs-name">replica</span>&gt;</span>replica_01<span class="hljs-tag">&lt;/<span class="hljs-name">replica</span>&gt;</span> <span class="hljs-comment">&lt;!-- 每个节点不同 --&gt;</span><br>    <span class="hljs-tag">&lt;/<span class="hljs-name">macros</span>&gt;</span><br><span class="hljs-tag">&lt;/<span class="hljs-name">clickhouse</span>&gt;</span><br></code></pre></td></tr></table></figure>
+<h2 id="典型应用场景">典型应用场景</h2>
+<h3 id="场景一实时日志分析">场景一：实时日志分析</h3>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 日志表</span><br><span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">TABLE</span> access_logs (<br>    <span class="hljs-type">timestamp</span> DateTime64(<span class="hljs-number">3</span>),<br>    <span class="hljs-type">date</span> <span class="hljs-type">Date</span> <span class="hljs-keyword">DEFAULT</span> toDate(<span class="hljs-type">timestamp</span>),<br>    service LowCardinality(String),<br>    level Enum8(<span class="hljs-string">&#x27;DEBUG&#x27;</span><span class="hljs-operator">=</span><span class="hljs-number">1</span>, <span class="hljs-string">&#x27;INFO&#x27;</span><span class="hljs-operator">=</span><span class="hljs-number">2</span>, <span class="hljs-string">&#x27;WARN&#x27;</span><span class="hljs-operator">=</span><span class="hljs-number">3</span>, <span class="hljs-string">&#x27;ERROR&#x27;</span><span class="hljs-operator">=</span><span class="hljs-number">4</span>),<br>    <span class="hljs-keyword">method</span> LowCardinality(String),<br>    path String,<br>    status_code UInt16,<br>    duration_ms UInt32,<br>    client_ip IPv4,<br>    user_agent String,<br>    request_id String,<br>    INDEX idx_request_id request_id TYPE bloom_filter(<span class="hljs-number">0.01</span>) GRANULARITY <span class="hljs-number">4</span><br>) ENGINE <span class="hljs-operator">=</span> MergeTree()<br><span class="hljs-keyword">PARTITION</span> <span class="hljs-keyword">BY</span> <span class="hljs-type">date</span><br><span class="hljs-keyword">ORDER</span> <span class="hljs-keyword">BY</span> (service, level, <span class="hljs-type">timestamp</span>)<br>TTL <span class="hljs-type">date</span> <span class="hljs-operator">+</span> <span class="hljs-type">INTERVAL</span> <span class="hljs-number">30</span> <span class="hljs-keyword">DAY</span> <span class="hljs-keyword">DELETE</span><br>SETTINGS index_granularity <span class="hljs-operator">=</span> <span class="hljs-number">8192</span>;<br><br><span class="hljs-comment">-- 实时错误监控</span><br><span class="hljs-keyword">SELECT</span><br>    service,<br>    <span class="hljs-built_in">count</span>() <span class="hljs-keyword">AS</span> error_count,<br>    uniq(request_id) <span class="hljs-keyword">AS</span> affected_requests,<br>    <span class="hljs-built_in">avg</span>(duration_ms) <span class="hljs-keyword">AS</span> avg_duration<br><span class="hljs-keyword">FROM</span> access_logs<br><span class="hljs-keyword">WHERE</span> <span class="hljs-type">timestamp</span> <span class="hljs-operator">&gt;=</span> now() <span class="hljs-operator">-</span> <span class="hljs-type">INTERVAL</span> <span class="hljs-number">5</span> <span class="hljs-keyword">MINUTE</span><br>    <span class="hljs-keyword">AND</span> level <span class="hljs-operator">&gt;=</span> <span class="hljs-string">&#x27;ERROR&#x27;</span><br><span class="hljs-keyword">GROUP</span> <span class="hljs-keyword">BY</span> service<br><span class="hljs-keyword">ORDER</span> <span class="hljs-keyword">BY</span> error_count <span class="hljs-keyword">DESC</span>;<br><br><span class="hljs-comment">-- P99延迟分析</span><br><span class="hljs-keyword">SELECT</span><br>    service,<br>    <span class="hljs-keyword">method</span>,<br>    quantile(<span class="hljs-number">0.5</span>)(duration_ms) <span class="hljs-keyword">AS</span> p50,<br>    quantile(<span class="hljs-number">0.9</span>)(duration_ms) <span class="hljs-keyword">AS</span> p90,<br>    quantile(<span class="hljs-number">0.99</span>)(duration_ms) <span class="hljs-keyword">AS</span> p99,<br>    <span class="hljs-built_in">max</span>(duration_ms) <span class="hljs-keyword">AS</span> max_duration<br><span class="hljs-keyword">FROM</span> access_logs<br><span class="hljs-keyword">WHERE</span> <span class="hljs-type">date</span> <span class="hljs-operator">=</span> today()<br><span class="hljs-keyword">GROUP</span> <span class="hljs-keyword">BY</span> service, <span class="hljs-keyword">method</span><br><span class="hljs-keyword">ORDER</span> <span class="hljs-keyword">BY</span> p99 <span class="hljs-keyword">DESC</span><br>LIMIT <span class="hljs-number">20</span>;<br></code></pre></td></tr></table></figure>
+<h3 id="场景二用户行为分析">场景二：用户行为分析</h3>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 漏斗分析</span><br><span class="hljs-keyword">SELECT</span><br>    windowFunnel(<span class="hljs-number">86400</span>)(event_time,<br>        event_type <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;page_view&#x27;</span>,<br>        event_type <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;add_to_cart&#x27;</span>,<br>        event_type <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;checkout&#x27;</span>,<br>        event_type <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;payment&#x27;</span><br>    ) <span class="hljs-keyword">AS</span> funnel_step<br><span class="hljs-keyword">FROM</span> user_events<br><span class="hljs-keyword">WHERE</span> event_date <span class="hljs-operator">&gt;=</span> <span class="hljs-string">&#x27;2025-03-01&#x27;</span> <span class="hljs-keyword">AND</span> event_date <span class="hljs-operator">&lt;=</span> <span class="hljs-string">&#x27;2025-03-31&#x27;</span><br><span class="hljs-keyword">GROUP</span> <span class="hljs-keyword">BY</span> user_id<br><span class="hljs-comment">-- 结果: 每个用户在24小时内到达了漏斗的第几步</span><br><br><span class="hljs-comment">-- 汇总漏斗</span><br><span class="hljs-keyword">SELECT</span><br>    step,<br>    <span class="hljs-built_in">count</span>() <span class="hljs-keyword">AS</span> user_count<br><span class="hljs-keyword">FROM</span> (<br>    <span class="hljs-keyword">SELECT</span><br>        windowFunnel(<span class="hljs-number">86400</span>)(event_time,<br>            event_type <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;page_view&#x27;</span>,<br>            event_type <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;add_to_cart&#x27;</span>,<br>            event_type <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;checkout&#x27;</span>,<br>            event_type <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;payment&#x27;</span><br>        ) <span class="hljs-keyword">AS</span> step<br>    <span class="hljs-keyword">FROM</span> user_events<br>    <span class="hljs-keyword">WHERE</span> event_date <span class="hljs-keyword">BETWEEN</span> <span class="hljs-string">&#x27;2025-03-01&#x27;</span> <span class="hljs-keyword">AND</span> <span class="hljs-string">&#x27;2025-03-31&#x27;</span><br>    <span class="hljs-keyword">GROUP</span> <span class="hljs-keyword">BY</span> user_id<br>)<br><span class="hljs-keyword">GROUP</span> <span class="hljs-keyword">BY</span> step<br><span class="hljs-keyword">ORDER</span> <span class="hljs-keyword">BY</span> step;<br><br><span class="hljs-comment">-- 留存分析</span><br><span class="hljs-keyword">SELECT</span><br>    first_day,<br>    dateDiff(<span class="hljs-string">&#x27;day&#x27;</span>, first_day, return_day) <span class="hljs-keyword">AS</span> day_n,<br>    uniq(user_id) <span class="hljs-keyword">AS</span> retained_users<br><span class="hljs-keyword">FROM</span> (<br>    <span class="hljs-keyword">SELECT</span><br>        user_id,<br>        <span class="hljs-built_in">min</span>(event_date) <span class="hljs-keyword">OVER</span> (<span class="hljs-keyword">PARTITION</span> <span class="hljs-keyword">BY</span> user_id) <span class="hljs-keyword">AS</span> first_day,<br>        event_date <span class="hljs-keyword">AS</span> return_day<br>    <span class="hljs-keyword">FROM</span> user_events<br>    <span class="hljs-keyword">WHERE</span> event_date <span class="hljs-operator">&gt;=</span> <span class="hljs-string">&#x27;2025-03-01&#x27;</span><br>)<br><span class="hljs-keyword">WHERE</span> dateDiff(<span class="hljs-string">&#x27;day&#x27;</span>, first_day, return_day) <span class="hljs-operator">&lt;=</span> <span class="hljs-number">30</span><br><span class="hljs-keyword">GROUP</span> <span class="hljs-keyword">BY</span> first_day, day_n<br><span class="hljs-keyword">ORDER</span> <span class="hljs-keyword">BY</span> first_day, day_n;<br></code></pre></td></tr></table></figure>
+<h2 id="总结">总结</h2>
+<p>ClickHouse是一个专为OLAP场景设计的高性能分析数据库：</p>
+<ul>
+<li><strong>列式存储</strong>是性能的基石，同列数据的高压缩率和SIMD向量化执行是查询速度快的核心原因</li>
+<li><strong>MergeTree引擎族</strong>提供了丰富的数据管理能力：去重（Replacing）、聚合（Summing/Aggregating）、变更追踪（Collapsing）</li>
+<li><strong>稀疏索引</strong>以极小的索引体积实现了高效的数据定位，跳数索引进一步补充了非主键列的过滤能力</li>
+<li><strong>物化视图</strong>是实现实时聚合的利器，可以在数据写入时增量计算聚合结果</li>
+<li><strong>数据摄入</strong>应以批量写入为主，避免频繁小批量插入产生过多Part</li>
+<li><strong>集群部署</strong>通过Shard分片和Replica复制实现水平扩展和高可用</li>
+<li>ClickHouse不适合OLTP场景（高频单行更新、事务需求），应与MySQL/PostgreSQL等OLTP数据库配合使用</li>
+</ul>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2025-03-26</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">3.7k 字 · 9 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/spring-security-oauth2/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Spring Security + OAuth2统一认证实战</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/java-design-patterns/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Java设计模式实战：23种模式在项目中的应用</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%88%97%E5%BC%8F%E5%AD%98%E5%82%A8%E5%8E%9F%E7%90%86"><span class="toc-text">列式存储原理</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%A1%8C%E5%AD%98%E5%82%A8-vs-%E5%88%97%E5%AD%98%E5%82%A8"><span class="toc-text">行存储 vs 列存储</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E5%8E%8B%E7%BC%A9%E6%95%88%E6%9E%9C"><span class="toc-text">数据压缩效果</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#mergetree-%E5%BC%95%E6%93%8E%E6%97%8F"><span class="toc-text">MergeTree 引擎族</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#mergetree-%E5%9F%BA%E7%A1%80"><span class="toc-text">MergeTree 基础</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#mergetree-%E5%AD%98%E5%82%A8%E7%BB%93%E6%9E%84"><span class="toc-text">MergeTree 存储结构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%A8%80%E7%96%8F%E7%B4%A2%E5%BC%95%E5%B7%A5%E4%BD%9C%E5%8E%9F%E7%90%86"><span class="toc-text">稀疏索引工作原理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#mergetree-%E5%BC%95%E6%93%8E%E5%8F%98%E4%BD%93"><span class="toc-text">MergeTree 引擎变体</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%89%A9%E5%8C%96%E8%A7%86%E5%9B%BE"><span class="toc-text">物化视图</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E6%91%84%E5%85%A5"><span class="toc-text">数据摄入</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%89%B9%E9%87%8F%E6%8F%92%E5%85%A5%E7%9A%84%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5"><span class="toc-text">批量插入的最佳实践</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BB%8E%E5%A4%96%E9%83%A8%E7%B3%BB%E7%BB%9F%E5%AF%BC%E5%85%A5"><span class="toc-text">从外部系统导入</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9F%A5%E8%AF%A2%E4%BC%98%E5%8C%96"><span class="toc-text">查询优化</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#order-by-%E9%94%AE%E7%9A%84%E9%80%89%E6%8B%A9"><span class="toc-text">ORDER BY 键的选择</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%B7%B3%E6%95%B0%E7%B4%A2%E5%BC%95data-skipping-index"><span class="toc-text">跳数索引（Data Skipping
+Index）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%9F%A5%E8%AF%A2%E6%80%A7%E8%83%BD%E8%B0%83%E4%BC%98"><span class="toc-text">查询性能调优</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%9B%86%E7%BE%A4%E9%83%A8%E7%BD%B2"><span class="toc-text">集群部署</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%9B%86%E7%BE%A4%E6%9E%B6%E6%9E%84"><span class="toc-text">集群架构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%88%86%E5%B8%83%E5%BC%8F%E8%A1%A8"><span class="toc-text">分布式表</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%9B%86%E7%BE%A4%E9%85%8D%E7%BD%AE"><span class="toc-text">集群配置</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%B8%E5%9E%8B%E5%BA%94%E7%94%A8%E5%9C%BA%E6%99%AF"><span class="toc-text">典型应用场景</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9C%BA%E6%99%AF%E4%B8%80%E5%AE%9E%E6%97%B6%E6%97%A5%E5%BF%97%E5%88%86%E6%9E%90"><span class="toc-text">场景一：实时日志分析</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9C%BA%E6%99%AF%E4%BA%8C%E7%94%A8%E6%88%B7%E8%A1%8C%E4%B8%BA%E5%88%86%E6%9E%90"><span class="toc-text">场景二：用户行为分析</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

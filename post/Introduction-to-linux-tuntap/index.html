@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Linux TUN/TAP：虚拟网络设备原理与实践 · zt&#39;s Blog</title>
+  <meta name="description" content="深入理解 Linux TUN/TAP 虚拟网络设备的工作原理，通过实际代码演示如何创建 TUN 接口、收发 IP 数据包，以及在容器网络和 VPN 中的应用。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/Introduction-to-linux-tuntap/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Linux TUN/TAP：虚拟网络设备原理与实践">
+  <meta property="og:description" content="深入理解 Linux TUN/TAP 虚拟网络设备的工作原理，通过实际代码演示如何创建 TUN 接口、收发 IP 数据包，以及在容器网络和 VPN 中的应用。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/Introduction-to-linux-tuntap/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2020-10-02T16:00:00.000Z">
+  <meta property="article:modified_time" content="2020-10-02T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Linux TUN/TAP：虚拟网络设备原理与实践">
+  <meta name="twitter:description" content="深入理解 Linux TUN/TAP 虚拟网络设备的工作原理，通过实际代码演示如何创建 TUN 接口、收发 IP 数据包，以及在容器网络和 VPN 中的应用。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Linux TUN/TAP：虚拟网络设备原理与实践","description":"深入理解 Linux TUN/TAP 虚拟网络设备的工作原理，通过实际代码演示如何创建 TUN 接口、收发 IP 数据包，以及在容器网络和 VPN 中的应用。","datePublished":"2020-10-02T16:00:00.000Z","dateModified":"2020-10-02T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/Introduction-to-linux-tuntap/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Linux","item":"https://withesse.co/categories/Linux/"},{"@type":"ListItem","position":2,"name":"Network","item":"https://withesse.co/categories/Linux/Network/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:40">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Linux/">Linux</a><span class="catsep">/</span><a class="catlink" href="/categories/Linux/Network/">Network</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/linux/"><span class="hash">#</span>linux</a><a class="tag" href="/tags/networking/"><span class="hash">#</span>networking</a><a class="tag" href="/tags/tun-tap/"><span class="hash">#</span>tun/tap</a><a class="tag" href="/tags/vpn/"><span class="hash">#</span>vpn</a>
+        
+      </div>
+
+      <h1>Linux TUN/TAP：虚拟网络设备原理与实践</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2020.10.03</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 4 min</span>
+        </span>
+        <span class="wc"><span class="num">1.8k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#tun-%E5%92%8C-tap-%E7%9A%84%E5%8C%BA%E5%88%AB"><span class="toc-text">TUN 和 TAP 的区别</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%88%9B%E5%BB%BA-tun-%E6%8E%A5%E5%8F%A3"><span class="toc-text">创建 TUN 接口</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#vpn-%E7%9A%84%E5%B7%A5%E4%BD%9C%E5%8E%9F%E7%90%86"><span class="toc-text">VPN 的工作原理</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%B9%E5%99%A8%E7%BD%91%E7%BB%9C%E4%B8%AD%E7%9A%84-tuntap"><span class="toc-text">容器网络中的 TUN&#x2F;TAP</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%94%A8-python-%E5%86%99%E4%B8%80%E4%B8%AA%E7%AE%80%E5%8D%95%E6%BC%94%E7%A4%BA"><span class="toc-text">用 Python 写一个简单演示</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%B8%A9%E5%9D%91%E8%AE%B0%E5%BD%95"><span class="toc-text">踩坑记录</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <p>学习 TUN/TAP 是因为在排查 Kubernetes 网络问题时，反复看到
+<code>flannel.1</code>、<code>cni0</code>、<code>veth</code>
+这些奇怪的网络接口，一直没搞清楚背后的机制。最后发现很多容器网络方案的底层都依赖
+TUN/TAP，理解了这个之后，很多之前困惑的东西就通了。</p>
+<h2 id="tun-和-tap-的区别">TUN 和 TAP 的区别</h2>
+<p>两者都是 Linux 内核提供的虚拟网络设备，本质区别在于工作在哪一层：</p>
+<ul>
+<li><strong>TUN</strong>（Network Tunnel）：工作在<strong>第三层（IP
+层）</strong>，处理 IP 数据包</li>
+<li><strong>TAP</strong>（Network
+Tap）：工作在<strong>第二层（以太网层）</strong>，处理以太网帧，包括 ARP
+广播</li>
+</ul>
+<p>普通物理网卡和 TUN/TAP
+的区别是：物理网卡的另一端接的是实际的物理网络，TUN/TAP
+的另一端接的是一个用户空间程序。内核把要发往虚拟接口的数据包交给程序读取，程序写入数据包就像从网络收到了数据。</p>
+<p>用 <code>ip link</code> 可以看到 TUN
+接口就像普通网络接口一样出现：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs bash">$ ip <span class="hljs-built_in">link</span> show<br>1: lo: &lt;LOOPBACK,UP,LOWER_UP&gt; mtu 65536<br>2: eth0: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1500<br>3: tun0: &lt;POINTOPOINT,MULTICAST,NOARP,UP,LOWER_UP&gt; mtu 1500<br>    <span class="hljs-built_in">link</span>/none<br></code></pre></td></tr></table></figure>
+<h2 id="创建-tun-接口">创建 TUN 接口</h2>
+<p>操作 TUN/TAP 设备通过字符设备
+<code>/dev/net/tun</code>。以下是一个最简单的 C 程序：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&lt;fcntl.h&gt;</span></span><br><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&lt;linux/if_tun.h&gt;</span></span><br><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&lt;net/if.h&gt;</span></span><br><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&lt;string.h&gt;</span></span><br><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&lt;sys/ioctl.h&gt;</span></span><br><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&lt;unistd.h&gt;</span></span><br><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&lt;stdio.h&gt;</span></span><br><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&lt;stdlib.h&gt;</span></span><br><br><span class="hljs-comment">// 创建 TUN 接口，返回文件描述符</span><br><span class="hljs-type">int</span> <span class="hljs-title function_">tun_alloc</span><span class="hljs-params">(<span class="hljs-type">char</span> *dev)</span> &#123;<br>    <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">ifreq</span> <span class="hljs-title">ifr</span>;</span><br>    <span class="hljs-type">int</span> fd, err;<br><br>    <span class="hljs-comment">// 打开 /dev/net/tun</span><br>    <span class="hljs-keyword">if</span> ((fd = open(<span class="hljs-string">&quot;/dev/net/tun&quot;</span>, O_RDWR)) &lt; <span class="hljs-number">0</span>) &#123;<br>        perror(<span class="hljs-string">&quot;open /dev/net/tun&quot;</span>);<br>        <span class="hljs-keyword">return</span> <span class="hljs-number">-1</span>;<br>    &#125;<br><br>    <span class="hljs-built_in">memset</span>(&amp;ifr, <span class="hljs-number">0</span>, <span class="hljs-keyword">sizeof</span>(ifr));<br><br>    <span class="hljs-comment">// IFF_TUN：三层设备（IP 包）</span><br>    <span class="hljs-comment">// IFF_TAP：二层设备（以太网帧）</span><br>    <span class="hljs-comment">// IFF_NO_PI：不包含额外的包头信息</span><br>    ifr.ifr_flags = IFF_TUN | IFF_NO_PI;<br><br>    <span class="hljs-keyword">if</span> (*dev) &#123;<br>        <span class="hljs-built_in">strncpy</span>(ifr.ifr_name, dev, IFNAMSIZ);<br>    &#125;<br><br>    <span class="hljs-comment">// 向内核注册这个虚拟接口</span><br>    <span class="hljs-keyword">if</span> ((err = ioctl(fd, TUNSETIFF, (<span class="hljs-type">void</span> *) &amp;ifr)) &lt; <span class="hljs-number">0</span>) &#123;<br>        perror(<span class="hljs-string">&quot;ioctl TUNSETIFF&quot;</span>);<br>        close(fd);<br>        <span class="hljs-keyword">return</span> err;<br>    &#125;<br><br>    <span class="hljs-comment">// 把实际分配的接口名写回</span><br>    <span class="hljs-built_in">strcpy</span>(dev, ifr.ifr_name);<br>    <span class="hljs-keyword">return</span> fd;<br>&#125;<br><br><span class="hljs-type">int</span> <span class="hljs-title function_">main</span><span class="hljs-params">()</span> &#123;<br>    <span class="hljs-type">char</span> dev[IFNAMSIZ] = <span class="hljs-string">&quot;tun0&quot;</span>;<br>    <span class="hljs-type">int</span> tun_fd = tun_alloc(dev);<br><br>    <span class="hljs-built_in">printf</span>(<span class="hljs-string">&quot;Created TUN device: %s\n&quot;</span>, dev);<br><br>    <span class="hljs-comment">// 配置 IP 地址（通常用 ip 命令，这里演示用 ioctl）</span><br>    <span class="hljs-comment">// 之后就可以 read/write 这个 fd 来收发 IP 包了</span><br><br>    <span class="hljs-comment">// 读取从 TUN 接口收到的 IP 包</span><br>    <span class="hljs-type">unsigned</span> <span class="hljs-type">char</span> buffer[<span class="hljs-number">4096</span>];<br>    <span class="hljs-keyword">while</span> (<span class="hljs-number">1</span>) &#123;<br>        <span class="hljs-type">int</span> n = read(tun_fd, buffer, <span class="hljs-keyword">sizeof</span>(buffer));<br>        <span class="hljs-keyword">if</span> (n &lt; <span class="hljs-number">0</span>) &#123;<br>            perror(<span class="hljs-string">&quot;read&quot;</span>);<br>            <span class="hljs-keyword">break</span>;<br>        &#125;<br>        <span class="hljs-comment">// buffer 里就是原始的 IP 数据包</span><br>        <span class="hljs-comment">// 第 0 字节：IP 版本（高 4 位）+ 头部长度（低 4 位）</span><br>        <span class="hljs-comment">// 第 9 字节：协议号（TCP=6, UDP=17, ICMP=1）</span><br>        <span class="hljs-built_in">printf</span>(<span class="hljs-string">&quot;Received %d bytes, protocol: %d\n&quot;</span>, n, buffer[<span class="hljs-number">9</span>]);<br>    &#125;<br><br>    close(tun_fd);<br>    <span class="hljs-keyword">return</span> <span class="hljs-number">0</span>;<br>&#125;<br></code></pre></td></tr></table></figure>
+<p>创建接口后还需要用 <code>ip</code> 命令配置：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 给 TUN 接口分配 IP</span><br>ip addr add 10.8.0.1/24 dev tun0<br><br><span class="hljs-comment"># 启动接口</span><br>ip <span class="hljs-built_in">link</span> <span class="hljs-built_in">set</span> tun0 up<br><br><span class="hljs-comment"># 测试：给 10.8.0.2 发包，TUN 程序会收到 ICMP 包</span><br>ping 10.8.0.2<br></code></pre></td></tr></table></figure>
+<h2 id="vpn-的工作原理">VPN 的工作原理</h2>
+<p>理解了 TUN/TAP，VPN 的原理就很清晰了。以 OpenVPN 为例：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><code class="hljs plaintext">客户端                              服务端<br>─────────                          ─────────<br>应用程序<br>    │ TCP/IP<br>    ▼<br>tun0 (10.8.0.2)                   tun0 (10.8.0.1)<br>    │ 原始 IP 包                        │<br>    ▼                                   │<br>OpenVPN 客户端进程                 OpenVPN 服务端进程<br>    │ 加密 + 封装                        │<br>    ▼                                   │<br>eth0 ──── 公网 ────────────────── eth0<br>      UDP/TCP 封装的加密包<br></code></pre></td></tr></table></figure>
+<p>核心步骤： 1. 应用发出的 IP 包到达 <code>tun0</code>，被 VPN
+客户端程序从 fd 读取 2. VPN 客户端加密这个 IP 包，再包一层 UDP/TCP
+头，通过物理网卡 <code>eth0</code> 发出去 3. VPN
+服务端收到后解密，把原始 IP 包写入服务端的 <code>tun0</code> 4.
+内核把包交给目标程序</p>
+<p>这就是为什么 VPN 能”绕过防火墙”——防火墙只看到你在和 VPN
+服务器通信，看不到里面的实际流量。</p>
+<h2 id="容器网络中的-tuntap">容器网络中的 TUN/TAP</h2>
+<p>Kubernetes 的 Flannel VXLAN 模式也用了类似机制。每个 Node 上有
+<code>flannel.1</code> 接口（VXLAN 设备），Pod 间的跨节点流量会被封装在
+VXLAN 头里，通过宿主机的物理网卡传输。</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 在 K8s 节点上看到的接口</span><br>$ ip <span class="hljs-built_in">link</span> show<br>2: eth0: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt;   <span class="hljs-comment"># 宿主机物理网卡</span><br>3: flannel.1: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt;  <span class="hljs-comment"># VXLAN 虚拟接口</span><br>4: cni0: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt;   <span class="hljs-comment"># 本节点 Pod 的网桥</span><br>5: vethxxx: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt;  <span class="hljs-comment"># Pod 的 veth pair 一端</span><br></code></pre></td></tr></table></figure>
+<p><code>flannel.1</code> 不是严格意义上的 TUN
+设备，但工作原理类似：跨节点的 Pod 通信数据包到达
+<code>flannel.1</code>，Flannel 进程把它封装成 VXLAN UDP 包，再通过
+<code>eth0</code> 发往目标节点。</p>
+<h2 id="用-python-写一个简单演示">用 Python 写一个简单演示</h2>
+<p>用 Python 做个最小演示，捕获发往 TUN 接口的 ICMP 包并打印：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">import</span> os<br><span class="hljs-keyword">import</span> struct<br><span class="hljs-keyword">import</span> fcntl<br><br>TUNSETIFF = <span class="hljs-number">0x400454ca</span><br>IFF_TUN = <span class="hljs-number">0x0001</span><br>IFF_NO_PI = <span class="hljs-number">0x1000</span><br><br><span class="hljs-keyword">def</span> <span class="hljs-title function_">create_tun</span>(<span class="hljs-params">name=<span class="hljs-string">&quot;tun0&quot;</span></span>):<br>    tun = <span class="hljs-built_in">open</span>(<span class="hljs-string">&quot;/dev/net/tun&quot;</span>, <span class="hljs-string">&quot;r+b&quot;</span>, buffering=<span class="hljs-number">0</span>)<br>    <span class="hljs-comment"># struct ifreq: 接口名（16字节）+ 标志（2字节）</span><br>    ifr = struct.pack(<span class="hljs-string">&quot;16sH&quot;</span>, name.encode(), IFF_TUN | IFF_NO_PI)<br>    fcntl.ioctl(tun, TUNSETIFF, ifr)<br>    <span class="hljs-keyword">return</span> tun<br><br><span class="hljs-keyword">def</span> <span class="hljs-title function_">parse_ip_header</span>(<span class="hljs-params">packet</span>):<br>    <span class="hljs-comment"># IPv4 头：版本/头长/服务/总长/标识/标志/TTL/协议/校验/源IP/目的IP</span><br>    <span class="hljs-keyword">if</span> <span class="hljs-built_in">len</span>(packet) &lt; <span class="hljs-number">20</span>:<br>        <span class="hljs-keyword">return</span> <span class="hljs-literal">None</span><br>    version_ihl = packet[<span class="hljs-number">0</span>]<br>    protocol = packet[<span class="hljs-number">9</span>]<br>    src_ip = <span class="hljs-string">&quot;.&quot;</span>.join(<span class="hljs-built_in">str</span>(b) <span class="hljs-keyword">for</span> b <span class="hljs-keyword">in</span> packet[<span class="hljs-number">12</span>:<span class="hljs-number">16</span>])<br>    dst_ip = <span class="hljs-string">&quot;.&quot;</span>.join(<span class="hljs-built_in">str</span>(b) <span class="hljs-keyword">for</span> b <span class="hljs-keyword">in</span> packet[<span class="hljs-number">16</span>:<span class="hljs-number">20</span>])<br>    <span class="hljs-keyword">return</span> protocol, src_ip, dst_ip<br><br><span class="hljs-keyword">if</span> __name__ == <span class="hljs-string">&quot;__main__&quot;</span>:<br>    tun = create_tun(<span class="hljs-string">&quot;tun1&quot;</span>)<br>    <span class="hljs-comment"># 需要 root 权限</span><br>    <span class="hljs-comment"># ip addr add 10.9.0.1/24 dev tun1 &amp;&amp; ip link set tun1 up</span><br>    <span class="hljs-built_in">print</span>(<span class="hljs-string">&quot;Listening on tun1...&quot;</span>)<br>    <span class="hljs-keyword">while</span> <span class="hljs-literal">True</span>:<br>        packet = tun.read(<span class="hljs-number">4096</span>)<br>        result = parse_ip_header(packet)<br>        <span class="hljs-keyword">if</span> result:<br>            proto, src, dst = result<br>            proto_name = &#123;<span class="hljs-number">1</span>: <span class="hljs-string">&quot;ICMP&quot;</span>, <span class="hljs-number">6</span>: <span class="hljs-string">&quot;TCP&quot;</span>, <span class="hljs-number">17</span>: <span class="hljs-string">&quot;UDP&quot;</span>&#125;.get(proto, <span class="hljs-built_in">str</span>(proto))<br>            <span class="hljs-built_in">print</span>(<span class="hljs-string">f&quot;<span class="hljs-subst">&#123;src&#125;</span> -&gt; <span class="hljs-subst">&#123;dst&#125;</span> [<span class="hljs-subst">&#123;proto_name&#125;</span>] <span class="hljs-subst">&#123;<span class="hljs-built_in">len</span>(packet)&#125;</span> bytes&quot;</span>)<br></code></pre></td></tr></table></figure>
+<p>运行后，执行 <code>ping 10.9.0.2</code>，可以看到 ICMP
+包被程序捕获并打印出来。</p>
+<h2 id="踩坑记录">踩坑记录</h2>
+<p>在搭一个简单的点对点隧道测试时，遇到过一个很迷惑的问题：两端 TUN
+程序都在运行，ping 却不通，但 <code>tcpdump</code> 在 TUN
+接口上能看到包。</p>
+<p>排查很久才发现：写入 TUN 接口的 IP 包，源 MAC 地址没有对应的 ARP
+条目，内核在回包时不知道往哪里发。因为 TUN 是三层设备，不处理
+ARP，而我没有在路由表里加正确的静态路由。</p>
+<p>解决方案：在两端分别加上对方的路由条目：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 节点 A（10.8.0.1）到节点 B（10.8.0.2）</span><br>ip route add 10.8.0.2/32 dev tun0<br><br><span class="hljs-comment"># 节点 B（10.8.0.2）到节点 A（10.8.0.1）</span><br>ip route add 10.8.0.1/32 dev tun0<br></code></pre></td></tr></table></figure>
+<p>如果用 TAP 则不需要，因为 TAP 是二层设备，会处理 ARP 广播，自动学习
+MAC 地址。这是 TUN 和 TAP 最实际的区别之一。</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2020-10-03</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">1.8k 字 · 4 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/cache-strategies/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">缓存策略深度解析：穿透、击穿与雪崩的防护</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/rest-client/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">VS Code REST Client：最好用的 API 测试工具之一</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#tun-%E5%92%8C-tap-%E7%9A%84%E5%8C%BA%E5%88%AB"><span class="toc-text">TUN 和 TAP 的区别</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%88%9B%E5%BB%BA-tun-%E6%8E%A5%E5%8F%A3"><span class="toc-text">创建 TUN 接口</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#vpn-%E7%9A%84%E5%B7%A5%E4%BD%9C%E5%8E%9F%E7%90%86"><span class="toc-text">VPN 的工作原理</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%B9%E5%99%A8%E7%BD%91%E7%BB%9C%E4%B8%AD%E7%9A%84-tuntap"><span class="toc-text">容器网络中的 TUN&#x2F;TAP</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%94%A8-python-%E5%86%99%E4%B8%80%E4%B8%AA%E7%AE%80%E5%8D%95%E6%BC%94%E7%A4%BA"><span class="toc-text">用 Python 写一个简单演示</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%B8%A9%E5%9D%91%E8%AE%B0%E5%BD%95"><span class="toc-text">踩坑记录</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

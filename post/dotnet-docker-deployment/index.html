@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>.NET Core 容器化部署：Docker 最佳实践 · zt&#39;s Blog</title>
+  <meta name="description" content="记录将 ASP.NET Core 2.1 应用容器化的完整过程：多阶段构建优化镜像大小、环境变量配置、健康检查，以及生产环境踩坑。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/dotnet-docker-deployment/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content=".NET Core 容器化部署：Docker 最佳实践">
+  <meta property="og:description" content="记录将 ASP.NET Core 2.1 应用容器化的完整过程：多阶段构建优化镜像大小、环境变量配置、健康检查，以及生产环境踩坑。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/dotnet-docker-deployment/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2018-11-19T16:00:00.000Z">
+  <meta property="article:modified_time" content="2018-11-19T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content=".NET Core 容器化部署：Docker 最佳实践">
+  <meta name="twitter:description" content="记录将 ASP.NET Core 2.1 应用容器化的完整过程：多阶段构建优化镜像大小、环境变量配置、健康检查，以及生产环境踩坑。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":".NET Core 容器化部署：Docker 最佳实践","description":"记录将 ASP.NET Core 2.1 应用容器化的完整过程：多阶段构建优化镜像大小、环境变量配置、健康检查，以及生产环境踩坑。","datePublished":"2018-11-19T16:00:00.000Z","dateModified":"2018-11-19T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/dotnet-docker-deployment/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"C#","item":"https://withesse.co/categories/C/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:145">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/C/">C#</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/deployment/"><span class="hash">#</span>deployment</a><a class="tag" href="/tags/csharp/"><span class="hash">#</span>csharp</a><a class="tag" href="/tags/dotnet-core/"><span class="hash">#</span>dotnet-core</a><a class="tag" href="/tags/docker/"><span class="hash">#</span>docker</a>
+        
+      </div>
+
+      <h1>.NET Core 容器化部署：Docker 最佳实践</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2018.11.20</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          <span class="row gap8" style="align-items:center"><span class="lang-dot" style="background:#178600"></span>C#</span>
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 3 min</span>
+        </span>
+        <span class="wc"><span class="num">1.2k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9F%BA%E7%A1%80-dockerfile%E4%B8%8D%E6%8E%A8%E8%8D%90"><span class="toc-text">1. 基础 Dockerfile（不推荐）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%A4%9A%E9%98%B6%E6%AE%B5%E6%9E%84%E5%BB%BA%E6%8E%A8%E8%8D%90"><span class="toc-text">2. 多阶段构建（推荐）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%85%8D%E7%BD%AE%E7%AE%A1%E7%90%86"><span class="toc-text">3. 配置管理</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%81%A5%E5%BA%B7%E6%A3%80%E6%9F%A5%E7%AB%AF%E7%82%B9"><span class="toc-text">4. 健康检查端点</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%97%A5%E5%BF%97%E9%85%8D%E7%BD%AE"><span class="toc-text">5. 日志配置</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%B8%A9%E5%9D%91%E8%AE%B0%E5%BD%95"><span class="toc-text">踩坑记录</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <p>把 .NET Core 应用跑在 Docker
+里，是我们团队迁移到容器化部署的第一步。这篇文章记录整个过程，重点是怎么把镜像做得又小又安全。</p>
+<h2 id="基础-dockerfile不推荐">1. 基础 Dockerfile（不推荐）</h2>
+<figure class="highlight dockerfile"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><code class="hljs dockerfile"><span class="hljs-keyword">FROM</span> mcr.microsoft.com/dotnet/core/sdk:<span class="hljs-number">2.1</span><br><span class="hljs-keyword">WORKDIR</span><span class="language-bash"> /app</span><br><span class="hljs-keyword">COPY</span><span class="language-bash"> . .</span><br><span class="hljs-keyword">RUN</span><span class="language-bash"> dotnet restore</span><br><span class="hljs-keyword">RUN</span><span class="language-bash"> dotnet publish -c Release -o /out</span><br><span class="hljs-keyword">EXPOSE</span> <span class="hljs-number">80</span><br><span class="hljs-keyword">ENTRYPOINT</span><span class="language-bash"> [<span class="hljs-string">&quot;dotnet&quot;</span>, <span class="hljs-string">&quot;/out/MyApp.dll&quot;</span>]</span><br></code></pre></td></tr></table></figure>
+<p>这个写法有几个问题： 1. 镜像包含 SDK（1.7GB），而运行时只需要
+runtime（约 200MB） 2. 每次代码改动都会重新
+<code>dotnet restore</code>，无法利用 Docker 层缓存</p>
+<h2 id="多阶段构建推荐">2. 多阶段构建（推荐）</h2>
+<figure class="highlight dockerfile"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><code class="hljs dockerfile"><span class="hljs-comment"># 阶段 1：构建</span><br><span class="hljs-keyword">FROM</span> mcr.microsoft.com/dotnet/core/sdk:<span class="hljs-number">2.1</span> AS build<br><span class="hljs-keyword">WORKDIR</span><span class="language-bash"> /src</span><br><br><span class="hljs-comment"># 先复制 csproj，利用 Docker 层缓存</span><br><span class="hljs-comment"># 只有依赖变化时才重新 restore（通常不频繁）</span><br><span class="hljs-keyword">COPY</span><span class="language-bash"> [<span class="hljs-string">&quot;src/MyApp/MyApp.csproj&quot;</span>, <span class="hljs-string">&quot;src/MyApp/&quot;</span>]</span><br><span class="hljs-keyword">COPY</span><span class="language-bash"> [<span class="hljs-string">&quot;src/MyApp.Domain/MyApp.Domain.csproj&quot;</span>, <span class="hljs-string">&quot;src/MyApp.Domain/&quot;</span>]</span><br><span class="hljs-keyword">RUN</span><span class="language-bash"> dotnet restore <span class="hljs-string">&quot;src/MyApp/MyApp.csproj&quot;</span></span><br><br><span class="hljs-comment"># 再复制源代码并构建</span><br><span class="hljs-keyword">COPY</span><span class="language-bash"> src/ src/</span><br><span class="hljs-keyword">WORKDIR</span><span class="language-bash"> <span class="hljs-string">&quot;/src/src/MyApp&quot;</span></span><br><span class="hljs-keyword">RUN</span><span class="language-bash"> dotnet publish -c Release -o /app/publish</span><br><br><span class="hljs-comment"># 阶段 2：运行时（只包含 Runtime，不含 SDK）</span><br><span class="hljs-keyword">FROM</span> mcr.microsoft.com/dotnet/core/aspnet:<span class="hljs-number">2.1</span> AS runtime<br><span class="hljs-keyword">WORKDIR</span><span class="language-bash"> /app</span><br><br><span class="hljs-comment"># 非 root 用户运行（安全实践）</span><br><span class="hljs-keyword">RUN</span><span class="language-bash"> adduser --disabled-password --home /app --gecos <span class="hljs-string">&quot;&quot;</span> appuser &amp;&amp; \</span><br><span class="language-bash">    <span class="hljs-built_in">chown</span> -R appuser:appuser /app</span><br><span class="hljs-keyword">USER</span> appuser<br><br><span class="hljs-keyword">COPY</span><span class="language-bash"> --from=build /app/publish .</span><br><br><span class="hljs-keyword">EXPOSE</span> <span class="hljs-number">80</span><br><span class="hljs-keyword">HEALTHCHECK</span><span class="language-bash"> --interval=30s --<span class="hljs-built_in">timeout</span>=10s --start-period=5s --retries=3 \</span><br><span class="language-bash">    CMD curl -f http://localhost/health || <span class="hljs-built_in">exit</span> 1</span><br><br><span class="hljs-keyword">ENTRYPOINT</span><span class="language-bash"> [<span class="hljs-string">&quot;dotnet&quot;</span>, <span class="hljs-string">&quot;MyApp.dll&quot;</span>]</span><br></code></pre></td></tr></table></figure>
+<p>镜像大小对比： - 单阶段（SDK）：~1.7GB - 多阶段（Runtime）：~250MB -
+多阶段 + 发布为 self-contained：~100MB（包含运行时，无需预装 .NET）</p>
+<h2 id="配置管理">3. 配置管理</h2>
+<p>.NET Core 配置系统天然支持环境变量覆盖
+<code>appsettings.json</code>：</p>
+<figure class="highlight csharp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><code class="hljs csharp"><span class="hljs-comment">// appsettings.json（开发默认值）</span><br>&#123;<br>    <span class="hljs-string">&quot;ConnectionStrings&quot;</span>: &#123;<br>        <span class="hljs-string">&quot;Default&quot;</span>: <span class="hljs-string">&quot;Server=localhost;Database=myapp;...&quot;</span><br>    &#125;,<br>    <span class="hljs-string">&quot;Logging&quot;</span>: &#123;<br>        <span class="hljs-string">&quot;LogLevel&quot;</span>: &#123; <span class="hljs-string">&quot;Default&quot;</span>: <span class="hljs-string">&quot;Information&quot;</span> &#125;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># Docker 运行时通过环境变量覆盖配置</span><br><span class="hljs-comment"># 规则：双下划线 __ 代替 JSON 层级分隔符 :</span><br>docker run \<br>  -e <span class="hljs-string">&quot;ConnectionStrings__Default=Server=prod-db;...&quot;</span> \<br>  -e <span class="hljs-string">&quot;Logging__LogLevel__Default=Warning&quot;</span> \<br>  -p 8080:80 \<br>  myapp:latest<br></code></pre></td></tr></table></figure>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># docker-compose.yml</span><br><span class="hljs-attr">version:</span> <span class="hljs-string">&#x27;3.7&#x27;</span><br><span class="hljs-attr">services:</span><br>  <span class="hljs-attr">api:</span><br>    <span class="hljs-attr">image:</span> <span class="hljs-string">myapp:latest</span><br>    <span class="hljs-attr">ports:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">&quot;8080:80&quot;</span><br>    <span class="hljs-attr">environment:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">ASPNETCORE_ENVIRONMENT=Production</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">ConnectionStrings__Default=$&#123;DB_CONNECTION_STRING&#125;</span><br>    <span class="hljs-attr">env_file:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">.env.production</span>  <span class="hljs-comment"># 不提交到 git 的敏感配置</span><br>    <span class="hljs-attr">healthcheck:</span><br>      <span class="hljs-attr">test:</span> [<span class="hljs-string">&quot;CMD&quot;</span>, <span class="hljs-string">&quot;curl&quot;</span>, <span class="hljs-string">&quot;-f&quot;</span>, <span class="hljs-string">&quot;http://localhost/health&quot;</span>]<br>      <span class="hljs-attr">interval:</span> <span class="hljs-string">30s</span><br>      <span class="hljs-attr">timeout:</span> <span class="hljs-string">10s</span><br>      <span class="hljs-attr">retries:</span> <span class="hljs-number">3</span><br>      <span class="hljs-attr">start_period:</span> <span class="hljs-string">40s</span><br>    <span class="hljs-attr">restart:</span> <span class="hljs-string">unless-stopped</span><br></code></pre></td></tr></table></figure>
+<h2 id="健康检查端点">4. 健康检查端点</h2>
+<figure class="highlight csharp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><code class="hljs csharp"><span class="hljs-comment">// Startup.cs</span><br><span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title">ConfigureServices</span>(<span class="hljs-params">IServiceCollection services</span>)</span><br>&#123;<br>    services.AddHealthChecks()<br>            .AddSqlServer(Configuration.GetConnectionString(<span class="hljs-string">&quot;Default&quot;</span>),<br>                          name: <span class="hljs-string">&quot;database&quot;</span>,<br>                          failureStatus: HealthStatus.Unhealthy)<br>            .AddRedis(Configuration[<span class="hljs-string">&quot;Redis:ConnectionString&quot;</span>],<br>                      name: <span class="hljs-string">&quot;cache&quot;</span>);<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title">Configure</span>(<span class="hljs-params">IApplicationBuilder app</span>)</span><br>&#123;<br>    app.UseHealthChecks(<span class="hljs-string">&quot;/health&quot;</span>, <span class="hljs-keyword">new</span> HealthCheckOptions<br>    &#123;<br>        ResponseWriter = <span class="hljs-keyword">async</span> (context, report) =&gt;<br>        &#123;<br>            context.Response.ContentType = <span class="hljs-string">&quot;application/json&quot;</span>;<br>            <span class="hljs-keyword">var</span> result = JsonSerializer.Serialize(<span class="hljs-keyword">new</span><br>            &#123;<br>                status = report.Status.ToString(),<br>                checks = report.Entries.Select(e =&gt; <span class="hljs-keyword">new</span><br>                &#123;<br>                    name = e.Key,<br>                    status = e.Value.Status.ToString(),<br>                    description = e.Value.Description<br>                &#125;)<br>            &#125;);<br>            <span class="hljs-keyword">await</span> context.Response.WriteAsync(result);<br>        &#125;<br>    &#125;);<br><br>    app.UseMvc();<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="日志配置">5. 日志配置</h2>
+<p>容器环境里日志应该输出到 stdout（Docker 会收集）：</p>
+<figure class="highlight csharp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><code class="hljs csharp"><span class="hljs-comment">// Program.cs</span><br>WebHost.CreateDefaultBuilder(args)<br>       .ConfigureLogging(logging =&gt;<br>       &#123;<br>           logging.ClearProviders(); <span class="hljs-comment">// 清除默认提供者</span><br>           logging.AddConsole(options =&gt;<br>           &#123;<br>               options.TimestampFormat = <span class="hljs-string">&quot;yyyy-MM-dd HH:mm:ss &quot;</span>;<br>               options.IncludeScopes = <span class="hljs-literal">true</span>;<br>           &#125;);<br><br>           <span class="hljs-keyword">if</span> (env.IsDevelopment())<br>               logging.AddDebug();<br>       &#125;)<br>       .UseStartup&lt;Startup&gt;()<br>       .Build();<br></code></pre></td></tr></table></figure>
+<p>生产环境配合 ELK Stack 或 Seq 做集中式日志：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 用 Docker 日志驱动把日志发到 Fluentd</span><br>docker run \<br>  --log-driver=fluentd \<br>  --log-opt fluentd-address=localhost:24224 \<br>  myapp:latest<br></code></pre></td></tr></table></figure>
+<h2 id="踩坑记录">踩坑记录</h2>
+<p>部署到生产环境后，应用在高并发下偶发
+<code>SocketException: Address already in use</code>。排查发现是
+<code>HttpClient</code> 使用方式不对——每次请求 new 一个
+<code>HttpClient</code> 然后 Dispose，导致 socket 进入 TIME_WAIT
+状态堆积，最终耗尽可用端口。</p>
+<p>在容器里这个问题更明显，因为容器 IP 固定，TIME_WAIT 的 socket
+无法快速复用。</p>
+<p>解决方案：使用 <code>IHttpClientFactory</code>（.NET Core 2.1
+引入）：</p>
+<figure class="highlight csharp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><code class="hljs csharp"><span class="hljs-comment">// 注册</span><br>services.AddHttpClient&lt;PaymentService&gt;(client =&gt;<br>&#123;<br>    client.BaseAddress = <span class="hljs-keyword">new</span> Uri(<span class="hljs-string">&quot;https://payment-api.example.com&quot;</span>);<br>    client.DefaultRequestHeaders.Add(<span class="hljs-string">&quot;Accept&quot;</span>, <span class="hljs-string">&quot;application/json&quot;</span>);<br>&#125;);<br><br><span class="hljs-comment">// 使用（IHttpClientFactory 管理连接池，避免 socket 耗尽）</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title">PaymentService</span><br>&#123;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">readonly</span> HttpClient _httpClient;<br><br>    <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-title">PaymentService</span>(<span class="hljs-params">HttpClient httpClient</span>)</span><br>    &#123;<br>        _httpClient = httpClient;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="总结">总结</h2>
+<p>.NET Core Docker 部署要点：</p>
+<ul>
+<li><strong>多阶段构建</strong>：SDK 用于构建，Runtime 用于运行，镜像从
+1.7GB 减到 250MB</li>
+<li><strong>层缓存优化</strong>：先 COPY csproj，再 dotnet restore，最后
+COPY 源码</li>
+<li><strong>非 root 用户运行</strong>：安全基线要求</li>
+<li><strong>环境变量覆盖配置</strong>：双下划线替换 JSON 层级分隔符</li>
+<li><strong><code>IHttpClientFactory</code></strong>：管理 HttpClient
+连接池，避免 socket 泄漏</li>
+<li><strong>健康检查</strong>：容器编排（K8s/Swarm）依赖它判断服务是否就绪</li>
+</ul>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2018-11-20</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">1.2k 字 · 3 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/macos-dot_clean/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">macOS dot_clean命令清理隐藏文件</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/aspnetcore-middleware/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">ASP.NET Core 中间件管道深入解析</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9F%BA%E7%A1%80-dockerfile%E4%B8%8D%E6%8E%A8%E8%8D%90"><span class="toc-text">1. 基础 Dockerfile（不推荐）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%A4%9A%E9%98%B6%E6%AE%B5%E6%9E%84%E5%BB%BA%E6%8E%A8%E8%8D%90"><span class="toc-text">2. 多阶段构建（推荐）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%85%8D%E7%BD%AE%E7%AE%A1%E7%90%86"><span class="toc-text">3. 配置管理</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%81%A5%E5%BA%B7%E6%A3%80%E6%9F%A5%E7%AB%AF%E7%82%B9"><span class="toc-text">4. 健康检查端点</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%97%A5%E5%BF%97%E9%85%8D%E7%BD%AE"><span class="toc-text">5. 日志配置</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%B8%A9%E5%9D%91%E8%AE%B0%E5%BD%95"><span class="toc-text">踩坑记录</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

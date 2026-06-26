@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>API 安全核对清单 · zt&#39;s Blog</title>
+  <meta name="description" content="从身份验证、输入校验、数据保护到日志与依赖治理，整理一份可直接落地的 API 安全检查清单。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/api-security-checklist/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="API 安全核对清单">
+  <meta property="og:description" content="从身份验证、输入校验、数据保护到日志与依赖治理，整理一份可直接落地的 API 安全检查清单。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/api-security-checklist/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2024-11-09T07:58:19.000Z">
+  <meta property="article:modified_time" content="2024-11-09T07:58:19.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="API 安全核对清单">
+  <meta name="twitter:description" content="从身份验证、输入校验、数据保护到日志与依赖治理，整理一份可直接落地的 API 安全检查清单。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"API 安全核对清单","description":"从身份验证、输入校验、数据保护到日志与依赖治理，整理一份可直接落地的 API 安全检查清单。","datePublished":"2024-11-09T07:58:19.000Z","dateModified":"2024-11-09T07:58:19.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/api-security-checklist/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Security","item":"https://withesse.co/categories/Security/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:350">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Security/">Security</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/api-security/"><span class="hash">#</span>api-security</a><a class="tag" href="/tags/authentication/"><span class="hash">#</span>authentication</a><a class="tag" href="/tags/authorization/"><span class="hash">#</span>authorization</a>
+        
+      </div>
+
+      <h1>API 安全核对清单</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2024.11.09</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 3 min</span>
+        </span>
+        <span class="wc"><span class="num">1.1k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%BA%AB%E4%BB%BD%E9%AA%8C%E8%AF%81%E4%B8%8E%E6%8E%88%E6%9D%83"><span class="toc-text">身份验证与授权</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%BE%93%E5%85%A5%E9%AA%8C%E8%AF%81"><span class="toc-text">输入验证</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E4%BF%9D%E6%8A%A4"><span class="toc-text">数据保护</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%94%99%E8%AF%AF%E5%A4%84%E7%90%86%E5%92%8C%E6%97%A5%E5%BF%97%E8%AE%B0%E5%BD%95"><span class="toc-text">错误处理和日志记录</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%80%9F%E7%8E%87%E9%99%90%E5%88%B6%E4%B8%8E%E5%AE%89%E5%85%A8%E9%98%B2%E6%8A%A4"><span class="toc-text">速率限制与安全防护</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#api-%E8%AE%BE%E8%AE%A1%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5"><span class="toc-text">API 设计最佳实践</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%89%E5%85%A8%E5%A4%B4%E8%AE%BE%E7%BD%AE"><span class="toc-text">安全头设置</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%B7%A8%E5%9F%9F%E8%B5%84%E6%BA%90%E5%85%B1%E4%BA%ABcors"><span class="toc-text">跨域资源共享（CORS）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%AC%AC%E4%B8%89%E6%96%B9%E7%BB%84%E4%BB%B6%E5%92%8C%E4%BE%9D%E8%B5%96"><span class="toc-text">第三方组件和依赖</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%B5%8B%E8%AF%95%E4%B8%8E%E5%AE%A1%E8%AE%A1"><span class="toc-text">测试与审计</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%B3%95%E8%A7%84%E9%81%B5%E4%BB%8E%E4%B8%8E%E9%9A%90%E7%A7%81"><span class="toc-text">法规遵从与隐私</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%B6%E4%BB%96%E5%AE%89%E5%85%A8%E8%80%83%E8%99%91"><span class="toc-text">其他安全考虑</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="身份验证与授权">身份验证与授权</h2>
+<ul class="task-list">
+<li><p><label><input
+type="checkbox" /><strong>使用安全的身份验证机制</strong>：采用 OAuth
+2.0、JWT、API Key
+等安全协议，避免使用容易被攻破的机制。</label></p></li>
+<li><p><label><input
+type="checkbox" /><strong>对所有访问进行身份验证</strong>：确保每个端点都需要身份验证，即使是内部接口。</label></p></li>
+<li><p><label><input
+type="checkbox" /><strong>实施强制访问控制（MAC）或基于角色的访问控制（RBAC）</strong>：根据用户角色和权限限制其访问资源的能力。</label></p></li>
+<li><p><label><input
+type="checkbox" /><strong>防止权限提升</strong>：验证用户是否有权访问或修改特定资源，防止水平和垂直权限提升攻击。</label></p></li>
+</ul>
+<h2 id="输入验证">输入验证</h2>
+<ul class="task-list">
+<li><p><label><input
+type="checkbox" /><strong>验证和清理所有输入</strong>：对用户提供的所有数据进行验证，防止
+SQL 注入、跨站脚本（XSS）等攻击。</label></p></li>
+<li><p><label><input
+type="checkbox" /><strong>使用白名单验证</strong>：仅接受预期的输入格式和内容，拒绝不符合的输入。</label></p></li>
+<li><p><label><input
+type="checkbox" /><strong>限制上传文件类型和大小</strong>：防止用户上传包含恶意代码的文件。</label></p></li>
+</ul>
+<h2 id="数据保护">数据保护</h2>
+<ul class="task-list">
+<li><p><label><input type="checkbox" /><strong>强制使用
+HTTPS</strong>：所有通信都应通过 TLS/SSL
+加密，防止中间人攻击。</label></p></li>
+<li><p><label><input
+type="checkbox" /><strong>加密敏感数据</strong>：对存储和传输中的敏感信息进行加密，如用户密码、个人身份信息（PII）等。</label></p></li>
+<li><p><label><input type="checkbox" /><strong>避免在 URL
+中传递敏感信息</strong>：使用请求头或请求体传递令牌等敏感数据，避免被日志或浏览器缓存记录。</label></p></li>
+</ul>
+<h2 id="错误处理和日志记录">错误处理和日志记录</h2>
+<ul class="task-list">
+<li><p><label><input
+type="checkbox" /><strong>统一错误响应</strong>：提供通用的错误信息，避免泄露系统内部结构和实现细节。</label></p></li>
+<li><p><label><input
+type="checkbox" /><strong>安全地记录日志</strong>：记录必要的操作日志，但要避免将敏感信息写入日志文件。</label></p></li>
+<li><p><label><input
+type="checkbox" /><strong>监控和报警</strong>：设置对异常行为的监控，并及时发出警报。</label></p></li>
+</ul>
+<h2 id="速率限制与安全防护">速率限制与安全防护</h2>
+<ul class="task-list">
+<li><p><label><input
+type="checkbox" /><strong>实施速率限制</strong>：防止暴力破解、DOS
+攻击，通过限制每个 IP 或用户的请求频率。</label></p></li>
+<li><p><label><input type="checkbox" /><strong>使用防火墙和 API
+网关</strong>：部署 WAF（Web 应用防火墙）或 API
+网关来过滤恶意请求。</label></p></li>
+<li><p><label><input
+type="checkbox" /><strong>防止重放攻击</strong>：使用唯一的请求 ID
+或时间戳，确保请求的唯一性和时效性。</label></p></li>
+</ul>
+<h2 id="api-设计最佳实践">API 设计最佳实践</h2>
+<ul class="task-list">
+<li><p><label><input type="checkbox" /><strong>遵循 RESTful
+原则</strong>：使用标准的 HTTP
+方法和状态码，提升一致性和可维护性。</label></p></li>
+<li><p><label><input
+type="checkbox" /><strong>分页和数据过滤</strong>：对于返回大量数据的接口，提供分页和过滤功能，防止数据过载。</label></p></li>
+<li><p><label><input
+type="checkbox" /><strong>最小化数据暴露</strong>：仅返回必要的字段，避免透传数据库模型或过多信息。</label></p></li>
+</ul>
+<h2 id="安全头设置">安全头设置</h2>
+<ul class="task-list">
+<li><label><input type="checkbox" /><strong>配置安全相关的 HTTP
+头</strong>：</label>
+<ul>
+<li><code>Content-Security-Policy</code>：防止跨站脚本和数据注入攻击。</li>
+<li><code>X-Content-Type-Options: nosniff</code>：阻止浏览器 MIME
+类型猜测。</li>
+<li><code>X-Frame-Options: DENY</code>：防止点击劫持攻击。</li>
+<li><code>Strict-Transport-Security</code>：强制使用 HTTPS 访问。</li>
+</ul></li>
+</ul>
+<h2 id="跨域资源共享cors">跨域资源共享（CORS）</h2>
+<ul class="task-list">
+<li><p><label><input type="checkbox" /><strong>正确配置 CORS
+策略</strong>：仅允许受信任的域访问
+API，限制允许的方法和头信息。</label></p></li>
+<li><p><label><input
+type="checkbox" /><strong>验证跨域请求来源</strong>：对于敏感操作，进一步验证请求的来源域名。</label></p></li>
+</ul>
+<h2 id="第三方组件和依赖">第三方组件和依赖</h2>
+<ul class="task-list">
+<li><p><label><input
+type="checkbox" /><strong>定期更新依赖项</strong>：及时更新第三方库，修复已知的安全漏洞。</label></p></li>
+<li><p><label><input
+type="checkbox" /><strong>最小化第三方依赖</strong>：仅使用必要的库和模块，减少潜在的攻击面。</label></p></li>
+<li><p><label><input
+type="checkbox" /><strong>监控依赖项的安全性</strong>：使用工具（如
+Snyk、Dependabot）监控并通知依赖项中的漏洞。</label></p></li>
+</ul>
+<h2 id="测试与审计">测试与审计</h2>
+<ul class="task-list">
+<li><p><label><input
+type="checkbox" /><strong>安全代码审查</strong>：在开发过程中定期进行代码审查，发现潜在的安全问题。</label></p></li>
+<li><p><label><input
+type="checkbox" /><strong>渗透测试</strong>：模拟黑客攻击方式，对 API
+进行安全测试和评估。</label></p></li>
+<li><p><label><input
+type="checkbox" /><strong>使用自动化安全扫描工具</strong>：集成
+SAST（静态应用安全测试）和
+DAST（动态应用安全测试）工具。</label></p></li>
+</ul>
+<h2 id="法规遵从与隐私">法规遵从与隐私</h2>
+<ul class="task-list">
+<li><p><label><input
+type="checkbox" /><strong>遵守数据保护法规</strong>：如 GDPR、CCPA
+等，确保用户数据的合法使用和存储。</label></p></li>
+<li><p><label><input
+type="checkbox" /><strong>明确定义隐私政策</strong>：告知用户数据收集、使用和共享的方式。</label></p></li>
+<li><p><label><input
+type="checkbox" /><strong>提供数据擦除和导出功能</strong>：满足用户对其个人数据的控制权要求。</label></p></li>
+</ul>
+<h2 id="其他安全考虑">其他安全考虑</h2>
+<ul class="task-list">
+<li><p><label><input type="checkbox" /><strong>使用 CSRF
+保护机制</strong>：对于状态变化的操作，使用 CSRF
+令牌来防范跨站请求伪造。</label></p></li>
+<li><p><label><input
+type="checkbox" /><strong>保护缓存数据</strong>：避免将敏感信息存储在缓存中，或正确设置缓存控制头。</label></p></li>
+<li><p><label><input
+type="checkbox" /><strong>定期备份和恢复测试</strong>：确保数据在遭受攻击或故障时可以恢复。</label></p></li>
+<li><p><label><input
+type="checkbox" /><strong>员工培训和意识提升</strong>：定期对开发和运营团队进行安全培训。</label></p></li>
+</ul>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2024-11-09</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">1.1k 字 · 3 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/new-features-in-java/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Java新特性探究：从Java 8开始的演进之路</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/java-memory-model/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">深入理解Java内存模型(JMM)</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%BA%AB%E4%BB%BD%E9%AA%8C%E8%AF%81%E4%B8%8E%E6%8E%88%E6%9D%83"><span class="toc-text">身份验证与授权</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%BE%93%E5%85%A5%E9%AA%8C%E8%AF%81"><span class="toc-text">输入验证</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E4%BF%9D%E6%8A%A4"><span class="toc-text">数据保护</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%94%99%E8%AF%AF%E5%A4%84%E7%90%86%E5%92%8C%E6%97%A5%E5%BF%97%E8%AE%B0%E5%BD%95"><span class="toc-text">错误处理和日志记录</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%80%9F%E7%8E%87%E9%99%90%E5%88%B6%E4%B8%8E%E5%AE%89%E5%85%A8%E9%98%B2%E6%8A%A4"><span class="toc-text">速率限制与安全防护</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#api-%E8%AE%BE%E8%AE%A1%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5"><span class="toc-text">API 设计最佳实践</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%89%E5%85%A8%E5%A4%B4%E8%AE%BE%E7%BD%AE"><span class="toc-text">安全头设置</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%B7%A8%E5%9F%9F%E8%B5%84%E6%BA%90%E5%85%B1%E4%BA%ABcors"><span class="toc-text">跨域资源共享（CORS）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%AC%AC%E4%B8%89%E6%96%B9%E7%BB%84%E4%BB%B6%E5%92%8C%E4%BE%9D%E8%B5%96"><span class="toc-text">第三方组件和依赖</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%B5%8B%E8%AF%95%E4%B8%8E%E5%AE%A1%E8%AE%A1"><span class="toc-text">测试与审计</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%B3%95%E8%A7%84%E9%81%B5%E4%BB%8E%E4%B8%8E%E9%9A%90%E7%A7%81"><span class="toc-text">法规遵从与隐私</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%B6%E4%BB%96%E5%AE%89%E5%85%A8%E8%80%83%E8%99%91"><span class="toc-text">其他安全考虑</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

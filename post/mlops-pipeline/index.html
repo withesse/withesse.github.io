@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MLOps流水线设计与实现 · zt&#39;s Blog</title>
+  <meta name="description" content="全面解析MLOps生命周期管理——特征工程、实验追踪、模型注册、在线服务、监控与漂移检测">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/mlops-pipeline/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="MLOps流水线设计与实现">
+  <meta property="og:description" content="全面解析MLOps生命周期管理——特征工程、实验追踪、模型注册、在线服务、监控与漂移检测">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/mlops-pipeline/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2025-10-28T16:00:00.000Z">
+  <meta property="article:modified_time" content="2025-10-28T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="MLOps流水线设计与实现">
+  <meta name="twitter:description" content="全面解析MLOps生命周期管理——特征工程、实验追踪、模型注册、在线服务、监控与漂移检测">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"MLOps流水线设计与实现","description":"全面解析MLOps生命周期管理——特征工程、实验追踪、模型注册、在线服务、监控与漂移检测","datePublished":"2025-10-28T16:00:00.000Z","dateModified":"2025-10-28T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/mlops-pipeline/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"AI","item":"https://withesse.co/categories/AI/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:280">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/AI/">AI</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/mlops/"><span class="hash">#</span>mlops</a><a class="tag" href="/tags/pipeline/"><span class="hash">#</span>pipeline</a><a class="tag" href="/tags/model-serving/"><span class="hash">#</span>model-serving</a>
+        
+      </div>
+
+      <h1>MLOps流水线设计与实现</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2025.10.29</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 7 min</span>
+        </span>
+        <span class="wc"><span class="num">2.7k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#mlops-%E5%85%A8%E6%99%AF%E6%9E%B6%E6%9E%84"><span class="toc-text">MLOps 全景架构</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%89%B9%E5%BE%81%E5%B7%A5%E7%A8%8B%E4%B8%8E-feature-store"><span class="toc-text">特征工程与 Feature Store</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BD%BF%E7%94%A8-feast"><span class="toc-text">使用 Feast</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E9%AA%8C%E8%BF%BD%E8%B8%AAmlflow"><span class="toc-text">实验追踪：MLflow</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#mlflow-model-registry"><span class="toc-text">MLflow Model Registry</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A8%A1%E5%9E%8B%E6%9C%8D%E5%8A%A1model-serving"><span class="toc-text">模型服务（Model Serving）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#tensorflow-serving"><span class="toc-text">TensorFlow Serving</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#nvidia-triton-inference-server"><span class="toc-text">NVIDIA Triton Inference
+Server</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#fastapi-%E8%87%AA%E5%AE%9A%E4%B9%89%E6%9C%8D%E5%8A%A1"><span class="toc-text">FastAPI 自定义服务</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%9B%91%E6%8E%A7%E4%B8%8E%E6%BC%82%E7%A7%BB%E6%A3%80%E6%B5%8B"><span class="toc-text">监控与漂移检测</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E6%BC%82%E7%A7%BB%E6%A3%80%E6%B5%8B"><span class="toc-text">数据漂移检测</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BD%BF%E7%94%A8-evidently-%E8%BF%9B%E8%A1%8C%E7%9B%91%E6%8E%A7"><span class="toc-text">使用 Evidently 进行监控</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#cicd-for-ml"><span class="toc-text">CI&#x2F;CD for ML</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="引言">引言</h2>
+<p>MLOps（Machine Learning Operations）将 DevOps
+的理念引入机器学习领域，解决模型从实验到生产的全生命周期管理问题。一个成熟的
+MLOps
+流水线能够实现：可复现的实验、自动化的训练、可靠的部署和持续的监控。本文将系统介绍
+MLOps
+各环节的设计与实现，涵盖特征存储、实验追踪（MLflow）、模型注册、在线服务（TFServing/Triton）、监控和漂移检测。</p>
+<h2 id="mlops-全景架构">MLOps 全景架构</h2>
+<pre class="mermaid">graph TB
+    subgraph "数据层 Data Layer"
+        A[数据源] --&gt; B[数据管道&lt;br/&gt;ETL/ELT]
+        B --&gt; C[Feature Store&lt;br/&gt;特征存储]
+    end
+
+    subgraph "实验层 Experiment Layer"
+        C --&gt; D[特征工程]
+        D --&gt; E[模型训练]
+        E --&gt; F[实验追踪&lt;br/&gt;MLflow]
+        F --&gt; G[模型评估]
+    end
+
+    subgraph "部署层 Deployment Layer"
+        G --&gt; H[模型注册&lt;br/&gt;Model Registry]
+        H --&gt; I{部署方式}
+        I --&gt; J[在线推理&lt;br/&gt;REST/gRPC]
+        I --&gt; K[批量推理&lt;br/&gt;Spark/Airflow]
+        I --&gt; L[边缘推理&lt;br/&gt;TFLite/ONNX]
+    end
+
+    subgraph "监控层 Monitoring Layer"
+        J --&gt; M[性能监控]
+        J --&gt; N[数据漂移检测]
+        J --&gt; O[模型漂移检测]
+        M --&gt; P[告警 &amp; 重训练触发]
+        N --&gt; P
+        O --&gt; P
+        P --&gt; D
+    end
+
+    style C fill:#3498db,color:#fff
+    style F fill:#e74c3c,color:#fff
+    style H fill:#2ecc71,color:#fff
+    style M fill:#f39c12,color:#000</pre>
+<h2 id="特征工程与-feature-store">特征工程与 Feature Store</h2>
+<p>Feature Store
+统一管理特征定义、计算和服务，避免训练和推理的特征不一致（Training-Serving
+Skew）：</p>
+<pre class="mermaid">graph LR
+    subgraph "Feature Store"
+        A[Feature Definition&lt;br/&gt;特征定义 DSL] --&gt; B[Offline Store&lt;br/&gt;批量特征 / 历史]
+        A --&gt; C[Online Store&lt;br/&gt;实时特征 / Redis]
+        D[Feature Transform&lt;br/&gt;特征计算] --&gt; B
+        D --&gt; C
+    end
+
+    E[训练管道] --&gt; B
+    F[在线推理] --&gt; C
+
+    style B fill:#3498db,color:#fff
+    style C fill:#e74c3c,color:#fff</pre>
+<h3 id="使用-feast">使用 Feast</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-comment"># feature_store/definitions.py</span><br><span class="hljs-keyword">from</span> feast <span class="hljs-keyword">import</span> Entity, Feature, FeatureView, FileSource, ValueType<br><span class="hljs-keyword">from</span> datetime <span class="hljs-keyword">import</span> timedelta<br><br><span class="hljs-comment"># Define entity</span><br>user = Entity(<br>    name=<span class="hljs-string">&quot;user_id&quot;</span>,<br>    value_type=ValueType.INT64,<br>    description=<span class="hljs-string">&quot;User identifier&quot;</span>,<br>)<br><br><span class="hljs-comment"># Define feature source</span><br>user_features_source = FileSource(<br>    path=<span class="hljs-string">&quot;data/user_features.parquet&quot;</span>,<br>    timestamp_field=<span class="hljs-string">&quot;event_timestamp&quot;</span>,<br>)<br><br><span class="hljs-comment"># Define feature view</span><br>user_features = FeatureView(<br>    name=<span class="hljs-string">&quot;user_features&quot;</span>,<br>    entities=[user],<br>    ttl=timedelta(days=<span class="hljs-number">1</span>),<br>    schema=[<br>        Feature(name=<span class="hljs-string">&quot;total_purchases&quot;</span>, dtype=ValueType.INT64),<br>        Feature(name=<span class="hljs-string">&quot;avg_order_value&quot;</span>, dtype=ValueType.FLOAT),<br>        Feature(name=<span class="hljs-string">&quot;days_since_last_order&quot;</span>, dtype=ValueType.INT64),<br>        Feature(name=<span class="hljs-string">&quot;preferred_category&quot;</span>, dtype=ValueType.STRING),<br>    ],<br>    source=user_features_source,<br>    online=<span class="hljs-literal">True</span>,<br>)<br></code></pre></td></tr></table></figure>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-comment"># Training: get historical features</span><br><span class="hljs-keyword">from</span> feast <span class="hljs-keyword">import</span> FeatureStore<br><br>store = FeatureStore(repo_path=<span class="hljs-string">&quot;./feature_store&quot;</span>)<br><br><span class="hljs-comment"># Point-in-time correct feature retrieval</span><br>training_df = store.get_historical_features(<br>    entity_df=entity_df,  <span class="hljs-comment"># DataFrame with user_id and event_timestamp</span><br>    features=[<br>        <span class="hljs-string">&quot;user_features:total_purchases&quot;</span>,<br>        <span class="hljs-string">&quot;user_features:avg_order_value&quot;</span>,<br>        <span class="hljs-string">&quot;user_features:days_since_last_order&quot;</span>,<br>    ],<br>).to_df()<br><br><span class="hljs-comment"># Serving: get online features</span><br>online_features = store.get_online_features(<br>    features=[<br>        <span class="hljs-string">&quot;user_features:total_purchases&quot;</span>,<br>        <span class="hljs-string">&quot;user_features:avg_order_value&quot;</span>,<br>    ],<br>    entity_rows=[&#123;<span class="hljs-string">&quot;user_id&quot;</span>: <span class="hljs-number">12345</span>&#125;],<br>).to_dict()<br></code></pre></td></tr></table></figure>
+<h2 id="实验追踪mlflow">实验追踪：MLflow</h2>
+<p>MLflow 是最流行的 ML
+实验追踪工具，支持参数、指标、模型和数据集的版本管理：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">import</span> mlflow<br><span class="hljs-keyword">import</span> mlflow.sklearn<br><span class="hljs-keyword">from</span> sklearn.ensemble <span class="hljs-keyword">import</span> RandomForestClassifier<br><span class="hljs-keyword">from</span> sklearn.metrics <span class="hljs-keyword">import</span> accuracy_score, f1_score, precision_score, recall_score<br><br><span class="hljs-comment"># Set tracking URI</span><br>mlflow.set_tracking_uri(<span class="hljs-string">&quot;http://mlflow-server:5000&quot;</span>)<br>mlflow.set_experiment(<span class="hljs-string">&quot;fraud-detection&quot;</span>)<br><br><span class="hljs-comment"># Training with experiment tracking</span><br><span class="hljs-keyword">with</span> mlflow.start_run(run_name=<span class="hljs-string">&quot;rf-v2-tuned&quot;</span>) <span class="hljs-keyword">as</span> run:<br>    <span class="hljs-comment"># Log parameters</span><br>    params = &#123;<br>        <span class="hljs-string">&quot;n_estimators&quot;</span>: <span class="hljs-number">200</span>,<br>        <span class="hljs-string">&quot;max_depth&quot;</span>: <span class="hljs-number">15</span>,<br>        <span class="hljs-string">&quot;min_samples_split&quot;</span>: <span class="hljs-number">5</span>,<br>        <span class="hljs-string">&quot;class_weight&quot;</span>: <span class="hljs-string">&quot;balanced&quot;</span>,<br>    &#125;<br>    mlflow.log_params(params)<br><br>    <span class="hljs-comment"># Train model</span><br>    model = RandomForestClassifier(**params, random_state=<span class="hljs-number">42</span>)<br>    model.fit(X_train, y_train)<br><br>    <span class="hljs-comment"># Evaluate</span><br>    y_pred = model.predict(X_test)<br>    metrics = &#123;<br>        <span class="hljs-string">&quot;accuracy&quot;</span>: accuracy_score(y_test, y_pred),<br>        <span class="hljs-string">&quot;f1&quot;</span>: f1_score(y_test, y_pred),<br>        <span class="hljs-string">&quot;precision&quot;</span>: precision_score(y_test, y_pred),<br>        <span class="hljs-string">&quot;recall&quot;</span>: recall_score(y_test, y_pred),<br>    &#125;<br>    mlflow.log_metrics(metrics)<br><br>    <span class="hljs-comment"># Log model with signature</span><br>    <span class="hljs-keyword">from</span> mlflow.models <span class="hljs-keyword">import</span> infer_signature<br>    signature = infer_signature(X_test, y_pred)<br>    mlflow.sklearn.log_model(<br>        model,<br>        artifact_path=<span class="hljs-string">&quot;model&quot;</span>,<br>        signature=signature,<br>        registered_model_name=<span class="hljs-string">&quot;fraud-detector&quot;</span>,<br>    )<br><br>    <span class="hljs-comment"># Log additional artifacts</span><br>    mlflow.log_artifact(<span class="hljs-string">&quot;feature_importance.png&quot;</span>)<br>    mlflow.log_dict(&#123;<span class="hljs-string">&quot;features&quot;</span>: feature_names&#125;, <span class="hljs-string">&quot;feature_config.json&quot;</span>)<br><br>    <span class="hljs-comment"># Log dataset info</span><br>    mlflow.log_input(<br>        mlflow.data.from_pandas(X_train, name=<span class="hljs-string">&quot;training_data&quot;</span>),<br>        context=<span class="hljs-string">&quot;training&quot;</span>,<br>    )<br><br>    <span class="hljs-built_in">print</span>(<span class="hljs-string">f&quot;Run ID: <span class="hljs-subst">&#123;run.info.run_id&#125;</span>&quot;</span>)<br>    <span class="hljs-built_in">print</span>(<span class="hljs-string">f&quot;Metrics: <span class="hljs-subst">&#123;metrics&#125;</span>&quot;</span>)<br></code></pre></td></tr></table></figure>
+<h3 id="mlflow-model-registry">MLflow Model Registry</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">from</span> mlflow.tracking <span class="hljs-keyword">import</span> MlflowClient<br><br>client = MlflowClient()<br><br><span class="hljs-comment"># Transition model stage</span><br>client.transition_model_version_stage(<br>    name=<span class="hljs-string">&quot;fraud-detector&quot;</span>,<br>    version=<span class="hljs-number">3</span>,<br>    stage=<span class="hljs-string">&quot;Production&quot;</span>,<br>    archive_existing_versions=<span class="hljs-literal">True</span>,  <span class="hljs-comment"># Archive previous production version</span><br>)<br><br><span class="hljs-comment"># Load production model</span><br>model = mlflow.pyfunc.load_model(<span class="hljs-string">&quot;models:/fraud-detector/Production&quot;</span>)<br>predictions = model.predict(new_data)<br><br><span class="hljs-comment"># Compare model versions</span><br>runs = mlflow.search_runs(<br>    experiment_ids=[<span class="hljs-string">&quot;1&quot;</span>],<br>    filter_string=<span class="hljs-string">&quot;metrics.f1 &gt; 0.85&quot;</span>,<br>    order_by=[<span class="hljs-string">&quot;metrics.f1 DESC&quot;</span>],<br>    max_results=<span class="hljs-number">5</span>,<br>)<br><span class="hljs-built_in">print</span>(runs[[<span class="hljs-string">&quot;run_id&quot;</span>, <span class="hljs-string">&quot;params.n_estimators&quot;</span>, <span class="hljs-string">&quot;metrics.f1&quot;</span>]])<br></code></pre></td></tr></table></figure>
+<h2 id="模型服务model-serving">模型服务（Model Serving）</h2>
+<h3 id="tensorflow-serving">TensorFlow Serving</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># Pull and run TF Serving Docker image</span><br>docker run -p 8501:8501 \<br>  --mount <span class="hljs-built_in">type</span>=<span class="hljs-built_in">bind</span>,<span class="hljs-built_in">source</span>=/models/fraud_detector,target=/models/fraud_detector \<br>  -e MODEL_NAME=fraud_detector \<br>  tensorflow/serving<br></code></pre></td></tr></table></figure>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-comment"># Client request</span><br><span class="hljs-keyword">import</span> requests<br><span class="hljs-keyword">import</span> json<br><br>data = &#123;<br>    <span class="hljs-string">&quot;instances&quot;</span>: [<br>        &#123;<span class="hljs-string">&quot;feature1&quot;</span>: <span class="hljs-number">0.5</span>, <span class="hljs-string">&quot;feature2&quot;</span>: <span class="hljs-number">1.2</span>, <span class="hljs-string">&quot;feature3&quot;</span>: -<span class="hljs-number">0.3</span>&#125;,<br>        &#123;<span class="hljs-string">&quot;feature1&quot;</span>: <span class="hljs-number">0.8</span>, <span class="hljs-string">&quot;feature2&quot;</span>: <span class="hljs-number">0.1</span>, <span class="hljs-string">&quot;feature3&quot;</span>: <span class="hljs-number">0.6</span>&#125;,<br>    ]<br>&#125;<br><br>response = requests.post(<br>    <span class="hljs-string">&quot;http://localhost:8501/v1/models/fraud_detector:predict&quot;</span>,<br>    json=data,<br>)<br><br>predictions = response.json()[<span class="hljs-string">&quot;predictions&quot;</span>]<br></code></pre></td></tr></table></figure>
+<h3 id="nvidia-triton-inference-server">NVIDIA Triton Inference
+Server</h3>
+<pre class="mermaid">graph TB
+    A[Client Requests] --&gt; B[Triton Inference Server]
+
+    B --&gt; C[Model Repository]
+    C --&gt; C1[PyTorch Model&lt;br/&gt;.pt]
+    C --&gt; C2[ONNX Model&lt;br/&gt;.onnx]
+    C --&gt; C3[TensorRT Model&lt;br/&gt;.plan]
+    C --&gt; C4[Python Backend&lt;br/&gt;.py]
+
+    B --&gt; D[Features]
+    D --&gt; D1[Dynamic Batching]
+    D --&gt; D2[Model Ensemble]
+    D --&gt; D3[Concurrent Execution]
+    D --&gt; D4[GPU Scheduling]
+
+    style B fill:#76b900,color:#fff
+    style D1 fill:#3498db,color:#fff</pre>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><code class="hljs plaintext"># Triton model repository structure<br>models/<br>├── fraud_detector/<br>│   ├── config.pbtxt<br>│   ├── 1/<br>│   │   └── model.onnx<br>│   └── 2/<br>│       └── model.onnx<br>└── text_encoder/<br>    ├── config.pbtxt<br>    └── 1/<br>        └── model.pt<br></code></pre></td></tr></table></figure>
+<figure class="highlight protobuf"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><code class="hljs protobuf"># config.pbtxt<br>name: <span class="hljs-string">&quot;fraud_detector&quot;</span><br>platform: <span class="hljs-string">&quot;onnxruntime_onnx&quot;</span><br>max_batch_size: <span class="hljs-number">64</span><br><br>input [<br>  &#123;<br>    name: <span class="hljs-string">&quot;features&quot;</span><br>    data_type: TYPE_FP32<br>    dims: [ <span class="hljs-number">20</span> ]<br>  &#125;<br>]<br><br>output [<br>  &#123;<br>    name: <span class="hljs-string">&quot;prediction&quot;</span><br>    data_type: TYPE_FP32<br>    dims: [ <span class="hljs-number">1</span> ]<br>  &#125;<br>]<br><br>dynamic_batching &#123;<br>  preferred_batch_size: [ <span class="hljs-number">16</span>, <span class="hljs-number">32</span> ]<br>  max_queue_delay_microseconds: <span class="hljs-number">100</span><br>&#125;<br><br>instance_group [<br>  &#123;<br>    count: <span class="hljs-number">2</span><br>    kind: KIND_GPU<br>    gpus: [ <span class="hljs-number">0</span> ]<br>  &#125;<br>]<br></code></pre></td></tr></table></figure>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-comment"># Triton client</span><br><span class="hljs-keyword">import</span> tritonclient.http <span class="hljs-keyword">as</span> httpclient<br><span class="hljs-keyword">import</span> numpy <span class="hljs-keyword">as</span> np<br><br>client = httpclient.InferenceServerClient(url=<span class="hljs-string">&quot;localhost:8000&quot;</span>)<br><br><span class="hljs-comment"># Prepare input</span><br>input_data = np.array([[<span class="hljs-number">0.5</span>, <span class="hljs-number">1.2</span>, -<span class="hljs-number">0.3</span>, ...]], dtype=np.float32)<br>inputs = [httpclient.InferInput(<span class="hljs-string">&quot;features&quot;</span>, input_data.shape, <span class="hljs-string">&quot;FP32&quot;</span>)]<br>inputs[<span class="hljs-number">0</span>].set_data_from_numpy(input_data)<br><br><span class="hljs-comment"># Inference</span><br>result = client.infer(model_name=<span class="hljs-string">&quot;fraud_detector&quot;</span>, inputs=inputs)<br>prediction = result.as_numpy(<span class="hljs-string">&quot;prediction&quot;</span>)<br><span class="hljs-built_in">print</span>(<span class="hljs-string">f&quot;Prediction: <span class="hljs-subst">&#123;prediction&#125;</span>&quot;</span>)<br></code></pre></td></tr></table></figure>
+<h3 id="fastapi-自定义服务">FastAPI 自定义服务</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">from</span> fastapi <span class="hljs-keyword">import</span> FastAPI, HTTPException<br><span class="hljs-keyword">from</span> pydantic <span class="hljs-keyword">import</span> BaseModel<br><span class="hljs-keyword">import</span> mlflow<br><span class="hljs-keyword">import</span> numpy <span class="hljs-keyword">as</span> np<br><br>app = FastAPI(title=<span class="hljs-string">&quot;ML Model Serving&quot;</span>)<br><br><span class="hljs-comment"># Load model at startup</span><br>model = <span class="hljs-literal">None</span><br><br><span class="hljs-meta">@app.on_event(<span class="hljs-params"><span class="hljs-string">&quot;startup&quot;</span></span>)</span><br><span class="hljs-keyword">async</span> <span class="hljs-keyword">def</span> <span class="hljs-title function_">load_model</span>():<br>    <span class="hljs-keyword">global</span> model<br>    model = mlflow.pyfunc.load_model(<span class="hljs-string">&quot;models:/fraud-detector/Production&quot;</span>)<br><br><span class="hljs-keyword">class</span> <span class="hljs-title class_">PredictionRequest</span>(<span class="hljs-title class_ inherited__">BaseModel</span>):<br>    features: <span class="hljs-built_in">list</span>[<span class="hljs-built_in">list</span>[<span class="hljs-built_in">float</span>]]<br><br><span class="hljs-keyword">class</span> <span class="hljs-title class_">PredictionResponse</span>(<span class="hljs-title class_ inherited__">BaseModel</span>):<br>    predictions: <span class="hljs-built_in">list</span>[<span class="hljs-built_in">float</span>]<br>    model_version: <span class="hljs-built_in">str</span><br><br><span class="hljs-meta">@app.post(<span class="hljs-params"><span class="hljs-string">&quot;/predict&quot;</span>, response_model=PredictionResponse</span>)</span><br><span class="hljs-keyword">async</span> <span class="hljs-keyword">def</span> <span class="hljs-title function_">predict</span>(<span class="hljs-params">request: PredictionRequest</span>):<br>    <span class="hljs-keyword">try</span>:<br>        input_data = np.array(request.features)<br>        predictions = model.predict(input_data).tolist()<br>        <span class="hljs-keyword">return</span> PredictionResponse(<br>            predictions=predictions,<br>            model_version=<span class="hljs-string">&quot;3&quot;</span>,<br>        )<br>    <span class="hljs-keyword">except</span> Exception <span class="hljs-keyword">as</span> e:<br>        <span class="hljs-keyword">raise</span> HTTPException(status_code=<span class="hljs-number">500</span>, detail=<span class="hljs-built_in">str</span>(e))<br><br><span class="hljs-meta">@app.get(<span class="hljs-params"><span class="hljs-string">&quot;/health&quot;</span></span>)</span><br><span class="hljs-keyword">async</span> <span class="hljs-keyword">def</span> <span class="hljs-title function_">health</span>():<br>    <span class="hljs-keyword">return</span> &#123;<span class="hljs-string">&quot;status&quot;</span>: <span class="hljs-string">&quot;healthy&quot;</span>, <span class="hljs-string">&quot;model_loaded&quot;</span>: model <span class="hljs-keyword">is</span> <span class="hljs-keyword">not</span> <span class="hljs-literal">None</span>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="监控与漂移检测">监控与漂移检测</h2>
+<pre class="mermaid">graph TB
+    A[模型监控维度] --&gt; B[性能监控]
+    A --&gt; C[数据漂移]
+    A --&gt; D[概念漂移]
+    A --&gt; E[系统监控]
+
+    B --&gt; B1[准确率/F1趋势]
+    B --&gt; B2[延迟 P50/P99]
+    B --&gt; B3[吞吐量 QPS]
+
+    C --&gt; C1[输入特征分布变化]
+    C --&gt; C2[PSI / KS Test]
+    C --&gt; C3[特征缺失率]
+
+    D --&gt; D1[预测分布变化]
+    D --&gt; D2[标签与预测的偏差]
+
+    E --&gt; E1[GPU利用率]
+    E --&gt; E2[内存使用]
+    E --&gt; E3[错误率]
+
+    style C fill:#e74c3c,color:#fff
+    style D fill:#f39c12,color:#000</pre>
+<h3 id="数据漂移检测">数据漂移检测</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">from</span> scipy <span class="hljs-keyword">import</span> stats<br><span class="hljs-keyword">import</span> numpy <span class="hljs-keyword">as</span> np<br><br><span class="hljs-keyword">def</span> <span class="hljs-title function_">detect_drift_ks</span>(<span class="hljs-params">reference_data, production_data, threshold=<span class="hljs-number">0.05</span></span>):<br>    <span class="hljs-string">&quot;&quot;&quot;</span><br><span class="hljs-string">    Kolmogorov-Smirnov test for data drift detection.</span><br><span class="hljs-string">    &quot;&quot;&quot;</span><br>    drift_results = &#123;&#125;<br><br>    <span class="hljs-keyword">for</span> feature <span class="hljs-keyword">in</span> reference_data.columns:<br>        statistic, p_value = stats.ks_2samp(<br>            reference_data[feature],<br>            production_data[feature],<br>        )<br>        is_drifted = p_value &lt; threshold<br>        drift_results[feature] = &#123;<br>            <span class="hljs-string">&quot;statistic&quot;</span>: statistic,<br>            <span class="hljs-string">&quot;p_value&quot;</span>: p_value,<br>            <span class="hljs-string">&quot;is_drifted&quot;</span>: is_drifted,<br>        &#125;<br><br>    <span class="hljs-keyword">return</span> drift_results<br><br><span class="hljs-keyword">def</span> <span class="hljs-title function_">calculate_psi</span>(<span class="hljs-params">expected, actual, bins=<span class="hljs-number">10</span></span>):<br>    <span class="hljs-string">&quot;&quot;&quot;</span><br><span class="hljs-string">    Population Stability Index (PSI) for drift detection.</span><br><span class="hljs-string"></span><br><span class="hljs-string">    PSI &lt; 0.1: No drift</span><br><span class="hljs-string">    0.1 &lt;= PSI &lt; 0.2: Moderate drift</span><br><span class="hljs-string">    PSI &gt;= 0.2: Significant drift</span><br><span class="hljs-string">    &quot;&quot;&quot;</span><br>    expected_percents = np.histogram(expected, bins=bins)[<span class="hljs-number">0</span>] / <span class="hljs-built_in">len</span>(expected)<br>    actual_percents = np.histogram(actual, bins=bins)[<span class="hljs-number">0</span>] / <span class="hljs-built_in">len</span>(actual)<br><br>    <span class="hljs-comment"># Avoid division by zero</span><br>    expected_percents = np.clip(expected_percents, <span class="hljs-number">0.001</span>, <span class="hljs-literal">None</span>)<br>    actual_percents = np.clip(actual_percents, <span class="hljs-number">0.001</span>, <span class="hljs-literal">None</span>)<br><br>    psi = np.<span class="hljs-built_in">sum</span>(<br>        (actual_percents - expected_percents) *<br>        np.log(actual_percents / expected_percents)<br>    )<br><br>    <span class="hljs-keyword">return</span> psi<br><br><span class="hljs-comment"># Usage</span><br>drift_results = detect_drift_ks(training_data, last_week_data)<br><span class="hljs-keyword">for</span> feature, result <span class="hljs-keyword">in</span> drift_results.items():<br>    <span class="hljs-keyword">if</span> result[<span class="hljs-string">&quot;is_drifted&quot;</span>]:<br>        <span class="hljs-built_in">print</span>(<span class="hljs-string">f&quot;DRIFT DETECTED in <span class="hljs-subst">&#123;feature&#125;</span>: p-value=<span class="hljs-subst">&#123;result[<span class="hljs-string">&#x27;p_value&#x27;</span>]:<span class="hljs-number">.4</span>f&#125;</span>&quot;</span>)<br></code></pre></td></tr></table></figure>
+<h3 id="使用-evidently-进行监控">使用 Evidently 进行监控</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">from</span> evidently <span class="hljs-keyword">import</span> ColumnMapping<br><span class="hljs-keyword">from</span> evidently.report <span class="hljs-keyword">import</span> Report<br><span class="hljs-keyword">from</span> evidently.metric_preset <span class="hljs-keyword">import</span> DataDriftPreset, DataQualityPreset<br><span class="hljs-keyword">from</span> evidently.metrics <span class="hljs-keyword">import</span> (<br>    DatasetDriftMetric,<br>    DataDriftTable,<br>    ClassificationQualityMetric,<br>)<br><br><span class="hljs-comment"># Define column mapping</span><br>column_mapping = ColumnMapping(<br>    target=<span class="hljs-string">&quot;label&quot;</span>,<br>    prediction=<span class="hljs-string">&quot;prediction&quot;</span>,<br>    numerical_features=[<span class="hljs-string">&quot;feature_1&quot;</span>, <span class="hljs-string">&quot;feature_2&quot;</span>, <span class="hljs-string">&quot;feature_3&quot;</span>],<br>    categorical_features=[<span class="hljs-string">&quot;category&quot;</span>],<br>)<br><br><span class="hljs-comment"># Create drift report</span><br>report = Report(metrics=[<br>    DatasetDriftMetric(),<br>    DataDriftTable(),<br>    ClassificationQualityMetric(),<br>])<br><br>report.run(<br>    reference_data=training_data,<br>    current_data=production_data,<br>    column_mapping=column_mapping,<br>)<br><br><span class="hljs-comment"># Save report</span><br>report.save_html(<span class="hljs-string">&quot;drift_report.html&quot;</span>)<br><br><span class="hljs-comment"># Get results programmatically</span><br>results = report.as_dict()<br>dataset_drift = results[<span class="hljs-string">&quot;metrics&quot;</span>][<span class="hljs-number">0</span>][<span class="hljs-string">&quot;result&quot;</span>][<span class="hljs-string">&quot;dataset_drift&quot;</span>]<br><span class="hljs-keyword">if</span> dataset_drift:<br>    <span class="hljs-built_in">print</span>(<span class="hljs-string">&quot;Dataset drift detected! Consider retraining.&quot;</span>)<br></code></pre></td></tr></table></figure>
+<h2 id="cicd-for-ml">CI/CD for ML</h2>
+<pre class="mermaid">graph LR
+    A[Code Push] --&gt; B[CI Pipeline]
+    B --&gt; C[Data Validation]
+    C --&gt; D[Unit Tests]
+    D --&gt; E[Model Training]
+    E --&gt; F[Model Evaluation]
+    F --&gt; G{Quality Gate}
+    G --&gt;|Pass| H[Model Registry]
+    G --&gt;|Fail| I[Notify &amp; Block]
+    H --&gt; J[Staging Deploy]
+    J --&gt; K[A/B Test / Shadow]
+    K --&gt; L{Performance OK?}
+    L --&gt;|Yes| M[Production Deploy]
+    L --&gt;|No| I
+
+    style G fill:#f39c12,color:#000
+    style L fill:#f39c12,color:#000
+    style M fill:#2ecc71,color:#fff</pre>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># .github/workflows/ml-pipeline.yml</span><br><span class="hljs-attr">name:</span> <span class="hljs-string">ML</span> <span class="hljs-string">Pipeline</span><br><br><span class="hljs-attr">on:</span><br>  <span class="hljs-attr">push:</span><br>    <span class="hljs-attr">paths:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">&#x27;models/**&#x27;</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">&#x27;data/**&#x27;</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">&#x27;training/**&#x27;</span><br><br><span class="hljs-attr">jobs:</span><br>  <span class="hljs-attr">train-and-evaluate:</span><br>    <span class="hljs-attr">runs-on:</span> <span class="hljs-string">ubuntu-latest</span><br>    <span class="hljs-attr">steps:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">uses:</span> <span class="hljs-string">actions/checkout@v4</span><br><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Setup</span> <span class="hljs-string">Python</span><br>        <span class="hljs-attr">uses:</span> <span class="hljs-string">actions/setup-python@v5</span><br>        <span class="hljs-attr">with:</span><br>          <span class="hljs-attr">python-version:</span> <span class="hljs-string">&#x27;3.11&#x27;</span><br><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Install</span> <span class="hljs-string">dependencies</span><br>        <span class="hljs-attr">run:</span> <span class="hljs-string">pip</span> <span class="hljs-string">install</span> <span class="hljs-string">-r</span> <span class="hljs-string">requirements.txt</span><br><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Validate</span> <span class="hljs-string">data</span><br>        <span class="hljs-attr">run:</span> <span class="hljs-string">python</span> <span class="hljs-string">scripts/validate_data.py</span><br><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Run</span> <span class="hljs-string">unit</span> <span class="hljs-string">tests</span><br>        <span class="hljs-attr">run:</span> <span class="hljs-string">pytest</span> <span class="hljs-string">tests/</span> <span class="hljs-string">-v</span><br><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Train</span> <span class="hljs-string">model</span><br>        <span class="hljs-attr">run:</span> <span class="hljs-string">python</span> <span class="hljs-string">training/train.py</span> <span class="hljs-string">--config</span> <span class="hljs-string">configs/production.yaml</span><br>        <span class="hljs-attr">env:</span><br>          <span class="hljs-attr">MLFLOW_TRACKING_URI:</span> <span class="hljs-string">$&#123;&#123;</span> <span class="hljs-string">secrets.MLFLOW_URI</span> <span class="hljs-string">&#125;&#125;</span><br><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Evaluate</span> <span class="hljs-string">model</span><br>        <span class="hljs-attr">run:</span> <span class="hljs-string">|</span><br><span class="hljs-string">          python training/evaluate.py \</span><br><span class="hljs-string">            --model-uri &quot;runs:/$&#123;&#123; env.RUN_ID &#125;&#125;/model&quot; \</span><br><span class="hljs-string">            --min-f1 0.85 \</span><br><span class="hljs-string">            --min-accuracy 0.90</span><br><span class="hljs-string"></span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Register</span> <span class="hljs-string">model</span><br>        <span class="hljs-attr">if:</span> <span class="hljs-string">success()</span><br>        <span class="hljs-attr">run:</span> <span class="hljs-string">|</span><br><span class="hljs-string">          python scripts/register_model.py \</span><br><span class="hljs-string">            --run-id $&#123;&#123; env.RUN_ID &#125;&#125; \</span><br><span class="hljs-string">            --stage Staging</span><br></code></pre></td></tr></table></figure>
+<h2 id="总结">总结</h2>
+<p>MLOps
+的核心目标是让机器学习系统可复现、可靠和可维护。关键实践包括：</p>
+<ol type="1">
+<li><strong>Feature Store</strong>：统一训练和推理的特征管道，避免
+Training-Serving Skew</li>
+<li><strong>实验追踪</strong>：使用 MLflow
+记录每次实验的参数、指标和产物</li>
+<li><strong>模型注册</strong>：版本化管理模型，支持回滚和 A/B 测试</li>
+<li><strong>自动化部署</strong>：CI/CD
+流水线包含数据验证、模型评估的质量门</li>
+<li><strong>持续监控</strong>：检测数据漂移和模型性能退化，自动触发重训练</li>
+<li><strong>Triton/TFServing</strong>：生产级模型服务，支持动态批处理和多模型管理</li>
+</ol>
+<p>从小规模开始，先做好实验追踪和模型版本管理，再逐步添加 Feature
+Store、漂移检测和自动化重训练。</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2025-10-29</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">2.7k 字 · 7 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/tmux-productivity/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Tmux高效终端管理</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/neovim-ide-setup/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Neovim IDE化配置完全指南</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#mlops-%E5%85%A8%E6%99%AF%E6%9E%B6%E6%9E%84"><span class="toc-text">MLOps 全景架构</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%89%B9%E5%BE%81%E5%B7%A5%E7%A8%8B%E4%B8%8E-feature-store"><span class="toc-text">特征工程与 Feature Store</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BD%BF%E7%94%A8-feast"><span class="toc-text">使用 Feast</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E9%AA%8C%E8%BF%BD%E8%B8%AAmlflow"><span class="toc-text">实验追踪：MLflow</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#mlflow-model-registry"><span class="toc-text">MLflow Model Registry</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A8%A1%E5%9E%8B%E6%9C%8D%E5%8A%A1model-serving"><span class="toc-text">模型服务（Model Serving）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#tensorflow-serving"><span class="toc-text">TensorFlow Serving</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#nvidia-triton-inference-server"><span class="toc-text">NVIDIA Triton Inference
+Server</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#fastapi-%E8%87%AA%E5%AE%9A%E4%B9%89%E6%9C%8D%E5%8A%A1"><span class="toc-text">FastAPI 自定义服务</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%9B%91%E6%8E%A7%E4%B8%8E%E6%BC%82%E7%A7%BB%E6%A3%80%E6%B5%8B"><span class="toc-text">监控与漂移检测</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E6%BC%82%E7%A7%BB%E6%A3%80%E6%B5%8B"><span class="toc-text">数据漂移检测</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BD%BF%E7%94%A8-evidently-%E8%BF%9B%E8%A1%8C%E7%9B%91%E6%8E%A7"><span class="toc-text">使用 Evidently 进行监控</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#cicd-for-ml"><span class="toc-text">CI&#x2F;CD for ML</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

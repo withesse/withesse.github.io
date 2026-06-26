@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Linux性能调优：从内核参数到应用优化 · zt&#39;s Blog</title>
+  <meta name="description" content="系统讲解Linux性能调优，涵盖CPU调度、内存管理、磁盘I/O、网络优化、sysctl参数和perf工具使用。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/linux-performance-tuning/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Linux性能调优：从内核参数到应用优化">
+  <meta property="og:description" content="系统讲解Linux性能调优，涵盖CPU调度、内存管理、磁盘I/O、网络优化、sysctl参数和perf工具使用。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/linux-performance-tuning/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2024-08-06T16:00:00.000Z">
+  <meta property="article:modified_time" content="2024-08-06T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Linux性能调优：从内核参数到应用优化">
+  <meta name="twitter:description" content="系统讲解Linux性能调优，涵盖CPU调度、内存管理、磁盘I/O、网络优化、sysctl参数和perf工具使用。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Linux性能调优：从内核参数到应用优化","description":"系统讲解Linux性能调优，涵盖CPU调度、内存管理、磁盘I/O、网络优化、sysctl参数和perf工具使用。","datePublished":"2024-08-06T16:00:00.000Z","dateModified":"2024-08-06T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/linux-performance-tuning/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"DevOps","item":"https://withesse.co/categories/DevOps/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:45">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/DevOps/">DevOps</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/performance/"><span class="hash">#</span>performance</a><a class="tag" href="/tags/linux/"><span class="hash">#</span>linux</a><a class="tag" href="/tags/tuning/"><span class="hash">#</span>tuning</a><a class="tag" href="/tags/kernel/"><span class="hash">#</span>kernel</a>
+        
+      </div>
+
+      <h1>Linux性能调优：从内核参数到应用优化</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2024.08.07</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 7 min</span>
+        </span>
+        <span class="wc"><span class="num">2.9k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%A7%E8%83%BD%E5%88%86%E6%9E%90%E6%96%B9%E6%B3%95%E8%AE%BA"><span class="toc-text">性能分析方法论</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#use%E6%96%B9%E6%B3%95"><span class="toc-text">USE方法</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%80%A7%E8%83%BD%E5%88%86%E6%9E%90%E5%B7%A5%E5%85%B7%E5%85%A8%E6%99%AF%E5%9B%BE"><span class="toc-text">性能分析工具全景图</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#cpu%E8%B0%83%E5%BA%A6%E4%BC%98%E5%8C%96"><span class="toc-text">CPU调度优化</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%9F%A5%E7%9C%8Bcpu%E7%8A%B6%E6%80%81"><span class="toc-text">查看CPU状态</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#cpu%E4%BA%B2%E5%92%8C%E6%80%A7cpu-affinity"><span class="toc-text">CPU亲和性（CPU Affinity）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%B0%83%E5%BA%A6%E5%99%A8%E5%8F%82%E6%95%B0"><span class="toc-text">调度器参数</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86%E4%BC%98%E5%8C%96"><span class="toc-text">内存管理优化</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%86%85%E5%AD%98%E7%8A%B6%E6%80%81%E5%88%86%E6%9E%90"><span class="toc-text">内存状态分析</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#vm.swappiness"><span class="toc-text">vm.swappiness</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#huge-pages%E5%A4%A7%E9%A1%B5%E5%86%85%E5%AD%98"><span class="toc-text">Huge Pages（大页内存）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%86%85%E5%AD%98%E5%9B%9E%E6%94%B6%E5%8F%82%E6%95%B0"><span class="toc-text">内存回收参数</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%A3%81%E7%9B%98io%E4%BC%98%E5%8C%96"><span class="toc-text">磁盘I&#x2F;O优化</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#io%E7%8A%B6%E6%80%81%E5%88%86%E6%9E%90"><span class="toc-text">I&#x2F;O状态分析</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#io%E8%B0%83%E5%BA%A6%E5%99%A8"><span class="toc-text">I&#x2F;O调度器</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%A2%84%E8%AF%BBreadahead"><span class="toc-text">预读（Readahead）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F%E4%BC%98%E5%8C%96"><span class="toc-text">文件系统优化</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BD%91%E7%BB%9C%E8%B0%83%E4%BC%98"><span class="toc-text">网络调优</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#tcp%E7%BC%93%E5%86%B2%E5%8C%BA"><span class="toc-text">TCP缓冲区</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BF%9E%E6%8E%A5%E9%98%9F%E5%88%97"><span class="toc-text">连接队列</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#time_wait%E4%BC%98%E5%8C%96"><span class="toc-text">TIME_WAIT优化</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%AB%AF%E5%8F%A3%E8%8C%83%E5%9B%B4%E4%B8%8E%E8%BF%9E%E6%8E%A5%E8%B7%9F%E8%B8%AA"><span class="toc-text">端口范围与连接跟踪</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%8C%E6%95%B4%E7%9A%84%E7%BD%91%E7%BB%9C%E8%B0%83%E4%BC%98sysctl%E9%85%8D%E7%BD%AE"><span class="toc-text">完整的网络调优sysctl配置</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#perf%E5%B7%A5%E5%85%B7%E5%AE%9E%E6%88%98"><span class="toc-text">perf工具实战</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#cpu%E6%80%A7%E8%83%BD%E5%88%86%E6%9E%90"><span class="toc-text">CPU性能分析</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%81%AB%E7%84%B0%E5%9B%BE%E5%88%86%E6%9E%90"><span class="toc-text">火焰图分析</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%B8%B8%E7%94%A8perf%E5%91%BD%E4%BB%A4"><span class="toc-text">常用perf命令</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BB%BC%E5%90%88%E8%B0%83%E4%BC%98%E7%A4%BA%E4%BE%8B"><span class="toc-text">综合调优示例</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%AB%98%E5%B9%B6%E5%8F%91web%E6%9C%8D%E5%8A%A1%E5%99%A8"><span class="toc-text">高并发Web服务器</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E5%BA%93%E6%9C%8D%E5%8A%A1%E5%99%A8"><span class="toc-text">数据库服务器</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="前言">前言</h2>
+<p>Linux性能调优是一门既需要理论基础又需要实践经验的技术。一个配置不当的系统可能浪费30%-50%的硬件能力。本文将从CPU、内存、磁盘I/O和网络四个维度，系统讲解Linux性能调优方法。</p>
+<h2 id="性能分析方法论">性能分析方法论</h2>
+<h3 id="use方法">USE方法</h3>
+<p>USE方法（Utilization, Saturation, Errors）适用于分析系统资源：</p>
+<pre class="mermaid">graph TB
+    subgraph USE["USE方法"]
+        U["Utilization 利用率&lt;br&gt;资源繁忙时间占比"]
+        S["Saturation 饱和度&lt;br&gt;排队等待的工作量"]
+        E["Errors 错误&lt;br&gt;错误事件计数"]
+    end
+
+    subgraph Resources["系统资源"]
+        CPU["CPU"]
+        MEM["Memory"]
+        DISK["Disk I/O"]
+        NET["Network"]
+    end
+
+    USE --&gt; Resources</pre>
+<table>
+<thead>
+<tr class="header">
+<th>资源</th>
+<th>利用率</th>
+<th>饱和度</th>
+<th>错误</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>CPU</td>
+<td><code>mpstat -P ALL 1</code></td>
+<td><code>vmstat</code>的r列</td>
+<td><code>perf stat</code></td>
+</tr>
+<tr class="even">
+<td>Memory</td>
+<td><code>free -m</code></td>
+<td><code>vmstat</code>的si/so列</td>
+<td><code>dmesg \| grep oom</code></td>
+</tr>
+<tr class="odd">
+<td>Disk</td>
+<td><code>iostat -xz 1</code></td>
+<td><code>iostat</code>的avgqu-sz</td>
+<td><code>smartctl</code></td>
+</tr>
+<tr class="even">
+<td>Network</td>
+<td><code>sar -n DEV 1</code></td>
+<td><code>ss -s</code>的overflowed</td>
+<td><code>ip -s link</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="性能分析工具全景图">性能分析工具全景图</h3>
+<pre class="mermaid">graph TB
+    subgraph Observability["观测工具"]
+        subgraph Basic["基础工具"]
+            top["top/htop"]
+            vmstat["vmstat"]
+            iostat["iostat"]
+            sar["sar"]
+            free["free"]
+            ss["ss/netstat"]
+        end
+
+        subgraph Advanced["高级工具"]
+            perf["perf"]
+            bpftrace["bpftrace"]
+            strace["strace"]
+            ftrace["ftrace"]
+            bcc["BCC tools"]
+        end
+
+        subgraph Profiling["剖析工具"]
+            flamegraph["Flame Graph"]
+            perfrecord["perf record"]
+            offcpu["Off-CPU Analysis"]
+        end
+    end</pre>
+<h2 id="cpu调度优化">CPU调度优化</h2>
+<h3 id="查看cpu状态">查看CPU状态</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># CPU概览</span><br>lscpu<br><span class="hljs-built_in">nproc</span><br><br><span class="hljs-comment"># 实时CPU使用率</span><br>mpstat -P ALL 1<br><span class="hljs-comment"># %usr  - 用户态CPU（应用程序）</span><br><span class="hljs-comment"># %sys  - 内核态CPU（系统调用）</span><br><span class="hljs-comment"># %iowait - I/O等待</span><br><span class="hljs-comment"># %idle - 空闲</span><br><br><span class="hljs-comment"># 进程级CPU分析</span><br>pidstat 1<br>pidstat -p &lt;pid&gt; -t 1  <span class="hljs-comment"># 线程级别</span><br><br><span class="hljs-comment"># CPU上下文切换</span><br>vmstat 1<br><span class="hljs-comment"># cs列 = 每秒上下文切换次数</span><br><span class="hljs-comment"># r列  = 运行队列长度（应 &lt; CPU核数*2）</span><br></code></pre></td></tr></table></figure>
+<h3 id="cpu亲和性cpu-affinity">CPU亲和性（CPU Affinity）</h3>
+<p>将进程绑定到特定CPU核心，减少缓存失效和上下文切换：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 查看进程的CPU亲和性</span><br>taskset -p &lt;pid&gt;<br><br><span class="hljs-comment"># 绑定进程到CPU 0-3</span><br>taskset -c 0-3 ./myapp<br><br><span class="hljs-comment"># 修改运行中进程的亲和性</span><br>taskset -p -c 0,1 &lt;pid&gt;<br><br><span class="hljs-comment"># 使用cgroup v2绑定CPU</span><br><span class="hljs-built_in">echo</span> <span class="hljs-string">&quot;0-3&quot;</span> &gt; /sys/fs/cgroup/myapp/cpuset.cpus<br><span class="hljs-built_in">echo</span> <span class="hljs-string">&quot;0&quot;</span> &gt; /sys/fs/cgroup/myapp/cpuset.mems<br></code></pre></td></tr></table></figure>
+<h3 id="调度器参数">调度器参数</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># CFS调度器参数</span><br><span class="hljs-comment"># 调度周期（默认6ms，减小可降低延迟但增加开销）</span><br>sysctl kernel.sched_min_granularity_ns=3000000<br><br><span class="hljs-comment"># 唤醒抢占粒度</span><br>sysctl kernel.sched_wakeup_granularity_ns=4000000<br><br><span class="hljs-comment"># 进程迁移成本（增大可减少跨CPU迁移）</span><br>sysctl kernel.sched_migration_cost_ns=5000000<br><br><span class="hljs-comment"># NUMA均衡</span><br>sysctl kernel.numa_balancing=1<br></code></pre></td></tr></table></figure>
+<pre class="mermaid">graph LR
+    subgraph CFS["CFS调度器"]
+        VRT["虚拟运行时间&lt;br&gt;(vruntime)"]
+        RBTree["红黑树&lt;br&gt;按vruntime排序"]
+        Pick["选择vruntime&lt;br&gt;最小的进程"]
+    end
+
+    VRT --&gt; RBTree --&gt; Pick --&gt; |"运行"| Process["进程"]
+    Process --&gt; |"更新vruntime"| VRT</pre>
+<h2 id="内存管理优化">内存管理优化</h2>
+<h3 id="内存状态分析">内存状态分析</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 内存概览</span><br>free -h<br><span class="hljs-built_in">cat</span> /proc/meminfo<br><br><span class="hljs-comment"># 关键指标</span><br><span class="hljs-comment"># MemTotal:     总物理内存</span><br><span class="hljs-comment"># MemAvailable: 可用内存（包含可回收缓存）</span><br><span class="hljs-comment"># Buffers:      磁盘缓冲</span><br><span class="hljs-comment"># Cached:       页面缓存</span><br><span class="hljs-comment"># SwapTotal:    总Swap空间</span><br><span class="hljs-comment"># SwapFree:     空闲Swap</span><br><br><span class="hljs-comment"># 进程内存分析</span><br>pmap -x &lt;pid&gt;<br>smem -t -k<br></code></pre></td></tr></table></figure>
+<h3 id="vm.swappiness">vm.swappiness</h3>
+<p>控制内核使用Swap的倾向（0-200，默认60）：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 查看当前值</span><br><span class="hljs-built_in">cat</span> /proc/sys/vm/swappiness<br><br><span class="hljs-comment"># 数据库服务器（减少Swap使用）</span><br>sysctl -w vm.swappiness=10<br><br><span class="hljs-comment"># 持久化配置</span><br><span class="hljs-built_in">echo</span> <span class="hljs-string">&quot;vm.swappiness=10&quot;</span> &gt;&gt; /etc/sysctl.d/99-tuning.conf<br></code></pre></td></tr></table></figure>
+<pre class="mermaid">graph LR
+    subgraph Swappiness["vm.swappiness"]
+        Low["swappiness=0~10&lt;br&gt;尽量不使用Swap&lt;br&gt;适合：数据库"]
+        Mid["swappiness=30~60&lt;br&gt;适度平衡&lt;br&gt;适合：通用服务器"]
+        High["swappiness=100+&lt;br&gt;积极使用Swap&lt;br&gt;适合：桌面系统"]
+    end</pre>
+<h3 id="huge-pages大页内存">Huge Pages（大页内存）</h3>
+<p>大页减少TLB（Translation Lookaside
+Buffer）Miss，适用于大内存应用：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 查看当前大页配置</span><br><span class="hljs-built_in">cat</span> /proc/meminfo | grep Huge<br><span class="hljs-comment"># HugePages_Total:     0</span><br><span class="hljs-comment"># HugePages_Free:      0</span><br><span class="hljs-comment"># Hugepagesize:     2048 kB</span><br><br><span class="hljs-comment"># 配置2MB大页（需要连续物理内存）</span><br>sysctl -w vm.nr_hugepages=1024  <span class="hljs-comment"># 分配1024个2MB大页 = 2GB</span><br><br><span class="hljs-comment"># 透明大页（THP）</span><br><span class="hljs-comment"># 对大多数应用有益，但数据库场景可能导致延迟抖动</span><br><span class="hljs-built_in">cat</span> /sys/kernel/mm/transparent_hugepage/enabled<br><span class="hljs-comment"># [always] madvise never</span><br><br><span class="hljs-comment"># 数据库服务器建议关闭THP</span><br><span class="hljs-built_in">echo</span> madvise &gt; /sys/kernel/mm/transparent_hugepage/enabled<br><span class="hljs-built_in">echo</span> madvise &gt; /sys/kernel/mm/transparent_hugepage/defrag<br></code></pre></td></tr></table></figure>
+<h3 id="内存回收参数">内存回收参数</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 脏页回写阈值（占总内存百分比）</span><br>sysctl -w vm.dirty_ratio=15              <span class="hljs-comment"># 同步回写阈值（默认20）</span><br>sysctl -w vm.dirty_background_ratio=5    <span class="hljs-comment"># 后台回写阈值（默认10）</span><br><br><span class="hljs-comment"># 或使用绝对字节数</span><br>sysctl -w vm.dirty_bytes=1073741824      <span class="hljs-comment"># 1GB</span><br>sysctl -w vm.dirty_background_bytes=536870912  <span class="hljs-comment"># 512MB</span><br><br><span class="hljs-comment"># 脏页过期时间（厘秒，默认3000=30秒）</span><br>sysctl -w vm.dirty_expire_centisecs=1500<br><br><span class="hljs-comment"># OOM相关</span><br>sysctl -w vm.overcommit_memory=0         <span class="hljs-comment"># 0=启发式, 1=总是允许, 2=严格限制</span><br>sysctl -w vm.panic_on_oom=0              <span class="hljs-comment"># OOM时不panic</span><br></code></pre></td></tr></table></figure>
+<h2 id="磁盘io优化">磁盘I/O优化</h2>
+<h3 id="io状态分析">I/O状态分析</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># I/O统计</span><br>iostat -xz 1<br><span class="hljs-comment"># rrqm/s, wrqm/s  - 合并读写请求数</span><br><span class="hljs-comment"># r/s, w/s         - 每秒读写次数</span><br><span class="hljs-comment"># rMB/s, wMB/s     - 每秒读写MB数</span><br><span class="hljs-comment"># avgrq-sz         - 平均请求大小</span><br><span class="hljs-comment"># avgqu-sz         - 平均队列长度（饱和度指标）</span><br><span class="hljs-comment"># await            - 平均I/O等待时间（ms）</span><br><span class="hljs-comment"># r_await, w_await - 读写等待时间</span><br><span class="hljs-comment"># %util            - 设备利用率</span><br><br><span class="hljs-comment"># 进程级I/O</span><br>iotop -oP<br>pidstat -d 1<br></code></pre></td></tr></table></figure>
+<h3 id="io调度器">I/O调度器</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 查看当前调度器</span><br><span class="hljs-built_in">cat</span> /sys/block/sda/queue/scheduler<br><span class="hljs-comment"># [mq-deadline] none</span><br><br><span class="hljs-comment"># 修改调度器</span><br><span class="hljs-built_in">echo</span> <span class="hljs-string">&quot;mq-deadline&quot;</span> &gt; /sys/block/sda/queue/scheduler<br><br><span class="hljs-comment"># NVMe设备通常使用none（硬件直接处理）</span><br><span class="hljs-built_in">echo</span> <span class="hljs-string">&quot;none&quot;</span> &gt; /sys/block/nvme0n1/queue/scheduler<br></code></pre></td></tr></table></figure>
+<table>
+<thead>
+<tr class="header">
+<th>调度器</th>
+<th>特点</th>
+<th>适用场景</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>none</code></td>
+<td>不排序，FIFO</td>
+<td>NVMe SSD</td>
+</tr>
+<tr class="even">
+<td><code>mq-deadline</code></td>
+<td>保证截止时间</td>
+<td>通用SSD/HDD</td>
+</tr>
+<tr class="odd">
+<td><code>bfq</code></td>
+<td>公平带宽分配</td>
+<td>桌面交互场景</td>
+</tr>
+<tr class="even">
+<td><code>kyber</code></td>
+<td>低延迟优化</td>
+<td>高速SSD</td>
+</tr>
+</tbody>
+</table>
+<h3 id="预读readahead">预读（Readahead）</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 查看当前预读大小（512字节扇区数）</span><br><span class="hljs-built_in">cat</span> /sys/block/sda/queue/read_ahead_kb<br><span class="hljs-comment"># 默认128KB</span><br><br><span class="hljs-comment"># 顺序读优化（增大预读）</span><br><span class="hljs-built_in">echo</span> 2048 &gt; /sys/block/sda/queue/read_ahead_kb  <span class="hljs-comment"># 2MB</span><br><br><span class="hljs-comment"># 使用blockdev命令</span><br>blockdev --getra /dev/sda<br>blockdev --setra 4096 /dev/sda  <span class="hljs-comment"># 设置为2MB (4096*512=2MB)</span><br></code></pre></td></tr></table></figure>
+<h3 id="文件系统优化">文件系统优化</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># ext4挂载选项优化</span><br>mount -o noatime,nodiratime,discard /dev/sda1 /data<br><span class="hljs-comment"># noatime    - 不更新访问时间（减少写I/O）</span><br><span class="hljs-comment"># nodiratime - 不更新目录访问时间</span><br><span class="hljs-comment"># discard    - 启用TRIM（SSD）</span><br><br><span class="hljs-comment"># /etc/fstab</span><br>/dev/sda1 /data ext4 defaults,noatime,nodiratime,discard 0 2<br><br><span class="hljs-comment"># XFS挂载优化</span><br>mount -o noatime,inode64,logbufs=8 /dev/sda1 /data<br></code></pre></td></tr></table></figure>
+<h2 id="网络调优">网络调优</h2>
+<h3 id="tcp缓冲区">TCP缓冲区</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># TCP接收/发送缓冲区（min, default, max）</span><br>sysctl -w net.ipv4.tcp_rmem=<span class="hljs-string">&quot;4096 87380 16777216&quot;</span><br>sysctl -w net.ipv4.tcp_wmem=<span class="hljs-string">&quot;4096 65536 16777216&quot;</span><br><br><span class="hljs-comment"># 全局socket缓冲区</span><br>sysctl -w net.core.rmem_max=16777216<br>sysctl -w net.core.wmem_max=16777216<br>sysctl -w net.core.rmem_default=262144<br>sysctl -w net.core.wmem_default=262144<br><br><span class="hljs-comment"># TCP窗口缩放（高带宽延迟网络必须）</span><br>sysctl -w net.ipv4.tcp_window_scaling=1<br></code></pre></td></tr></table></figure>
+<h3 id="连接队列">连接队列</h3>
+<pre class="mermaid">graph LR
+    Client["客户端"] --&gt; |"SYN"| SYN_Q["SYN队列&lt;br&gt;(半连接队列)&lt;br&gt;tcp_max_syn_backlog"]
+    SYN_Q --&gt; |"SYN+ACK"| Client
+    Client --&gt; |"ACK"| Accept_Q["Accept队列&lt;br&gt;(全连接队列)&lt;br&gt;somaxconn"]
+    Accept_Q --&gt; |"accept()"| App["应用程序"]</pre>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># SYN队列大小（半连接）</span><br>sysctl -w net.ipv4.tcp_max_syn_backlog=65535<br><br><span class="hljs-comment"># Accept队列大小（全连接）</span><br>sysctl -w net.core.somaxconn=65535<br><br><span class="hljs-comment"># 队列溢出时的行为</span><br>sysctl -w net.ipv4.tcp_abort_on_overflow=0  <span class="hljs-comment"># 0=丢弃, 1=发送RST</span><br><br><span class="hljs-comment"># SYN Flood防护</span><br>sysctl -w net.ipv4.tcp_syncookies=1<br>sysctl -w net.ipv4.tcp_max_syn_backlog=65535<br></code></pre></td></tr></table></figure>
+<h3 id="time_wait优化">TIME_WAIT优化</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># TIME_WAIT套接字复用</span><br>sysctl -w net.ipv4.tcp_tw_reuse=1<br><br><span class="hljs-comment"># 最大TIME_WAIT数量</span><br>sysctl -w net.ipv4.tcp_max_tw_buckets=262144<br><br><span class="hljs-comment"># FIN超时时间</span><br>sysctl -w net.ipv4.tcp_fin_timeout=15<br></code></pre></td></tr></table></figure>
+<h3 id="端口范围与连接跟踪">端口范围与连接跟踪</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 本地端口范围</span><br>sysctl -w net.ipv4.ip_local_port_range=<span class="hljs-string">&quot;1024 65535&quot;</span><br><br><span class="hljs-comment"># 连接跟踪表大小（防火墙/NAT场景）</span><br>sysctl -w net.netfilter.nf_conntrack_max=1048576<br>sysctl -w net.netfilter.nf_conntrack_tcp_timeout_established=3600<br><br><span class="hljs-comment"># 文件描述符限制</span><br>sysctl -w fs.file-max=2097152<br><span class="hljs-built_in">ulimit</span> -n 1048576<br></code></pre></td></tr></table></figure>
+<h3 id="完整的网络调优sysctl配置">完整的网络调优sysctl配置</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># /etc/sysctl.d/99-network-tuning.conf</span><br><br><span class="hljs-comment"># TCP缓冲区</span><br>net.ipv4.tcp_rmem = 4096 87380 16777216<br>net.ipv4.tcp_wmem = 4096 65536 16777216<br>net.core.rmem_max = 16777216<br>net.core.wmem_max = 16777216<br><br><span class="hljs-comment"># 连接队列</span><br>net.core.somaxconn = 65535<br>net.ipv4.tcp_max_syn_backlog = 65535<br>net.core.netdev_max_backlog = 65535<br><br><span class="hljs-comment"># TCP优化</span><br>net.ipv4.tcp_window_scaling = 1<br>net.ipv4.tcp_timestamps = 1<br>net.ipv4.tcp_sack = 1<br>net.ipv4.tcp_tw_reuse = 1<br>net.ipv4.tcp_fin_timeout = 15<br>net.ipv4.tcp_keepalive_time = 600<br>net.ipv4.tcp_keepalive_intvl = 30<br>net.ipv4.tcp_keepalive_probes = 5<br><br><span class="hljs-comment"># 安全</span><br>net.ipv4.tcp_syncookies = 1<br>net.ipv4.conf.all.rp_filter = 1<br><br><span class="hljs-comment"># 端口范围</span><br>net.ipv4.ip_local_port_range = 1024 65535<br><br><span class="hljs-comment"># 文件描述符</span><br>fs.file-max = 2097152<br></code></pre></td></tr></table></figure>
+<h2 id="perf工具实战">perf工具实战</h2>
+<h3 id="cpu性能分析">CPU性能分析</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 采集CPU性能事件</span><br>perf <span class="hljs-built_in">stat</span> -d ./myapp<br><span class="hljs-comment"># 输出:</span><br><span class="hljs-comment">#  1,234,567,890  cycles</span><br><span class="hljs-comment">#    567,890,123  instructions     #  0.46 insn per cycle</span><br><span class="hljs-comment">#    123,456,789  cache-misses     #  12.5% of cache references</span><br><span class="hljs-comment">#         45,678  page-faults</span><br><span class="hljs-comment">#            123  context-switches</span><br><br><span class="hljs-comment"># CPU采样（生成火焰图数据）</span><br>perf record -g -p &lt;pid&gt; -- <span class="hljs-built_in">sleep</span> 30<br><br><span class="hljs-comment"># 查看报告</span><br>perf report<br><br><span class="hljs-comment"># 生成火焰图</span><br>perf script | stackcollapse-perf.pl | flamegraph.pl &gt; flamegraph.svg<br></code></pre></td></tr></table></figure>
+<h3 id="火焰图分析">火焰图分析</h3>
+<pre class="mermaid">graph TB
+    subgraph FlameGraph["火焰图解读"]
+        direction TB
+        Root["全部采样"]
+        Func1["main() - 100%"]
+        Func2["handleRequest() - 60%"]
+        Func3["queryDB() - 35%"]
+        Func4["parseJSON() - 25%"]
+        Func5["executeSQL() - 30%"]
+        Func6["serialize() - 5%"]
+
+        Root --&gt; Func1
+        Func1 --&gt; Func2
+        Func1 --&gt; Func4
+        Func2 --&gt; Func3
+        Func3 --&gt; Func5
+        Func3 --&gt; Func6
+    end</pre>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># On-CPU火焰图</span><br>perf record -F 99 -g -p &lt;pid&gt; -- <span class="hljs-built_in">sleep</span> 30<br>perf script &gt; perf.out<br>./stackcollapse-perf.pl perf.out | ./flamegraph.pl &gt; oncpu.svg<br><br><span class="hljs-comment"># Off-CPU分析（使用bpftrace）</span><br>bpftrace -e <span class="hljs-string">&#x27;</span><br><span class="hljs-string">    kprobe:finish_task_switch &#123;</span><br><span class="hljs-string">        @[kstack, comm] = count();</span><br><span class="hljs-string">    &#125;</span><br><span class="hljs-string">&#x27;</span> &gt; offcpu.out<br></code></pre></td></tr></table></figure>
+<h3 id="常用perf命令">常用perf命令</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 查看热点函数</span><br>perf top -p &lt;pid&gt;<br><br><span class="hljs-comment"># 跟踪系统调用延迟</span><br>perf trace -p &lt;pid&gt; -s<br><br><span class="hljs-comment"># 分析缓存命中率</span><br>perf <span class="hljs-built_in">stat</span> -e cache-references,cache-misses -p &lt;pid&gt; -- <span class="hljs-built_in">sleep</span> 10<br><br><span class="hljs-comment"># 分析分支预测</span><br>perf <span class="hljs-built_in">stat</span> -e branch-instructions,branch-misses -p &lt;pid&gt; -- <span class="hljs-built_in">sleep</span> 10<br><br><span class="hljs-comment"># 内存访问分析</span><br>perf mem record -p &lt;pid&gt; -- <span class="hljs-built_in">sleep</span> 10<br>perf mem report<br></code></pre></td></tr></table></figure>
+<h2 id="综合调优示例">综合调优示例</h2>
+<h3 id="高并发web服务器">高并发Web服务器</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># /etc/sysctl.d/99-webserver.conf</span><br><br><span class="hljs-comment"># 网络</span><br>net.core.somaxconn = 65535<br>net.ipv4.tcp_max_syn_backlog = 65535<br>net.core.netdev_max_backlog = 65535<br>net.ipv4.tcp_tw_reuse = 1<br>net.ipv4.tcp_fin_timeout = 15<br>net.ipv4.ip_local_port_range = 1024 65535<br><br><span class="hljs-comment"># TCP缓冲区</span><br>net.ipv4.tcp_rmem = 4096 87380 16777216<br>net.ipv4.tcp_wmem = 4096 65536 16777216<br><br><span class="hljs-comment"># 内存</span><br>vm.swappiness = 10<br>vm.dirty_ratio = 15<br>vm.dirty_background_ratio = 5<br><br><span class="hljs-comment"># 文件</span><br>fs.file-max = 2097152<br>fs.inotify.max_user_watches = 524288<br></code></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># /etc/security/limits.d/99-webserver.conf</span><br>*    soft    nofile    1048576<br>*    hard    nofile    1048576<br>*    soft    <span class="hljs-built_in">nproc</span>     65535<br>*    hard    <span class="hljs-built_in">nproc</span>     65535<br></code></pre></td></tr></table></figure>
+<h3 id="数据库服务器">数据库服务器</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># /etc/sysctl.d/99-database.conf</span><br><br><span class="hljs-comment"># 内存优化（数据库最关键）</span><br>vm.swappiness = 1<br>vm.dirty_ratio = 40<br>vm.dirty_background_ratio = 10<br>vm.dirty_expire_centisecs = 500<br><br><span class="hljs-comment"># 禁用透明大页</span><br><span class="hljs-comment"># echo never &gt; /sys/kernel/mm/transparent_hugepage/enabled</span><br><br><span class="hljs-comment"># 网络</span><br>net.core.somaxconn = 4096<br>net.ipv4.tcp_keepalive_time = 600<br><br><span class="hljs-comment"># 共享内存（PostgreSQL需要）</span><br>kernel.shmmax = 68719476736   <span class="hljs-comment"># 64GB</span><br>kernel.shmall = 16777216<br></code></pre></td></tr></table></figure>
+<h2 id="总结">总结</h2>
+<p>Linux性能调优的核心方法：</p>
+<ol type="1">
+<li><strong>先测量后优化</strong>：使用USE方法识别瓶颈，避免盲目调参</li>
+<li><strong>一次只改一个参数</strong>：确认效果后再调整下一个</li>
+<li><strong>CPU</strong>：关注上下文切换、调度延迟，合理使用CPU亲和性</li>
+<li><strong>内存</strong>：调整swappiness、大页配置，监控OOM事件</li>
+<li><strong>磁盘I/O</strong>：选择合适的调度器，优化预读和文件系统挂载选项</li>
+<li><strong>网络</strong>：调整TCP缓冲区、连接队列、TIME_WAIT参数</li>
+<li><strong>持久化配置</strong>：所有优化写入<code>/etc/sysctl.d/</code>，重启后生效</li>
+</ol>
+<p>性能调优是一个持续的过程，需要结合监控数据不断迭代。切忌照搬网上的”最优配置”，每个系统的工作负载不同，最优参数也不同。</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2024-08-07</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">2.9k 字 · 7 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/ebpf-observability/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">eBPF技术解析与可观测性应用</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/argocd-gitops/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">ArgoCD GitOps持续交付实践</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%A7%E8%83%BD%E5%88%86%E6%9E%90%E6%96%B9%E6%B3%95%E8%AE%BA"><span class="toc-text">性能分析方法论</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#use%E6%96%B9%E6%B3%95"><span class="toc-text">USE方法</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%80%A7%E8%83%BD%E5%88%86%E6%9E%90%E5%B7%A5%E5%85%B7%E5%85%A8%E6%99%AF%E5%9B%BE"><span class="toc-text">性能分析工具全景图</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#cpu%E8%B0%83%E5%BA%A6%E4%BC%98%E5%8C%96"><span class="toc-text">CPU调度优化</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%9F%A5%E7%9C%8Bcpu%E7%8A%B6%E6%80%81"><span class="toc-text">查看CPU状态</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#cpu%E4%BA%B2%E5%92%8C%E6%80%A7cpu-affinity"><span class="toc-text">CPU亲和性（CPU Affinity）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%B0%83%E5%BA%A6%E5%99%A8%E5%8F%82%E6%95%B0"><span class="toc-text">调度器参数</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86%E4%BC%98%E5%8C%96"><span class="toc-text">内存管理优化</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%86%85%E5%AD%98%E7%8A%B6%E6%80%81%E5%88%86%E6%9E%90"><span class="toc-text">内存状态分析</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#vm.swappiness"><span class="toc-text">vm.swappiness</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#huge-pages%E5%A4%A7%E9%A1%B5%E5%86%85%E5%AD%98"><span class="toc-text">Huge Pages（大页内存）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%86%85%E5%AD%98%E5%9B%9E%E6%94%B6%E5%8F%82%E6%95%B0"><span class="toc-text">内存回收参数</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%A3%81%E7%9B%98io%E4%BC%98%E5%8C%96"><span class="toc-text">磁盘I&#x2F;O优化</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#io%E7%8A%B6%E6%80%81%E5%88%86%E6%9E%90"><span class="toc-text">I&#x2F;O状态分析</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#io%E8%B0%83%E5%BA%A6%E5%99%A8"><span class="toc-text">I&#x2F;O调度器</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%A2%84%E8%AF%BBreadahead"><span class="toc-text">预读（Readahead）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F%E4%BC%98%E5%8C%96"><span class="toc-text">文件系统优化</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BD%91%E7%BB%9C%E8%B0%83%E4%BC%98"><span class="toc-text">网络调优</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#tcp%E7%BC%93%E5%86%B2%E5%8C%BA"><span class="toc-text">TCP缓冲区</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BF%9E%E6%8E%A5%E9%98%9F%E5%88%97"><span class="toc-text">连接队列</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#time_wait%E4%BC%98%E5%8C%96"><span class="toc-text">TIME_WAIT优化</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%AB%AF%E5%8F%A3%E8%8C%83%E5%9B%B4%E4%B8%8E%E8%BF%9E%E6%8E%A5%E8%B7%9F%E8%B8%AA"><span class="toc-text">端口范围与连接跟踪</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%8C%E6%95%B4%E7%9A%84%E7%BD%91%E7%BB%9C%E8%B0%83%E4%BC%98sysctl%E9%85%8D%E7%BD%AE"><span class="toc-text">完整的网络调优sysctl配置</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#perf%E5%B7%A5%E5%85%B7%E5%AE%9E%E6%88%98"><span class="toc-text">perf工具实战</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#cpu%E6%80%A7%E8%83%BD%E5%88%86%E6%9E%90"><span class="toc-text">CPU性能分析</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%81%AB%E7%84%B0%E5%9B%BE%E5%88%86%E6%9E%90"><span class="toc-text">火焰图分析</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%B8%B8%E7%94%A8perf%E5%91%BD%E4%BB%A4"><span class="toc-text">常用perf命令</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BB%BC%E5%90%88%E8%B0%83%E4%BC%98%E7%A4%BA%E4%BE%8B"><span class="toc-text">综合调优示例</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%AB%98%E5%B9%B6%E5%8F%91web%E6%9C%8D%E5%8A%A1%E5%99%A8"><span class="toc-text">高并发Web服务器</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E5%BA%93%E6%9C%8D%E5%8A%A1%E5%99%A8"><span class="toc-text">数据库服务器</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

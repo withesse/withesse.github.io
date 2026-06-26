@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vue3 Composition API设计与实战 · zt&#39;s Blog</title>
+  <meta name="description" content="深入理解Vue3 Composition API的响应式系统、组合函数模式及与Options API的对比">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/vue3-composition-api/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Vue3 Composition API设计与实战">
+  <meta property="og:description" content="深入理解Vue3 Composition API的响应式系统、组合函数模式及与Options API的对比">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/vue3-composition-api/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2025-05-06T16:00:00.000Z">
+  <meta property="article:modified_time" content="2025-05-06T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Vue3 Composition API设计与实战">
+  <meta name="twitter:description" content="深入理解Vue3 Composition API的响应式系统、组合函数模式及与Options API的对比">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Vue3 Composition API设计与实战","description":"深入理解Vue3 Composition API的响应式系统、组合函数模式及与Options API的对比","datePublished":"2025-05-06T16:00:00.000Z","dateModified":"2025-05-06T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/vue3-composition-api/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Frontend","item":"https://withesse.co/categories/Frontend/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:200">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Frontend/">Frontend</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/frontend/"><span class="hash">#</span>frontend</a><a class="tag" href="/tags/vue3/"><span class="hash">#</span>vue3</a><a class="tag" href="/tags/composition-api/"><span class="hash">#</span>composition-api</a>
+        
+      </div>
+
+      <h1>Vue3 Composition API设计与实战</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2025.05.07</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 6 min</span>
+        </span>
+        <span class="wc"><span class="num">2.5k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%93%8D%E5%BA%94%E5%BC%8F%E7%B3%BB%E7%BB%9F%E6%A0%B8%E5%BF%83%E5%8E%9F%E7%90%86"><span class="toc-text">响应式系统核心原理</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#proxy-based-reactivity"><span class="toc-text">Proxy-Based Reactivity</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BE%9D%E8%B5%96%E6%94%B6%E9%9B%86%E4%B8%8E%E8%A7%A6%E5%8F%91%E7%9A%84%E7%AE%80%E5%8C%96%E6%A8%A1%E5%9E%8B"><span class="toc-text">依赖收集与触发的简化模型</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#ref-%E4%B8%8E-reactive-%E7%9A%84%E9%80%89%E6%8B%A9"><span class="toc-text">ref 与 reactive 的选择</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#ref%E5%8C%85%E8%A3%85%E5%8E%9F%E5%A7%8B%E5%80%BC"><span class="toc-text">ref：包装原始值</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#reactive%E4%BB%A3%E7%90%86%E5%AF%B9%E8%B1%A1"><span class="toc-text">reactive：代理对象</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%80%89%E6%8B%A9%E6%8C%87%E5%8D%97"><span class="toc-text">选择指南</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#setup-%E5%87%BD%E6%95%B0%E4%B8%8E-script-setup"><span class="toc-text">setup 函数与
+&lt;script setup&gt;</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BC%A0%E7%BB%9F-setup-%E5%87%BD%E6%95%B0"><span class="toc-text">传统 setup 函数</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#script-setup-%E8%AF%AD%E6%B3%95%E7%B3%96%E6%8E%A8%E8%8D%90"><span class="toc-text">&lt;script setup&gt;
+语法糖（推荐）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%94%9F%E5%91%BD%E5%91%A8%E6%9C%9F-hooks"><span class="toc-text">生命周期 Hooks</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#provide-inject-%E4%BE%9D%E8%B5%96%E6%B3%A8%E5%85%A5"><span class="toc-text">provide &#x2F; inject 依赖注入</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#composables-%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F"><span class="toc-text">Composables 设计模式</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A8%A1%E5%BC%8F%E4%B8%80usemouse-%E5%85%A8%E5%B1%80%E4%BA%8B%E4%BB%B6%E7%9B%91%E5%90%AC"><span class="toc-text">模式一：useMouse —
+全局事件监听</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A8%A1%E5%BC%8F%E4%BA%8Cuseasync-%E5%BC%82%E6%AD%A5%E6%93%8D%E4%BD%9C%E5%B0%81%E8%A3%85"><span class="toc-text">模式二：useAsync —
+异步操作封装</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A8%A1%E5%BC%8F%E4%B8%89useformvalidation-%E8%A1%A8%E5%8D%95%E9%AA%8C%E8%AF%81"><span class="toc-text">模式三：useFormValidation —
+表单验证</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#composition-api-vs-options-api"><span class="toc-text">Composition API vs Options
+API</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E6%88%98%E7%BB%84%E5%90%88%E5%A4%9A%E4%B8%AA-composables"><span class="toc-text">实战：组合多个 Composables</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="引言">引言</h2>
+<p>Vue3 的 Composition API 是 Vue
+框架自诞生以来最重大的范式变革。它借鉴了 React Hooks
+的组合思想，同时保留了 Vue
+特有的响应式系统优势。本文将从响应式系统的底层原理讲起，系统梳理
+<code>ref</code>、<code>reactive</code>、<code>computed</code> 等核心
+API，深入探讨 composables 设计模式，并与 Options API
+进行全方位对比。</p>
+<h2 id="响应式系统核心原理">响应式系统核心原理</h2>
+<h3 id="proxy-based-reactivity">Proxy-Based Reactivity</h3>
+<p>Vue3 的响应式系统建立在 ES6 Proxy 之上，替代了 Vue2 中的
+<code>Object.defineProperty</code>。这带来了对属性的新增/删除、数组索引修改等场景的完整支持。</p>
+<pre class="mermaid">graph TB
+    A[reactive/ref 创建响应式数据] --&gt; B[Proxy Handler]
+    B --&gt; C{操作类型}
+    C --&gt;|get| D[track: 收集依赖]
+    C --&gt;|set| E[trigger: 触发更新]
+    D --&gt; F[activeEffect 当前正在执行的副作用]
+    F --&gt; G[targetMap: WeakMap 存储依赖关系]
+    E --&gt; G
+    G --&gt; H[执行关联的 effect / computed / watch]
+
+    style A fill:#42b883,color:#fff
+    style D fill:#3498db,color:#fff
+    style E fill:#e74c3c,color:#fff
+    style G fill:#f39c12,color:#fff</pre>
+<h3 id="依赖收集与触发的简化模型">依赖收集与触发的简化模型</h3>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-comment">// Simplified reactive system implementation</span><br><span class="hljs-keyword">const</span> targetMap = <span class="hljs-keyword">new</span> <span class="hljs-title class_">WeakMap</span>();<br><span class="hljs-keyword">let</span> activeEffect = <span class="hljs-literal">null</span>;<br><br><span class="hljs-keyword">function</span> <span class="hljs-title function_">track</span>(<span class="hljs-params">target, key</span>) &#123;<br>  <span class="hljs-keyword">if</span> (!activeEffect) <span class="hljs-keyword">return</span>;<br>  <span class="hljs-keyword">let</span> depsMap = targetMap.<span class="hljs-title function_">get</span>(target);<br>  <span class="hljs-keyword">if</span> (!depsMap) &#123;<br>    targetMap.<span class="hljs-title function_">set</span>(target, (depsMap = <span class="hljs-keyword">new</span> <span class="hljs-title class_">Map</span>()));<br>  &#125;<br>  <span class="hljs-keyword">let</span> dep = depsMap.<span class="hljs-title function_">get</span>(key);<br>  <span class="hljs-keyword">if</span> (!dep) &#123;<br>    depsMap.<span class="hljs-title function_">set</span>(key, (dep = <span class="hljs-keyword">new</span> <span class="hljs-title class_">Set</span>()));<br>  &#125;<br>  dep.<span class="hljs-title function_">add</span>(activeEffect);<br>&#125;<br><br><span class="hljs-keyword">function</span> <span class="hljs-title function_">trigger</span>(<span class="hljs-params">target, key</span>) &#123;<br>  <span class="hljs-keyword">const</span> depsMap = targetMap.<span class="hljs-title function_">get</span>(target);<br>  <span class="hljs-keyword">if</span> (!depsMap) <span class="hljs-keyword">return</span>;<br>  <span class="hljs-keyword">const</span> dep = depsMap.<span class="hljs-title function_">get</span>(key);<br>  <span class="hljs-keyword">if</span> (dep) &#123;<br>    dep.<span class="hljs-title function_">forEach</span>(<span class="hljs-function"><span class="hljs-params">effect</span> =&gt;</span> <span class="hljs-title function_">effect</span>());<br>  &#125;<br>&#125;<br><br><span class="hljs-keyword">function</span> <span class="hljs-title function_">reactive</span>(<span class="hljs-params">obj</span>) &#123;<br>  <span class="hljs-keyword">return</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">Proxy</span>(obj, &#123;<br>    <span class="hljs-title function_">get</span>(<span class="hljs-params">target, key, receiver</span>) &#123;<br>      <span class="hljs-title function_">track</span>(target, key);<br>      <span class="hljs-keyword">const</span> result = <span class="hljs-title class_">Reflect</span>.<span class="hljs-title function_">get</span>(target, key, receiver);<br>      <span class="hljs-comment">// Deep reactivity: recursively wrap nested objects</span><br>      <span class="hljs-keyword">return</span> <span class="hljs-keyword">typeof</span> result === <span class="hljs-string">&#x27;object&#x27;</span> &amp;&amp; result !== <span class="hljs-literal">null</span><br>        ? <span class="hljs-title function_">reactive</span>(result)<br>        : result;<br>    &#125;,<br>    <span class="hljs-title function_">set</span>(<span class="hljs-params">target, key, value, receiver</span>) &#123;<br>      <span class="hljs-keyword">const</span> oldValue = target[key];<br>      <span class="hljs-keyword">const</span> result = <span class="hljs-title class_">Reflect</span>.<span class="hljs-title function_">set</span>(target, key, value, receiver);<br>      <span class="hljs-keyword">if</span> (oldValue !== value) &#123;<br>        <span class="hljs-title function_">trigger</span>(target, key);<br>      &#125;<br>      <span class="hljs-keyword">return</span> result;<br>    &#125;,<br>  &#125;);<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="ref-与-reactive-的选择">ref 与 reactive 的选择</h2>
+<h3 id="ref包装原始值">ref：包装原始值</h3>
+<p><code>ref</code> 通过 <code>.value</code>
+属性包装原始类型值，使其具备响应式能力：</p>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-keyword">import</span> &#123; ref, watch &#125; <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;vue&#x27;</span>;<br><br><span class="hljs-keyword">const</span> count = <span class="hljs-title function_">ref</span>(<span class="hljs-number">0</span>);<br><span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(count.<span class="hljs-property">value</span>); <span class="hljs-comment">// 0</span><br><br><span class="hljs-comment">// In template, auto-unwrapped (no need for .value)</span><br><span class="hljs-comment">// &lt;template&gt;&#123;&#123; count &#125;&#125;&lt;/template&gt;</span><br><br>count.<span class="hljs-property">value</span>++; <span class="hljs-comment">// Triggers reactivity</span><br><br><span class="hljs-comment">// ref can also wrap objects (internally uses reactive)</span><br><span class="hljs-keyword">const</span> user = <span class="hljs-title function_">ref</span>(&#123; <span class="hljs-attr">name</span>: <span class="hljs-string">&#x27;Alice&#x27;</span>, <span class="hljs-attr">age</span>: <span class="hljs-number">25</span> &#125;);<br>user.<span class="hljs-property">value</span>.<span class="hljs-property">name</span> = <span class="hljs-string">&#x27;Bob&#x27;</span>; <span class="hljs-comment">// Reactive!</span><br></code></pre></td></tr></table></figure>
+<h3 id="reactive代理对象">reactive：代理对象</h3>
+<p><code>reactive</code> 直接返回对象的 Proxy，无需
+<code>.value</code>，但有限制：</p>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-keyword">import</span> &#123; reactive &#125; <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;vue&#x27;</span>;<br><br><span class="hljs-keyword">const</span> state = <span class="hljs-title function_">reactive</span>(&#123;<br>  <span class="hljs-attr">user</span>: &#123; <span class="hljs-attr">name</span>: <span class="hljs-string">&#x27;Alice&#x27;</span>, <span class="hljs-attr">age</span>: <span class="hljs-number">25</span> &#125;,<br>  <span class="hljs-attr">todos</span>: [],<br>  <span class="hljs-attr">settings</span>: &#123; <span class="hljs-attr">theme</span>: <span class="hljs-string">&#x27;dark&#x27;</span> &#125;,<br>&#125;);<br><br>state.<span class="hljs-property">user</span>.<span class="hljs-property">name</span> = <span class="hljs-string">&#x27;Bob&#x27;</span>; <span class="hljs-comment">// Reactive</span><br>state.<span class="hljs-property">todos</span>.<span class="hljs-title function_">push</span>(&#123; <span class="hljs-attr">text</span>: <span class="hljs-string">&#x27;Learn Vue3&#x27;</span> &#125;); <span class="hljs-comment">// Reactive</span><br><br><span class="hljs-comment">// PITFALL: destructuring loses reactivity!</span><br><span class="hljs-keyword">const</span> &#123; user &#125; = state; <span class="hljs-comment">// `user` is now a plain object reference</span><br><span class="hljs-comment">// Reassigning state properties also breaks reactivity</span><br><span class="hljs-comment">// state = &#123; ...state, newProp: true &#125;; // Don&#x27;t do this!</span><br></code></pre></td></tr></table></figure>
+<h3 id="选择指南">选择指南</h3>
+<pre class="mermaid">flowchart TD
+    A[需要响应式数据] --&gt; B{数据类型?}
+    B --&gt;|原始类型 string/number/boolean| C[使用 ref]
+    B --&gt;|对象/数组| D{是否需要整体替换?}
+    D --&gt;|是| E[使用 ref]
+    D --&gt;|否| F{是否需要解构?}
+    F --&gt;|是| G[使用 ref 或 toRefs]
+    F --&gt;|否| H[使用 reactive]
+
+    style C fill:#42b883,color:#fff
+    style E fill:#42b883,color:#fff
+    style G fill:#f39c12,color:#000
+    style H fill:#3498db,color:#fff</pre>
+<h2 id="setup-函数与-script-setup">setup 函数与
+<code>&lt;script setup&gt;</code></h2>
+<h3 id="传统-setup-函数">传统 setup 函数</h3>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-keyword">import</span> &#123; ref, computed, onMounted &#125; <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;vue&#x27;</span>;<br><br><span class="hljs-keyword">export</span> <span class="hljs-keyword">default</span> &#123;<br>  <span class="hljs-attr">props</span>: &#123;<br>    <span class="hljs-attr">initialCount</span>: &#123; <span class="hljs-attr">type</span>: <span class="hljs-title class_">Number</span>, <span class="hljs-attr">default</span>: <span class="hljs-number">0</span> &#125;,<br>  &#125;,<br>  <span class="hljs-title function_">setup</span>(<span class="hljs-params">props, &#123; emit, slots, attrs &#125;</span>) &#123;<br>    <span class="hljs-keyword">const</span> count = <span class="hljs-title function_">ref</span>(props.<span class="hljs-property">initialCount</span>);<br>    <span class="hljs-keyword">const</span> doubled = <span class="hljs-title function_">computed</span>(<span class="hljs-function">() =&gt;</span> count.<span class="hljs-property">value</span> * <span class="hljs-number">2</span>);<br><br>    <span class="hljs-keyword">function</span> <span class="hljs-title function_">increment</span>(<span class="hljs-params"></span>) &#123;<br>      count.<span class="hljs-property">value</span>++;<br>      <span class="hljs-title function_">emit</span>(<span class="hljs-string">&#x27;update&#x27;</span>, count.<span class="hljs-property">value</span>);<br>    &#125;<br><br>    <span class="hljs-title function_">onMounted</span>(<span class="hljs-function">() =&gt;</span> &#123;<br>      <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">&#x27;Component mounted&#x27;</span>);<br>    &#125;);<br><br>    <span class="hljs-comment">// Must explicitly return what template needs</span><br>    <span class="hljs-keyword">return</span> &#123; count, doubled, increment &#125;;<br>  &#125;,<br>&#125;;<br></code></pre></td></tr></table></figure>
+<h3 id="script-setup-语法糖推荐"><code>&lt;script setup&gt;</code>
+语法糖（推荐）</h3>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><code class="hljs vue">&lt;script setup&gt;<br>import &#123; ref, computed, onMounted &#125; from &#x27;vue&#x27;;<br><br>const props = defineProps(&#123;<br>  initialCount: &#123; type: Number, default: 0 &#125;,<br>&#125;);<br>const emit = defineEmits([&#x27;update&#x27;]);<br><br>const count = ref(props.initialCount);<br>const doubled = computed(() =&gt; count.value * 2);<br><br>function increment() &#123;<br>  count.value++;<br>  emit(&#x27;update&#x27;, count.value);<br>&#125;<br><br>onMounted(() =&gt; &#123;<br>  console.log(&#x27;Component mounted&#x27;);<br>&#125;);<br><br>// Everything declared is automatically available in template<br>&lt;/script&gt;<br><br>&lt;template&gt;<br>  &lt;div&gt;<br>    &lt;p&gt;Count: &#123;&#123; count &#125;&#125;, Doubled: &#123;&#123; doubled &#125;&#125;&lt;/p&gt;<br>    &lt;button @click=&quot;increment&quot;&gt;+1&lt;/button&gt;<br>  &lt;/div&gt;<br>&lt;/template&gt;<br></code></pre></td></tr></table></figure>
+<p><code>&lt;script setup&gt;</code> 的优势：更少的样板代码、更好的
+TypeScript 类型推断、更高的编译优化空间。</p>
+<h2 id="生命周期-hooks">生命周期 Hooks</h2>
+<pre class="mermaid">graph TD
+    A[setup / 创建阶段] --&gt; B[onBeforeMount]
+    B --&gt; C[onMounted]
+    C --&gt; D{数据变化?}
+    D --&gt;|是| E[onBeforeUpdate]
+    E --&gt; F[onUpdated]
+    F --&gt; D
+    D --&gt;|卸载| G[onBeforeUnmount]
+    G --&gt; H[onUnmounted]
+
+    style A fill:#42b883,color:#fff
+    style C fill:#3498db,color:#fff
+    style H fill:#e74c3c,color:#fff</pre>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-keyword">import</span> &#123;<br>  onBeforeMount,<br>  onMounted,<br>  onBeforeUpdate,<br>  onUpdated,<br>  onBeforeUnmount,<br>  onUnmounted,<br>  onActivated,<br>  onDeactivated,<br>  onErrorCaptured,<br>&#125; <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;vue&#x27;</span>;<br><br><span class="hljs-comment">// All lifecycle hooks can be called multiple times</span><br><span class="hljs-comment">// Useful in composables</span><br><span class="hljs-title function_">onMounted</span>(<span class="hljs-function">() =&gt;</span> &#123;<br>  <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">&#x27;First mounted callback&#x27;</span>);<br>&#125;);<br><br><span class="hljs-title function_">onMounted</span>(<span class="hljs-function">() =&gt;</span> &#123;<br>  <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">&#x27;Second mounted callback — both will execute&#x27;</span>);<br>&#125;);<br></code></pre></td></tr></table></figure>
+<h2 id="provide-inject-依赖注入">provide / inject 依赖注入</h2>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-comment">// Parent component</span><br><span class="hljs-keyword">import</span> &#123; provide, ref &#125; <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;vue&#x27;</span>;<br><br><span class="hljs-keyword">const</span> theme = <span class="hljs-title function_">ref</span>(<span class="hljs-string">&#x27;dark&#x27;</span>);<br><span class="hljs-keyword">const</span> <span class="hljs-title function_">toggleTheme</span> = (<span class="hljs-params"></span>) =&gt; &#123;<br>  theme.<span class="hljs-property">value</span> = theme.<span class="hljs-property">value</span> === <span class="hljs-string">&#x27;dark&#x27;</span> ? <span class="hljs-string">&#x27;light&#x27;</span> : <span class="hljs-string">&#x27;dark&#x27;</span>;<br>&#125;;<br><br><span class="hljs-comment">// Use Symbol keys to avoid naming conflicts</span><br><span class="hljs-keyword">const</span> <span class="hljs-variable constant_">THEME_KEY</span> = <span class="hljs-title class_">Symbol</span>(<span class="hljs-string">&#x27;theme&#x27;</span>);<br><span class="hljs-title function_">provide</span>(<span class="hljs-variable constant_">THEME_KEY</span>, &#123; theme, toggleTheme &#125;);<br><br><span class="hljs-comment">// Deep child component</span><br><span class="hljs-keyword">import</span> &#123; inject &#125; <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;vue&#x27;</span>;<br><br><span class="hljs-keyword">const</span> &#123; theme, toggleTheme &#125; = <span class="hljs-title function_">inject</span>(<span class="hljs-variable constant_">THEME_KEY</span>, &#123;<br>  <span class="hljs-attr">theme</span>: <span class="hljs-title function_">ref</span>(<span class="hljs-string">&#x27;light&#x27;</span>), <span class="hljs-comment">// Default value</span><br>  <span class="hljs-attr">toggleTheme</span>: <span class="hljs-function">() =&gt;</span> &#123;&#125;,<br>&#125;);<br></code></pre></td></tr></table></figure>
+<p><strong>TypeScript 类型安全的 provide/inject：</strong></p>
+<figure class="highlight typescript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><code class="hljs typescript"><span class="hljs-keyword">import</span> <span class="hljs-keyword">type</span> &#123; <span class="hljs-title class_">InjectionKey</span>, <span class="hljs-title class_">Ref</span> &#125; <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;vue&#x27;</span>;<br><br><span class="hljs-keyword">interface</span> <span class="hljs-title class_">ThemeContext</span> &#123;<br>  <span class="hljs-attr">theme</span>: <span class="hljs-title class_">Ref</span>&lt;<span class="hljs-string">&#x27;light&#x27;</span> | <span class="hljs-string">&#x27;dark&#x27;</span>&gt;;<br>  <span class="hljs-attr">toggleTheme</span>: <span class="hljs-function">() =&gt;</span> <span class="hljs-built_in">void</span>;<br>&#125;<br><br><span class="hljs-keyword">export</span> <span class="hljs-keyword">const</span> <span class="hljs-attr">THEME_KEY</span>: <span class="hljs-title class_">InjectionKey</span>&lt;<span class="hljs-title class_">ThemeContext</span>&gt; = <span class="hljs-title class_">Symbol</span>(<span class="hljs-string">&#x27;theme&#x27;</span>);<br><br><span class="hljs-comment">// provide and inject now have full type inference</span><br><span class="hljs-title function_">provide</span>(<span class="hljs-variable constant_">THEME_KEY</span>, &#123; theme, toggleTheme &#125;);<br><span class="hljs-keyword">const</span> themeCtx = <span class="hljs-title function_">inject</span>(<span class="hljs-variable constant_">THEME_KEY</span>)!; <span class="hljs-comment">// ThemeContext</span><br></code></pre></td></tr></table></figure>
+<h2 id="composables-设计模式">Composables 设计模式</h2>
+<p>Composables 是 Composition API 最核心的复用机制——以 <code>use</code>
+开头的函数，封装并复用有状态逻辑。</p>
+<h3 id="模式一usemouse-全局事件监听">模式一：useMouse —
+全局事件监听</h3>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-comment">// composables/useMouse.js</span><br><span class="hljs-keyword">import</span> &#123; ref, onMounted, onUnmounted &#125; <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;vue&#x27;</span>;<br><br><span class="hljs-keyword">export</span> <span class="hljs-keyword">function</span> <span class="hljs-title function_">useMouse</span>(<span class="hljs-params"></span>) &#123;<br>  <span class="hljs-keyword">const</span> x = <span class="hljs-title function_">ref</span>(<span class="hljs-number">0</span>);<br>  <span class="hljs-keyword">const</span> y = <span class="hljs-title function_">ref</span>(<span class="hljs-number">0</span>);<br><br>  <span class="hljs-keyword">function</span> <span class="hljs-title function_">update</span>(<span class="hljs-params">event</span>) &#123;<br>    x.<span class="hljs-property">value</span> = event.<span class="hljs-property">pageX</span>;<br>    y.<span class="hljs-property">value</span> = event.<span class="hljs-property">pageY</span>;<br>  &#125;<br><br>  <span class="hljs-title function_">onMounted</span>(<span class="hljs-function">() =&gt;</span> <span class="hljs-variable language_">window</span>.<span class="hljs-title function_">addEventListener</span>(<span class="hljs-string">&#x27;mousemove&#x27;</span>, update));<br>  <span class="hljs-title function_">onUnmounted</span>(<span class="hljs-function">() =&gt;</span> <span class="hljs-variable language_">window</span>.<span class="hljs-title function_">removeEventListener</span>(<span class="hljs-string">&#x27;mousemove&#x27;</span>, update));<br><br>  <span class="hljs-keyword">return</span> &#123; x, y &#125;;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="模式二useasync-异步操作封装">模式二：useAsync —
+异步操作封装</h3>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-comment">// composables/useAsync.js</span><br><span class="hljs-keyword">import</span> &#123; ref, shallowRef &#125; <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;vue&#x27;</span>;<br><br><span class="hljs-keyword">export</span> <span class="hljs-keyword">function</span> <span class="hljs-title function_">useAsync</span>(<span class="hljs-params">asyncFn</span>) &#123;<br>  <span class="hljs-keyword">const</span> data = <span class="hljs-title function_">shallowRef</span>(<span class="hljs-literal">null</span>);<br>  <span class="hljs-keyword">const</span> error = <span class="hljs-title function_">ref</span>(<span class="hljs-literal">null</span>);<br>  <span class="hljs-keyword">const</span> loading = <span class="hljs-title function_">ref</span>(<span class="hljs-literal">false</span>);<br><br>  <span class="hljs-keyword">async</span> <span class="hljs-keyword">function</span> <span class="hljs-title function_">execute</span>(<span class="hljs-params">...args</span>) &#123;<br>    loading.<span class="hljs-property">value</span> = <span class="hljs-literal">true</span>;<br>    error.<span class="hljs-property">value</span> = <span class="hljs-literal">null</span>;<br>    <span class="hljs-keyword">try</span> &#123;<br>      data.<span class="hljs-property">value</span> = <span class="hljs-keyword">await</span> <span class="hljs-title function_">asyncFn</span>(...args);<br>    &#125; <span class="hljs-keyword">catch</span> (err) &#123;<br>      error.<span class="hljs-property">value</span> = err;<br>    &#125; <span class="hljs-keyword">finally</span> &#123;<br>      loading.<span class="hljs-property">value</span> = <span class="hljs-literal">false</span>;<br>    &#125;<br>  &#125;<br><br>  <span class="hljs-keyword">return</span> &#123; data, error, loading, execute &#125;;<br>&#125;<br><br><span class="hljs-comment">// Usage</span><br><span class="hljs-keyword">const</span> &#123; <span class="hljs-attr">data</span>: users, loading, <span class="hljs-attr">execute</span>: fetchUsers &#125; = <span class="hljs-title function_">useAsync</span>(<br>  <span class="hljs-function">() =&gt;</span> <span class="hljs-title function_">fetch</span>(<span class="hljs-string">&#x27;/api/users&#x27;</span>).<span class="hljs-title function_">then</span>(<span class="hljs-function"><span class="hljs-params">r</span> =&gt;</span> r.<span class="hljs-title function_">json</span>())<br>);<br><br><span class="hljs-title function_">onMounted</span>(<span class="hljs-function">() =&gt;</span> <span class="hljs-title function_">fetchUsers</span>());<br></code></pre></td></tr></table></figure>
+<h3 id="模式三useformvalidation-表单验证">模式三：useFormValidation —
+表单验证</h3>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-comment">// composables/useFormValidation.js</span><br><span class="hljs-keyword">import</span> &#123; reactive, computed &#125; <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;vue&#x27;</span>;<br><br><span class="hljs-keyword">export</span> <span class="hljs-keyword">function</span> <span class="hljs-title function_">useFormValidation</span>(<span class="hljs-params">rules</span>) &#123;<br>  <span class="hljs-keyword">const</span> errors = <span class="hljs-title function_">reactive</span>(&#123;&#125;);<br>  <span class="hljs-keyword">const</span> fields = <span class="hljs-title function_">reactive</span>(&#123;&#125;);<br><br>  <span class="hljs-keyword">function</span> <span class="hljs-title function_">setField</span>(<span class="hljs-params">name, value</span>) &#123;<br>    fields[name] = value;<br>    <span class="hljs-title function_">validateField</span>(name);<br>  &#125;<br><br>  <span class="hljs-keyword">function</span> <span class="hljs-title function_">validateField</span>(<span class="hljs-params">name</span>) &#123;<br>    <span class="hljs-keyword">const</span> fieldRules = rules[name];<br>    <span class="hljs-keyword">if</span> (!fieldRules) <span class="hljs-keyword">return</span>;<br><br>    <span class="hljs-keyword">const</span> fieldErrors = [];<br>    <span class="hljs-keyword">for</span> (<span class="hljs-keyword">const</span> rule <span class="hljs-keyword">of</span> fieldRules) &#123;<br>      <span class="hljs-keyword">const</span> result = rule.<span class="hljs-title function_">validator</span>(fields[name], fields);<br>      <span class="hljs-keyword">if</span> (!result) &#123;<br>        fieldErrors.<span class="hljs-title function_">push</span>(rule.<span class="hljs-property">message</span>);<br>      &#125;<br>    &#125;<br>    errors[name] = fieldErrors;<br>  &#125;<br><br>  <span class="hljs-keyword">function</span> <span class="hljs-title function_">validateAll</span>(<span class="hljs-params"></span>) &#123;<br>    <span class="hljs-title class_">Object</span>.<span class="hljs-title function_">keys</span>(rules).<span class="hljs-title function_">forEach</span>(validateField);<br>    <span class="hljs-keyword">return</span> isValid.<span class="hljs-property">value</span>;<br>  &#125;<br><br>  <span class="hljs-keyword">const</span> isValid = <span class="hljs-title function_">computed</span>(<span class="hljs-function">() =&gt;</span><br>    <span class="hljs-title class_">Object</span>.<span class="hljs-title function_">values</span>(errors).<span class="hljs-title function_">every</span>(<span class="hljs-function"><span class="hljs-params">errs</span> =&gt;</span> errs.<span class="hljs-property">length</span> === <span class="hljs-number">0</span>)<br>  );<br><br>  <span class="hljs-keyword">return</span> &#123; fields, errors, setField, validateAll, isValid &#125;;<br>&#125;<br><br><span class="hljs-comment">// Usage</span><br><span class="hljs-keyword">const</span> &#123; fields, errors, setField, validateAll, isValid &#125; = <span class="hljs-title function_">useFormValidation</span>(&#123;<br>  <span class="hljs-attr">email</span>: [<br>    &#123; <span class="hljs-attr">validator</span>: <span class="hljs-function"><span class="hljs-params">v</span> =&gt;</span> !!v, <span class="hljs-attr">message</span>: <span class="hljs-string">&#x27;邮箱不能为空&#x27;</span> &#125;,<br>    &#123; <span class="hljs-attr">validator</span>: <span class="hljs-function"><span class="hljs-params">v</span> =&gt;</span> <span class="hljs-regexp">/.+@.+\..+/</span>.<span class="hljs-title function_">test</span>(v), <span class="hljs-attr">message</span>: <span class="hljs-string">&#x27;邮箱格式不正确&#x27;</span> &#125;,<br>  ],<br>  <span class="hljs-attr">password</span>: [<br>    &#123; <span class="hljs-attr">validator</span>: <span class="hljs-function"><span class="hljs-params">v</span> =&gt;</span> !!v, <span class="hljs-attr">message</span>: <span class="hljs-string">&#x27;密码不能为空&#x27;</span> &#125;,<br>    &#123; <span class="hljs-attr">validator</span>: <span class="hljs-function"><span class="hljs-params">v</span> =&gt;</span> v?.<span class="hljs-property">length</span> &gt;= <span class="hljs-number">8</span>, <span class="hljs-attr">message</span>: <span class="hljs-string">&#x27;密码至少8位&#x27;</span> &#125;,<br>  ],<br>&#125;);<br></code></pre></td></tr></table></figure>
+<h2 id="composition-api-vs-options-api">Composition API vs Options
+API</h2>
+<pre class="mermaid">graph LR
+    subgraph "Options API: 按选项分组"
+        A1[data] --&gt; A2[methods]
+        A2 --&gt; A3[computed]
+        A3 --&gt; A4[watch]
+        A4 --&gt; A5[lifecycle hooks]
+    end
+
+    subgraph "Composition API: 按功能分组"
+        B1[Feature A: state + logic + lifecycle]
+        B2[Feature B: state + logic + lifecycle]
+        B3[Feature C: state + logic + lifecycle]
+    end
+
+    style A1 fill:#e74c3c,color:#fff
+    style A2 fill:#3498db,color:#fff
+    style A3 fill:#2ecc71,color:#fff
+    style B1 fill:#9b59b6,color:#fff
+    style B2 fill:#f39c12,color:#000
+    style B3 fill:#1abc9c,color:#fff</pre>
+<table>
+<thead>
+<tr class="header">
+<th>维度</th>
+<th>Options API</th>
+<th>Composition API</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>代码组织</td>
+<td>按选项类型分组</td>
+<td>按功能逻辑分组</td>
+</tr>
+<tr class="even">
+<td>逻辑复用</td>
+<td>Mixins（命名冲突风险）</td>
+<td>Composables（清晰的输入输出）</td>
+</tr>
+<tr class="odd">
+<td>TypeScript</td>
+<td>需要额外类型体操</td>
+<td>原生友好，类型自动推断</td>
+</tr>
+<tr class="even">
+<td>学习曲线</td>
+<td>低（对象结构直观）</td>
+<td>中（需理解响应式原语）</td>
+</tr>
+<tr class="odd">
+<td>适用场景</td>
+<td>简单组件</td>
+<td>复杂组件、逻辑复用</td>
+</tr>
+</tbody>
+</table>
+<h2 id="实战组合多个-composables">实战：组合多个 Composables</h2>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br></pre></td><td class="code"><pre><code class="hljs vue">&lt;script setup&gt;<br>import &#123; useFetch &#125; from &#x27;@/composables/useFetch&#x27;;<br>import &#123; useDebounce &#125; from &#x27;@/composables/useDebounce&#x27;;<br>import &#123; usePagination &#125; from &#x27;@/composables/usePagination&#x27;;<br>import &#123; ref, computed, watch &#125; from &#x27;vue&#x27;;<br><br>const search = ref(&#x27;&#x27;);<br>const debouncedSearch = useDebounce(search, 300);<br><br>const &#123; page, pageSize, offset, nextPage, prevPage &#125; = usePagination();<br><br>const url = computed(<br>  () =&gt; `/api/products?q=$&#123;debouncedSearch.value&#125;&amp;offset=$&#123;offset.value&#125;&amp;limit=$&#123;pageSize.value&#125;`<br>);<br><br>const &#123; data, loading, error &#125; = useFetch(url);<br><br>// Reset pagination when search changes<br>watch(debouncedSearch, () =&gt; &#123;<br>  page.value = 1;<br>&#125;);<br>&lt;/script&gt;<br><br>&lt;template&gt;<br>  &lt;div&gt;<br>    &lt;input v-model=&quot;search&quot; placeholder=&quot;搜索产品...&quot; /&gt;<br>    &lt;div v-if=&quot;loading&quot;&gt;加载中...&lt;/div&gt;<br>    &lt;div v-else-if=&quot;error&quot;&gt;错误: &#123;&#123; error.message &#125;&#125;&lt;/div&gt;<br>    &lt;div v-else&gt;<br>      &lt;ProductList :products=&quot;data?.items&quot; /&gt;<br>      &lt;Pagination<br>        :page=&quot;page&quot;<br>        :total=&quot;data?.total&quot;<br>        @next=&quot;nextPage&quot;<br>        @prev=&quot;prevPage&quot;<br>      /&gt;<br>    &lt;/div&gt;<br>  &lt;/div&gt;<br>&lt;/template&gt;<br></code></pre></td></tr></table></figure>
+<h2 id="总结">总结</h2>
+<p>Vue3 Composition API 通过响应式原语（<code>ref</code> /
+<code>reactive</code> / <code>computed</code>）和生命周期
+Hooks，提供了一种灵活的代码组织方式。Composables 模式解决了 Mixins
+的命名冲突和来源不明问题，使逻辑复用变得清晰可控。推荐在新项目中优先使用
+<code>&lt;script setup&gt;</code> 语法配合 Composition
+API，而简单组件仍可使用 Options API。两种 API 在 Vue3
+中完全兼容，可以按需选择。</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2025-05-07</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">2.5k 字 · 6 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/netty-source-analysis/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Netty核心架构与源码分析</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/tls-handshake/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">TLS 1.3握手过程与性能优化</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%93%8D%E5%BA%94%E5%BC%8F%E7%B3%BB%E7%BB%9F%E6%A0%B8%E5%BF%83%E5%8E%9F%E7%90%86"><span class="toc-text">响应式系统核心原理</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#proxy-based-reactivity"><span class="toc-text">Proxy-Based Reactivity</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BE%9D%E8%B5%96%E6%94%B6%E9%9B%86%E4%B8%8E%E8%A7%A6%E5%8F%91%E7%9A%84%E7%AE%80%E5%8C%96%E6%A8%A1%E5%9E%8B"><span class="toc-text">依赖收集与触发的简化模型</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#ref-%E4%B8%8E-reactive-%E7%9A%84%E9%80%89%E6%8B%A9"><span class="toc-text">ref 与 reactive 的选择</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#ref%E5%8C%85%E8%A3%85%E5%8E%9F%E5%A7%8B%E5%80%BC"><span class="toc-text">ref：包装原始值</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#reactive%E4%BB%A3%E7%90%86%E5%AF%B9%E8%B1%A1"><span class="toc-text">reactive：代理对象</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%80%89%E6%8B%A9%E6%8C%87%E5%8D%97"><span class="toc-text">选择指南</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#setup-%E5%87%BD%E6%95%B0%E4%B8%8E-script-setup"><span class="toc-text">setup 函数与
+&lt;script setup&gt;</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BC%A0%E7%BB%9F-setup-%E5%87%BD%E6%95%B0"><span class="toc-text">传统 setup 函数</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#script-setup-%E8%AF%AD%E6%B3%95%E7%B3%96%E6%8E%A8%E8%8D%90"><span class="toc-text">&lt;script setup&gt;
+语法糖（推荐）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%94%9F%E5%91%BD%E5%91%A8%E6%9C%9F-hooks"><span class="toc-text">生命周期 Hooks</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#provide-inject-%E4%BE%9D%E8%B5%96%E6%B3%A8%E5%85%A5"><span class="toc-text">provide &#x2F; inject 依赖注入</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#composables-%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F"><span class="toc-text">Composables 设计模式</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A8%A1%E5%BC%8F%E4%B8%80usemouse-%E5%85%A8%E5%B1%80%E4%BA%8B%E4%BB%B6%E7%9B%91%E5%90%AC"><span class="toc-text">模式一：useMouse —
+全局事件监听</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A8%A1%E5%BC%8F%E4%BA%8Cuseasync-%E5%BC%82%E6%AD%A5%E6%93%8D%E4%BD%9C%E5%B0%81%E8%A3%85"><span class="toc-text">模式二：useAsync —
+异步操作封装</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A8%A1%E5%BC%8F%E4%B8%89useformvalidation-%E8%A1%A8%E5%8D%95%E9%AA%8C%E8%AF%81"><span class="toc-text">模式三：useFormValidation —
+表单验证</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#composition-api-vs-options-api"><span class="toc-text">Composition API vs Options
+API</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E6%88%98%E7%BB%84%E5%90%88%E5%A4%9A%E4%B8%AA-composables"><span class="toc-text">实战：组合多个 Composables</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

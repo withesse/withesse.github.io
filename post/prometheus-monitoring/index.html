@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Prometheus监控体系：从部署到告警 · zt&#39;s Blog</title>
+  <meta name="description" content="全面讲解Prometheus监控体系，包括架构设计、指标类型、PromQL查询、服务发现、告警管理和高可用方案。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/prometheus-monitoring/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Prometheus监控体系：从部署到告警">
+  <meta property="og:description" content="全面讲解Prometheus监控体系，包括架构设计、指标类型、PromQL查询、服务发现、告警管理和高可用方案。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/prometheus-monitoring/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2024-01-21T16:00:00.000Z">
+  <meta property="article:modified_time" content="2024-01-21T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Prometheus监控体系：从部署到告警">
+  <meta name="twitter:description" content="全面讲解Prometheus监控体系，包括架构设计、指标类型、PromQL查询、服务发现、告警管理和高可用方案。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Prometheus监控体系：从部署到告警","description":"全面讲解Prometheus监控体系，包括架构设计、指标类型、PromQL查询、服务发现、告警管理和高可用方案。","datePublished":"2024-01-21T16:00:00.000Z","dateModified":"2024-01-21T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/prometheus-monitoring/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"DevOps","item":"https://withesse.co/categories/DevOps/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:45">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/DevOps/">DevOps</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/prometheus/"><span class="hash">#</span>prometheus</a><a class="tag" href="/tags/monitoring/"><span class="hash">#</span>monitoring</a><a class="tag" href="/tags/alerting/"><span class="hash">#</span>alerting</a>
+        
+      </div>
+
+      <h1>Prometheus监控体系：从部署到告警</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2024.01.22</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 8 min</span>
+        </span>
+        <span class="wc"><span class="num">3.1k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#prometheus%E6%9E%B6%E6%9E%84"><span class="toc-text">Prometheus架构</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E7%89%B9%E6%80%A7"><span class="toc-text">核心特性</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%8C%87%E6%A0%87%E7%B1%BB%E5%9E%8B"><span class="toc-text">指标类型</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#counter"><span class="toc-text">Counter</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#gauge"><span class="toc-text">Gauge</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#histogram"><span class="toc-text">Histogram</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#promql%E6%9F%A5%E8%AF%A2"><span class="toc-text">PromQL查询</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9F%BA%E7%A1%80%E6%9F%A5%E8%AF%A2"><span class="toc-text">基础查询</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%81%9A%E5%90%88%E5%87%BD%E6%95%B0"><span class="toc-text">聚合函数</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%B8%B8%E7%94%A8%E8%BF%90%E7%AE%97"><span class="toc-text">常用运算</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#promql%E8%BF%90%E7%AE%97%E4%BC%98%E5%85%88%E7%BA%A7%E4%B8%8E%E7%B1%BB%E5%9E%8B"><span class="toc-text">PromQL运算优先级与类型</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9C%8D%E5%8A%A1%E5%8F%91%E7%8E%B0"><span class="toc-text">服务发现</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#kubernetes%E6%9C%8D%E5%8A%A1%E5%8F%91%E7%8E%B0"><span class="toc-text">Kubernetes服务发现</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#alertmanager%E5%91%8A%E8%AD%A6"><span class="toc-text">Alertmanager告警</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%91%8A%E8%AD%A6%E8%A7%84%E5%88%99"><span class="toc-text">告警规则</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#alertmanager%E9%85%8D%E7%BD%AE"><span class="toc-text">Alertmanager配置</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#recording-rules"><span class="toc-text">Recording Rules</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%AB%98%E5%8F%AF%E7%94%A8%E6%96%B9%E6%A1%88"><span class="toc-text">高可用方案</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#federation"><span class="toc-text">Federation</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#thanos"><span class="toc-text">Thanos</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%B8%A9%E5%9D%91%E8%AE%B0%E5%BD%95"><span class="toc-text">踩坑记录</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E6%B5%8B%E7%BB%93%E6%9E%9C"><span class="toc-text">实测结果</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%88%91%E7%9A%84%E7%9C%8B%E6%B3%95"><span class="toc-text">我的看法</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="前言">前言</h2>
+<p>Prometheus是云原生时代最流行的监控系统，是CNCF的第二个毕业项目（仅次于Kubernetes）。本文将全面讲解Prometheus的架构、指标模型、PromQL查询语言、告警机制和高可用方案。</p>
+<h2 id="prometheus架构">Prometheus架构</h2>
+<pre class="mermaid">graph TB
+    subgraph Targets["监控目标"]
+        App["应用程序&lt;br&gt;/metrics"]
+        Node["Node Exporter"]
+        MySQL["MySQL Exporter"]
+        K8s["kube-state-metrics"]
+    end
+
+    subgraph Prometheus["Prometheus Server"]
+        Retrieval["数据采集&lt;br&gt;(Pull)"]
+        TSDB["时序数据库&lt;br&gt;(TSDB)"]
+        HTTP["HTTP Server&lt;br&gt;(PromQL API)"]
+        Rules["规则引擎"]
+    end
+
+    subgraph AlertStack["告警"]
+        AM["Alertmanager"]
+        Slack["Slack"]
+        PD["PagerDuty"]
+        Email["Email"]
+    end
+
+    subgraph Discovery["服务发现"]
+        K8sSD["Kubernetes SD"]
+        ConsulSD["Consul SD"]
+        FileSD["File SD"]
+    end
+
+    Discovery --&gt; Retrieval
+    Retrieval --&gt; |"scrape"| Targets
+    Retrieval --&gt; TSDB
+    TSDB --&gt; HTTP
+    Rules --&gt; |"evaluate"| TSDB
+    Rules --&gt; |"alert"| AM
+    AM --&gt; Slack
+    AM --&gt; PD
+    AM --&gt; Email
+
+    Grafana["Grafana"] --&gt; HTTP
+    PushGW["Pushgateway"] --&gt; Retrieval</pre>
+<h3 id="核心特性">核心特性</h3>
+<ul>
+<li><strong>多维数据模型</strong>：时间序列由指标名和标签（label）唯一标识</li>
+<li><strong>Pull模型</strong>：主动从目标拉取指标</li>
+<li><strong>PromQL</strong>：强大灵活的查询语言</li>
+<li><strong>自治性</strong>：不依赖外部存储，单机即可运行</li>
+<li><strong>服务发现</strong>：自动发现监控目标</li>
+</ul>
+<h2 id="指标类型">指标类型</h2>
+<p>Prometheus定义了四种核心指标类型：</p>
+<pre class="mermaid">graph TB
+    subgraph MetricTypes["四种指标类型"]
+        Counter["Counter (计数器)&lt;br&gt;只增不减&lt;br&gt;如: http_requests_total"]
+        Gauge["Gauge (仪表盘)&lt;br&gt;可增可减&lt;br&gt;如: temperature, memory_usage"]
+        Histogram["Histogram (直方图)&lt;br&gt;分桶统计分布&lt;br&gt;如: request_duration_seconds"]
+        Summary["Summary (摘要)&lt;br&gt;客户端计算分位数&lt;br&gt;如: request_duration_quantile"]
+    end</pre>
+<h3 id="counter">Counter</h3>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-comment">// Go应用程序中定义Counter</span><br><span class="hljs-keyword">import</span> <span class="hljs-string">&quot;github.com/prometheus/client_golang/prometheus&quot;</span><br><br><span class="hljs-keyword">var</span> httpRequestsTotal = prometheus.NewCounterVec(<br>    prometheus.CounterOpts&#123;<br>        Name: <span class="hljs-string">&quot;http_requests_total&quot;</span>,<br>        Help: <span class="hljs-string">&quot;Total number of HTTP requests&quot;</span>,<br>    &#125;,<br>    []<span class="hljs-type">string</span>&#123;<span class="hljs-string">&quot;method&quot;</span>, <span class="hljs-string">&quot;path&quot;</span>, <span class="hljs-string">&quot;status&quot;</span>&#125;,<br>)<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">init</span><span class="hljs-params">()</span></span> &#123;<br>    prometheus.MustRegister(httpRequestsTotal)<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">handleRequest</span><span class="hljs-params">(w http.ResponseWriter, r *http.Request)</span></span> &#123;<br>    <span class="hljs-comment">// 业务逻辑...</span><br>    httpRequestsTotal.WithLabelValues(r.Method, r.URL.Path, <span class="hljs-string">&quot;200&quot;</span>).Inc()<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="gauge">Gauge</h3>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-keyword">var</span> memoryUsageBytes = prometheus.NewGauge(<br>    prometheus.GaugeOpts&#123;<br>        Name: <span class="hljs-string">&quot;app_memory_usage_bytes&quot;</span>,<br>        Help: <span class="hljs-string">&quot;Current memory usage in bytes&quot;</span>,<br>    &#125;,<br>)<br><br><span class="hljs-keyword">var</span> activeConnections = prometheus.NewGaugeVec(<br>    prometheus.GaugeOpts&#123;<br>        Name: <span class="hljs-string">&quot;app_active_connections&quot;</span>,<br>        Help: <span class="hljs-string">&quot;Number of active connections&quot;</span>,<br>    &#125;,<br>    []<span class="hljs-type">string</span>&#123;<span class="hljs-string">&quot;pool&quot;</span>&#125;,<br>)<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">updateMetrics</span><span class="hljs-params">()</span></span> &#123;<br>    <span class="hljs-keyword">var</span> m runtime.MemStats<br>    runtime.ReadMemStats(&amp;m)<br>    memoryUsageBytes.Set(<span class="hljs-type">float64</span>(m.Alloc))<br>    activeConnections.WithLabelValues(<span class="hljs-string">&quot;db&quot;</span>).Set(<span class="hljs-number">42</span>)<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="histogram">Histogram</h3>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-keyword">var</span> requestDuration = prometheus.NewHistogramVec(<br>    prometheus.HistogramOpts&#123;<br>        Name:    <span class="hljs-string">&quot;http_request_duration_seconds&quot;</span>,<br>        Help:    <span class="hljs-string">&quot;HTTP request duration in seconds&quot;</span>,<br>        Buckets: []<span class="hljs-type">float64</span>&#123;<span class="hljs-number">0.005</span>, <span class="hljs-number">0.01</span>, <span class="hljs-number">0.025</span>, <span class="hljs-number">0.05</span>, <span class="hljs-number">0.1</span>, <span class="hljs-number">0.25</span>, <span class="hljs-number">0.5</span>, <span class="hljs-number">1</span>, <span class="hljs-number">2.5</span>, <span class="hljs-number">5</span>, <span class="hljs-number">10</span>&#125;,<br>    &#125;,<br>    []<span class="hljs-type">string</span>&#123;<span class="hljs-string">&quot;method&quot;</span>, <span class="hljs-string">&quot;path&quot;</span>&#125;,<br>)<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">handleRequest</span><span class="hljs-params">(w http.ResponseWriter, r *http.Request)</span></span> &#123;<br>    start := time.Now()<br>    <span class="hljs-comment">// 业务逻辑...</span><br>    duration := time.Since(start).Seconds()<br>    requestDuration.WithLabelValues(r.Method, r.URL.Path).Observe(duration)<br>&#125;<br></code></pre></td></tr></table></figure>
+<p>Histogram会自动生成三类时间序列：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><code class="hljs plaintext"># 各桶的累计计数<br>http_request_duration_seconds_bucket&#123;le=&quot;0.01&quot;&#125; 24054<br>http_request_duration_seconds_bucket&#123;le=&quot;0.025&quot;&#125; 35782<br>http_request_duration_seconds_bucket&#123;le=&quot;0.05&quot;&#125; 48923<br>http_request_duration_seconds_bucket&#123;le=&quot;0.1&quot;&#125; 52109<br>http_request_duration_seconds_bucket&#123;le=&quot;+Inf&quot;&#125; 53271<br><br># 总计数<br>http_request_duration_seconds_count 53271<br><br># 总和<br>http_request_duration_seconds_sum 2876.43<br></code></pre></td></tr></table></figure>
+<h2 id="promql查询">PromQL查询</h2>
+<h3 id="基础查询">基础查询</h3>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><code class="hljs promql"># 即时向量查询<br>http_requests_total&#123;method=&quot;GET&quot;, status=&quot;200&quot;&#125;<br><br># 范围向量查询（最近5分钟）<br>http_requests_total&#123;method=&quot;GET&quot;&#125;[5m]<br><br># 正则匹配<br>http_requests_total&#123;status=~&quot;5..&quot;&#125;<br><br># 排除匹配<br>http_requests_total&#123;path!~&quot;/health.*&quot;&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="聚合函数">聚合函数</h3>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><code class="hljs promql"># 求和 - 按状态码分组<br>sum by (status) (rate(http_requests_total[5m]))<br><br># 平均值 - 按实例分组<br>avg by (instance) (node_cpu_seconds_total&#123;mode=&quot;idle&quot;&#125;)<br><br># Top 5 内存使用<br>topk(5, container_memory_usage_bytes)<br><br># 百分位数（Histogram）<br>histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[5m]))<br>histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))<br>histogram_quantile(0.50, rate(http_request_duration_seconds_bucket[5m]))<br></code></pre></td></tr></table></figure>
+<h3 id="常用运算">常用运算</h3>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><code class="hljs promql"># QPS (每秒请求数)<br>rate(http_requests_total[5m])<br><br># 错误率<br>sum(rate(http_requests_total&#123;status=~&quot;5..&quot;&#125;[5m]))<br>/<br>sum(rate(http_requests_total[5m]))<br>* 100<br><br># CPU使用率<br>100 - (avg by (instance) (rate(node_cpu_seconds_total&#123;mode=&quot;idle&quot;&#125;[5m])) * 100)<br><br># 内存使用率<br>(1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100<br><br># 磁盘使用率<br>(1 - node_filesystem_avail_bytes&#123;mountpoint=&quot;/&quot;&#125; / node_filesystem_size_bytes&#123;mountpoint=&quot;/&quot;&#125;) * 100<br><br># 请求延迟P99<br>histogram_quantile(0.99,<br>  sum by (le) (rate(http_request_duration_seconds_bucket[5m]))<br>)<br><br># 预测磁盘空间何时用尽（线性预测）<br>predict_linear(node_filesystem_avail_bytes&#123;mountpoint=&quot;/&quot;&#125;[6h], 24*3600) &lt; 0<br></code></pre></td></tr></table></figure>
+<h3 id="promql运算优先级与类型">PromQL运算优先级与类型</h3>
+<pre class="mermaid">graph LR
+    IV["即时向量&lt;br&gt;Instant Vector"] --&gt; |"聚合函数"| IV2["即时向量"]
+    RV["范围向量&lt;br&gt;Range Vector"] --&gt; |"rate/increase"| IV3["即时向量"]
+    IV --&gt; |"[5m]"| RV
+    S["标量 Scalar"] --&gt; |"运算"| IV
+    IV --&gt; |"算术运算"| IV</pre>
+<h2 id="服务发现">服务发现</h2>
+<h3 id="kubernetes服务发现">Kubernetes服务发现</h3>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># prometheus.yml</span><br><span class="hljs-attr">scrape_configs:</span><br>  <span class="hljs-comment"># 采集kubelet指标</span><br>  <span class="hljs-bullet">-</span> <span class="hljs-attr">job_name:</span> <span class="hljs-string">&#x27;kubelet&#x27;</span><br>    <span class="hljs-attr">kubernetes_sd_configs:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">role:</span> <span class="hljs-string">node</span><br>    <span class="hljs-attr">scheme:</span> <span class="hljs-string">https</span><br>    <span class="hljs-attr">tls_config:</span><br>      <span class="hljs-attr">ca_file:</span> <span class="hljs-string">/var/run/secrets/kubernetes.io/serviceaccount/ca.crt</span><br>    <span class="hljs-attr">bearer_token_file:</span> <span class="hljs-string">/var/run/secrets/kubernetes.io/serviceaccount/token</span><br>    <span class="hljs-attr">relabel_configs:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">action:</span> <span class="hljs-string">labelmap</span><br>        <span class="hljs-attr">regex:</span> <span class="hljs-string">__meta_kubernetes_node_label_(.+)</span><br><br>  <span class="hljs-comment"># 采集Pod指标（基于annotation自动发现）</span><br>  <span class="hljs-bullet">-</span> <span class="hljs-attr">job_name:</span> <span class="hljs-string">&#x27;kubernetes-pods&#x27;</span><br>    <span class="hljs-attr">kubernetes_sd_configs:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">role:</span> <span class="hljs-string">pod</span><br>    <span class="hljs-attr">relabel_configs:</span><br>      <span class="hljs-comment"># 仅采集带有prometheus.io/scrape=true注解的Pod</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">source_labels:</span> [<span class="hljs-string">__meta_kubernetes_pod_annotation_prometheus_io_scrape</span>]<br>        <span class="hljs-attr">action:</span> <span class="hljs-string">keep</span><br>        <span class="hljs-attr">regex:</span> <span class="hljs-literal">true</span><br>      <span class="hljs-comment"># 自定义采集路径</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">source_labels:</span> [<span class="hljs-string">__meta_kubernetes_pod_annotation_prometheus_io_path</span>]<br>        <span class="hljs-attr">action:</span> <span class="hljs-string">replace</span><br>        <span class="hljs-attr">target_label:</span> <span class="hljs-string">__metrics_path__</span><br>        <span class="hljs-attr">regex:</span> <span class="hljs-string">(.+)</span><br>      <span class="hljs-comment"># 自定义采集端口</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">source_labels:</span> [<span class="hljs-string">__address__</span>, <span class="hljs-string">__meta_kubernetes_pod_annotation_prometheus_io_port</span>]<br>        <span class="hljs-attr">action:</span> <span class="hljs-string">replace</span><br>        <span class="hljs-attr">regex:</span> <span class="hljs-string">([^:]+)(?::\d+)?;(\d+)</span><br>        <span class="hljs-attr">replacement:</span> <span class="hljs-string">$1:$2</span><br>        <span class="hljs-attr">target_label:</span> <span class="hljs-string">__address__</span><br>      <span class="hljs-comment"># 添加命名空间标签</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">source_labels:</span> [<span class="hljs-string">__meta_kubernetes_namespace</span>]<br>        <span class="hljs-attr">action:</span> <span class="hljs-string">replace</span><br>        <span class="hljs-attr">target_label:</span> <span class="hljs-string">namespace</span><br>      <span class="hljs-comment"># 添加Pod名称标签</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">source_labels:</span> [<span class="hljs-string">__meta_kubernetes_pod_name</span>]<br>        <span class="hljs-attr">action:</span> <span class="hljs-string">replace</span><br>        <span class="hljs-attr">target_label:</span> <span class="hljs-string">pod</span><br><br>  <span class="hljs-comment"># 采集Service指标</span><br>  <span class="hljs-bullet">-</span> <span class="hljs-attr">job_name:</span> <span class="hljs-string">&#x27;kubernetes-services&#x27;</span><br>    <span class="hljs-attr">kubernetes_sd_configs:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">role:</span> <span class="hljs-string">endpoints</span><br>    <span class="hljs-attr">relabel_configs:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">source_labels:</span> [<span class="hljs-string">__meta_kubernetes_service_annotation_prometheus_io_scrape</span>]<br>        <span class="hljs-attr">action:</span> <span class="hljs-string">keep</span><br>        <span class="hljs-attr">regex:</span> <span class="hljs-literal">true</span><br></code></pre></td></tr></table></figure>
+<p>Pod注解配置示例：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">v1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">Pod</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">annotations:</span><br>    <span class="hljs-attr">prometheus.io/scrape:</span> <span class="hljs-string">&quot;true&quot;</span><br>    <span class="hljs-attr">prometheus.io/path:</span> <span class="hljs-string">&quot;/metrics&quot;</span><br>    <span class="hljs-attr">prometheus.io/port:</span> <span class="hljs-string">&quot;8080&quot;</span><br></code></pre></td></tr></table></figure>
+<h2 id="alertmanager告警">Alertmanager告警</h2>
+<h3 id="告警规则">告警规则</h3>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># alert-rules.yaml</span><br><span class="hljs-attr">groups:</span><br>  <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">application</span><br>    <span class="hljs-attr">rules:</span><br>      <span class="hljs-comment"># 高错误率告警</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">alert:</span> <span class="hljs-string">HighErrorRate</span><br>        <span class="hljs-attr">expr:</span> <span class="hljs-string">|</span><br><span class="hljs-string">          sum(rate(http_requests_total&#123;status=~&quot;5..&quot;&#125;[5m]))</span><br><span class="hljs-string">          /</span><br><span class="hljs-string">          sum(rate(http_requests_total[5m]))</span><br><span class="hljs-string">          &gt; 0.05</span><br><span class="hljs-string"></span>        <span class="hljs-attr">for:</span> <span class="hljs-string">5m</span><br>        <span class="hljs-attr">labels:</span><br>          <span class="hljs-attr">severity:</span> <span class="hljs-string">critical</span><br>          <span class="hljs-attr">team:</span> <span class="hljs-string">backend</span><br>        <span class="hljs-attr">annotations:</span><br>          <span class="hljs-attr">summary:</span> <span class="hljs-string">&quot;高错误率: <span class="hljs-template-variable">&#123;&#123; $value | humanizePercentage &#125;&#125;</span>&quot;</span><br>          <span class="hljs-attr">description:</span> <span class="hljs-string">&quot;过去5分钟HTTP 5xx错误率超过5%，当前值: <span class="hljs-template-variable">&#123;&#123; $value | humanizePercentage &#125;&#125;</span>&quot;</span><br>          <span class="hljs-attr">runbook_url:</span> <span class="hljs-string">&quot;https://wiki.example.com/runbook/high-error-rate&quot;</span><br><br>      <span class="hljs-comment"># 响应延迟告警</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">alert:</span> <span class="hljs-string">HighLatency</span><br>        <span class="hljs-attr">expr:</span> <span class="hljs-string">|</span><br><span class="hljs-string">          histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket[5m]))) &gt; 1</span><br><span class="hljs-string"></span>        <span class="hljs-attr">for:</span> <span class="hljs-string">10m</span><br>        <span class="hljs-attr">labels:</span><br>          <span class="hljs-attr">severity:</span> <span class="hljs-string">warning</span><br>        <span class="hljs-attr">annotations:</span><br>          <span class="hljs-attr">summary:</span> <span class="hljs-string">&quot;P99延迟过高: <span class="hljs-template-variable">&#123;&#123; $value &#125;&#125;</span>s&quot;</span><br><br>  <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">infrastructure</span><br>    <span class="hljs-attr">rules:</span><br>      <span class="hljs-comment"># 节点内存不足</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">alert:</span> <span class="hljs-string">NodeMemoryHigh</span><br>        <span class="hljs-attr">expr:</span> <span class="hljs-string">(1</span> <span class="hljs-bullet">-</span> <span class="hljs-string">node_memory_MemAvailable_bytes</span> <span class="hljs-string">/</span> <span class="hljs-string">node_memory_MemTotal_bytes)</span> <span class="hljs-string">&gt;</span> <span class="hljs-number">0.9</span><br>        <span class="hljs-attr">for:</span> <span class="hljs-string">5m</span><br>        <span class="hljs-attr">labels:</span><br>          <span class="hljs-attr">severity:</span> <span class="hljs-string">warning</span><br>        <span class="hljs-attr">annotations:</span><br>          <span class="hljs-attr">summary:</span> <span class="hljs-string">&quot;节点 <span class="hljs-template-variable">&#123;&#123; $labels.instance &#125;&#125;</span> 内存使用率超过90%&quot;</span><br><br>      <span class="hljs-comment"># 磁盘即将写满</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">alert:</span> <span class="hljs-string">DiskSpaceRunningOut</span><br>        <span class="hljs-attr">expr:</span> <span class="hljs-string">predict_linear(node_filesystem_avail_bytes&#123;mountpoint=&quot;/&quot;&#125;[6h],</span> <span class="hljs-number">24</span><span class="hljs-string">*3600)</span> <span class="hljs-string">&lt;</span> <span class="hljs-number">0</span><br>        <span class="hljs-attr">for:</span> <span class="hljs-string">30m</span><br>        <span class="hljs-attr">labels:</span><br>          <span class="hljs-attr">severity:</span> <span class="hljs-string">warning</span><br>        <span class="hljs-attr">annotations:</span><br>          <span class="hljs-attr">summary:</span> <span class="hljs-string">&quot;节点 <span class="hljs-template-variable">&#123;&#123; $labels.instance &#125;&#125;</span> 磁盘预计24小时内写满&quot;</span><br><br>      <span class="hljs-comment"># Pod频繁重启</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">alert:</span> <span class="hljs-string">PodCrashLooping</span><br>        <span class="hljs-attr">expr:</span> <span class="hljs-string">rate(kube_pod_container_status_restarts_total[15m])</span> <span class="hljs-string">*</span> <span class="hljs-number">60</span> <span class="hljs-string">*</span> <span class="hljs-number">15</span> <span class="hljs-string">&gt;</span> <span class="hljs-number">3</span><br>        <span class="hljs-attr">for:</span> <span class="hljs-string">5m</span><br>        <span class="hljs-attr">labels:</span><br>          <span class="hljs-attr">severity:</span> <span class="hljs-string">critical</span><br>        <span class="hljs-attr">annotations:</span><br>          <span class="hljs-attr">summary:</span> <span class="hljs-string">&quot;Pod <span class="hljs-template-variable">&#123;&#123; $labels.namespace &#125;&#125;</span>/<span class="hljs-template-variable">&#123;&#123; $labels.pod &#125;&#125;</span> 频繁重启&quot;</span><br></code></pre></td></tr></table></figure>
+<h3 id="alertmanager配置">Alertmanager配置</h3>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># alertmanager.yml</span><br><span class="hljs-attr">global:</span><br>  <span class="hljs-attr">resolve_timeout:</span> <span class="hljs-string">5m</span><br>  <span class="hljs-attr">slack_api_url:</span> <span class="hljs-string">&#x27;https://hooks.slack.com/services/xxx/yyy/zzz&#x27;</span><br><br><span class="hljs-comment"># 告警路由</span><br><span class="hljs-attr">route:</span><br>  <span class="hljs-attr">receiver:</span> <span class="hljs-string">default</span><br>  <span class="hljs-attr">group_by:</span> [<span class="hljs-string">&#x27;alertname&#x27;</span>, <span class="hljs-string">&#x27;namespace&#x27;</span>]<br>  <span class="hljs-attr">group_wait:</span> <span class="hljs-string">30s</span><br>  <span class="hljs-attr">group_interval:</span> <span class="hljs-string">5m</span><br>  <span class="hljs-attr">repeat_interval:</span> <span class="hljs-string">4h</span><br>  <span class="hljs-attr">routes:</span><br>    <span class="hljs-comment"># critical告警发送到PagerDuty + Slack</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-attr">match:</span><br>        <span class="hljs-attr">severity:</span> <span class="hljs-string">critical</span><br>      <span class="hljs-attr">receiver:</span> <span class="hljs-string">critical-alerts</span><br>      <span class="hljs-attr">group_wait:</span> <span class="hljs-string">10s</span><br>      <span class="hljs-attr">repeat_interval:</span> <span class="hljs-string">1h</span><br>    <span class="hljs-comment"># warning告警发送到Slack</span><br>    <span class="hljs-bullet">-</span> <span class="hljs-attr">match:</span><br>        <span class="hljs-attr">severity:</span> <span class="hljs-string">warning</span><br>      <span class="hljs-attr">receiver:</span> <span class="hljs-string">warning-alerts</span><br>      <span class="hljs-attr">repeat_interval:</span> <span class="hljs-string">4h</span><br><br><span class="hljs-comment"># 告警接收器</span><br><span class="hljs-attr">receivers:</span><br>  <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">default</span><br>    <span class="hljs-attr">slack_configs:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">channel:</span> <span class="hljs-string">&#x27;#alerts&#x27;</span><br>        <span class="hljs-attr">title:</span> <span class="hljs-string">&#x27;<span class="hljs-template-variable">&#123;&#123; .GroupLabels.alertname &#125;&#125;</span>&#x27;</span><br>        <span class="hljs-attr">text:</span> <span class="hljs-string">&#x27;<span class="hljs-template-variable">&#123;&#123; range .Alerts &#125;&#125;</span><span class="hljs-template-variable">&#123;&#123; .Annotations.summary &#125;&#125;</span><span class="hljs-template-variable">&#123;&#123; end &#125;&#125;</span>&#x27;</span><br><br>  <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">critical-alerts</span><br>    <span class="hljs-attr">pagerduty_configs:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">service_key:</span> <span class="hljs-string">&#x27;&lt;pagerduty-service-key&gt;&#x27;</span><br>        <span class="hljs-attr">severity:</span> <span class="hljs-string">critical</span><br>    <span class="hljs-attr">slack_configs:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">channel:</span> <span class="hljs-string">&#x27;#critical-alerts&#x27;</span><br>        <span class="hljs-attr">color:</span> <span class="hljs-string">&#x27;#ff0000&#x27;</span><br>        <span class="hljs-attr">title:</span> <span class="hljs-string">&#x27;[CRITICAL] <span class="hljs-template-variable">&#123;&#123; .GroupLabels.alertname &#125;&#125;</span>&#x27;</span><br>        <span class="hljs-attr">text:</span> <span class="hljs-string">|</span><br><span class="hljs-string">          &#123;&#123; range .Alerts &#125;&#125;</span><br><span class="hljs-string">          *Summary:* &#123;&#123; .Annotations.summary &#125;&#125;</span><br><span class="hljs-string">          *Description:* &#123;&#123; .Annotations.description &#125;&#125;</span><br><span class="hljs-string">          *Runbook:* &#123;&#123; .Annotations.runbook_url &#125;&#125;</span><br><span class="hljs-string">          &#123;&#123; end &#125;&#125;</span><br><span class="hljs-string"></span><br>  <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">warning-alerts</span><br>    <span class="hljs-attr">slack_configs:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">channel:</span> <span class="hljs-string">&#x27;#warnings&#x27;</span><br>        <span class="hljs-attr">color:</span> <span class="hljs-string">&#x27;#ff9800&#x27;</span><br>        <span class="hljs-attr">title:</span> <span class="hljs-string">&#x27;[WARNING] <span class="hljs-template-variable">&#123;&#123; .GroupLabels.alertname &#125;&#125;</span>&#x27;</span><br><br><span class="hljs-comment"># 抑制规则</span><br><span class="hljs-attr">inhibit_rules:</span><br>  <span class="hljs-comment"># critical告警触发时，抑制同名的warning告警</span><br>  <span class="hljs-bullet">-</span> <span class="hljs-attr">source_match:</span><br>      <span class="hljs-attr">severity:</span> <span class="hljs-string">critical</span><br>    <span class="hljs-attr">target_match:</span><br>      <span class="hljs-attr">severity:</span> <span class="hljs-string">warning</span><br>    <span class="hljs-attr">equal:</span> [<span class="hljs-string">&#x27;alertname&#x27;</span>, <span class="hljs-string">&#x27;namespace&#x27;</span>]<br></code></pre></td></tr></table></figure>
+<pre class="mermaid">sequenceDiagram
+    participant Prom as Prometheus
+    participant AM as Alertmanager
+    participant Route as 路由树
+    participant Recv as 接收器
+
+    Prom-&gt;&gt;AM: 发送告警
+    AM-&gt;&gt;AM: 去重 (Dedup)
+    AM-&gt;&gt;AM: 分组 (Group)
+    AM-&gt;&gt;Route: 路由匹配
+    Route-&gt;&gt;AM: 检查抑制规则
+    Route-&gt;&gt;AM: 检查静默规则
+    AM-&gt;&gt;Recv: 发送通知
+    Recv-&gt;&gt;Recv: Slack/PagerDuty/Email</pre>
+<h2 id="recording-rules">Recording Rules</h2>
+<p>Recording Rules预计算频繁使用的查询，提高查询性能：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-attr">groups:</span><br>  <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">recording_rules</span><br>    <span class="hljs-attr">interval:</span> <span class="hljs-string">30s</span><br>    <span class="hljs-attr">rules:</span><br>      <span class="hljs-comment"># 预计算QPS</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">record:</span> <span class="hljs-string">job:http_requests:rate5m</span><br>        <span class="hljs-attr">expr:</span> <span class="hljs-string">sum</span> <span class="hljs-string">by</span> <span class="hljs-string">(job)</span> <span class="hljs-string">(rate(http_requests_total[5m]))</span><br><br>      <span class="hljs-comment"># 预计算错误率</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">record:</span> <span class="hljs-string">job:http_error_rate:ratio5m</span><br>        <span class="hljs-attr">expr:</span> <span class="hljs-string">|</span><br><span class="hljs-string">          sum by (job) (rate(http_requests_total&#123;status=~&quot;5..&quot;&#125;[5m]))</span><br><span class="hljs-string">          /</span><br><span class="hljs-string">          sum by (job) (rate(http_requests_total[5m]))</span><br><span class="hljs-string"></span><br>      <span class="hljs-comment"># 预计算P99延迟</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">record:</span> <span class="hljs-string">job:http_request_duration:p99_5m</span><br>        <span class="hljs-attr">expr:</span> <span class="hljs-string">|</span><br><span class="hljs-string">          histogram_quantile(0.99,</span><br><span class="hljs-string">            sum by (job, le) (rate(http_request_duration_seconds_bucket[5m]))</span><br><span class="hljs-string">          )</span><br><span class="hljs-string"></span><br>      <span class="hljs-comment"># 预计算节点CPU使用率</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">record:</span> <span class="hljs-string">instance:node_cpu_utilisation:rate5m</span><br>        <span class="hljs-attr">expr:</span> <span class="hljs-string">|</span><br>          <span class="hljs-number">100</span> <span class="hljs-bullet">-</span> <span class="hljs-string">avg</span> <span class="hljs-string">by</span> <span class="hljs-string">(instance)</span> <span class="hljs-string">(rate(node_cpu_seconds_total&#123;mode=&quot;idle&quot;&#125;[5m]))</span> <span class="hljs-string">*</span> <span class="hljs-number">100</span><br></code></pre></td></tr></table></figure>
+<h2 id="高可用方案">高可用方案</h2>
+<h3 id="federation">Federation</h3>
+<pre class="mermaid">graph TB
+    subgraph DC1["数据中心 1"]
+        P1["Prometheus (Local)"]
+        T1["Targets"]
+        P1 --&gt; T1
+    end
+
+    subgraph DC2["数据中心 2"]
+        P2["Prometheus (Local)"]
+        T2["Targets"]
+        P2 --&gt; T2
+    end
+
+    GlobalP["Global Prometheus"] --&gt; |"federation"| P1
+    GlobalP --&gt; |"federation"| P2
+    Grafana["Grafana"] --&gt; GlobalP</pre>
+<h3 id="thanos">Thanos</h3>
+<p>Thanos为Prometheus提供全局查询视图、长期存储和高可用：</p>
+<pre class="mermaid">graph TB
+    subgraph Cluster1["Cluster 1"]
+        P1["Prometheus"]
+        S1["Thanos Sidecar"]
+        P1 --&gt; S1
+    end
+
+    subgraph Cluster2["Cluster 2"]
+        P2["Prometheus"]
+        S2["Thanos Sidecar"]
+        P2 --&gt; S2
+    end
+
+    S1 --&gt; |"上传"| ObjStore["对象存储&lt;br&gt;(S3/GCS)"]
+    S2 --&gt; |"上传"| ObjStore
+
+    Query["Thanos Query"] --&gt; S1
+    Query --&gt; S2
+    Query --&gt; Store["Thanos Store Gateway"]
+    Store --&gt; ObjStore
+
+    Compact["Thanos Compactor"] --&gt; ObjStore
+    Grafana["Grafana"] --&gt; Query</pre>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># Thanos Sidecar配置（作为Prometheus容器的sidecar）</span><br><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">apps/v1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">StatefulSet</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">prometheus</span><br><span class="hljs-attr">spec:</span><br>  <span class="hljs-attr">template:</span><br>    <span class="hljs-attr">spec:</span><br>      <span class="hljs-attr">containers:</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">prometheus</span><br>          <span class="hljs-attr">image:</span> <span class="hljs-string">prom/prometheus:v2.50.0</span><br>          <span class="hljs-attr">args:</span><br>            <span class="hljs-bullet">-</span> <span class="hljs-string">--config.file=/etc/prometheus/prometheus.yml</span><br>            <span class="hljs-bullet">-</span> <span class="hljs-string">--storage.tsdb.path=/prometheus</span><br>            <span class="hljs-bullet">-</span> <span class="hljs-string">--storage.tsdb.min-block-duration=2h</span><br>            <span class="hljs-bullet">-</span> <span class="hljs-string">--storage.tsdb.max-block-duration=2h</span><br>            <span class="hljs-bullet">-</span> <span class="hljs-string">--web.enable-lifecycle</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">thanos-sidecar</span><br>          <span class="hljs-attr">image:</span> <span class="hljs-string">thanosio/thanos:v0.34.0</span><br>          <span class="hljs-attr">args:</span><br>            <span class="hljs-bullet">-</span> <span class="hljs-string">sidecar</span><br>            <span class="hljs-bullet">-</span> <span class="hljs-string">--tsdb.path=/prometheus</span><br>            <span class="hljs-bullet">-</span> <span class="hljs-string">--prometheus.url=http://localhost:9090</span><br>            <span class="hljs-bullet">-</span> <span class="hljs-string">--objstore.config-file=/etc/thanos/objstore.yml</span><br>          <span class="hljs-attr">volumeMounts:</span><br>            <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">prometheus-data</span><br>              <span class="hljs-attr">mountPath:</span> <span class="hljs-string">/prometheus</span><br>            <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">thanos-config</span><br>              <span class="hljs-attr">mountPath:</span> <span class="hljs-string">/etc/thanos</span><br></code></pre></td></tr></table></figure>
+<h2 id="总结">总结</h2>
+<p>Prometheus监控体系的关键要点：</p>
+<ol type="1">
+<li><strong>指标设计</strong>：遵循命名规范，选择正确的指标类型，控制标签基数</li>
+<li><strong>PromQL</strong>：掌握rate/increase/histogram_quantile等核心函数</li>
+<li><strong>服务发现</strong>：利用Kubernetes SD自动发现监控目标</li>
+<li><strong>告警分级</strong>：critical/warning分级，配合抑制和静默减少告警噪音</li>
+<li><strong>Recording
+Rules</strong>：预计算高频查询，提升Dashboard性能</li>
+<li><strong>高可用</strong>：Thanos/Victoria
+Metrics实现全局视图和长期存储</li>
+<li><strong>可观测性</strong>：与Grafana、Loki、Tempo配合构建完整可观测性平台</li>
+</ol>
+<hr />
+<h2 id="踩坑记录">踩坑记录</h2>
+<p>微服务扩展到 80+ 个服务后，每天告警邮件 200
+封，值班同学把告警邮件设成了自动归档。有一次真实的服务宕机持续了 40
+分钟没人发现，是用户投诉才知道。</p>
+<p>根本原因：所有告警规则都是「CPU &gt; 80%」「内存 &gt;
+85%」这类资源阈值，既没有业务含义，误报率又高。CPU 跑到 82%
+不一定有问题，但接口错误率超过 1% 一定是出了事。</p>
+<p>重新设计告警体系：只对 SLO 指标（接口错误率 &gt; 1%、P99 &gt;
+500ms、可用性 &lt; 99.9%）触发 critical 告警，资源类告警全部降级为
+warning，只在 Dashboard 展示，不发通知。同时为每条告警写
+<code>runbook_url</code>，值班同学收到告警后知道怎么处理。</p>
+<p>改造后第一个月：每天有效告警从 200 封降到 8
+封以内，值班同学终于开始认真看告警了。</p>
+<h2 id="实测结果">实测结果</h2>
+<table>
+<thead>
+<tr class="header">
+<th>指标</th>
+<th>改造前</th>
+<th>改造后</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>每日告警数量</td>
+<td>200+ 封</td>
+<td>&lt; 10 封</td>
+</tr>
+<tr class="even">
+<td>告警误报率</td>
+<td>~85%</td>
+<td>&lt; 5%</td>
+</tr>
+<tr class="odd">
+<td>MTTD（平均检测时间）</td>
+<td>40 分钟（靠用户投诉）</td>
+<td>&lt; 3 分钟</td>
+</tr>
+<tr class="even">
+<td>核心链路 SLO 覆盖率</td>
+<td>0%</td>
+<td>100%</td>
+</tr>
+<tr class="odd">
+<td>值班响应率</td>
+<td>约 20%（大多被忽略）</td>
+<td>约 95%</td>
+</tr>
+</tbody>
+</table>
+<h2 id="我的看法">我的看法</h2>
+<p>监控的本质是「让人能做决策」，不是「收集所有数据」。很多团队的监控系统数据量巨大，但故障时完全用不上，因为找不到有用的信息——所有指标都在动，不知道看哪个。</p>
+<p>我现在的建议是：<strong>先定义
+SLO，再倒推需要哪些指标</strong>，而不是先收集所有指标再想怎么用。对用户有直接影响的才是
+critical，其余的降级处理。告警疲劳比没有告警更危险，因为它会让真正的故障淹没在噪音里。</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2024-01-22</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">3.1k 字 · 8 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/a-comparison-of-event-driven-architecture-and-request-response-architecture/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">事件驱动架构（EDA）与请求/响应架构（RR）的深度比较</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/api-gateway-design/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">API网关设计与实现：Kong/APISIX对比</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#prometheus%E6%9E%B6%E6%9E%84"><span class="toc-text">Prometheus架构</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E7%89%B9%E6%80%A7"><span class="toc-text">核心特性</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%8C%87%E6%A0%87%E7%B1%BB%E5%9E%8B"><span class="toc-text">指标类型</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#counter"><span class="toc-text">Counter</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#gauge"><span class="toc-text">Gauge</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#histogram"><span class="toc-text">Histogram</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#promql%E6%9F%A5%E8%AF%A2"><span class="toc-text">PromQL查询</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9F%BA%E7%A1%80%E6%9F%A5%E8%AF%A2"><span class="toc-text">基础查询</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%81%9A%E5%90%88%E5%87%BD%E6%95%B0"><span class="toc-text">聚合函数</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%B8%B8%E7%94%A8%E8%BF%90%E7%AE%97"><span class="toc-text">常用运算</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#promql%E8%BF%90%E7%AE%97%E4%BC%98%E5%85%88%E7%BA%A7%E4%B8%8E%E7%B1%BB%E5%9E%8B"><span class="toc-text">PromQL运算优先级与类型</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9C%8D%E5%8A%A1%E5%8F%91%E7%8E%B0"><span class="toc-text">服务发现</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#kubernetes%E6%9C%8D%E5%8A%A1%E5%8F%91%E7%8E%B0"><span class="toc-text">Kubernetes服务发现</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#alertmanager%E5%91%8A%E8%AD%A6"><span class="toc-text">Alertmanager告警</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%91%8A%E8%AD%A6%E8%A7%84%E5%88%99"><span class="toc-text">告警规则</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#alertmanager%E9%85%8D%E7%BD%AE"><span class="toc-text">Alertmanager配置</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#recording-rules"><span class="toc-text">Recording Rules</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%AB%98%E5%8F%AF%E7%94%A8%E6%96%B9%E6%A1%88"><span class="toc-text">高可用方案</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#federation"><span class="toc-text">Federation</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#thanos"><span class="toc-text">Thanos</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%B8%A9%E5%9D%91%E8%AE%B0%E5%BD%95"><span class="toc-text">踩坑记录</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E6%B5%8B%E7%BB%93%E6%9E%9C"><span class="toc-text">实测结果</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%88%91%E7%9A%84%E7%9C%8B%E6%B3%95"><span class="toc-text">我的看法</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

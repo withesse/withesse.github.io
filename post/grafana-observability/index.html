@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Grafana可观测性平台搭建指南 · zt&#39;s Blog</title>
+  <meta name="description" content="系统讲解Grafana可观测性平台搭建，涵盖数据源配置、Dashboard设计、Loki日志聚合、Tempo链路追踪与Grafana Stack。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/grafana-observability/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Grafana可观测性平台搭建指南">
+  <meta property="og:description" content="系统讲解Grafana可观测性平台搭建，涵盖数据源配置、Dashboard设计、Loki日志聚合、Tempo链路追踪与Grafana Stack。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/grafana-observability/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2024-09-03T16:00:00.000Z">
+  <meta property="article:modified_time" content="2024-09-03T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Grafana可观测性平台搭建指南">
+  <meta name="twitter:description" content="系统讲解Grafana可观测性平台搭建，涵盖数据源配置、Dashboard设计、Loki日志聚合、Tempo链路追踪与Grafana Stack。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Grafana可观测性平台搭建指南","description":"系统讲解Grafana可观测性平台搭建，涵盖数据源配置、Dashboard设计、Loki日志聚合、Tempo链路追踪与Grafana Stack。","datePublished":"2024-09-03T16:00:00.000Z","dateModified":"2024-09-03T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/grafana-observability/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"DevOps","item":"https://withesse.co/categories/DevOps/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:45">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/DevOps/">DevOps</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/observability/"><span class="hash">#</span>observability</a><a class="tag" href="/tags/grafana/"><span class="hash">#</span>grafana</a><a class="tag" href="/tags/dashboard/"><span class="hash">#</span>dashboard</a>
+        
+      </div>
+
+      <h1>Grafana可观测性平台搭建指南</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2024.09.04</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 7 min</span>
+        </span>
+        <span class="wc"><span class="num">3.0k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7%E4%B8%89%E5%A4%A7%E6%94%AF%E6%9F%B1"><span class="toc-text">可观测性三大支柱</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#grafana%E6%95%B0%E6%8D%AE%E6%BA%90%E9%85%8D%E7%BD%AE"><span class="toc-text">Grafana数据源配置</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#prometheus%E6%95%B0%E6%8D%AE%E6%BA%90"><span class="toc-text">Prometheus数据源</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E6%BA%90%E5%85%B3%E8%81%94"><span class="toc-text">数据源关联</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#dashboard%E8%AE%BE%E8%AE%A1"><span class="toc-text">Dashboard设计</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%9D%A2%E6%9D%BF%E7%B1%BB%E5%9E%8B"><span class="toc-text">面板类型</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#dashboard-json%E6%A8%A1%E5%9E%8B"><span class="toc-text">Dashboard JSON模型</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#dashboard-provisioning"><span class="toc-text">Dashboard Provisioning</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8F%98%E9%87%8Fvariables"><span class="toc-text">变量（Variables）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#loki%E6%97%A5%E5%BF%97%E8%81%9A%E5%90%88"><span class="toc-text">Loki日志聚合</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#loki%E6%9E%B6%E6%9E%84"><span class="toc-text">Loki架构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#promtail%E9%85%8D%E7%BD%AE"><span class="toc-text">Promtail配置</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#logql%E6%9F%A5%E8%AF%A2"><span class="toc-text">LogQL查询</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#tempo%E9%93%BE%E8%B7%AF%E8%BF%BD%E8%B8%AA"><span class="toc-text">Tempo链路追踪</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#tempo%E6%9E%B6%E6%9E%84"><span class="toc-text">Tempo架构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#opentelemetry%E9%85%8D%E7%BD%AE"><span class="toc-text">OpenTelemetry配置</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%BA%94%E7%94%A8%E7%A8%8B%E5%BA%8F%E9%9B%86%E6%88%90"><span class="toc-text">应用程序集成</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#grafana-stacklgtm%E9%83%A8%E7%BD%B2"><span class="toc-text">Grafana Stack（LGTM）部署</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#grafana%E5%91%8A%E8%AD%A6"><span class="toc-text">Grafana告警</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#dashboard%E8%AE%BE%E8%AE%A1%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5"><span class="toc-text">Dashboard设计最佳实践</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="前言">前言</h2>
+<p>可观测性（Observability）的三大支柱是指标（Metrics）、日志（Logs）和链路追踪（Traces）。Grafana生态提供了一站式的可观测性解决方案：Grafana用于可视化，Prometheus用于指标，Loki用于日志，Tempo用于追踪。本文将系统讲解如何搭建完整的可观测性平台。</p>
+<h2 id="可观测性三大支柱">可观测性三大支柱</h2>
+<pre class="mermaid">graph TB
+    subgraph Observability["可观测性三大支柱"]
+        Metrics["指标 (Metrics)&lt;br&gt;Prometheus&lt;br&gt;时序数据，数值型"]
+        Logs["日志 (Logs)&lt;br&gt;Loki&lt;br&gt;事件记录，文本型"]
+        Traces["追踪 (Traces)&lt;br&gt;Tempo&lt;br&gt;请求链路，分布式"]
+    end
+
+    App["应用程序"] --&gt; Metrics
+    App --&gt; Logs
+    App --&gt; Traces
+
+    Metrics --&gt; Grafana["Grafana&lt;br&gt;统一可视化"]
+    Logs --&gt; Grafana
+    Traces --&gt; Grafana
+
+    Grafana --&gt; Alert["告警"]
+    Grafana --&gt; Dashboard["Dashboard"]
+    Grafana --&gt; Explore["Explore"]</pre>
+<h2 id="grafana数据源配置">Grafana数据源配置</h2>
+<h3 id="prometheus数据源">Prometheus数据源</h3>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># Grafana数据源配置 (provisioning)</span><br><span class="hljs-comment"># /etc/grafana/provisioning/datasources/datasources.yaml</span><br><span class="hljs-attr">apiVersion:</span> <span class="hljs-number">1</span><br><span class="hljs-attr">datasources:</span><br>  <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Prometheus</span><br>    <span class="hljs-attr">type:</span> <span class="hljs-string">prometheus</span><br>    <span class="hljs-attr">access:</span> <span class="hljs-string">proxy</span><br>    <span class="hljs-attr">url:</span> <span class="hljs-string">http://prometheus:9090</span><br>    <span class="hljs-attr">isDefault:</span> <span class="hljs-literal">true</span><br>    <span class="hljs-attr">jsonData:</span><br>      <span class="hljs-attr">timeInterval:</span> <span class="hljs-string">15s</span><br>      <span class="hljs-attr">httpMethod:</span> <span class="hljs-string">POST</span><br>      <span class="hljs-attr">exemplarTraceIdDestinations:</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">traceID</span><br>          <span class="hljs-attr">datasourceUid:</span> <span class="hljs-string">tempo</span><br><br>  <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Loki</span><br>    <span class="hljs-attr">type:</span> <span class="hljs-string">loki</span><br>    <span class="hljs-attr">access:</span> <span class="hljs-string">proxy</span><br>    <span class="hljs-attr">url:</span> <span class="hljs-string">http://loki:3100</span><br>    <span class="hljs-attr">jsonData:</span><br>      <span class="hljs-attr">derivedFields:</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-attr">datasourceUid:</span> <span class="hljs-string">tempo</span><br>          <span class="hljs-attr">matcherRegex:</span> <span class="hljs-string">&quot;traceID=(\\w+)&quot;</span><br>          <span class="hljs-attr">name:</span> <span class="hljs-string">TraceID</span><br>          <span class="hljs-attr">url:</span> <span class="hljs-string">&quot;$$&#123;__value.raw&#125;&quot;</span><br><br>  <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Tempo</span><br>    <span class="hljs-attr">type:</span> <span class="hljs-string">tempo</span><br>    <span class="hljs-attr">access:</span> <span class="hljs-string">proxy</span><br>    <span class="hljs-attr">url:</span> <span class="hljs-string">http://tempo:3200</span><br>    <span class="hljs-attr">uid:</span> <span class="hljs-string">tempo</span><br>    <span class="hljs-attr">jsonData:</span><br>      <span class="hljs-attr">tracesToLogs:</span><br>        <span class="hljs-attr">datasourceUid:</span> <span class="hljs-string">loki</span><br>        <span class="hljs-attr">tags:</span> [<span class="hljs-string">&#x27;service.name&#x27;</span>, <span class="hljs-string">&#x27;namespace&#x27;</span>]<br>        <span class="hljs-attr">mappedTags:</span> [&#123; <span class="hljs-attr">key:</span> <span class="hljs-string">&#x27;service.name&#x27;</span>, <span class="hljs-attr">value:</span> <span class="hljs-string">&#x27;app&#x27;</span> &#125;]<br>        <span class="hljs-attr">filterByTraceID:</span> <span class="hljs-literal">true</span><br>      <span class="hljs-attr">tracesToMetrics:</span><br>        <span class="hljs-attr">datasourceUid:</span> <span class="hljs-string">prometheus</span><br>        <span class="hljs-attr">tags:</span> [&#123; <span class="hljs-attr">key:</span> <span class="hljs-string">&#x27;service.name&#x27;</span>, <span class="hljs-attr">value:</span> <span class="hljs-string">&#x27;service&#x27;</span> &#125;]<br>        <span class="hljs-attr">queries:</span><br>          <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Request</span> <span class="hljs-string">Rate</span><br>            <span class="hljs-attr">query:</span> <span class="hljs-string">&#x27;rate(http_requests_total&#123;$$__tags&#125;[5m])&#x27;</span><br>      <span class="hljs-attr">nodeGraph:</span><br>        <span class="hljs-attr">enabled:</span> <span class="hljs-literal">true</span><br>      <span class="hljs-attr">serviceMap:</span><br>        <span class="hljs-attr">datasourceUid:</span> <span class="hljs-string">prometheus</span><br></code></pre></td></tr></table></figure>
+<h3 id="数据源关联">数据源关联</h3>
+<pre class="mermaid">graph LR
+    subgraph Correlation["数据关联"]
+        M["Metrics&lt;br&gt;(Prometheus)"] --&gt; |"exemplar"| T["Traces&lt;br&gt;(Tempo)"]
+        T --&gt; |"tracesToLogs"| L["Logs&lt;br&gt;(Loki)"]
+        L --&gt; |"derivedFields"| T
+        T --&gt; |"tracesToMetrics"| M
+    end
+
+    style M fill:#E65100,color:#fff
+    style L fill:#1565C0,color:#fff
+    style T fill:#2E7D32,color:#fff</pre>
+<h2 id="dashboard设计">Dashboard设计</h2>
+<h3 id="面板类型">面板类型</h3>
+<p>Grafana提供多种面板类型：</p>
+<table>
+<thead>
+<tr class="header">
+<th>面板类型</th>
+<th>用途</th>
+<th>适用数据</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Time Series</td>
+<td>时序折线图</td>
+<td>QPS、延迟、资源使用率</td>
+</tr>
+<tr class="even">
+<td>Stat</td>
+<td>单值展示</td>
+<td>当前值、总数</td>
+</tr>
+<tr class="odd">
+<td>Gauge</td>
+<td>仪表盘</td>
+<td>百分比、利用率</td>
+</tr>
+<tr class="even">
+<td>Bar Chart</td>
+<td>柱状图</td>
+<td>分类对比</td>
+</tr>
+<tr class="odd">
+<td>Table</td>
+<td>表格</td>
+<td>详细数据列表</td>
+</tr>
+<tr class="even">
+<td>Heatmap</td>
+<td>热力图</td>
+<td>延迟分布</td>
+</tr>
+<tr class="odd">
+<td>Logs</td>
+<td>日志面板</td>
+<td>Loki日志</td>
+</tr>
+<tr class="even">
+<td>Node Graph</td>
+<td>拓扑图</td>
+<td>服务依赖关系</td>
+</tr>
+</tbody>
+</table>
+<h3 id="dashboard-json模型">Dashboard JSON模型</h3>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br></pre></td><td class="code"><pre><code class="hljs json"><span class="hljs-punctuation">&#123;</span><br>  <span class="hljs-attr">&quot;dashboard&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">&#123;</span><br>    <span class="hljs-attr">&quot;title&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;Application Overview&quot;</span><span class="hljs-punctuation">,</span><br>    <span class="hljs-attr">&quot;tags&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><span class="hljs-string">&quot;production&quot;</span><span class="hljs-punctuation">,</span> <span class="hljs-string">&quot;application&quot;</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span><br>    <span class="hljs-attr">&quot;timezone&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;browser&quot;</span><span class="hljs-punctuation">,</span><br>    <span class="hljs-attr">&quot;refresh&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;30s&quot;</span><span class="hljs-punctuation">,</span><br>    <span class="hljs-attr">&quot;time&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">&#123;</span><br>      <span class="hljs-attr">&quot;from&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;now-1h&quot;</span><span class="hljs-punctuation">,</span><br>      <span class="hljs-attr">&quot;to&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;now&quot;</span><br>    <span class="hljs-punctuation">&#125;</span><span class="hljs-punctuation">,</span><br>    <span class="hljs-attr">&quot;templating&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">&#123;</span><br>      <span class="hljs-attr">&quot;list&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><br>        <span class="hljs-punctuation">&#123;</span><br>          <span class="hljs-attr">&quot;name&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;namespace&quot;</span><span class="hljs-punctuation">,</span><br>          <span class="hljs-attr">&quot;type&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;query&quot;</span><span class="hljs-punctuation">,</span><br>          <span class="hljs-attr">&quot;datasource&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;Prometheus&quot;</span><span class="hljs-punctuation">,</span><br>          <span class="hljs-attr">&quot;query&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;label_values(http_requests_total, namespace)&quot;</span><span class="hljs-punctuation">,</span><br>          <span class="hljs-attr">&quot;refresh&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-number">2</span><span class="hljs-punctuation">,</span><br>          <span class="hljs-attr">&quot;multi&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-literal"><span class="hljs-keyword">false</span></span><span class="hljs-punctuation">,</span><br>          <span class="hljs-attr">&quot;includeAll&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-literal"><span class="hljs-keyword">true</span></span><br>        <span class="hljs-punctuation">&#125;</span><span class="hljs-punctuation">,</span><br>        <span class="hljs-punctuation">&#123;</span><br>          <span class="hljs-attr">&quot;name&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;service&quot;</span><span class="hljs-punctuation">,</span><br>          <span class="hljs-attr">&quot;type&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;query&quot;</span><span class="hljs-punctuation">,</span><br>          <span class="hljs-attr">&quot;datasource&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;Prometheus&quot;</span><span class="hljs-punctuation">,</span><br>          <span class="hljs-attr">&quot;query&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;label_values(http_requests_total&#123;namespace=\&quot;$namespace\&quot;&#125;, service)&quot;</span><span class="hljs-punctuation">,</span><br>          <span class="hljs-attr">&quot;refresh&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-number">2</span><span class="hljs-punctuation">,</span><br>          <span class="hljs-attr">&quot;multi&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-literal"><span class="hljs-keyword">true</span></span><br>        <span class="hljs-punctuation">&#125;</span><br>      <span class="hljs-punctuation">]</span><br>    <span class="hljs-punctuation">&#125;</span><span class="hljs-punctuation">,</span><br>    <span class="hljs-attr">&quot;panels&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><br>      <span class="hljs-punctuation">&#123;</span><br>        <span class="hljs-attr">&quot;title&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;Request Rate&quot;</span><span class="hljs-punctuation">,</span><br>        <span class="hljs-attr">&quot;type&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;timeseries&quot;</span><span class="hljs-punctuation">,</span><br>        <span class="hljs-attr">&quot;gridPos&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">&#123;</span> <span class="hljs-attr">&quot;h&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-number">8</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">&quot;w&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-number">12</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">&quot;x&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-number">0</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">&quot;y&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-number">0</span> <span class="hljs-punctuation">&#125;</span><span class="hljs-punctuation">,</span><br>        <span class="hljs-attr">&quot;targets&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><br>          <span class="hljs-punctuation">&#123;</span><br>            <span class="hljs-attr">&quot;expr&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;sum by (service) (rate(http_requests_total&#123;namespace=\&quot;$namespace\&quot;, service=~\&quot;$service\&quot;&#125;[5m]))&quot;</span><span class="hljs-punctuation">,</span><br>            <span class="hljs-attr">&quot;legendFormat&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;&#123;&#123; service &#125;&#125;&quot;</span><br>          <span class="hljs-punctuation">&#125;</span><br>        <span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span><br>        <span class="hljs-attr">&quot;fieldConfig&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">&#123;</span><br>          <span class="hljs-attr">&quot;defaults&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">&#123;</span><br>            <span class="hljs-attr">&quot;unit&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;reqps&quot;</span><span class="hljs-punctuation">,</span><br>            <span class="hljs-attr">&quot;custom&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">&#123;</span><br>              <span class="hljs-attr">&quot;drawStyle&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;line&quot;</span><span class="hljs-punctuation">,</span><br>              <span class="hljs-attr">&quot;lineInterpolation&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;smooth&quot;</span><span class="hljs-punctuation">,</span><br>              <span class="hljs-attr">&quot;fillOpacity&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-number">10</span><br>            <span class="hljs-punctuation">&#125;</span><br>          <span class="hljs-punctuation">&#125;</span><br>        <span class="hljs-punctuation">&#125;</span><br>      <span class="hljs-punctuation">&#125;</span><br>    <span class="hljs-punctuation">]</span><br>  <span class="hljs-punctuation">&#125;</span><br><span class="hljs-punctuation">&#125;</span><br></code></pre></td></tr></table></figure>
+<h3 id="dashboard-provisioning">Dashboard Provisioning</h3>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># /etc/grafana/provisioning/dashboards/dashboards.yaml</span><br><span class="hljs-attr">apiVersion:</span> <span class="hljs-number">1</span><br><span class="hljs-attr">providers:</span><br>  <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">default</span><br>    <span class="hljs-attr">orgId:</span> <span class="hljs-number">1</span><br>    <span class="hljs-attr">folder:</span> <span class="hljs-string">&quot;Production&quot;</span><br>    <span class="hljs-attr">type:</span> <span class="hljs-string">file</span><br>    <span class="hljs-attr">disableDeletion:</span> <span class="hljs-literal">false</span><br>    <span class="hljs-attr">updateIntervalSeconds:</span> <span class="hljs-number">30</span><br>    <span class="hljs-attr">allowUiUpdates:</span> <span class="hljs-literal">true</span><br>    <span class="hljs-attr">options:</span><br>      <span class="hljs-attr">path:</span> <span class="hljs-string">/var/lib/grafana/dashboards</span><br>      <span class="hljs-attr">foldersFromFilesStructure:</span> <span class="hljs-literal">true</span><br></code></pre></td></tr></table></figure>
+<h3 id="变量variables">变量（Variables）</h3>
+<p>变量使Dashboard具备交互能力和复用性：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># 变量定义示例</span><br><span class="hljs-attr">variables:</span><br>  <span class="hljs-comment"># Query变量 - 从数据源动态获取</span><br>  <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">cluster</span><br>    <span class="hljs-attr">type:</span> <span class="hljs-string">query</span><br>    <span class="hljs-attr">query:</span> <span class="hljs-string">&quot;label_values(up, cluster)&quot;</span><br><br>  <span class="hljs-comment"># Custom变量 - 预定义选项</span><br>  <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">interval</span><br>    <span class="hljs-attr">type:</span> <span class="hljs-string">custom</span><br>    <span class="hljs-attr">values:</span> <span class="hljs-string">&quot;1m,5m,15m,1h&quot;</span><br>    <span class="hljs-attr">current:</span> <span class="hljs-string">&quot;5m&quot;</span><br><br>  <span class="hljs-comment"># Interval变量 - 自动计算采样间隔</span><br>  <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">__rate_interval</span><br>    <span class="hljs-attr">type:</span> <span class="hljs-string">interval</span><br>    <span class="hljs-attr">auto:</span> <span class="hljs-literal">true</span><br>    <span class="hljs-attr">auto_min:</span> <span class="hljs-string">&quot;1m&quot;</span><br><br>  <span class="hljs-comment"># Chained变量 - 级联选择</span><br>  <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">pod</span><br>    <span class="hljs-attr">type:</span> <span class="hljs-string">query</span><br>    <span class="hljs-attr">query:</span> <span class="hljs-string">&quot;label_values(kube_pod_info&#123;namespace=&#x27;$namespace&#x27;&#125;, pod)&quot;</span><br></code></pre></td></tr></table></figure>
+<h2 id="loki日志聚合">Loki日志聚合</h2>
+<h3 id="loki架构">Loki架构</h3>
+<pre class="mermaid">graph TB
+    subgraph Sources["日志来源"]
+        Promtail["Promtail&lt;br&gt;(DaemonSet)"]
+        FluentBit["Fluent Bit"]
+        OTel["OpenTelemetry&lt;br&gt;Collector"]
+    end
+
+    subgraph Loki["Loki"]
+        Distributor["Distributor"]
+        Ingester["Ingester"]
+        Querier["Querier"]
+        QueryFrontend["Query Frontend"]
+        Compactor["Compactor"]
+    end
+
+    subgraph Storage["存储"]
+        Chunks["Chunks&lt;br&gt;(S3/GCS)"]
+        Index["Index&lt;br&gt;(BoltDB/TSDB)"]
+    end
+
+    Promtail --&gt; Distributor
+    FluentBit --&gt; Distributor
+    OTel --&gt; Distributor
+    Distributor --&gt; Ingester
+    Ingester --&gt; Chunks
+    Ingester --&gt; Index
+    Querier --&gt; Chunks
+    Querier --&gt; Index
+    QueryFrontend --&gt; Querier
+    Compactor --&gt; Index
+    Grafana["Grafana"] --&gt; QueryFrontend</pre>
+<h3 id="promtail配置">Promtail配置</h3>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># promtail-config.yaml</span><br><span class="hljs-attr">server:</span><br>  <span class="hljs-attr">http_listen_port:</span> <span class="hljs-number">9080</span><br><br><span class="hljs-attr">positions:</span><br>  <span class="hljs-attr">filename:</span> <span class="hljs-string">/tmp/positions.yaml</span><br><br><span class="hljs-attr">clients:</span><br>  <span class="hljs-bullet">-</span> <span class="hljs-attr">url:</span> <span class="hljs-string">http://loki:3100/loki/api/v1/push</span><br><br><span class="hljs-attr">scrape_configs:</span><br>  <span class="hljs-comment"># 采集Kubernetes Pod日志</span><br>  <span class="hljs-bullet">-</span> <span class="hljs-attr">job_name:</span> <span class="hljs-string">kubernetes-pods</span><br>    <span class="hljs-attr">kubernetes_sd_configs:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">role:</span> <span class="hljs-string">pod</span><br>    <span class="hljs-attr">pipeline_stages:</span><br>      <span class="hljs-comment"># 解析Docker JSON日志格式</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">docker:</span> &#123;&#125;<br>      <span class="hljs-comment"># 解析JSON结构化日志</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">json:</span><br>          <span class="hljs-attr">expressions:</span><br>            <span class="hljs-attr">level:</span> <span class="hljs-string">level</span><br>            <span class="hljs-attr">msg:</span> <span class="hljs-string">message</span><br>            <span class="hljs-attr">traceID:</span> <span class="hljs-string">traceID</span><br>            <span class="hljs-attr">timestamp:</span> <span class="hljs-string">timestamp</span><br>      <span class="hljs-comment"># 设置标签</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">labels:</span><br>          <span class="hljs-attr">level:</span><br>          <span class="hljs-attr">traceID:</span><br>      <span class="hljs-comment"># 设置时间戳</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">timestamp:</span><br>          <span class="hljs-attr">source:</span> <span class="hljs-string">timestamp</span><br>          <span class="hljs-attr">format:</span> <span class="hljs-string">RFC3339Nano</span><br>      <span class="hljs-comment"># 丢弃健康检查日志</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">match:</span><br>          <span class="hljs-attr">selector:</span> <span class="hljs-string">&#x27;&#123;app=&quot;nginx&quot;&#125;&#x27;</span><br>          <span class="hljs-attr">stages:</span><br>            <span class="hljs-bullet">-</span> <span class="hljs-attr">regex:</span><br>                <span class="hljs-attr">expression:</span> <span class="hljs-string">&#x27;.*&quot;(?P&lt;path&gt;/health[z]?)&quot;.*&#x27;</span><br>            <span class="hljs-bullet">-</span> <span class="hljs-attr">match:</span><br>                <span class="hljs-attr">selector:</span> <span class="hljs-string">&#x27;&#123;path=~&quot;/health.*&quot;&#125;&#x27;</span><br>                <span class="hljs-attr">action:</span> <span class="hljs-string">drop</span><br>    <span class="hljs-attr">relabel_configs:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">source_labels:</span> [<span class="hljs-string">__meta_kubernetes_pod_label_app</span>]<br>        <span class="hljs-attr">target_label:</span> <span class="hljs-string">app</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">source_labels:</span> [<span class="hljs-string">__meta_kubernetes_namespace</span>]<br>        <span class="hljs-attr">target_label:</span> <span class="hljs-string">namespace</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">source_labels:</span> [<span class="hljs-string">__meta_kubernetes_pod_name</span>]<br>        <span class="hljs-attr">target_label:</span> <span class="hljs-string">pod</span><br></code></pre></td></tr></table></figure>
+<h3 id="logql查询">LogQL查询</h3>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br></pre></td><td class="code"><pre><code class="hljs logql"># 基本查询 - 标签过滤<br>&#123;namespace=&quot;production&quot;, app=&quot;api-server&quot;&#125;<br><br># 关键词过滤<br>&#123;app=&quot;api-server&quot;&#125; |= &quot;error&quot;<br>&#123;app=&quot;api-server&quot;&#125; != &quot;health&quot;<br>&#123;app=&quot;api-server&quot;&#125; |~ &quot;timeout|connection refused&quot;<br><br># JSON解析<br>&#123;app=&quot;api-server&quot;&#125; | json | level=&quot;error&quot; | line_format &quot;&#123;&#123;.message&#125;&#125;&quot;<br><br># 正则解析<br>&#123;app=&quot;nginx&quot;&#125; | regexp `(?P&lt;ip&gt;\d+\.\d+\.\d+\.\d+) .* &quot;(?P&lt;method&gt;\w+) (?P&lt;path&gt;[^ ]+).*&quot; (?P&lt;status&gt;\d+)`<br>  | status &gt;= 500<br><br># 指标查询 - 日志计数<br>count_over_time(&#123;app=&quot;api-server&quot;, level=&quot;error&quot;&#125;[5m])<br><br># 指标查询 - QPS<br>rate(&#123;app=&quot;api-server&quot;&#125;[5m])<br><br># 指标查询 - 按状态码分组<br>sum by (status) (<br>  count_over_time(<br>    &#123;app=&quot;nginx&quot;&#125; | regexp `&quot;(?P&lt;method&gt;\w+) (?P&lt;path&gt;[^ ]+).*&quot; (?P&lt;status&gt;\d+)` [5m]<br>  )<br>)<br><br># 错误率<br>sum(rate(&#123;app=&quot;api-server&quot;&#125; |= &quot;error&quot; [5m]))<br>/<br>sum(rate(&#123;app=&quot;api-server&quot;&#125; [5m]))<br></code></pre></td></tr></table></figure>
+<h2 id="tempo链路追踪">Tempo链路追踪</h2>
+<h3 id="tempo架构">Tempo架构</h3>
+<pre class="mermaid">graph TB
+    subgraph App["应用程序"]
+        SDK["OpenTelemetry SDK"]
+    end
+
+    subgraph OTelCol["OpenTelemetry Collector"]
+        Receiver["Receiver&lt;br&gt;(OTLP/Jaeger/Zipkin)"]
+        Processor["Processor&lt;br&gt;(Batch/Filter)"]
+        Exporter["Exporter"]
+    end
+
+    subgraph Tempo["Grafana Tempo"]
+        Dist["Distributor"]
+        Ing["Ingester"]
+        QFE["Query Frontend"]
+        Que["Querier"]
+        Comp["Compactor"]
+    end
+
+    subgraph Store["Object Storage"]
+        S3["S3/GCS/Azure Blob"]
+    end
+
+    SDK --&gt; Receiver
+    Receiver --&gt; Processor
+    Processor --&gt; Exporter
+    Exporter --&gt; Dist
+    Dist --&gt; Ing
+    Ing --&gt; S3
+    QFE --&gt; Que
+    Que --&gt; S3
+    Comp --&gt; S3
+    Grafana["Grafana"] --&gt; QFE</pre>
+<h3 id="opentelemetry配置">OpenTelemetry配置</h3>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># otel-collector-config.yaml</span><br><span class="hljs-attr">receivers:</span><br>  <span class="hljs-attr">otlp:</span><br>    <span class="hljs-attr">protocols:</span><br>      <span class="hljs-attr">grpc:</span><br>        <span class="hljs-attr">endpoint:</span> <span class="hljs-number">0.0</span><span class="hljs-number">.0</span><span class="hljs-number">.0</span><span class="hljs-string">:4317</span><br>      <span class="hljs-attr">http:</span><br>        <span class="hljs-attr">endpoint:</span> <span class="hljs-number">0.0</span><span class="hljs-number">.0</span><span class="hljs-number">.0</span><span class="hljs-string">:4318</span><br><br><span class="hljs-attr">processors:</span><br>  <span class="hljs-attr">batch:</span><br>    <span class="hljs-attr">timeout:</span> <span class="hljs-string">5s</span><br>    <span class="hljs-attr">send_batch_size:</span> <span class="hljs-number">1000</span><br>  <span class="hljs-comment"># 自动生成服务指标</span><br>  <span class="hljs-attr">spanmetrics:</span><br>    <span class="hljs-attr">metrics_exporter:</span> <span class="hljs-string">prometheus</span><br>    <span class="hljs-attr">dimensions:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">http.method</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">http.status_code</span><br><br><span class="hljs-attr">exporters:</span><br>  <span class="hljs-attr">otlp/tempo:</span><br>    <span class="hljs-attr">endpoint:</span> <span class="hljs-string">tempo:4317</span><br>    <span class="hljs-attr">tls:</span><br>      <span class="hljs-attr">insecure:</span> <span class="hljs-literal">true</span><br>  <span class="hljs-attr">prometheus:</span><br>    <span class="hljs-attr">endpoint:</span> <span class="hljs-number">0.0</span><span class="hljs-number">.0</span><span class="hljs-number">.0</span><span class="hljs-string">:8889</span><br><br><span class="hljs-attr">service:</span><br>  <span class="hljs-attr">pipelines:</span><br>    <span class="hljs-attr">traces:</span><br>      <span class="hljs-attr">receivers:</span> [<span class="hljs-string">otlp</span>]<br>      <span class="hljs-attr">processors:</span> [<span class="hljs-string">batch</span>, <span class="hljs-string">spanmetrics</span>]<br>      <span class="hljs-attr">exporters:</span> [<span class="hljs-string">otlp/tempo</span>]<br>    <span class="hljs-attr">metrics:</span><br>      <span class="hljs-attr">receivers:</span> [<span class="hljs-string">otlp</span>]<br>      <span class="hljs-attr">processors:</span> [<span class="hljs-string">batch</span>]<br>      <span class="hljs-attr">exporters:</span> [<span class="hljs-string">prometheus</span>]<br></code></pre></td></tr></table></figure>
+<h3 id="应用程序集成">应用程序集成</h3>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-comment">// Go应用中集成OpenTelemetry</span><br><span class="hljs-keyword">package</span> main<br><br><span class="hljs-keyword">import</span> (<br>    <span class="hljs-string">&quot;context&quot;</span><br>    <span class="hljs-string">&quot;go.opentelemetry.io/otel&quot;</span><br>    <span class="hljs-string">&quot;go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc&quot;</span><br>    <span class="hljs-string">&quot;go.opentelemetry.io/otel/sdk/resource&quot;</span><br>    sdktrace <span class="hljs-string">&quot;go.opentelemetry.io/otel/sdk/trace&quot;</span><br>    semconv <span class="hljs-string">&quot;go.opentelemetry.io/otel/semconv/v1.24.0&quot;</span><br>    <span class="hljs-string">&quot;go.opentelemetry.io/otel/trace&quot;</span><br>)<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">initTracer</span><span class="hljs-params">()</span></span> (*sdktrace.TracerProvider, <span class="hljs-type">error</span>) &#123;<br>    exporter, err := otlptracegrpc.New(context.Background(),<br>        otlptracegrpc.WithEndpoint(<span class="hljs-string">&quot;otel-collector:4317&quot;</span>),<br>        otlptracegrpc.WithInsecure(),<br>    )<br>    <span class="hljs-keyword">if</span> err != <span class="hljs-literal">nil</span> &#123;<br>        <span class="hljs-keyword">return</span> <span class="hljs-literal">nil</span>, err<br>    &#125;<br><br>    tp := sdktrace.NewTracerProvider(<br>        sdktrace.WithBatcher(exporter),<br>        sdktrace.WithResource(resource.NewWithAttributes(<br>            semconv.SchemaURL,<br>            semconv.ServiceNameKey.String(<span class="hljs-string">&quot;api-server&quot;</span>),<br>            semconv.ServiceVersionKey.String(<span class="hljs-string">&quot;1.0.0&quot;</span>),<br>            semconv.DeploymentEnvironmentKey.String(<span class="hljs-string">&quot;production&quot;</span>),<br>        )),<br>        sdktrace.WithSampler(sdktrace.TraceIDRatioBased(<span class="hljs-number">0.1</span>)), <span class="hljs-comment">// 10%采样</span><br>    )<br><br>    otel.SetTracerProvider(tp)<br>    <span class="hljs-keyword">return</span> tp, <span class="hljs-literal">nil</span><br>&#125;<br><br><span class="hljs-keyword">var</span> tracer = otel.Tracer(<span class="hljs-string">&quot;api-server&quot;</span>)<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">handleOrder</span><span class="hljs-params">(ctx context.Context, orderID <span class="hljs-type">string</span>)</span></span> <span class="hljs-type">error</span> &#123;<br>    ctx, span := tracer.Start(ctx, <span class="hljs-string">&quot;handleOrder&quot;</span>,<br>        trace.WithAttributes(<br>            attribute.String(<span class="hljs-string">&quot;order.id&quot;</span>, orderID),<br>        ),<br>    )<br>    <span class="hljs-keyword">defer</span> span.End()<br><br>    <span class="hljs-comment">// 调用下游服务</span><br>    <span class="hljs-keyword">if</span> err := validateOrder(ctx, orderID); err != <span class="hljs-literal">nil</span> &#123;<br>        span.RecordError(err)<br>        span.SetStatus(codes.Error, err.Error())<br>        <span class="hljs-keyword">return</span> err<br>    &#125;<br><br>    <span class="hljs-keyword">return</span> processPayment(ctx, orderID)<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="grafana-stacklgtm部署">Grafana Stack（LGTM）部署</h2>
+<p>使用Docker Compose快速搭建完整的Grafana Stack：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># docker-compose.yaml</span><br><span class="hljs-attr">version:</span> <span class="hljs-string">&quot;3.8&quot;</span><br><span class="hljs-attr">services:</span><br>  <span class="hljs-attr">grafana:</span><br>    <span class="hljs-attr">image:</span> <span class="hljs-string">grafana/grafana:10.3.0</span><br>    <span class="hljs-attr">ports:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">&quot;3000:3000&quot;</span><br>    <span class="hljs-attr">environment:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">GF_AUTH_ANONYMOUS_ENABLED=true</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">GF_AUTH_ANONYMOUS_ORG_ROLE=Admin</span><br>    <span class="hljs-attr">volumes:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">./provisioning:/etc/grafana/provisioning</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">grafana-data:/var/lib/grafana</span><br><br>  <span class="hljs-attr">prometheus:</span><br>    <span class="hljs-attr">image:</span> <span class="hljs-string">prom/prometheus:v2.50.0</span><br>    <span class="hljs-attr">ports:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">&quot;9090:9090&quot;</span><br>    <span class="hljs-attr">volumes:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">./prometheus.yml:/etc/prometheus/prometheus.yml</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">prometheus-data:/prometheus</span><br>    <span class="hljs-attr">command:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">--config.file=/etc/prometheus/prometheus.yml</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">--storage.tsdb.retention.time=30d</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">--web.enable-remote-write-receiver</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">--enable-feature=exemplar-storage</span><br><br>  <span class="hljs-attr">loki:</span><br>    <span class="hljs-attr">image:</span> <span class="hljs-string">grafana/loki:2.9.4</span><br>    <span class="hljs-attr">ports:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">&quot;3100:3100&quot;</span><br>    <span class="hljs-attr">volumes:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">./loki-config.yaml:/etc/loki/config.yaml</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">loki-data:/loki</span><br>    <span class="hljs-attr">command:</span> <span class="hljs-string">-config.file=/etc/loki/config.yaml</span><br><br>  <span class="hljs-attr">tempo:</span><br>    <span class="hljs-attr">image:</span> <span class="hljs-string">grafana/tempo:2.3.1</span><br>    <span class="hljs-attr">ports:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">&quot;3200:3200&quot;</span>   <span class="hljs-comment"># Tempo API</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">&quot;4317:4317&quot;</span>   <span class="hljs-comment"># OTLP gRPC</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">&quot;4318:4318&quot;</span>   <span class="hljs-comment"># OTLP HTTP</span><br>    <span class="hljs-attr">volumes:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">./tempo-config.yaml:/etc/tempo/config.yaml</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">tempo-data:/var/tempo</span><br>    <span class="hljs-attr">command:</span> <span class="hljs-string">-config.file=/etc/tempo/config.yaml</span><br><br>  <span class="hljs-attr">promtail:</span><br>    <span class="hljs-attr">image:</span> <span class="hljs-string">grafana/promtail:2.9.4</span><br>    <span class="hljs-attr">volumes:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">./promtail-config.yaml:/etc/promtail/config.yaml</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">/var/log:/var/log:ro</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">/var/lib/docker/containers:/var/lib/docker/containers:ro</span><br>    <span class="hljs-attr">command:</span> <span class="hljs-string">-config.file=/etc/promtail/config.yaml</span><br><br>  <span class="hljs-attr">otel-collector:</span><br>    <span class="hljs-attr">image:</span> <span class="hljs-string">otel/opentelemetry-collector-contrib:0.93.0</span><br>    <span class="hljs-attr">ports:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">&quot;4317&quot;</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">&quot;4318&quot;</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">&quot;8889:8889&quot;</span><br>    <span class="hljs-attr">volumes:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-string">./otel-collector-config.yaml:/etc/otel/config.yaml</span><br>    <span class="hljs-attr">command:</span> <span class="hljs-string">--config</span> <span class="hljs-string">/etc/otel/config.yaml</span><br><br><span class="hljs-attr">volumes:</span><br>  <span class="hljs-attr">grafana-data:</span><br>  <span class="hljs-attr">prometheus-data:</span><br>  <span class="hljs-attr">loki-data:</span><br>  <span class="hljs-attr">tempo-data:</span><br></code></pre></td></tr></table></figure>
+<pre class="mermaid">graph LR
+    subgraph LGTM["Grafana LGTM Stack"]
+        L["Loki&lt;br&gt;Logs"]
+        G["Grafana&lt;br&gt;Visualization"]
+        T["Tempo&lt;br&gt;Traces"]
+        M["Mimir/Prometheus&lt;br&gt;Metrics"]
+    end
+
+    App["Application"] --&gt; OTel["OpenTelemetry&lt;br&gt;Collector"]
+    OTel --&gt; L
+    OTel --&gt; T
+    OTel --&gt; M
+    L --&gt; G
+    T --&gt; G
+    M --&gt; G
+
+    style G fill:#F46800,color:#fff
+    style L fill:#1565C0,color:#fff
+    style T fill:#2E7D32,color:#fff
+    style M fill:#E65100,color:#fff</pre>
+<h2 id="grafana告警">Grafana告警</h2>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># Grafana Alerting (Unified Alerting)</span><br><span class="hljs-comment"># 告警规则通过UI或Provisioning定义</span><br><span class="hljs-attr">apiVersion:</span> <span class="hljs-number">1</span><br><span class="hljs-attr">groups:</span><br>  <span class="hljs-bullet">-</span> <span class="hljs-attr">orgId:</span> <span class="hljs-number">1</span><br>    <span class="hljs-attr">name:</span> <span class="hljs-string">application-alerts</span><br>    <span class="hljs-attr">folder:</span> <span class="hljs-string">Production</span><br>    <span class="hljs-attr">interval:</span> <span class="hljs-string">1m</span><br>    <span class="hljs-attr">rules:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">uid:</span> <span class="hljs-string">high-error-rate</span><br>        <span class="hljs-attr">title:</span> <span class="hljs-string">High</span> <span class="hljs-string">Error</span> <span class="hljs-string">Rate</span><br>        <span class="hljs-attr">condition:</span> <span class="hljs-string">C</span><br>        <span class="hljs-attr">data:</span><br>          <span class="hljs-bullet">-</span> <span class="hljs-attr">refId:</span> <span class="hljs-string">A</span><br>            <span class="hljs-attr">datasourceUid:</span> <span class="hljs-string">prometheus</span><br>            <span class="hljs-attr">model:</span><br>              <span class="hljs-attr">expr:</span> <span class="hljs-string">sum(rate(http_requests_total&#123;status=~&quot;5..&quot;&#125;[5m]))</span> <span class="hljs-string">/</span> <span class="hljs-string">sum(rate(http_requests_total[5m]))</span><br>          <span class="hljs-bullet">-</span> <span class="hljs-attr">refId:</span> <span class="hljs-string">B</span><br>            <span class="hljs-attr">datasourceUid:</span> <span class="hljs-string">&quot;-100&quot;</span><br>            <span class="hljs-attr">model:</span><br>              <span class="hljs-attr">type:</span> <span class="hljs-string">reduce</span><br>              <span class="hljs-attr">reducer:</span> <span class="hljs-string">last</span><br>              <span class="hljs-attr">expression:</span> <span class="hljs-string">A</span><br>          <span class="hljs-bullet">-</span> <span class="hljs-attr">refId:</span> <span class="hljs-string">C</span><br>            <span class="hljs-attr">datasourceUid:</span> <span class="hljs-string">&quot;-100&quot;</span><br>            <span class="hljs-attr">model:</span><br>              <span class="hljs-attr">type:</span> <span class="hljs-string">threshold</span><br>              <span class="hljs-attr">expression:</span> <span class="hljs-string">B</span><br>              <span class="hljs-attr">conditions:</span><br>                <span class="hljs-bullet">-</span> <span class="hljs-attr">evaluator:</span><br>                    <span class="hljs-attr">type:</span> <span class="hljs-string">gt</span><br>                    <span class="hljs-attr">params:</span> [<span class="hljs-number">0.05</span>]<br>        <span class="hljs-attr">for:</span> <span class="hljs-string">5m</span><br>        <span class="hljs-attr">labels:</span><br>          <span class="hljs-attr">severity:</span> <span class="hljs-string">critical</span><br>        <span class="hljs-attr">annotations:</span><br>          <span class="hljs-attr">summary:</span> <span class="hljs-string">&quot;Error rate exceeds 5%&quot;</span><br></code></pre></td></tr></table></figure>
+<h2 id="dashboard设计最佳实践">Dashboard设计最佳实践</h2>
+<ol type="1">
+<li><strong>USE方法</strong>（基础设施）：Utilization（利用率）、Saturation（饱和度）、Errors（错误）</li>
+<li><strong>RED方法</strong>（微服务）：Rate（请求率）、Errors（错误率）、Duration（延迟）</li>
+<li><strong>四个黄金信号</strong>（SRE）：延迟、流量、错误、饱和度</li>
+</ol>
+<pre class="mermaid">graph TB
+    subgraph RED["RED方法 - 微服务Dashboard"]
+        Rate["Rate&lt;br&gt;请求速率 (QPS)"]
+        Errors["Errors&lt;br&gt;错误率 (%)"]
+        Duration["Duration&lt;br&gt;延迟 (P50/P95/P99)"]
+    end
+
+    subgraph USE["USE方法 - 基础设施Dashboard"]
+        Utilization["Utilization&lt;br&gt;CPU/内存/磁盘利用率"]
+        Saturation["Saturation&lt;br&gt;队列深度/等待数"]
+        ErrRate["Errors&lt;br&gt;硬件/软件错误"]
+    end</pre>
+<h2 id="总结">总结</h2>
+<p>构建完整的可观测性平台需要将指标、日志和追踪三大支柱有机结合：</p>
+<ol type="1">
+<li><strong>Prometheus</strong>负责指标采集和告警评估</li>
+<li><strong>Loki</strong>负责日志聚合，通过标签实现高效查询</li>
+<li><strong>Tempo</strong>负责分布式追踪，支持全量存储</li>
+<li><strong>Grafana</strong>作为统一可视化层，关联三大数据源</li>
+<li><strong>OpenTelemetry</strong>作为统一的数据采集标准</li>
+</ol>
+<p>关键是建立数据之间的关联：从指标异常钻取到相关日志，从日志中的TraceID跳转到完整链路。这种端到端的关联能力是快速定位和排查问题的核心。</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2024-09-04</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">3.0k 字 · 7 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/transformer-architecture/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Transformer架构深度解析</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/ebpf-observability/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">eBPF技术解析与可观测性应用</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7%E4%B8%89%E5%A4%A7%E6%94%AF%E6%9F%B1"><span class="toc-text">可观测性三大支柱</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#grafana%E6%95%B0%E6%8D%AE%E6%BA%90%E9%85%8D%E7%BD%AE"><span class="toc-text">Grafana数据源配置</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#prometheus%E6%95%B0%E6%8D%AE%E6%BA%90"><span class="toc-text">Prometheus数据源</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E6%BA%90%E5%85%B3%E8%81%94"><span class="toc-text">数据源关联</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#dashboard%E8%AE%BE%E8%AE%A1"><span class="toc-text">Dashboard设计</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%9D%A2%E6%9D%BF%E7%B1%BB%E5%9E%8B"><span class="toc-text">面板类型</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#dashboard-json%E6%A8%A1%E5%9E%8B"><span class="toc-text">Dashboard JSON模型</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#dashboard-provisioning"><span class="toc-text">Dashboard Provisioning</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8F%98%E9%87%8Fvariables"><span class="toc-text">变量（Variables）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#loki%E6%97%A5%E5%BF%97%E8%81%9A%E5%90%88"><span class="toc-text">Loki日志聚合</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#loki%E6%9E%B6%E6%9E%84"><span class="toc-text">Loki架构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#promtail%E9%85%8D%E7%BD%AE"><span class="toc-text">Promtail配置</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#logql%E6%9F%A5%E8%AF%A2"><span class="toc-text">LogQL查询</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#tempo%E9%93%BE%E8%B7%AF%E8%BF%BD%E8%B8%AA"><span class="toc-text">Tempo链路追踪</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#tempo%E6%9E%B6%E6%9E%84"><span class="toc-text">Tempo架构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#opentelemetry%E9%85%8D%E7%BD%AE"><span class="toc-text">OpenTelemetry配置</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%BA%94%E7%94%A8%E7%A8%8B%E5%BA%8F%E9%9B%86%E6%88%90"><span class="toc-text">应用程序集成</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#grafana-stacklgtm%E9%83%A8%E7%BD%B2"><span class="toc-text">Grafana Stack（LGTM）部署</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#grafana%E5%91%8A%E8%AD%A6"><span class="toc-text">Grafana告警</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#dashboard%E8%AE%BE%E8%AE%A1%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5"><span class="toc-text">Dashboard设计最佳实践</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

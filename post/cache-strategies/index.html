@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>缓存策略深度解析：穿透、击穿与雪崩的防护 · zt&#39;s Blog</title>
+  <meta name="description" content="深入解析缓存读写策略（Cache-Aside/Read-Through/Write-Through/Write-Behind），以及缓存穿透、击穿、雪崩的原理与防护方案。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/cache-strategies/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="缓存策略深度解析：穿透、击穿与雪崩的防护">
+  <meta property="og:description" content="深入解析缓存读写策略（Cache-Aside/Read-Through/Write-Through/Write-Behind），以及缓存穿透、击穿、雪崩的原理与防护方案。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/cache-strategies/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2021-03-09T16:00:00.000Z">
+  <meta property="article:modified_time" content="2021-03-09T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="缓存策略深度解析：穿透、击穿与雪崩的防护">
+  <meta name="twitter:description" content="深入解析缓存读写策略（Cache-Aside/Read-Through/Write-Through/Write-Behind），以及缓存穿透、击穿、雪崩的原理与防护方案。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"缓存策略深度解析：穿透、击穿与雪崩的防护","description":"深入解析缓存读写策略（Cache-Aside/Read-Through/Write-Through/Write-Behind），以及缓存穿透、击穿、雪崩的原理与防护方案。","datePublished":"2021-03-09T16:00:00.000Z","dateModified":"2021-03-09T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/cache-strategies/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Architecture","item":"https://withesse.co/categories/Architecture/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:152">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Architecture/">Architecture</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/cache/"><span class="hash">#</span>cache</a><a class="tag" href="/tags/redis/"><span class="hash">#</span>redis</a><a class="tag" href="/tags/strategy/"><span class="hash">#</span>strategy</a>
+        
+      </div>
+
+      <h1>缓存策略深度解析：穿透、击穿与雪崩的防护</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2021.03.10</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 10 min</span>
+        </span>
+        <span class="wc"><span class="num">3.9k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BC%93%E5%AD%98%E8%AF%BB%E5%86%99%E7%AD%96%E7%95%A5"><span class="toc-text">缓存读写策略</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#cache-aside%E6%97%81%E8%B7%AF%E7%BC%93%E5%AD%98"><span class="toc-text">Cache-Aside（旁路缓存）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#read-through-write-through"><span class="toc-text">Read-Through &#x2F; Write-Through</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#write-behind%E5%BC%82%E6%AD%A5%E5%86%99%E5%9B%9E"><span class="toc-text">Write-Behind（异步写回）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BC%93%E5%AD%98%E7%A9%BF%E9%80%8F"><span class="toc-text">缓存穿透</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%97%AE%E9%A2%98%E6%8F%8F%E8%BF%B0"><span class="toc-text">问题描述</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88-1%E7%BC%93%E5%AD%98%E7%A9%BA%E5%80%BC"><span class="toc-text">解决方案 1：缓存空值</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88-2%E5%B8%83%E9%9A%86%E8%BF%87%E6%BB%A4%E5%99%A8"><span class="toc-text">解决方案 2：布隆过滤器</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BC%93%E5%AD%98%E5%87%BB%E7%A9%BF"><span class="toc-text">缓存击穿</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%97%AE%E9%A2%98%E6%8F%8F%E8%BF%B0-1"><span class="toc-text">问题描述</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88-1%E4%BA%92%E6%96%A5%E9%94%81mutex"><span class="toc-text">解决方案 1：互斥锁（Mutex）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88-2%E9%80%BB%E8%BE%91%E8%BF%87%E6%9C%9F"><span class="toc-text">解决方案 2：逻辑过期</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BC%93%E5%AD%98%E9%9B%AA%E5%B4%A9"><span class="toc-text">缓存雪崩</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%97%AE%E9%A2%98%E6%8F%8F%E8%BF%B0-2"><span class="toc-text">问题描述</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88"><span class="toc-text">解决方案</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BC%93%E5%AD%98%E4%B8%80%E8%87%B4%E6%80%A7%E7%AD%96%E7%95%A5"><span class="toc-text">缓存一致性策略</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%BB%B6%E8%BF%9F%E5%8F%8C%E5%88%A0"><span class="toc-text">延迟双删</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9F%BA%E4%BA%8E-binlog-%E7%9A%84%E7%BC%93%E5%AD%98%E6%9B%B4%E6%96%B0"><span class="toc-text">基于 Binlog 的缓存更新</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BC%93%E5%AD%98%E7%AD%96%E7%95%A5%E9%80%89%E5%9E%8B"><span class="toc-text">缓存策略选型</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%B8%A9%E5%9D%91%E8%AE%B0%E5%BD%95"><span class="toc-text">踩坑记录</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E6%B5%8B%E7%BB%93%E6%9E%9C"><span class="toc-text">实测结果</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%88%91%E7%9A%84%E7%9C%8B%E6%B3%95"><span class="toc-text">我的看法</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="前言">前言</h2>
+<p>缓存是提升系统性能最直接有效的手段。合理使用缓存可以将响应时间从毫秒级降低到微秒级，将数据库的
+QPS
+降低几个数量级。但缓存的使用远不止”读缓存，没有就查库再写缓存”这么简单——缓存穿透、击穿、雪崩是生产环境中的常见问题，处理不好可能导致整个系统瘫痪。本文将系统性地梳理缓存策略和常见问题的解决方案。</p>
+<h2 id="缓存读写策略">缓存读写策略</h2>
+<h3 id="cache-aside旁路缓存">Cache-Aside（旁路缓存）</h3>
+<p>最经典的缓存模式，应用代码同时管理缓存和数据库。</p>
+<pre class="mermaid">sequenceDiagram
+    participant App as 应用
+    participant Cache as Redis
+    participant DB as 数据库
+
+    Note over App: 读操作
+    App-&gt;&gt;Cache: 1. GET key
+    alt 缓存命中
+        Cache--&gt;&gt;App: 返回数据
+    else 缓存未命中
+        Cache--&gt;&gt;App: nil
+        App-&gt;&gt;DB: 2. 查询数据库
+        DB--&gt;&gt;App: 返回数据
+        App-&gt;&gt;Cache: 3. SET key value
+    end
+
+    Note over App: 写操作
+    App-&gt;&gt;DB: 1. 更新数据库
+    App-&gt;&gt;Cache: 2. 删除缓存</pre>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-meta">@Service</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">ProductService</span> &#123;<br>    <span class="hljs-meta">@Autowired</span><br>    <span class="hljs-keyword">private</span> RedisTemplate&lt;String, Product&gt; redis;<br>    <span class="hljs-meta">@Autowired</span><br>    <span class="hljs-keyword">private</span> ProductMapper productMapper;<br><br>    <span class="hljs-comment">// 读操作</span><br>    <span class="hljs-keyword">public</span> Product <span class="hljs-title function_">getProduct</span><span class="hljs-params">(String productId)</span> &#123;<br>        <span class="hljs-type">String</span> <span class="hljs-variable">cacheKey</span> <span class="hljs-operator">=</span> <span class="hljs-string">&quot;product:&quot;</span> + productId;<br><br>        <span class="hljs-comment">// 1. 查缓存</span><br>        <span class="hljs-type">Product</span> <span class="hljs-variable">product</span> <span class="hljs-operator">=</span> redis.opsForValue().get(cacheKey);<br>        <span class="hljs-keyword">if</span> (product != <span class="hljs-literal">null</span>) &#123;<br>            <span class="hljs-keyword">return</span> product;<br>        &#125;<br><br>        <span class="hljs-comment">// 2. 缓存未命中，查数据库</span><br>        product = productMapper.selectById(productId);<br>        <span class="hljs-keyword">if</span> (product != <span class="hljs-literal">null</span>) &#123;<br>            <span class="hljs-comment">// 3. 写入缓存，设置随机过期时间</span><br>            <span class="hljs-type">long</span> <span class="hljs-variable">ttl</span> <span class="hljs-operator">=</span> <span class="hljs-number">3600</span> + ThreadLocalRandom.current().nextInt(<span class="hljs-number">600</span>);<br>            redis.opsForValue().set(cacheKey, product, ttl, TimeUnit.SECONDS);<br>        &#125;<br><br>        <span class="hljs-keyword">return</span> product;<br>    &#125;<br><br>    <span class="hljs-comment">// 写操作</span><br>    <span class="hljs-meta">@Transactional</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">updateProduct</span><span class="hljs-params">(Product product)</span> &#123;<br>        <span class="hljs-comment">// 1. 更新数据库</span><br>        productMapper.updateById(product);<br>        <span class="hljs-comment">// 2. 删除缓存</span><br>        redis.delete(<span class="hljs-string">&quot;product:&quot;</span> + product.getId());<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<p><strong>为什么是”先更新数据库，再删除缓存”而不是”先删除缓存，再更新数据库”？</strong></p>
+<pre class="mermaid">sequenceDiagram
+    participant A as 请求A(写)
+    participant B as 请求B(读)
+    participant Cache as 缓存
+    participant DB as 数据库
+
+    Note over A,DB: 场景: 先删缓存再更新DB(有问题!)
+
+    A-&gt;&gt;Cache: 1. 删除缓存
+    B-&gt;&gt;Cache: 2. 读缓存(未命中)
+    B-&gt;&gt;DB: 3. 读数据库(旧值V1)
+    A-&gt;&gt;DB: 4. 更新数据库(V1→V2)
+    B-&gt;&gt;Cache: 5. 写入缓存(旧值V1)
+
+    Note over Cache: 缓存中是旧值V1&lt;br/&gt;数据库是新值V2&lt;br/&gt;数据不一致!</pre>
+<h3 id="read-through-write-through">Read-Through / Write-Through</h3>
+<p>应用只和缓存交互，由缓存层负责与数据库的读写同步。</p>
+<pre class="mermaid">graph LR
+    subgraph Read-Through
+        App1[应用] --&gt;|读| Cache1[缓存层]
+        Cache1 --&gt;|未命中时自动加载| DB1[数据库]
+    end
+
+    subgraph Write-Through
+        App2[应用] --&gt;|写| Cache2[缓存层]
+        Cache2 --&gt;|同步写入| DB2[数据库]
+    end</pre>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">// 使用 Spring Cache 实现 Read-Through</span><br><span class="hljs-meta">@Service</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">ProductService</span> &#123;<br><br>    <span class="hljs-meta">@Cacheable(value = &quot;products&quot;, key = &quot;#productId&quot;,</span><br><span class="hljs-meta">               unless = &quot;#result == null&quot;)</span><br>    <span class="hljs-keyword">public</span> Product <span class="hljs-title function_">getProduct</span><span class="hljs-params">(String productId)</span> &#123;<br>        <span class="hljs-comment">// 缓存未命中时自动调用此方法</span><br>        <span class="hljs-keyword">return</span> productMapper.selectById(productId);<br>    &#125;<br><br>    <span class="hljs-meta">@CachePut(value = &quot;products&quot;, key = &quot;#product.id&quot;)</span><br>    <span class="hljs-meta">@Transactional</span><br>    <span class="hljs-keyword">public</span> Product <span class="hljs-title function_">updateProduct</span><span class="hljs-params">(Product product)</span> &#123;<br>        productMapper.updateById(product);<br>        <span class="hljs-keyword">return</span> product; <span class="hljs-comment">// 返回值写入缓存</span><br>    &#125;<br><br>    <span class="hljs-meta">@CacheEvict(value = &quot;products&quot;, key = &quot;#productId&quot;)</span><br>    <span class="hljs-meta">@Transactional</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">deleteProduct</span><span class="hljs-params">(String productId)</span> &#123;<br>        productMapper.deleteById(productId);<br>    &#125;<br>&#125;<br><br><span class="hljs-comment">// Spring Cache 配置</span><br><span class="hljs-meta">@Configuration</span><br><span class="hljs-meta">@EnableCaching</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">CacheConfig</span> &#123;<br>    <span class="hljs-meta">@Bean</span><br>    <span class="hljs-keyword">public</span> RedisCacheManager <span class="hljs-title function_">cacheManager</span><span class="hljs-params">(RedisConnectionFactory factory)</span> &#123;<br>        <span class="hljs-type">RedisCacheConfiguration</span> <span class="hljs-variable">config</span> <span class="hljs-operator">=</span> RedisCacheConfiguration.defaultCacheConfig()<br>            .entryTtl(Duration.ofMinutes(<span class="hljs-number">60</span>))<br>            .serializeKeysWith(RedisSerializationContext.SerializationPair<br>                .fromSerializer(<span class="hljs-keyword">new</span> <span class="hljs-title class_">StringRedisSerializer</span>()))<br>            .serializeValuesWith(RedisSerializationContext.SerializationPair<br>                .fromSerializer(<span class="hljs-keyword">new</span> <span class="hljs-title class_">GenericJackson2JsonRedisSerializer</span>()));<br><br>        <span class="hljs-keyword">return</span> RedisCacheManager.builder(factory)<br>            .cacheDefaults(config)<br>            .withCacheConfiguration(<span class="hljs-string">&quot;products&quot;</span>,<br>                config.entryTtl(Duration.ofMinutes(<span class="hljs-number">30</span>)))<br>            .build();<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="write-behind异步写回">Write-Behind（异步写回）</h3>
+<p>写操作先更新缓存，异步批量写入数据库。适合写密集型场景。</p>
+<pre class="mermaid">sequenceDiagram
+    participant App as 应用
+    participant Cache as 缓存
+    participant Queue as 异步队列
+    participant DB as 数据库
+
+    App-&gt;&gt;Cache: 1. 更新缓存
+    Cache--&gt;&gt;App: OK(立即返回)
+    Cache-&gt;&gt;Queue: 2. 写入变更队列
+
+    loop 定时批量写入
+        Queue-&gt;&gt;DB: 3. 批量写入数据库
+    end</pre>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">// Write-Behind 实现示例</span><br><span class="hljs-meta">@Component</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">WriteBehindCache</span> &#123;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> RedisTemplate&lt;String, Object&gt; redis;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> BlockingQueue&lt;WriteTask&gt; writeQueue = <span class="hljs-keyword">new</span> <span class="hljs-title class_">LinkedBlockingQueue</span>&lt;&gt;(<span class="hljs-number">10000</span>);<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> <span class="hljs-type">ScheduledExecutorService</span> <span class="hljs-variable">scheduler</span> <span class="hljs-operator">=</span> Executors.newScheduledThreadPool(<span class="hljs-number">2</span>);<br><br>    <span class="hljs-meta">@PostConstruct</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">init</span><span class="hljs-params">()</span> &#123;<br>        <span class="hljs-comment">// 每500ms批量写入一次</span><br>        scheduler.scheduleWithFixedDelay(<span class="hljs-built_in">this</span>::flushWriteQueue,<br>            <span class="hljs-number">500</span>, <span class="hljs-number">500</span>, TimeUnit.MILLISECONDS);<br>    &#125;<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">put</span><span class="hljs-params">(String key, Object value)</span> &#123;<br>        redis.opsForValue().set(key, value);<br>        writeQueue.offer(<span class="hljs-keyword">new</span> <span class="hljs-title class_">WriteTask</span>(key, value, WriteType.UPDATE));<br>    &#125;<br><br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">flushWriteQueue</span><span class="hljs-params">()</span> &#123;<br>        List&lt;WriteTask&gt; batch = <span class="hljs-keyword">new</span> <span class="hljs-title class_">ArrayList</span>&lt;&gt;();<br>        writeQueue.drainTo(batch, <span class="hljs-number">200</span>); <span class="hljs-comment">// 每次最多处理200条</span><br><br>        <span class="hljs-keyword">if</span> (batch.isEmpty()) <span class="hljs-keyword">return</span>;<br><br>        <span class="hljs-comment">// 合并同key的操作，只保留最后一次</span><br>        Map&lt;String, WriteTask&gt; merged = <span class="hljs-keyword">new</span> <span class="hljs-title class_">LinkedHashMap</span>&lt;&gt;();<br>        <span class="hljs-keyword">for</span> (WriteTask task : batch) &#123;<br>            merged.put(task.getKey(), task);<br>        &#125;<br><br>        <span class="hljs-comment">// 批量写入数据库</span><br>        <span class="hljs-keyword">try</span> &#123;<br>            dataMapper.batchUpsert(merged.values());<br>        &#125; <span class="hljs-keyword">catch</span> (Exception e) &#123;<br>            log.error(<span class="hljs-string">&quot;Batch write failed, re-enqueue&quot;</span>, e);<br>            merged.values().forEach(writeQueue::offer);<br>        &#125;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="缓存穿透">缓存穿透</h2>
+<h3 id="问题描述">问题描述</h3>
+<p>查询一个不存在的数据，缓存中没有，数据库中也没有。每次请求都会穿透缓存直达数据库。</p>
+<pre class="mermaid">graph LR
+    Attacker[攻击者] --&gt;|大量请求&lt;br/&gt;不存在的ID| Cache[缓存&lt;br/&gt;全部MISS]
+    Cache --&gt;|所有请求| DB[数据库&lt;br/&gt;全部查不到]
+    DB --&gt;|压力暴增| Crash[数据库崩溃]</pre>
+<h3 id="解决方案-1缓存空值">解决方案 1：缓存空值</h3>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-keyword">public</span> Product <span class="hljs-title function_">getProduct</span><span class="hljs-params">(String productId)</span> &#123;<br>    <span class="hljs-type">String</span> <span class="hljs-variable">cacheKey</span> <span class="hljs-operator">=</span> <span class="hljs-string">&quot;product:&quot;</span> + productId;<br><br>    <span class="hljs-comment">// 查缓存（包括空值标记）</span><br>    <span class="hljs-type">ValueWrapper</span> <span class="hljs-variable">cached</span> <span class="hljs-operator">=</span> redis.opsForValue().get(cacheKey);<br>    <span class="hljs-keyword">if</span> (cached != <span class="hljs-literal">null</span>) &#123;<br>        <span class="hljs-type">Object</span> <span class="hljs-variable">value</span> <span class="hljs-operator">=</span> cached;<br>        <span class="hljs-keyword">if</span> (<span class="hljs-string">&quot;NULL&quot;</span>.equals(value)) &#123;<br>            <span class="hljs-keyword">return</span> <span class="hljs-literal">null</span>; <span class="hljs-comment">// 缓存的空值</span><br>        &#125;<br>        <span class="hljs-keyword">return</span> (Product) value;<br>    &#125;<br><br>    <span class="hljs-type">Product</span> <span class="hljs-variable">product</span> <span class="hljs-operator">=</span> productMapper.selectById(productId);<br>    <span class="hljs-keyword">if</span> (product != <span class="hljs-literal">null</span>) &#123;<br>        redis.opsForValue().set(cacheKey, product, <span class="hljs-number">3600</span>, TimeUnit.SECONDS);<br>    &#125; <span class="hljs-keyword">else</span> &#123;<br>        <span class="hljs-comment">// 缓存空值，较短过期时间</span><br>        redis.opsForValue().set(cacheKey, <span class="hljs-string">&quot;NULL&quot;</span>, <span class="hljs-number">300</span>, TimeUnit.SECONDS);<br>    &#125;<br>    <span class="hljs-keyword">return</span> product;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="解决方案-2布隆过滤器">解决方案 2：布隆过滤器</h3>
+<p>布隆过滤器（Bloom
+Filter）可以快速判断一个元素是否<strong>一定不存在</strong>。</p>
+<pre class="mermaid">graph LR
+    Request[请求] --&gt; BF{布隆过滤器&lt;br/&gt;存在?}
+    BF --&gt;|一定不存在| Reject[直接返回null]
+    BF --&gt;|可能存在| Cache[查缓存]
+    Cache --&gt;|命中| Return[返回数据]
+    Cache --&gt;|未命中| DB[查数据库]</pre>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-meta">@Component</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">ProductCacheWithBloomFilter</span> &#123;<br>    <span class="hljs-keyword">private</span> BloomFilter&lt;String&gt; bloomFilter;<br><br>    <span class="hljs-meta">@PostConstruct</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">initBloomFilter</span><span class="hljs-params">()</span> &#123;<br>        <span class="hljs-comment">// 预期100万条数据，误判率0.01%</span><br>        bloomFilter = BloomFilter.create(<br>            Funnels.stringFunnel(StandardCharsets.UTF_8),<br>            <span class="hljs-number">1_000_000</span>, <span class="hljs-number">0.0001</span>);<br><br>        <span class="hljs-comment">// 加载所有已有商品ID</span><br>        List&lt;String&gt; allProductIds = productMapper.selectAllIds();<br>        allProductIds.forEach(bloomFilter::put);<br>    &#125;<br><br>    <span class="hljs-keyword">public</span> Product <span class="hljs-title function_">getProduct</span><span class="hljs-params">(String productId)</span> &#123;<br>        <span class="hljs-comment">// 布隆过滤器快速判断</span><br>        <span class="hljs-keyword">if</span> (!bloomFilter.mightContain(productId)) &#123;<br>            <span class="hljs-keyword">return</span> <span class="hljs-literal">null</span>; <span class="hljs-comment">// 一定不存在</span><br>        &#125;<br><br>        <span class="hljs-type">String</span> <span class="hljs-variable">cacheKey</span> <span class="hljs-operator">=</span> <span class="hljs-string">&quot;product:&quot;</span> + productId;<br>        <span class="hljs-type">Product</span> <span class="hljs-variable">product</span> <span class="hljs-operator">=</span> redis.opsForValue().get(cacheKey);<br>        <span class="hljs-keyword">if</span> (product != <span class="hljs-literal">null</span>) &#123;<br>            <span class="hljs-keyword">return</span> product;<br>        &#125;<br><br>        product = productMapper.selectById(productId);<br>        <span class="hljs-keyword">if</span> (product != <span class="hljs-literal">null</span>) &#123;<br>            redis.opsForValue().set(cacheKey, product, <span class="hljs-number">3600</span>, TimeUnit.SECONDS);<br>        &#125;<br>        <span class="hljs-keyword">return</span> product;<br>    &#125;<br><br>    <span class="hljs-comment">// 新增商品时同步更新布隆过滤器</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">addProduct</span><span class="hljs-params">(Product product)</span> &#123;<br>        productMapper.insert(product);<br>        bloomFilter.put(product.getId());<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<p>Redis 也提供了布隆过滤器模块（RedisBloom）：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># Redis Bloom Filter 命令</span><br>BF.ADD product_bloom product_001<br>BF.ADD product_bloom product_002<br>BF.EXISTS product_bloom product_001  <span class="hljs-comment"># 返回 1</span><br>BF.EXISTS product_bloom product_999  <span class="hljs-comment"># 返回 0 (一定不存在)</span><br></code></pre></td></tr></table></figure>
+<h2 id="缓存击穿">缓存击穿</h2>
+<h3 id="问题描述-1">问题描述</h3>
+<p>某个热点 Key 恰好在高并发时过期，大量请求同时穿透到数据库。</p>
+<pre class="mermaid">graph LR
+    subgraph "缓存击穿"
+        R1[请求1] --&gt; Cache[缓存&lt;br/&gt;Hot Key刚过期]
+        R2[请求2] --&gt; Cache
+        R3[请求3] --&gt; Cache
+        RN[请求N...] --&gt; Cache
+        Cache --&gt;|全部MISS| DB[数据库&lt;br/&gt;瞬间大量查询]
+    end</pre>
+<h3 id="解决方案-1互斥锁mutex">解决方案 1：互斥锁（Mutex）</h3>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-keyword">public</span> Product <span class="hljs-title function_">getProductWithMutex</span><span class="hljs-params">(String productId)</span> &#123;<br>    <span class="hljs-type">String</span> <span class="hljs-variable">cacheKey</span> <span class="hljs-operator">=</span> <span class="hljs-string">&quot;product:&quot;</span> + productId;<br>    <span class="hljs-type">String</span> <span class="hljs-variable">lockKey</span> <span class="hljs-operator">=</span> <span class="hljs-string">&quot;lock:product:&quot;</span> + productId;<br><br>    <span class="hljs-type">Product</span> <span class="hljs-variable">product</span> <span class="hljs-operator">=</span> redis.opsForValue().get(cacheKey);<br>    <span class="hljs-keyword">if</span> (product != <span class="hljs-literal">null</span>) &#123;<br>        <span class="hljs-keyword">return</span> product;<br>    &#125;<br><br>    <span class="hljs-comment">// 尝试获取分布式锁</span><br>    <span class="hljs-type">boolean</span> <span class="hljs-variable">locked</span> <span class="hljs-operator">=</span> redis.opsForValue()<br>        .setIfAbsent(lockKey, <span class="hljs-string">&quot;1&quot;</span>, <span class="hljs-number">10</span>, TimeUnit.SECONDS);<br><br>    <span class="hljs-keyword">if</span> (locked) &#123;<br>        <span class="hljs-keyword">try</span> &#123;<br>            <span class="hljs-comment">// 双重检查</span><br>            product = redis.opsForValue().get(cacheKey);<br>            <span class="hljs-keyword">if</span> (product != <span class="hljs-literal">null</span>) &#123;<br>                <span class="hljs-keyword">return</span> product;<br>            &#125;<br><br>            <span class="hljs-comment">// 查数据库</span><br>            product = productMapper.selectById(productId);<br>            <span class="hljs-keyword">if</span> (product != <span class="hljs-literal">null</span>) &#123;<br>                redis.opsForValue().set(cacheKey, product, <span class="hljs-number">3600</span>, TimeUnit.SECONDS);<br>            &#125;<br>            <span class="hljs-keyword">return</span> product;<br>        &#125; <span class="hljs-keyword">finally</span> &#123;<br>            redis.delete(lockKey);<br>        &#125;<br>    &#125; <span class="hljs-keyword">else</span> &#123;<br>        <span class="hljs-comment">// 未获得锁，短暂等待后重试</span><br>        <span class="hljs-keyword">try</span> &#123;<br>            Thread.sleep(<span class="hljs-number">50</span>);<br>        &#125; <span class="hljs-keyword">catch</span> (InterruptedException ignored) &#123;&#125;<br>        <span class="hljs-keyword">return</span> getProductWithMutex(productId);<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="解决方案-2逻辑过期">解决方案 2：逻辑过期</h3>
+<p>缓存永不过期，但在数据中存储逻辑过期时间。发现逻辑过期后异步更新缓存。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-meta">@Data</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">CacheData</span>&lt;T&gt; &#123;<br>    <span class="hljs-keyword">private</span> T data;<br>    <span class="hljs-keyword">private</span> <span class="hljs-type">long</span> expireAt; <span class="hljs-comment">// 逻辑过期时间戳</span><br><br>    <span class="hljs-keyword">public</span> <span class="hljs-type">boolean</span> <span class="hljs-title function_">isExpired</span><span class="hljs-params">()</span> &#123;<br>        <span class="hljs-keyword">return</span> System.currentTimeMillis() &gt; expireAt;<br>    &#125;<br>&#125;<br><br><span class="hljs-keyword">public</span> Product <span class="hljs-title function_">getProductWithLogicalExpire</span><span class="hljs-params">(String productId)</span> &#123;<br>    <span class="hljs-type">String</span> <span class="hljs-variable">cacheKey</span> <span class="hljs-operator">=</span> <span class="hljs-string">&quot;product:&quot;</span> + productId;<br><br>    CacheData&lt;Product&gt; cached = redis.opsForValue().get(cacheKey);<br>    <span class="hljs-keyword">if</span> (cached == <span class="hljs-literal">null</span>) &#123;<br>        <span class="hljs-comment">// 缓存中完全没有，说明数据不存在或未初始化</span><br>        <span class="hljs-keyword">return</span> <span class="hljs-literal">null</span>;<br>    &#125;<br><br>    <span class="hljs-comment">// 未过期，直接返回</span><br>    <span class="hljs-keyword">if</span> (!cached.isExpired()) &#123;<br>        <span class="hljs-keyword">return</span> cached.getData();<br>    &#125;<br><br>    <span class="hljs-comment">// 已逻辑过期，尝试异步更新</span><br>    <span class="hljs-type">String</span> <span class="hljs-variable">lockKey</span> <span class="hljs-operator">=</span> <span class="hljs-string">&quot;lock:product:&quot;</span> + productId;<br>    <span class="hljs-type">boolean</span> <span class="hljs-variable">locked</span> <span class="hljs-operator">=</span> redis.opsForValue()<br>        .setIfAbsent(lockKey, <span class="hljs-string">&quot;1&quot;</span>, <span class="hljs-number">10</span>, TimeUnit.SECONDS);<br><br>    <span class="hljs-keyword">if</span> (locked) &#123;<br>        <span class="hljs-comment">// 获得锁，异步更新缓存</span><br>        CompletableFuture.runAsync(() -&gt; &#123;<br>            <span class="hljs-keyword">try</span> &#123;<br>                <span class="hljs-type">Product</span> <span class="hljs-variable">fresh</span> <span class="hljs-operator">=</span> productMapper.selectById(productId);<br>                CacheData&lt;Product&gt; newCache = <span class="hljs-keyword">new</span> <span class="hljs-title class_">CacheData</span>&lt;&gt;();<br>                newCache.setData(fresh);<br>                newCache.setExpireAt(System.currentTimeMillis() + <span class="hljs-number">3600_000</span>);<br>                redis.opsForValue().set(cacheKey, newCache);<br>            &#125; <span class="hljs-keyword">finally</span> &#123;<br>                redis.delete(lockKey);<br>            &#125;<br>        &#125;);<br>    &#125;<br><br>    <span class="hljs-comment">// 返回旧数据（可能稍有延迟但不会阻塞）</span><br>    <span class="hljs-keyword">return</span> cached.getData();<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="缓存雪崩">缓存雪崩</h2>
+<h3 id="问题描述-2">问题描述</h3>
+<p>大量缓存同时过期，或者缓存服务宕机，导致所有请求涌向数据库。</p>
+<pre class="mermaid">graph TB
+    subgraph "缓存雪崩场景"
+        Normal[正常情况&lt;br/&gt;缓存挡住99%请求]
+        Avalanche[雪崩&lt;br/&gt;缓存大面积失效]
+        Normal --&gt; |大量Key同时过期&lt;br/&gt;或Redis宕机| Avalanche
+        Avalanche --&gt; |100%流量| DB[数据库崩溃]
+    end</pre>
+<h3 id="解决方案">解决方案</h3>
+<pre class="mermaid">graph TB
+    subgraph 防护措施
+        A[随机过期时间&lt;br/&gt;避免同时过期] --&gt; Goal[防雪崩]
+        B[多级缓存&lt;br/&gt;L1本地+L2 Redis] --&gt; Goal
+        C[集群部署&lt;br/&gt;Redis Cluster/Sentinel] --&gt; Goal
+        D[限流降级&lt;br/&gt;保护数据库] --&gt; Goal
+        E[缓存预热&lt;br/&gt;启动时加载] --&gt; Goal
+    end</pre>
+<h4 id="随机过期时间">1. 随机过期时间</h4>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">// 在基础TTL上加随机偏移</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">cacheProduct</span><span class="hljs-params">(String key, Product product)</span> &#123;<br>    <span class="hljs-type">long</span> <span class="hljs-variable">baseTtl</span> <span class="hljs-operator">=</span> <span class="hljs-number">3600</span>; <span class="hljs-comment">// 基础1小时</span><br>    <span class="hljs-type">long</span> <span class="hljs-variable">randomOffset</span> <span class="hljs-operator">=</span> ThreadLocalRandom.current().nextLong(<span class="hljs-number">0</span>, <span class="hljs-number">600</span>); <span class="hljs-comment">// 随机0-10分钟</span><br>    redis.opsForValue().set(key, product, baseTtl + randomOffset, TimeUnit.SECONDS);<br>&#125;<br></code></pre></td></tr></table></figure>
+<h4 id="多级缓存">2. 多级缓存</h4>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-meta">@Component</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">MultiLevelCache</span> &#123;<br>    <span class="hljs-comment">// L1: 本地缓存 (Caffeine)</span><br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> Cache&lt;String, Object&gt; localCache = Caffeine.newBuilder()<br>        .maximumSize(<span class="hljs-number">10_000</span>)<br>        .expireAfterWrite(<span class="hljs-number">5</span>, TimeUnit.MINUTES)<br>        .build();<br><br>    <span class="hljs-comment">// L2: 分布式缓存 (Redis)</span><br>    <span class="hljs-meta">@Autowired</span><br>    <span class="hljs-keyword">private</span> RedisTemplate&lt;String, Object&gt; redis;<br><br>    <span class="hljs-keyword">public</span> Object <span class="hljs-title function_">get</span><span class="hljs-params">(String key, Function&lt;String, Object&gt; loader)</span> &#123;<br>        <span class="hljs-comment">// L1 查询</span><br>        <span class="hljs-type">Object</span> <span class="hljs-variable">value</span> <span class="hljs-operator">=</span> localCache.getIfPresent(key);<br>        <span class="hljs-keyword">if</span> (value != <span class="hljs-literal">null</span>) &#123;<br>            <span class="hljs-keyword">return</span> value;<br>        &#125;<br><br>        <span class="hljs-comment">// L2 查询</span><br>        value = redis.opsForValue().get(key);<br>        <span class="hljs-keyword">if</span> (value != <span class="hljs-literal">null</span>) &#123;<br>            localCache.put(key, value);<br>            <span class="hljs-keyword">return</span> value;<br>        &#125;<br><br>        <span class="hljs-comment">// 数据库查询</span><br>        value = loader.apply(key);<br>        <span class="hljs-keyword">if</span> (value != <span class="hljs-literal">null</span>) &#123;<br>            redis.opsForValue().set(key, value, randomTtl(), TimeUnit.SECONDS);<br>            localCache.put(key, value);<br>        &#125;<br>        <span class="hljs-keyword">return</span> value;<br>    &#125;<br><br>    <span class="hljs-keyword">private</span> <span class="hljs-type">long</span> <span class="hljs-title function_">randomTtl</span><span class="hljs-params">()</span> &#123;<br>        <span class="hljs-keyword">return</span> <span class="hljs-number">3600</span> + ThreadLocalRandom.current().nextLong(<span class="hljs-number">600</span>);<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<pre class="mermaid">graph LR
+    Request[请求] --&gt; L1[L1: 本地缓存&lt;br/&gt;Caffeine&lt;br/&gt;5min TTL]
+    L1 --&gt;|MISS| L2[L2: 分布式缓存&lt;br/&gt;Redis&lt;br/&gt;1h TTL]
+    L2 --&gt;|MISS| DB[数据库]
+    DB --&gt;|回填| L2
+    L2 --&gt;|回填| L1</pre>
+<h4 id="缓存预热">3. 缓存预热</h4>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-meta">@Component</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">CacheWarmer</span> <span class="hljs-keyword">implements</span> <span class="hljs-title class_">ApplicationRunner</span> &#123;<br><br>    <span class="hljs-meta">@Override</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">run</span><span class="hljs-params">(ApplicationArguments args)</span> &#123;<br>        log.info(<span class="hljs-string">&quot;Starting cache warm-up...&quot;</span>);<br><br>        <span class="hljs-comment">// 加载热门商品</span><br>        List&lt;Product&gt; hotProducts = productMapper.selectHotProducts(<span class="hljs-number">1000</span>);<br>        <span class="hljs-keyword">for</span> (Product product : hotProducts) &#123;<br>            <span class="hljs-type">String</span> <span class="hljs-variable">key</span> <span class="hljs-operator">=</span> <span class="hljs-string">&quot;product:&quot;</span> + product.getId();<br>            <span class="hljs-type">long</span> <span class="hljs-variable">ttl</span> <span class="hljs-operator">=</span> <span class="hljs-number">3600</span> + ThreadLocalRandom.current().nextLong(<span class="hljs-number">600</span>);<br>            redis.opsForValue().set(key, product, ttl, TimeUnit.SECONDS);<br>        &#125;<br><br>        <span class="hljs-comment">// 加载配置数据</span><br>        List&lt;Config&gt; configs = configMapper.selectAll();<br>        <span class="hljs-keyword">for</span> (Config config : configs) &#123;<br>            redis.opsForValue().set(<span class="hljs-string">&quot;config:&quot;</span> + config.getKey(),<br>                config.getValue(), <span class="hljs-number">86400</span>, TimeUnit.SECONDS);<br>        &#125;<br><br>        log.info(<span class="hljs-string">&quot;Cache warm-up completed. Products=&#123;&#125;, Configs=&#123;&#125;&quot;</span>,<br>            hotProducts.size(), configs.size());<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="缓存一致性策略">缓存一致性策略</h2>
+<h3 id="延迟双删">延迟双删</h3>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">updateProductWithDoubleDelete</span><span class="hljs-params">(Product product)</span> &#123;<br>    <span class="hljs-type">String</span> <span class="hljs-variable">cacheKey</span> <span class="hljs-operator">=</span> <span class="hljs-string">&quot;product:&quot;</span> + product.getId();<br><br>    <span class="hljs-comment">// 1. 删除缓存</span><br>    redis.delete(cacheKey);<br><br>    <span class="hljs-comment">// 2. 更新数据库</span><br>    productMapper.updateById(product);<br><br>    <span class="hljs-comment">// 3. 延迟再删一次缓存（异步）</span><br>    CompletableFuture.runAsync(() -&gt; &#123;<br>        <span class="hljs-keyword">try</span> &#123;<br>            Thread.sleep(<span class="hljs-number">500</span>); <span class="hljs-comment">// 等待主从同步</span><br>        &#125; <span class="hljs-keyword">catch</span> (InterruptedException ignored) &#123;&#125;<br>        redis.delete(cacheKey);<br>    &#125;);<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="基于-binlog-的缓存更新">基于 Binlog 的缓存更新</h3>
+<pre class="mermaid">graph LR
+    App[应用] --&gt;|更新| DB[MySQL]
+    DB --&gt;|Binlog| Canal[Canal]
+    Canal --&gt;|解析变更| MQ[消息队列]
+    MQ --&gt;|消费| CacheUpdater[缓存更新服务]
+    CacheUpdater --&gt;|删除/更新| Redis[Redis]</pre>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">// Canal 监听 Binlog 变更</span><br><span class="hljs-meta">@Component</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">CanalEventHandler</span> &#123;<br><br>    <span class="hljs-meta">@CanalEventListener</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">onEvent</span><span class="hljs-params">(CanalEntry.Entry entry)</span> &#123;<br>        <span class="hljs-keyword">if</span> (entry.getEntryType() != CanalEntry.EntryType.ROWDATA) &#123;<br>            <span class="hljs-keyword">return</span>;<br>        &#125;<br><br>        CanalEntry.<span class="hljs-type">RowChange</span> <span class="hljs-variable">rowChange</span> <span class="hljs-operator">=</span> CanalEntry.RowChange<br>            .parseFrom(entry.getStoreValue());<br><br>        <span class="hljs-type">String</span> <span class="hljs-variable">tableName</span> <span class="hljs-operator">=</span> entry.getHeader().getTableName();<br><br>        <span class="hljs-keyword">for</span> (CanalEntry.RowData rowData : rowChange.getRowDatasList()) &#123;<br>            <span class="hljs-keyword">if</span> (<span class="hljs-string">&quot;product&quot;</span>.equals(tableName)) &#123;<br>                <span class="hljs-type">String</span> <span class="hljs-variable">productId</span> <span class="hljs-operator">=</span> getColumnValue(rowData, <span class="hljs-string">&quot;id&quot;</span>);<br>                <span class="hljs-comment">// 删除对应缓存</span><br>                redis.delete(<span class="hljs-string">&quot;product:&quot;</span> + productId);<br>                log.info(<span class="hljs-string">&quot;Cache invalidated for product: &#123;&#125;&quot;</span>, productId);<br>            &#125;<br>        &#125;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="缓存策略选型">缓存策略选型</h2>
+<table>
+<thead>
+<tr class="header">
+<th>场景</th>
+<th>推荐策略</th>
+<th>原因</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>读多写少</td>
+<td>Cache-Aside</td>
+<td>简单可靠</td>
+</tr>
+<tr class="even">
+<td>读写均衡</td>
+<td>Read/Write-Through</td>
+<td>代码简洁</td>
+</tr>
+<tr class="odd">
+<td>写密集</td>
+<td>Write-Behind</td>
+<td>减少数据库压力</td>
+</tr>
+<tr class="even">
+<td>强一致性</td>
+<td>Binlog + 缓存失效</td>
+<td>数据库变更驱动</td>
+</tr>
+<tr class="odd">
+<td>防穿透</td>
+<td>布隆过滤器 + 空值缓存</td>
+<td>双重保障</td>
+</tr>
+<tr class="even">
+<td>防击穿</td>
+<td>互斥锁 / 逻辑过期</td>
+<td>按场景选择</td>
+</tr>
+<tr class="odd">
+<td>防雪崩</td>
+<td>随机TTL + 多级缓存</td>
+<td>多维防护</td>
+</tr>
+</tbody>
+</table>
+<h2 id="总结">总结</h2>
+<p>缓存策略的选择取决于业务场景的读写比例、一致性要求和性能目标。在实际项目中，通常需要组合使用多种策略：Cache-Aside
+作为基础模式，布隆过滤器防穿透，互斥锁防击穿，随机 TTL +
+多级缓存防雪崩。对于一致性要求高的场景，推荐基于 Canal 监听 Binlog
+来异步更新缓存。最重要的是做好监控——监控缓存命中率、穿透率和 Redis
+内存使用情况，在问题发生前及时预警。</p>
+<hr />
+<h2 id="踩坑记录">踩坑记录</h2>
+<p>春节大促，凌晨零点活动开始，Redis 缓存大规模过期，DB 直接被打挂。</p>
+<p>起因是：我们给活动商品缓存统一设置了
+<code>TTL=3600s</code>，所有商品在同一时刻批量导入
+Redis。零点活动开始后整整 1 小时，所有缓存同时过期，2000 并发直接穿透到
+MySQL。DB CPU 飙到 100%，订单服务开始大量超时，持续了 6
+分钟才靠限流恢复。</p>
+<p>事后分析：典型缓存雪崩，完全是可预防的。改造方案：<code>TTL = 3600 + random(0, 600)</code>，加互斥锁控制缓存重建并发（只允许一个线程回源，其他线程等待或返回旧值），同时对
+TOP 100 热点商品做永久预热。之后经历了 3 次大促，DB QPS
+峰值始终控制在日常的 1.5 倍以内。</p>
+<h2 id="实测结果">实测结果</h2>
+<table>
+<thead>
+<tr class="header">
+<th>阶段</th>
+<th>DB QPS 峰值</th>
+<th>DB CPU</th>
+<th>接口 P99</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>雪崩发生时</td>
+<td>18,000（平时 800）</td>
+<td>持续 100% 约 6 分钟</td>
+<td>8,000ms+</td>
+</tr>
+<tr class="even">
+<td>改造后首次大促</td>
+<td>1,200</td>
+<td>峰值 35%</td>
+<td>45ms</td>
+</tr>
+<tr class="odd">
+<td>改造后第三次大促</td>
+<td>980</td>
+<td>峰值 28%</td>
+<td>38ms</td>
+</tr>
+</tbody>
+</table>
+<p>缓存命中率从雪崩前的 92% 提升到改造后的 99.3%。</p>
+<h2 id="我的看法">我的看法</h2>
+<p>我见过很多团队只防「穿透」，因为布隆过滤器方案网上资料最多，实现也最有”技术感”。但真正打垮系统的往往是「雪崩」——批量缓存同时过期这个场景太容易被忽略，尤其是定时任务统一刷新缓存的系统必须加随机抖动。</p>
+<p>防雪崩的成本极低（一行 <code>random</code>
+代码），收益极高。这种投入产出比最高的事应该优先做，而不是上来就搞多级缓存这种复杂方案。</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2021-03-10</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">3.9k 字 · 10 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/redis/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">开发中常见的 Redis 问题及解决方案</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/Introduction-to-linux-tuntap/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Linux TUN/TAP：虚拟网络设备原理与实践</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BC%93%E5%AD%98%E8%AF%BB%E5%86%99%E7%AD%96%E7%95%A5"><span class="toc-text">缓存读写策略</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#cache-aside%E6%97%81%E8%B7%AF%E7%BC%93%E5%AD%98"><span class="toc-text">Cache-Aside（旁路缓存）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#read-through-write-through"><span class="toc-text">Read-Through &#x2F; Write-Through</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#write-behind%E5%BC%82%E6%AD%A5%E5%86%99%E5%9B%9E"><span class="toc-text">Write-Behind（异步写回）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BC%93%E5%AD%98%E7%A9%BF%E9%80%8F"><span class="toc-text">缓存穿透</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%97%AE%E9%A2%98%E6%8F%8F%E8%BF%B0"><span class="toc-text">问题描述</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88-1%E7%BC%93%E5%AD%98%E7%A9%BA%E5%80%BC"><span class="toc-text">解决方案 1：缓存空值</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88-2%E5%B8%83%E9%9A%86%E8%BF%87%E6%BB%A4%E5%99%A8"><span class="toc-text">解决方案 2：布隆过滤器</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BC%93%E5%AD%98%E5%87%BB%E7%A9%BF"><span class="toc-text">缓存击穿</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%97%AE%E9%A2%98%E6%8F%8F%E8%BF%B0-1"><span class="toc-text">问题描述</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88-1%E4%BA%92%E6%96%A5%E9%94%81mutex"><span class="toc-text">解决方案 1：互斥锁（Mutex）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88-2%E9%80%BB%E8%BE%91%E8%BF%87%E6%9C%9F"><span class="toc-text">解决方案 2：逻辑过期</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BC%93%E5%AD%98%E9%9B%AA%E5%B4%A9"><span class="toc-text">缓存雪崩</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%97%AE%E9%A2%98%E6%8F%8F%E8%BF%B0-2"><span class="toc-text">问题描述</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88"><span class="toc-text">解决方案</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BC%93%E5%AD%98%E4%B8%80%E8%87%B4%E6%80%A7%E7%AD%96%E7%95%A5"><span class="toc-text">缓存一致性策略</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%BB%B6%E8%BF%9F%E5%8F%8C%E5%88%A0"><span class="toc-text">延迟双删</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9F%BA%E4%BA%8E-binlog-%E7%9A%84%E7%BC%93%E5%AD%98%E6%9B%B4%E6%96%B0"><span class="toc-text">基于 Binlog 的缓存更新</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BC%93%E5%AD%98%E7%AD%96%E7%95%A5%E9%80%89%E5%9E%8B"><span class="toc-text">缓存策略选型</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%B8%A9%E5%9D%91%E8%AE%B0%E5%BD%95"><span class="toc-text">踩坑记录</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E6%B5%8B%E7%BB%93%E6%9E%9C"><span class="toc-text">实测结果</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%88%91%E7%9A%84%E7%9C%8B%E6%B3%95"><span class="toc-text">我的看法</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

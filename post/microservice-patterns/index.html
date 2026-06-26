@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>微服务架构模式：从单体到分布式 · zt&#39;s Blog</title>
+  <meta name="description" content="深入剖析微服务架构核心模式，从单体架构演进到分布式系统，涵盖分解策略、API网关、服务网格、Saga模式、事件驱动架构与绞杀者模式。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/microservice-patterns/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="微服务架构模式：从单体到分布式">
+  <meta property="og:description" content="深入剖析微服务架构核心模式，从单体架构演进到分布式系统，涵盖分解策略、API网关、服务网格、Saga模式、事件驱动架构与绞杀者模式。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/microservice-patterns/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2021-10-24T16:00:00.000Z">
+  <meta property="article:modified_time" content="2021-10-24T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="微服务架构模式：从单体到分布式">
+  <meta name="twitter:description" content="深入剖析微服务架构核心模式，从单体架构演进到分布式系统，涵盖分解策略、API网关、服务网格、Saga模式、事件驱动架构与绞杀者模式。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"微服务架构模式：从单体到分布式","description":"深入剖析微服务架构核心模式，从单体架构演进到分布式系统，涵盖分解策略、API网关、服务网格、Saga模式、事件驱动架构与绞杀者模式。","datePublished":"2021-10-24T16:00:00.000Z","dateModified":"2021-10-24T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/microservice-patterns/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Architecture","item":"https://withesse.co/categories/Architecture/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:152">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Architecture/">Architecture</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/architecture/"><span class="hash">#</span>architecture</a><a class="tag" href="/tags/microservices/"><span class="hash">#</span>microservices</a><a class="tag" href="/tags/patterns/"><span class="hash">#</span>patterns</a>
+        
+      </div>
+
+      <h1>微服务架构模式：从单体到分布式</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2021.10.25</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 8 min</span>
+        </span>
+        <span class="wc"><span class="num">3.3k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8D%95%E4%BD%93%E6%9E%B6%E6%9E%84-vs-%E5%BE%AE%E6%9C%8D%E5%8A%A1%E6%9E%B6%E6%9E%84"><span class="toc-text">单体架构 vs 微服务架构</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8D%95%E4%BD%93%E6%9E%B6%E6%9E%84%E7%9A%84%E7%89%B9%E5%BE%81"><span class="toc-text">单体架构的特征</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8D%95%E4%BD%93%E6%9E%B6%E6%9E%84%E7%9A%84%E7%97%9B%E7%82%B9"><span class="toc-text">单体架构的痛点</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%BE%AE%E6%9C%8D%E5%8A%A1%E6%9E%B6%E6%9E%84%E5%85%A8%E6%99%AF"><span class="toc-text">微服务架构全景</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9C%8D%E5%8A%A1%E5%88%86%E8%A7%A3%E7%AD%96%E7%95%A5"><span class="toc-text">服务分解策略</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%8C%89%E4%B8%9A%E5%8A%A1%E8%83%BD%E5%8A%9B%E5%88%86%E8%A7%A3business-capability"><span class="toc-text">按业务能力分解（Business
+Capability）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%8C%89%E5%AD%90%E5%9F%9F%E5%88%86%E8%A7%A3ddd-subdomain"><span class="toc-text">按子域分解（DDD Subdomain）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%88%86%E8%A7%A3%E5%8E%9F%E5%88%99"><span class="toc-text">分解原则</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#api-gateway-%E6%A8%A1%E5%BC%8F"><span class="toc-text">API Gateway 模式</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#bff-%E6%A8%A1%E5%BC%8Fbackend-for-frontend"><span class="toc-text">BFF 模式（Backend for
+Frontend）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#service-mesh-%E6%A8%A1%E5%BC%8F"><span class="toc-text">Service Mesh 模式</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#saga-%E6%A8%A1%E5%BC%8F"><span class="toc-text">Saga 模式</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%BC%96%E6%8E%92%E5%BC%8F-sagaorchestration"><span class="toc-text">编排式 Saga（Orchestration）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8D%8F%E5%90%8C%E5%BC%8F-sagachoreography"><span class="toc-text">协同式 Saga（Choreography）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%8B%E4%BB%B6%E9%A9%B1%E5%8A%A8%E6%9E%B6%E6%9E%84"><span class="toc-text">事件驱动架构</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BB%9E%E6%9D%80%E8%80%85%E6%A8%A1%E5%BC%8Fstrangler-fig-pattern"><span class="toc-text">绞杀者模式（Strangler Fig
+Pattern）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%9E%E6%96%BD%E6%AD%A5%E9%AA%A4"><span class="toc-text">实施步骤</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BE%AE%E6%9C%8D%E5%8A%A1%E6%9E%B6%E6%9E%84%E5%86%B3%E7%AD%96%E6%A1%86%E6%9E%B6"><span class="toc-text">微服务架构决策框架</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%B8%A9%E5%9D%91%E8%AE%B0%E5%BD%95"><span class="toc-text">踩坑记录</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E6%B5%8B%E7%BB%93%E6%9E%9C"><span class="toc-text">实测结果</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%88%91%E7%9A%84%E7%9C%8B%E6%B3%95"><span class="toc-text">我的看法</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="前言">前言</h2>
+<p>随着业务规模的增长，单体架构逐渐暴露出部署困难、扩展受限、技术栈锁定等问题。微服务架构通过将系统拆分为一组小型、自治的服务来解决这些问题。但微服务并非银弹，它引入了分布式系统的复杂性。本文将系统性地梳理微服务架构中的核心模式，帮助你在实际项目中做出正确的架构决策。</p>
+<h2 id="单体架构-vs-微服务架构">单体架构 vs 微服务架构</h2>
+<h3 id="单体架构的特征">单体架构的特征</h3>
+<p>单体架构将所有功能模块打包在一个部署单元中，共享同一个数据库。它的优势在于开发简单、部署方便、调试直观。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">// 典型的单体应用结构</span><br><span class="hljs-meta">@SpringBootApplication</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">MonolithApplication</span> &#123;<br>    <span class="hljs-comment">// 所有模块在同一个进程中</span><br>    <span class="hljs-comment">// - UserModule</span><br>    <span class="hljs-comment">// - OrderModule</span><br>    <span class="hljs-comment">// - PaymentModule</span><br>    <span class="hljs-comment">// - InventoryModule</span><br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="单体架构的痛点">单体架构的痛点</h3>
+<p>当团队规模超过 10 人、代码量超过 50
+万行时，单体架构的问题开始显现：</p>
+<ol type="1">
+<li><strong>部署耦合</strong>：修改一行代码需要重新部署整个应用</li>
+<li><strong>扩展受限</strong>：无法针对热点模块单独扩容</li>
+<li><strong>技术锁定</strong>：所有模块必须使用相同的技术栈</li>
+<li><strong>故障传播</strong>：一个模块的 OOM 会导致整个应用崩溃</li>
+</ol>
+<h3 id="微服务架构全景">微服务架构全景</h3>
+<pre class="mermaid">graph TB
+    Client[客户端] --&gt; Gateway[API Gateway]
+
+    Gateway --&gt; UserService[用户服务]
+    Gateway --&gt; OrderService[订单服务]
+    Gateway --&gt; PaymentService[支付服务]
+    Gateway --&gt; InventoryService[库存服务]
+
+    UserService --&gt; UserDB[(用户DB)]
+    OrderService --&gt; OrderDB[(订单DB)]
+    PaymentService --&gt; PaymentDB[(支付DB)]
+    InventoryService --&gt; InventoryDB[(库存DB)]
+
+    OrderService --&gt;|异步消息| MQ[消息队列]
+    MQ --&gt; PaymentService
+    MQ --&gt; InventoryService
+
+    subgraph Service Mesh
+        UserService
+        OrderService
+        PaymentService
+        InventoryService
+    end</pre>
+<h2 id="服务分解策略">服务分解策略</h2>
+<h3 id="按业务能力分解business-capability">按业务能力分解（Business
+Capability）</h3>
+<p>根据企业的业务能力来划分服务边界。业务能力是企业为产生价值而做的事情。</p>
+<pre class="mermaid">graph LR
+    subgraph 电商平台
+        subgraph 商品管理
+            A[商品目录服务]
+            B[库存服务]
+        end
+        subgraph 订单管理
+            C[订单服务]
+            D[物流服务]
+        end
+        subgraph 用户管理
+            E[账户服务]
+            F[认证服务]
+        end
+        subgraph 支付管理
+            G[支付服务]
+            H[结算服务]
+        end
+    end</pre>
+<h3 id="按子域分解ddd-subdomain">按子域分解（DDD Subdomain）</h3>
+<p>基于领域驱动设计（DDD）的限界上下文来定义服务边界，这是目前最被推荐的分解方式。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">// 订单上下文中的 Order 聚合根</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">Order</span> &#123;<br>    <span class="hljs-keyword">private</span> OrderId id;<br>    <span class="hljs-keyword">private</span> CustomerId customerId;<br>    <span class="hljs-keyword">private</span> List&lt;OrderItem&gt; items;<br>    <span class="hljs-keyword">private</span> OrderStatus status;<br>    <span class="hljs-keyword">private</span> Money totalAmount;<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">place</span><span class="hljs-params">()</span> &#123;<br>        <span class="hljs-keyword">if</span> (items.isEmpty()) &#123;<br>            <span class="hljs-keyword">throw</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">OrderException</span>(<span class="hljs-string">&quot;Order must have at least one item&quot;</span>);<br>        &#125;<br>        <span class="hljs-built_in">this</span>.status = OrderStatus.PLACED;<br>        registerEvent(<span class="hljs-keyword">new</span> <span class="hljs-title class_">OrderPlacedEvent</span>(<span class="hljs-built_in">this</span>.id, <span class="hljs-built_in">this</span>.customerId, <span class="hljs-built_in">this</span>.totalAmount));<br>    &#125;<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">cancel</span><span class="hljs-params">()</span> &#123;<br>        <span class="hljs-keyword">if</span> (status != OrderStatus.PLACED) &#123;<br>            <span class="hljs-keyword">throw</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">OrderException</span>(<span class="hljs-string">&quot;Only placed orders can be cancelled&quot;</span>);<br>        &#125;<br>        <span class="hljs-built_in">this</span>.status = OrderStatus.CANCELLED;<br>        registerEvent(<span class="hljs-keyword">new</span> <span class="hljs-title class_">OrderCancelledEvent</span>(<span class="hljs-built_in">this</span>.id));<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="分解原则">分解原则</h3>
+<ul>
+<li><strong>单一职责</strong>：每个服务只负责一个业务能力</li>
+<li><strong>高内聚低耦合</strong>：服务内部紧密相关，服务之间松散依赖</li>
+<li><strong>数据自治</strong>：每个服务拥有并管理自己的数据库</li>
+<li><strong>合理粒度</strong>：不要过度拆分，一个小团队（2-pizza
+team）能维护一个服务</li>
+</ul>
+<h2 id="api-gateway-模式">API Gateway 模式</h2>
+<p>API Gateway
+是微服务架构中的核心基础设施，它作为系统的统一入口，承担请求路由、协议转换、认证授权、限流熔断等职责。</p>
+<pre class="mermaid">sequenceDiagram
+    participant C as 客户端
+    participant G as API Gateway
+    participant A as 认证服务
+    participant O as 订单服务
+    participant U as 用户服务
+
+    C-&gt;&gt;G: GET /api/orders/123
+    G-&gt;&gt;A: 验证 Token
+    A--&gt;&gt;G: Token 有效, userId=456
+
+    par 并行调用
+        G-&gt;&gt;O: GET /orders/123
+        G-&gt;&gt;U: GET /users/456
+    end
+
+    O--&gt;&gt;G: 订单数据
+    U--&gt;&gt;G: 用户数据
+    G-&gt;&gt;G: 聚合响应数据
+    G--&gt;&gt;C: 完整订单信息(含用户)</pre>
+<h3 id="bff-模式backend-for-frontend">BFF 模式（Backend for
+Frontend）</h3>
+<p>不同的客户端（Web、移动端、第三方）有不同的数据需求，可以为每种客户端提供专属的
+API Gateway。</p>
+<pre class="mermaid">graph TB
+    Web[Web App] --&gt; WebBFF[Web BFF]
+    Mobile[Mobile App] --&gt; MobileBFF[Mobile BFF]
+    ThirdParty[第三方] --&gt; OpenAPI[Open API Gateway]
+
+    WebBFF --&gt; Services[微服务集群]
+    MobileBFF --&gt; Services
+    OpenAPI --&gt; Services</pre>
+<figure class="highlight nginx"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><code class="hljs nginx"><span class="hljs-comment"># Nginx 作为简单 API Gateway 的配置示例</span><br><span class="hljs-section">upstream</span> order-service &#123;<br>    <span class="hljs-attribute">server</span> order-<span class="hljs-number">1</span>:<span class="hljs-number">8080</span>;<br>    <span class="hljs-attribute">server</span> order-<span class="hljs-number">2</span>:<span class="hljs-number">8080</span>;<br>&#125;<br><br><span class="hljs-section">upstream</span> user-service &#123;<br>    <span class="hljs-attribute">server</span> user-<span class="hljs-number">1</span>:<span class="hljs-number">8080</span>;<br>    <span class="hljs-attribute">server</span> user-<span class="hljs-number">2</span>:<span class="hljs-number">8080</span>;<br>&#125;<br><br><span class="hljs-section">server</span> &#123;<br>    <span class="hljs-attribute">listen</span> <span class="hljs-number">80</span>;<br><br>    <span class="hljs-section">location</span> /api/orders &#123;<br>        <span class="hljs-comment"># 限流配置</span><br>        <span class="hljs-attribute">limit_req</span> zone=api burst=<span class="hljs-number">20</span> nodelay;<br>        <span class="hljs-attribute">proxy_pass</span> http://order-service;<br>        <span class="hljs-attribute">proxy_set_header</span> X-Request-ID <span class="hljs-variable">$request_id</span>;<br>    &#125;<br><br>    <span class="hljs-section">location</span> /api/users &#123;<br>        <span class="hljs-attribute">limit_req</span> zone=api burst=<span class="hljs-number">20</span> nodelay;<br>        <span class="hljs-attribute">proxy_pass</span> http://user-service;<br>        <span class="hljs-attribute">proxy_set_header</span> X-Request-ID <span class="hljs-variable">$request_id</span>;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="service-mesh-模式">Service Mesh 模式</h2>
+<p>Service Mesh
+将服务间通信的复杂性从应用代码中剥离出来，下沉到基础设施层。每个服务实例旁边部署一个
+Sidecar 代理，由它负责所有的网络通信。</p>
+<pre class="mermaid">graph TB
+    subgraph Pod A
+        ServiceA[服务 A] &lt;--&gt; ProxyA[Envoy Proxy]
+    end
+
+    subgraph Pod B
+        ServiceB[服务 B] &lt;--&gt; ProxyB[Envoy Proxy]
+    end
+
+    subgraph Pod C
+        ServiceC[服务 C] &lt;--&gt; ProxyC[Envoy Proxy]
+    end
+
+    ProxyA &lt;--&gt;|mTLS| ProxyB
+    ProxyB &lt;--&gt;|mTLS| ProxyC
+    ProxyA &lt;--&gt;|mTLS| ProxyC
+
+    ControlPlane[控制平面 Istiod] --&gt;|配置下发| ProxyA
+    ControlPlane --&gt;|配置下发| ProxyB
+    ControlPlane --&gt;|配置下发| ProxyC</pre>
+<p>Service Mesh 提供的核心能力： -
+<strong>流量管理</strong>：负载均衡、熔断、超时、重试、灰度发布 -
+<strong>安全通信</strong>：mTLS 加密、访问控制 -
+<strong>可观测性</strong>：分布式追踪、指标采集、访问日志</p>
+<h2 id="saga-模式">Saga 模式</h2>
+<p>在微服务架构中，跨服务的事务不能使用传统的 ACID 事务。Saga
+模式通过一系列本地事务和补偿操作来维护数据一致性。</p>
+<h3 id="编排式-sagaorchestration">编排式 Saga（Orchestration）</h3>
+<p>由一个中央协调器（Orchestrator）来控制整个 Saga 的执行流程。</p>
+<pre class="mermaid">sequenceDiagram
+    participant Orch as Saga Orchestrator
+    participant Order as 订单服务
+    participant Payment as 支付服务
+    participant Inventory as 库存服务
+    participant Delivery as 物流服务
+
+    Orch-&gt;&gt;Order: 创建订单
+    Order--&gt;&gt;Orch: 订单已创建
+
+    Orch-&gt;&gt;Payment: 扣款
+    Payment--&gt;&gt;Orch: 扣款成功
+
+    Orch-&gt;&gt;Inventory: 扣减库存
+    Inventory--&gt;&gt;Orch: 库存不足!
+
+    Note over Orch: 触发补偿流程
+    Orch-&gt;&gt;Payment: 退款(补偿)
+    Payment--&gt;&gt;Orch: 退款成功
+    Orch-&gt;&gt;Order: 取消订单(补偿)
+    Order--&gt;&gt;Orch: 订单已取消</pre>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">// Saga 编排器示例</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">CreateOrderSaga</span> &#123;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> SagaDefinition&lt;CreateOrderState&gt; sagaDefinition;<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-title function_">CreateOrderSaga</span><span class="hljs-params">()</span> &#123;<br>        <span class="hljs-built_in">this</span>.sagaDefinition = SagaDefinition.&lt;CreateOrderState&gt;builder()<br>            .step()<br>                .invokeParticipant(<span class="hljs-built_in">this</span>::createOrder)<br>                .withCompensation(<span class="hljs-built_in">this</span>::cancelOrder)<br>            .step()<br>                .invokeParticipant(<span class="hljs-built_in">this</span>::processPayment)<br>                .withCompensation(<span class="hljs-built_in">this</span>::refundPayment)<br>            .step()<br>                .invokeParticipant(<span class="hljs-built_in">this</span>::reserveInventory)<br>                .withCompensation(<span class="hljs-built_in">this</span>::releaseInventory)<br>            .step()<br>                .invokeParticipant(<span class="hljs-built_in">this</span>::arrangeDelivery)<br>            .build();<br>    &#125;<br><br>    <span class="hljs-keyword">private</span> CommandWithDestination <span class="hljs-title function_">createOrder</span><span class="hljs-params">(CreateOrderState state)</span> &#123;<br>        <span class="hljs-keyword">return</span> send(<span class="hljs-keyword">new</span> <span class="hljs-title class_">CreateOrderCommand</span>(state.getOrderDetails()))<br>                .to(<span class="hljs-string">&quot;order-service&quot;</span>)<br>                .build();<br>    &#125;<br><br>    <span class="hljs-keyword">private</span> CommandWithDestination <span class="hljs-title function_">cancelOrder</span><span class="hljs-params">(CreateOrderState state)</span> &#123;<br>        <span class="hljs-keyword">return</span> send(<span class="hljs-keyword">new</span> <span class="hljs-title class_">CancelOrderCommand</span>(state.getOrderId()))<br>                .to(<span class="hljs-string">&quot;order-service&quot;</span>)<br>                .build();<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="协同式-sagachoreography">协同式 Saga（Choreography）</h3>
+<p>没有中央协调器，每个服务监听事件并决定下一步操作。</p>
+<pre class="mermaid">graph LR
+    A[订单服务] --&gt;|OrderCreated| B[支付服务]
+    B --&gt;|PaymentCompleted| C[库存服务]
+    C --&gt;|InventoryReserved| D[物流服务]
+
+    C --&gt;|InventoryFailed| B
+    B --&gt;|PaymentRefunded| A
+    A --&gt;|OrderCancelled| E[结束]</pre>
+<p>编排式适合流程复杂、参与者较多的场景，便于理解和维护。协同式适合简单流程，避免了单点故障，但流程复杂时难以追踪。</p>
+<h2 id="事件驱动架构">事件驱动架构</h2>
+<p>事件驱动架构（EDA）是微服务间通信的核心模式之一，它实现了服务间的松耦合。</p>
+<pre class="mermaid">graph LR
+    subgraph 生产者
+        OrderService[订单服务]
+        UserService[用户服务]
+    end
+
+    subgraph 事件总线
+        Topic1[order-events]
+        Topic2[user-events]
+    end
+
+    subgraph 消费者
+        Analytics[分析服务]
+        Notification[通知服务]
+        Search[搜索服务]
+    end
+
+    OrderService --&gt;|publish| Topic1
+    UserService --&gt;|publish| Topic2
+
+    Topic1 --&gt;|subscribe| Analytics
+    Topic1 --&gt;|subscribe| Notification
+    Topic1 --&gt;|subscribe| Search
+    Topic2 --&gt;|subscribe| Analytics
+    Topic2 --&gt;|subscribe| Notification</pre>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">// 领域事件定义</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">record</span> <span class="hljs-title class_">OrderPlacedEvent</span><span class="hljs-params">(</span><br><span class="hljs-params">    String orderId,</span><br><span class="hljs-params">    String customerId,</span><br><span class="hljs-params">    BigDecimal totalAmount,</span><br><span class="hljs-params">    List&lt;OrderItem&gt; items,</span><br><span class="hljs-params">    Instant occurredAt</span><br><span class="hljs-params">)</span> <span class="hljs-keyword">implements</span> <span class="hljs-title class_">DomainEvent</span> &#123;&#125;<br><br><span class="hljs-comment">// 事件发布</span><br><span class="hljs-meta">@Service</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">OrderService</span> &#123;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> EventPublisher eventPublisher;<br><br>    <span class="hljs-meta">@Transactional</span><br>    <span class="hljs-keyword">public</span> Order <span class="hljs-title function_">placeOrder</span><span class="hljs-params">(PlaceOrderCommand cmd)</span> &#123;<br>        <span class="hljs-type">Order</span> <span class="hljs-variable">order</span> <span class="hljs-operator">=</span> Order.create(cmd);<br>        orderRepository.save(order);<br><br>        <span class="hljs-comment">// 使用 Transactional Outbox 模式保证可靠发布</span><br>        outboxRepository.save(<span class="hljs-keyword">new</span> <span class="hljs-title class_">OutboxMessage</span>(<br>            <span class="hljs-string">&quot;order-events&quot;</span>,<br>            order.getId(),<br>            <span class="hljs-keyword">new</span> <span class="hljs-title class_">OrderPlacedEvent</span>(order.getId(), cmd.customerId(), order.totalAmount(), order.getItems(), Instant.now())<br>        ));<br><br>        <span class="hljs-keyword">return</span> order;<br>    &#125;<br>&#125;<br><br><span class="hljs-comment">// 事件消费</span><br><span class="hljs-meta">@Component</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">InventoryEventHandler</span> &#123;<br>    <span class="hljs-meta">@EventListener(topics = &quot;order-events&quot;)</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">handleOrderPlaced</span><span class="hljs-params">(OrderPlacedEvent event)</span> &#123;<br>        <span class="hljs-keyword">for</span> (OrderItem item : event.items()) &#123;<br>            inventoryService.reserve(item.productId(), item.quantity());<br>        &#125;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="绞杀者模式strangler-fig-pattern">绞杀者模式（Strangler Fig
+Pattern）</h2>
+<p>绞杀者模式是将单体架构逐步迁移到微服务架构的最佳策略。就像绞杀榕缠绕宿主树一样，新的微服务逐渐替代旧系统的功能。</p>
+<pre class="mermaid">graph TB
+    subgraph "阶段1: 初始状态"
+        Client1[客户端] --&gt; Monolith1[单体应用&lt;br/&gt;用户/订单/支付/库存]
+    end
+
+    subgraph "阶段2: 开始迁移"
+        Client2[客户端] --&gt; Facade2[反腐层/Facade]
+        Facade2 --&gt; Monolith2[单体应用&lt;br/&gt;用户/支付/库存]
+        Facade2 --&gt; OrderMS2[订单微服务]
+    end
+
+    subgraph "阶段3: 逐步替换"
+        Client3[客户端] --&gt; Facade3[API Gateway]
+        Facade3 --&gt; Monolith3[单体应用&lt;br/&gt;库存]
+        Facade3 --&gt; OrderMS3[订单微服务]
+        Facade3 --&gt; UserMS3[用户微服务]
+        Facade3 --&gt; PayMS3[支付微服务]
+    end
+
+    subgraph "阶段4: 完成迁移"
+        Client4[客户端] --&gt; Gateway4[API Gateway]
+        Gateway4 --&gt; OrderMS4[订单微服务]
+        Gateway4 --&gt; UserMS4[用户微服务]
+        Gateway4 --&gt; PayMS4[支付微服务]
+        Gateway4 --&gt; InvMS4[库存微服务]
+    end</pre>
+<h3 id="实施步骤">实施步骤</h3>
+<ol type="1">
+<li><strong>识别边界</strong>：在单体中找到可以独立拆分的模块</li>
+<li><strong>建立反腐层</strong>：在新旧系统之间建立适配层</li>
+<li><strong>逐步迁移</strong>：将流量从旧模块路由到新服务</li>
+<li><strong>数据迁移</strong>：将数据从共享数据库迁移到服务专属数据库</li>
+<li><strong>退役旧代码</strong>：确认新服务稳定后，删除单体中的对应模块</li>
+</ol>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># 使用 Nginx 实现流量切换</span><br><span class="hljs-string">upstream</span> <span class="hljs-string">monolith</span> &#123;<br>    <span class="hljs-string">server</span> <span class="hljs-string">monolith:8080;</span><br>&#125;<br><br><span class="hljs-string">upstream</span> <span class="hljs-string">order-microservice</span> &#123;<br>    <span class="hljs-string">server</span> <span class="hljs-string">order-service:8080;</span><br>&#125;<br><br><span class="hljs-comment"># 将订单相关请求路由到新的微服务</span><br><span class="hljs-string">location</span> <span class="hljs-string">/api/orders</span> &#123;<br>    <span class="hljs-string">proxy_pass</span> <span class="hljs-string">http://order-microservice;</span><br>&#125;<br><br><span class="hljs-comment"># 其他请求仍然路由到单体应用</span><br><span class="hljs-string">location</span> <span class="hljs-string">/</span> &#123;<br>    <span class="hljs-string">proxy_pass</span> <span class="hljs-string">http://monolith;</span><br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="微服务架构决策框架">微服务架构决策框架</h2>
+<p>在采用微服务之前，需要回答以下问题：</p>
+<table>
+<thead>
+<tr class="header">
+<th>维度</th>
+<th>适合微服务</th>
+<th>适合单体</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>团队规模</td>
+<td>&gt; 10 人</td>
+<td>&lt; 10 人</td>
+</tr>
+<tr class="even">
+<td>系统复杂度</td>
+<td>多个业务域</td>
+<td>单一业务域</td>
+</tr>
+<tr class="odd">
+<td>发布频率</td>
+<td>各模块独立发布</td>
+<td>统一发布即可</td>
+</tr>
+<tr class="even">
+<td>扩展需求</td>
+<td>各模块扩展需求不同</td>
+<td>整体扩展即可</td>
+</tr>
+<tr class="odd">
+<td>技术多样性</td>
+<td>需要不同技术栈</td>
+<td>统一技术栈</td>
+</tr>
+<tr class="even">
+<td>运维能力</td>
+<td>有 DevOps 文化和工具链</td>
+<td>运维能力有限</td>
+</tr>
+</tbody>
+</table>
+<h2 id="总结">总结</h2>
+<p>微服务架构不是目标，而是手段。在实施微服务架构时，需要根据团队能力、业务复杂度和技术基础设施来选择合适的模式：</p>
+<ul>
+<li><strong>API Gateway</strong> 解决统一入口和请求聚合的问题</li>
+<li><strong>Service Mesh</strong> 将通信复杂性下沉到基础设施层</li>
+<li><strong>Saga 模式</strong> 解决分布式事务的一致性问题</li>
+<li><strong>事件驱动架构</strong> 实现服务间的松耦合</li>
+<li><strong>绞杀者模式</strong> 提供从单体到微服务的平滑迁移路径</li>
+</ul>
+<p>记住 Martin Fowler 的建议：<strong>Monolith
+First</strong>。先用单体架构快速验证业务，在确认需要时再逐步演进到微服务。</p>
+<hr />
+<h2 id="踩坑记录">踩坑记录</h2>
+<p>我们第一次服务拆分，按数据库表来拆，把用户模块拆成了「用户基础信息服务」、「用户地址服务」、「用户积分服务」三个。结果一个「查询用户完整信息」的接口要调用
+3 个服务，N+1 查询问题比单体时代更严重，链路延迟从 20ms 变成
+200ms，还多了 3 倍的网络故障点。</p>
+<p>根本原因是<strong>按表拆而不是按业务能力拆</strong>。表是实现细节，不是业务边界。</p>
+<p>后来重新梳理，按照 DDD
+限界上下文重新划分：<code>User Profile</code>（身份/地址）、<code>User Behavior</code>（积分/历史）、<code>User Account</code>（余额/支付）。每个服务内部数据完整，跨服务只有事件通知。重新拆完后，核心接口从
+3 次 RPC 变回 1 次，延迟降到 12ms，故障影响范围也大幅缩小。</p>
+<h2 id="实测结果">实测结果</h2>
+<table>
+<thead>
+<tr class="header">
+<th>阶段</th>
+<th>部署窗口</th>
+<th>核心接口 P99</th>
+<th>服务间依赖数</th>
+<th>故障影响范围</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>单体</td>
+<td>每两周一次，全量发布</td>
+<td>20ms</td>
+<td>0</td>
+<td>全部功能</td>
+</tr>
+<tr class="even">
+<td>按表拆分后</td>
+<td>可独立，但耦合严重</td>
+<td>200ms</td>
+<td>3 次 RPC</td>
+<td>仍波及全链路</td>
+</tr>
+<tr class="odd">
+<td>按业务能力拆分后</td>
+<td>完全独立</td>
+<td>12ms</td>
+<td>1 次 RPC</td>
+<td>故障隔离有效</td>
+</tr>
+</tbody>
+</table>
+<h2 id="我的看法">我的看法</h2>
+<p>「按表拆」是微服务拆分最常见的错误。DDD
+的限界上下文真正有价值的地方在于：它告诉你什么数据应该在同一个服务里，以及服务间的<strong>数据冗余是被允许的</strong>。</p>
+<p>不要为了「单一职责」而拆到每个服务只有一张表。微服务的边界应该和团队边界对齐（Conway’s
+Law），一个团队能独立负责、独立发布的才是合理的服务边界。如果两个服务经常需要同时修改、同时发布，那它们根本就不应该被拆开。</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2021-10-25</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">3.3k 字 · 8 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/kubernetes-architecture/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Kubernetes架构深度解析</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/dapper-a-large-scale-distributed-systems-tracing-infrastructure/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Dapper 论文精读：Google 分布式追踪系统的设计取舍</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8D%95%E4%BD%93%E6%9E%B6%E6%9E%84-vs-%E5%BE%AE%E6%9C%8D%E5%8A%A1%E6%9E%B6%E6%9E%84"><span class="toc-text">单体架构 vs 微服务架构</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8D%95%E4%BD%93%E6%9E%B6%E6%9E%84%E7%9A%84%E7%89%B9%E5%BE%81"><span class="toc-text">单体架构的特征</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8D%95%E4%BD%93%E6%9E%B6%E6%9E%84%E7%9A%84%E7%97%9B%E7%82%B9"><span class="toc-text">单体架构的痛点</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%BE%AE%E6%9C%8D%E5%8A%A1%E6%9E%B6%E6%9E%84%E5%85%A8%E6%99%AF"><span class="toc-text">微服务架构全景</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9C%8D%E5%8A%A1%E5%88%86%E8%A7%A3%E7%AD%96%E7%95%A5"><span class="toc-text">服务分解策略</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%8C%89%E4%B8%9A%E5%8A%A1%E8%83%BD%E5%8A%9B%E5%88%86%E8%A7%A3business-capability"><span class="toc-text">按业务能力分解（Business
+Capability）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%8C%89%E5%AD%90%E5%9F%9F%E5%88%86%E8%A7%A3ddd-subdomain"><span class="toc-text">按子域分解（DDD Subdomain）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%88%86%E8%A7%A3%E5%8E%9F%E5%88%99"><span class="toc-text">分解原则</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#api-gateway-%E6%A8%A1%E5%BC%8F"><span class="toc-text">API Gateway 模式</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#bff-%E6%A8%A1%E5%BC%8Fbackend-for-frontend"><span class="toc-text">BFF 模式（Backend for
+Frontend）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#service-mesh-%E6%A8%A1%E5%BC%8F"><span class="toc-text">Service Mesh 模式</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#saga-%E6%A8%A1%E5%BC%8F"><span class="toc-text">Saga 模式</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%BC%96%E6%8E%92%E5%BC%8F-sagaorchestration"><span class="toc-text">编排式 Saga（Orchestration）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8D%8F%E5%90%8C%E5%BC%8F-sagachoreography"><span class="toc-text">协同式 Saga（Choreography）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%8B%E4%BB%B6%E9%A9%B1%E5%8A%A8%E6%9E%B6%E6%9E%84"><span class="toc-text">事件驱动架构</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BB%9E%E6%9D%80%E8%80%85%E6%A8%A1%E5%BC%8Fstrangler-fig-pattern"><span class="toc-text">绞杀者模式（Strangler Fig
+Pattern）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%9E%E6%96%BD%E6%AD%A5%E9%AA%A4"><span class="toc-text">实施步骤</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BE%AE%E6%9C%8D%E5%8A%A1%E6%9E%B6%E6%9E%84%E5%86%B3%E7%AD%96%E6%A1%86%E6%9E%B6"><span class="toc-text">微服务架构决策框架</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%B8%A9%E5%9D%91%E8%AE%B0%E5%BD%95"><span class="toc-text">踩坑记录</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E6%B5%8B%E7%BB%93%E6%9E%9C"><span class="toc-text">实测结果</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%88%91%E7%9A%84%E7%9C%8B%E6%B3%95"><span class="toc-text">我的看法</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

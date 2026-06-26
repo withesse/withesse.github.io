@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>分布式共识算法：Raft与Paxos详解 · zt&#39;s Blog</title>
+  <meta name="description" content="深入理解分布式共识问题的本质，详解Paxos三阶段与Raft的领导者选举、日志复制、安全性机制，以及etcd和ZooKeeper的实际应用。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/distributed-consensus/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="分布式共识算法：Raft与Paxos详解">
+  <meta property="og:description" content="深入理解分布式共识问题的本质，详解Paxos三阶段与Raft的领导者选举、日志复制、安全性机制，以及etcd和ZooKeeper的实际应用。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/distributed-consensus/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2023-11-21T16:00:00.000Z">
+  <meta property="article:modified_time" content="2023-11-21T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="分布式共识算法：Raft与Paxos详解">
+  <meta name="twitter:description" content="深入理解分布式共识问题的本质，详解Paxos三阶段与Raft的领导者选举、日志复制、安全性机制，以及etcd和ZooKeeper的实际应用。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"分布式共识算法：Raft与Paxos详解","description":"深入理解分布式共识问题的本质，详解Paxos三阶段与Raft的领导者选举、日志复制、安全性机制，以及etcd和ZooKeeper的实际应用。","datePublished":"2023-11-21T16:00:00.000Z","dateModified":"2023-11-21T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/distributed-consensus/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Architecture","item":"https://withesse.co/categories/Architecture/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:152">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Architecture/">Architecture</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/distributed/"><span class="hash">#</span>distributed</a><a class="tag" href="/tags/consensus/"><span class="hash">#</span>consensus</a><a class="tag" href="/tags/raft/"><span class="hash">#</span>raft</a><a class="tag" href="/tags/paxos/"><span class="hash">#</span>paxos</a>
+        
+      </div>
+
+      <h1>分布式共识算法：Raft与Paxos详解</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2023.11.22</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 8 min</span>
+        </span>
+        <span class="wc"><span class="num">3.1k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%B1%E8%AF%86%E9%97%AE%E9%A2%98%E7%9A%84%E6%9C%AC%E8%B4%A8"><span class="toc-text">共识问题的本质</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BB%80%E4%B9%88%E6%98%AF%E5%85%B1%E8%AF%86"><span class="toc-text">什么是共识</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#flp-%E4%B8%8D%E5%8F%AF%E8%83%BD%E5%AE%9A%E7%90%86"><span class="toc-text">FLP 不可能定理</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#paxos-%E7%AE%97%E6%B3%95"><span class="toc-text">Paxos 算法</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9F%BA%E6%9C%AC%E6%A6%82%E5%BF%B5"><span class="toc-text">基本概念</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#basic-paxos%E4%B8%A4%E9%98%B6%E6%AE%B5%E5%8D%8F%E8%AE%AE"><span class="toc-text">Basic Paxos：两阶段协议</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%AB%9E%E4%BA%89%E5%9C%BA%E6%99%AF"><span class="toc-text">竞争场景</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#multi-paxos"><span class="toc-text">Multi-Paxos</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#raft-%E7%AE%97%E6%B3%95"><span class="toc-text">Raft 算法</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%AE%BE%E8%AE%A1%E7%90%86%E5%BF%B5"><span class="toc-text">设计理念</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%8A%82%E7%82%B9%E7%8A%B6%E6%80%81"><span class="toc-text">节点状态</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#leader-election"><span class="toc-text">Leader Election</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#log-replication"><span class="toc-text">Log Replication</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#safety-%E4%BF%9D%E8%AF%81"><span class="toc-text">Safety 保证</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#paxos-vs-raft-%E5%AF%B9%E6%AF%94"><span class="toc-text">Paxos vs Raft 对比</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E9%99%85%E5%BA%94%E7%94%A8"><span class="toc-text">实际应用</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#etcd%E4%BD%BF%E7%94%A8-raft"><span class="toc-text">etcd（使用 Raft）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#zookeeper%E4%BD%BF%E7%94%A8-zab"><span class="toc-text">ZooKeeper（使用 ZAB）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%B7%A5%E7%A8%8B%E5%AE%9E%E8%B7%B5%E5%BB%BA%E8%AE%AE"><span class="toc-text">工程实践建议</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%9B%86%E7%BE%A4%E8%A7%84%E6%A8%A1"><span class="toc-text">集群规模</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96"><span class="toc-text">性能优化</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="前言">前言</h2>
+<p>在分布式系统中，多个节点需要就某个值达成一致，这就是共识问题。共识算法是分布式系统的基石，无论是数据库的主从复制、配置中心的数据同步，还是分布式锁的实现，都依赖共识算法来保证一致性。本文将深入分析两个最重要的共识算法——Paxos
+和 Raft，帮助你理解它们的核心原理和实际应用。</p>
+<h2 id="共识问题的本质">共识问题的本质</h2>
+<h3 id="什么是共识">什么是共识</h3>
+<p>共识问题的形式化定义：在一个由 N
+个节点组成的分布式系统中，即使部分节点发生故障，所有正常节点最终也要就某个提议值达成一致。</p>
+<p>共识算法需要满足三个属性：</p>
+<ol type="1">
+<li><strong>一致性（Agreement）</strong>：所有正常节点决定的值相同</li>
+<li><strong>有效性（Validity）</strong>：决定的值必须是某个节点提议的值</li>
+<li><strong>终止性（Termination）</strong>：所有正常节点最终都能做出决定</li>
+</ol>
+<h3 id="flp-不可能定理">FLP 不可能定理</h3>
+<p>Fischer、Lynch 和 Paterson 在 1985
+年证明了：在异步网络模型中，即使只有一个节点可能崩溃，也不存在能保证终止性的确定性共识算法。</p>
+<p>这意味着实际的共识算法都需要某种形式的妥协——通常是引入超时机制或随机化来绕过
+FLP 限制。</p>
+<h2 id="paxos-算法">Paxos 算法</h2>
+<h3 id="基本概念">基本概念</h3>
+<p>Paxos 由 Leslie Lamport 在 1990
+年提出，是第一个被严格证明正确性的共识算法。它定义了三种角色：</p>
+<ul>
+<li><strong>Proposer（提议者）</strong>：发起提议</li>
+<li><strong>Acceptor（接受者）</strong>：参与投票，决定是否接受提议</li>
+<li><strong>Learner（学习者）</strong>：学习最终被选定的值</li>
+</ul>
+<pre class="mermaid">graph LR
+    P1[Proposer 1] --&gt; A1[Acceptor 1]
+    P1 --&gt; A2[Acceptor 2]
+    P1 --&gt; A3[Acceptor 3]
+    P2[Proposer 2] --&gt; A1
+    P2 --&gt; A2
+    P2 --&gt; A3
+    A1 --&gt; L1[Learner 1]
+    A2 --&gt; L1
+    A3 --&gt; L1
+    A1 --&gt; L2[Learner 2]
+    A2 --&gt; L2
+    A3 --&gt; L2</pre>
+<h3 id="basic-paxos两阶段协议">Basic Paxos：两阶段协议</h3>
+<h4 id="phase-1-prepare">Phase 1: Prepare</h4>
+<p>Proposer 选择一个提案编号 n，向多数派 Acceptor 发送 Prepare(n)
+请求。</p>
+<h4 id="phase-2-accept">Phase 2: Accept</h4>
+<p>如果 Proposer 收到多数派的 Promise 响应，它就发送 Accept(n, v)
+请求。</p>
+<pre class="mermaid">sequenceDiagram
+    participant P as Proposer
+    participant A1 as Acceptor 1
+    participant A2 as Acceptor 2
+    participant A3 as Acceptor 3
+
+    Note over P: Phase 1: Prepare
+    P-&gt;&gt;A1: Prepare(n=1)
+    P-&gt;&gt;A2: Prepare(n=1)
+    P-&gt;&gt;A3: Prepare(n=1)
+
+    A1--&gt;&gt;P: Promise(n=1, 无已接受值)
+    A2--&gt;&gt;P: Promise(n=1, 无已接受值)
+    A3--&gt;&gt;P: Promise(n=1, 无已接受值)
+
+    Note over P: 收到多数派Promise&lt;br/&gt;Phase 2: Accept
+    P-&gt;&gt;A1: Accept(n=1, v="X")
+    P-&gt;&gt;A2: Accept(n=1, v="X")
+    P-&gt;&gt;A3: Accept(n=1, v="X")
+
+    A1--&gt;&gt;P: Accepted(n=1, v="X")
+    A2--&gt;&gt;P: Accepted(n=1, v="X")
+    A3--&gt;&gt;P: Accepted(n=1, v="X")
+
+    Note over P: 值 "X" 被选定</pre>
+<h3 id="竞争场景">竞争场景</h3>
+<p>当两个 Proposer 同时发起提议时，可能出现活锁（Livelock）。</p>
+<pre class="mermaid">sequenceDiagram
+    participant P1 as Proposer 1
+    participant A1 as Acceptor 1
+    participant A2 as Acceptor 2
+    participant A3 as Acceptor 3
+    participant P2 as Proposer 2
+
+    P1-&gt;&gt;A1: Prepare(n=1)
+    P1-&gt;&gt;A2: Prepare(n=1)
+    A1--&gt;&gt;P1: Promise(n=1)
+    A2--&gt;&gt;P1: Promise(n=1)
+
+    Note over P2: P2 使用更高编号
+    P2-&gt;&gt;A2: Prepare(n=2)
+    P2-&gt;&gt;A3: Prepare(n=2)
+    A2--&gt;&gt;P2: Promise(n=2)
+    A3--&gt;&gt;P2: Promise(n=2)
+
+    P1-&gt;&gt;A1: Accept(n=1, v="X")
+    P1-&gt;&gt;A2: Accept(n=1, v="X")
+    A2--&gt;&gt;P1: Reject(已承诺n=2)
+
+    Note over P1: 失败,使用更高编号n=3重试
+    Note over P1,P2: 可能无限循环...活锁!</pre>
+<h3 id="multi-paxos">Multi-Paxos</h3>
+<p>Basic Paxos 每决定一个值需要两轮通信，效率太低。Multi-Paxos
+通过选举一个稳定的 Leader 来优化：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-comment">// Multi-Paxos Leader 的简化逻辑</span><br><span class="hljs-keyword">type</span> MultiPaxosNode <span class="hljs-keyword">struct</span> &#123;<br>    id          <span class="hljs-type">int</span><br>    isLeader    <span class="hljs-type">bool</span><br>    currentTerm <span class="hljs-type">int</span><br>    log         []LogEntry<br>    acceptors   []Acceptor<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-params">(n *MultiPaxosNode)</span></span> propose(value <span class="hljs-keyword">interface</span>&#123;&#125;) <span class="hljs-type">error</span> &#123;<br>    <span class="hljs-keyword">if</span> !n.isLeader &#123;<br>        <span class="hljs-keyword">return</span> ErrNotLeader<br>    &#125;<br><br>    <span class="hljs-comment">// Leader 已经完成了 Phase 1，可以直接进入 Phase 2</span><br>    entry := LogEntry&#123;<br>        Index: <span class="hljs-built_in">len</span>(n.log),<br>        Term:  n.currentTerm,<br>        Value: value,<br>    &#125;<br><br>    <span class="hljs-comment">// 向多数派发送 Accept 请求</span><br>    ackCount := <span class="hljs-number">1</span> <span class="hljs-comment">// 自己先接受</span><br>    <span class="hljs-keyword">for</span> _, acceptor := <span class="hljs-keyword">range</span> n.acceptors &#123;<br>        <span class="hljs-keyword">if</span> acceptor.Accept(n.currentTerm, entry) &#123;<br>            ackCount++<br>        &#125;<br>    &#125;<br><br>    <span class="hljs-keyword">if</span> ackCount &gt; <span class="hljs-built_in">len</span>(n.acceptors)/<span class="hljs-number">2</span> &#123;<br>        n.log = <span class="hljs-built_in">append</span>(n.log, entry)<br>        <span class="hljs-comment">// 通知所有 Learner</span><br>        n.notifyLearners(entry)<br>        <span class="hljs-keyword">return</span> <span class="hljs-literal">nil</span><br>    &#125;<br>    <span class="hljs-keyword">return</span> ErrNotEnoughAcks<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="raft-算法">Raft 算法</h2>
+<h3 id="设计理念">设计理念</h3>
+<p>Raft 由 Diego Ongaro 和 John Ousterhout 在 2014
+年提出，其核心目标是<strong>可理解性</strong>。Raft
+将共识问题分解为三个相对独立的子问题：</p>
+<ol type="1">
+<li><strong>Leader Election（领导者选举）</strong></li>
+<li><strong>Log Replication（日志复制）</strong></li>
+<li><strong>Safety（安全性保证）</strong></li>
+</ol>
+<h3 id="节点状态">节点状态</h3>
+<p>Raft 中每个节点有三种状态：</p>
+<pre class="mermaid">stateDiagram-v2
+    [*] --&gt; Follower
+    Follower --&gt; Candidate: 选举超时&lt;br/&gt;未收到心跳
+    Candidate --&gt; Leader: 获得多数票
+    Candidate --&gt; Follower: 发现更高任期的Leader
+    Candidate --&gt; Candidate: 选举超时&lt;br/&gt;重新选举
+    Leader --&gt; Follower: 发现更高任期</pre>
+<h3 id="leader-election">Leader Election</h3>
+<pre class="mermaid">sequenceDiagram
+    participant F1 as Node A&lt;br/&gt;(Follower)
+    participant C as Node B&lt;br/&gt;(Candidate)
+    participant F2 as Node C&lt;br/&gt;(Follower)
+    participant F3 as Node D&lt;br/&gt;(Follower)
+    participant F4 as Node E&lt;br/&gt;(Follower)
+
+    Note over C: 选举超时,转为Candidate&lt;br/&gt;term: 1 → 2
+    C-&gt;&gt;C: 投票给自己
+    C-&gt;&gt;F1: RequestVote(term=2)
+    C-&gt;&gt;F2: RequestVote(term=2)
+    C-&gt;&gt;F3: RequestVote(term=2)
+    C-&gt;&gt;F4: RequestVote(term=2)
+
+    F1--&gt;&gt;C: VoteGranted(term=2)
+    F2--&gt;&gt;C: VoteGranted(term=2)
+    F3--&gt;&gt;C: VoteGranted(term=2)
+
+    Note over C: 获得4票(含自己)&lt;br/&gt;成为Leader
+
+    loop 心跳
+        C-&gt;&gt;F1: AppendEntries(heartbeat)
+        C-&gt;&gt;F2: AppendEntries(heartbeat)
+        C-&gt;&gt;F3: AppendEntries(heartbeat)
+        C-&gt;&gt;F4: AppendEntries(heartbeat)
+    end</pre>
+<p><strong>选举超时的随机化</strong>是 Raft 避免分票（split
+vote）的关键机制。每个 Follower 的选举超时时间在 150ms-300ms
+之间随机选择。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-comment">// Raft 节点核心结构</span><br><span class="hljs-keyword">type</span> RaftNode <span class="hljs-keyword">struct</span> &#123;<br>    mu          sync.Mutex<br>    id          <span class="hljs-type">int</span><br>    state       NodeState<br>    currentTerm <span class="hljs-type">int</span><br>    votedFor    <span class="hljs-type">int</span><br>    log         []LogEntry<br>    commitIndex <span class="hljs-type">int</span><br>    lastApplied <span class="hljs-type">int</span><br><br>    <span class="hljs-comment">// Leader 专属</span><br>    nextIndex   []<span class="hljs-type">int</span><br>    matchIndex  []<span class="hljs-type">int</span><br><br>    <span class="hljs-comment">// 选举相关</span><br>    electionTimeout  time.Duration<br>    heartbeatTimeout time.Duration<br>    electionTimer    *time.Timer<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-params">(rn *RaftNode)</span></span> startElection() &#123;<br>    rn.mu.Lock()<br>    rn.state = Candidate<br>    rn.currentTerm++<br>    rn.votedFor = rn.id<br>    currentTerm := rn.currentTerm<br>    lastLogIndex := <span class="hljs-built_in">len</span>(rn.log) - <span class="hljs-number">1</span><br>    lastLogTerm := <span class="hljs-number">0</span><br>    <span class="hljs-keyword">if</span> lastLogIndex &gt;= <span class="hljs-number">0</span> &#123;<br>        lastLogTerm = rn.log[lastLogIndex].Term<br>    &#125;<br>    rn.mu.Unlock()<br><br>    votes := <span class="hljs-number">1</span> <span class="hljs-comment">// 自己的一票</span><br>    <span class="hljs-keyword">var</span> voteMu sync.Mutex<br><br>    <span class="hljs-keyword">for</span> _, peer := <span class="hljs-keyword">range</span> rn.peers &#123;<br>        <span class="hljs-keyword">go</span> <span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">(p *Peer)</span></span> &#123;<br>            reply := p.RequestVote(&amp;RequestVoteArgs&#123;<br>                Term:         currentTerm,<br>                CandidateId:  rn.id,<br>                LastLogIndex: lastLogIndex,<br>                LastLogTerm:  lastLogTerm,<br>            &#125;)<br><br>            <span class="hljs-keyword">if</span> reply.VoteGranted &#123;<br>                voteMu.Lock()<br>                votes++<br>                <span class="hljs-keyword">if</span> votes &gt; <span class="hljs-built_in">len</span>(rn.peers)/<span class="hljs-number">2</span> &amp;&amp; rn.state == Candidate &#123;<br>                    rn.becomeLeader()<br>                &#125;<br>                voteMu.Unlock()<br>            &#125; <span class="hljs-keyword">else</span> <span class="hljs-keyword">if</span> reply.Term &gt; currentTerm &#123;<br>                rn.becomeFollower(reply.Term)<br>            &#125;<br>        &#125;(peer)<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="log-replication">Log Replication</h3>
+<p>Leader 收到客户端请求后，将命令追加到本地日志，然后并行复制给所有
+Follower。当多数派确认后，该日志条目被提交（committed）。</p>
+<pre class="mermaid">sequenceDiagram
+    participant Client
+    participant Leader
+    participant F1 as Follower 1
+    participant F2 as Follower 2
+    participant F3 as Follower 3
+    participant F4 as Follower 4
+
+    Client-&gt;&gt;Leader: SET x=5
+    Note over Leader: 追加到本地日志&lt;br/&gt;index=3, term=2
+
+    par 并行复制
+        Leader-&gt;&gt;F1: AppendEntries(index=3, SET x=5)
+        Leader-&gt;&gt;F2: AppendEntries(index=3, SET x=5)
+        Leader-&gt;&gt;F3: AppendEntries(index=3, SET x=5)
+        Leader-&gt;&gt;F4: AppendEntries(index=3, SET x=5)
+    end
+
+    F1--&gt;&gt;Leader: Success
+    F2--&gt;&gt;Leader: Success
+    F3--&gt;&gt;Leader: Success
+
+    Note over Leader: 3个Follower确认&lt;br/&gt;加上自己共4个&lt;br/&gt;多数派确认,提交!
+
+    Leader-&gt;&gt;Leader: Apply to State Machine
+    Leader--&gt;&gt;Client: OK
+
+    Note over Leader: 下次心跳通知Follower提交
+    Leader-&gt;&gt;F1: AppendEntries(commitIndex=3)
+    Leader-&gt;&gt;F2: AppendEntries(commitIndex=3)
+    Leader-&gt;&gt;F3: AppendEntries(commitIndex=3)
+    Leader-&gt;&gt;F4: AppendEntries(commitIndex=3)</pre>
+<h3 id="safety-保证">Safety 保证</h3>
+<p>Raft 的安全性核心保证是 <strong>Leader Completeness
+Property</strong>：如果某个日志条目在给定任期内被提交，那么更高任期的
+Leader 一定包含该条目。</p>
+<p>这通过 <strong>投票限制</strong> 来实现：Candidate 在 RequestVote
+中携带自己最后一条日志的信息，Follower 只给日志至少和自己一样新的
+Candidate 投票。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-params">(rn *RaftNode)</span></span> handleRequestVote(args *RequestVoteArgs) *RequestVoteReply &#123;<br>    rn.mu.Lock()<br>    <span class="hljs-keyword">defer</span> rn.mu.Unlock()<br><br>    reply := &amp;RequestVoteReply&#123;Term: rn.currentTerm&#125;<br><br>    <span class="hljs-comment">// 拒绝旧任期的请求</span><br>    <span class="hljs-keyword">if</span> args.Term &lt; rn.currentTerm &#123;<br>        reply.VoteGranted = <span class="hljs-literal">false</span><br>        <span class="hljs-keyword">return</span> reply<br>    &#125;<br><br>    <span class="hljs-comment">// 检查是否已投票</span><br>    <span class="hljs-keyword">if</span> rn.votedFor != <span class="hljs-number">-1</span> &amp;&amp; rn.votedFor != args.CandidateId &#123;<br>        reply.VoteGranted = <span class="hljs-literal">false</span><br>        <span class="hljs-keyword">return</span> reply<br>    &#125;<br><br>    <span class="hljs-comment">// 安全性检查：Candidate 的日志必须至少和自己一样新</span><br>    lastIndex := <span class="hljs-built_in">len</span>(rn.log) - <span class="hljs-number">1</span><br>    lastTerm := <span class="hljs-number">0</span><br>    <span class="hljs-keyword">if</span> lastIndex &gt;= <span class="hljs-number">0</span> &#123;<br>        lastTerm = rn.log[lastIndex].Term<br>    &#125;<br><br>    logOk := args.LastLogTerm &gt; lastTerm ||<br>        (args.LastLogTerm == lastTerm &amp;&amp; args.LastLogIndex &gt;= lastIndex)<br><br>    <span class="hljs-keyword">if</span> logOk &#123;<br>        rn.votedFor = args.CandidateId<br>        reply.VoteGranted = <span class="hljs-literal">true</span><br>        rn.resetElectionTimer()<br>    &#125;<br><br>    <span class="hljs-keyword">return</span> reply<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="paxos-vs-raft-对比">Paxos vs Raft 对比</h2>
+<table>
+<thead>
+<tr class="header">
+<th>维度</th>
+<th>Paxos</th>
+<th>Raft</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>提出时间</td>
+<td>1990年</td>
+<td>2014年</td>
+</tr>
+<tr class="even">
+<td>可理解性</td>
+<td>非常难理解</td>
+<td>专为可理解性设计</td>
+</tr>
+<tr class="odd">
+<td>Leader</td>
+<td>Multi-Paxos 中有</td>
+<td>强 Leader</td>
+</tr>
+<tr class="even">
+<td>日志</td>
+<td>允许空洞（holes）</td>
+<td>连续，无空洞</td>
+</tr>
+<tr class="odd">
+<td>成员变更</td>
+<td>未明确规定</td>
+<td>Joint Consensus</td>
+</tr>
+<tr class="even">
+<td>正确性证明</td>
+<td>严格数学证明</td>
+<td>TLA+ 形式化验证</td>
+</tr>
+<tr class="odd">
+<td>工程实现</td>
+<td>各实现差异大</td>
+<td>实现较为统一</td>
+</tr>
+</tbody>
+</table>
+<h2 id="实际应用">实际应用</h2>
+<h3 id="etcd使用-raft">etcd（使用 Raft）</h3>
+<p>etcd 是 Kubernetes 的底层存储，使用 Raft 实现数据一致性。</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># etcd 集群配置</span><br><span class="hljs-attr">etcd:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">node1</span><br>  <span class="hljs-attr">initial-cluster:</span> <span class="hljs-string">&gt;</span><br><span class="hljs-string">    node1=https://10.0.0.1:2380,</span><br><span class="hljs-string">    node2=https://10.0.0.2:2380,</span><br><span class="hljs-string">    node3=https://10.0.0.3:2380</span><br><span class="hljs-string"></span>  <span class="hljs-attr">initial-cluster-state:</span> <span class="hljs-string">new</span><br>  <span class="hljs-attr">listen-peer-urls:</span> <span class="hljs-string">https://10.0.0.1:2380</span><br>  <span class="hljs-attr">listen-client-urls:</span> <span class="hljs-string">https://10.0.0.1:2379</span><br>  <span class="hljs-comment"># Raft 相关参数</span><br>  <span class="hljs-attr">heartbeat-interval:</span> <span class="hljs-number">100</span>    <span class="hljs-comment"># 心跳间隔 100ms</span><br>  <span class="hljs-attr">election-timeout:</span> <span class="hljs-number">1000</span>     <span class="hljs-comment"># 选举超时 1000ms</span><br>  <span class="hljs-attr">snapshot-count:</span> <span class="hljs-number">10000</span>      <span class="hljs-comment"># 每 10000 条日志做一次快照</span><br></code></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 查看 etcd 集群中的 Raft 状态</span><br>etcdctl endpoint status --write-out=table<br><span class="hljs-comment"># +------------------+------------------+---------+---------+-----------+</span><br><span class="hljs-comment"># |     ENDPOINT     |        ID        | VERSION | DB SIZE | IS LEADER |</span><br><span class="hljs-comment"># +------------------+------------------+---------+---------+-----------+</span><br><span class="hljs-comment"># | 10.0.0.1:2379    | 8e9e05c52164694d |  3.5.0  |   20 kB |      true |</span><br><span class="hljs-comment"># | 10.0.0.2:2379    | 4e2e05c52164694e |  3.5.0  |   20 kB |     false |</span><br><span class="hljs-comment"># | 10.0.0.3:2379    | 6f3e05c52164694f |  3.5.0  |   20 kB |     false |</span><br><span class="hljs-comment"># +------------------+------------------+---------+---------+-----------+</span><br></code></pre></td></tr></table></figure>
+<h3 id="zookeeper使用-zab">ZooKeeper（使用 ZAB）</h3>
+<p>ZooKeeper 使用 ZAB（ZooKeeper Atomic Broadcast）协议，它是 Paxos
+的变种，针对主备模式进行了优化。</p>
+<pre class="mermaid">sequenceDiagram
+    participant Client
+    participant Leader as ZK Leader
+    participant F1 as ZK Follower 1
+    participant F2 as ZK Follower 2
+
+    Client-&gt;&gt;Leader: create /config/db_url
+    Note over Leader: 生成 zxid&lt;br/&gt;epoch.counter
+
+    Leader-&gt;&gt;F1: Proposal(zxid, data)
+    Leader-&gt;&gt;F2: Proposal(zxid, data)
+
+    F1--&gt;&gt;Leader: ACK
+    F2--&gt;&gt;Leader: ACK
+
+    Note over Leader: 多数派ACK,提交
+
+    Leader-&gt;&gt;F1: Commit(zxid)
+    Leader-&gt;&gt;F2: Commit(zxid)
+    Leader--&gt;&gt;Client: OK</pre>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">// ZooKeeper 客户端使用 Curator 框架</span><br><span class="hljs-type">CuratorFramework</span> <span class="hljs-variable">client</span> <span class="hljs-operator">=</span> CuratorFrameworkFactory.builder()<br>    .connectString(<span class="hljs-string">&quot;zk1:2181,zk2:2181,zk3:2181&quot;</span>)<br>    .sessionTimeoutMs(<span class="hljs-number">5000</span>)<br>    .retryPolicy(<span class="hljs-keyword">new</span> <span class="hljs-title class_">ExponentialBackoffRetry</span>(<span class="hljs-number">1000</span>, <span class="hljs-number">3</span>))<br>    .build();<br>client.start();<br><br><span class="hljs-comment">// 分布式锁 - 基于 ZooKeeper 的临时顺序节点</span><br><span class="hljs-type">InterProcessMutex</span> <span class="hljs-variable">lock</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">InterProcessMutex</span>(client, <span class="hljs-string">&quot;/locks/order&quot;</span>);<br><span class="hljs-keyword">try</span> &#123;<br>    <span class="hljs-keyword">if</span> (lock.acquire(<span class="hljs-number">10</span>, TimeUnit.SECONDS)) &#123;<br>        <span class="hljs-comment">// 临界区操作</span><br>        processOrder(orderId);<br>    &#125;<br>&#125; <span class="hljs-keyword">finally</span> &#123;<br>    lock.release();<br>&#125;<br><br><span class="hljs-comment">// Leader 选举</span><br><span class="hljs-type">LeaderSelector</span> <span class="hljs-variable">selector</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">LeaderSelector</span>(client, <span class="hljs-string">&quot;/leader/election&quot;</span>,<br>    <span class="hljs-keyword">new</span> <span class="hljs-title class_">LeaderSelectorListenerAdapter</span>() &#123;<br>        <span class="hljs-meta">@Override</span><br>        <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">takeLeadership</span><span class="hljs-params">(CuratorFramework client)</span> <span class="hljs-keyword">throws</span> Exception &#123;<br>            System.out.println(<span class="hljs-string">&quot;I am the leader now!&quot;</span>);<br>            <span class="hljs-comment">// 执行 Leader 职责，方法返回则放弃 Leadership</span><br>            Thread.sleep(Long.MAX_VALUE);<br>        &#125;<br>    &#125;);<br>selector.autoRequeue();<br>selector.start();<br></code></pre></td></tr></table></figure>
+<h2 id="工程实践建议">工程实践建议</h2>
+<h3 id="集群规模">集群规模</h3>
+<p>共识算法要求多数派确认，因此集群节点数推荐为奇数（3、5、7）：</p>
+<ul>
+<li><strong>3 节点</strong>：容忍 1 个故障，适合大多数场景</li>
+<li><strong>5 节点</strong>：容忍 2
+个故障，适合高可用要求的生产环境</li>
+<li><strong>7 节点</strong>：容忍 3 个故障，极少使用，写入延迟增大</li>
+</ul>
+<h3 id="性能优化">性能优化</h3>
+<pre class="mermaid">graph TB
+    subgraph 优化手段
+        A[Batch 批量提交] --&gt; D[减少网络往返]
+        B[Pipeline 流水线] --&gt; D
+        C[Learner 只读副本] --&gt; E[分担读压力]
+        F[PreVote 预投票] --&gt; G[减少不必要选举]
+        H[快照压缩] --&gt; I[减少日志大小]
+    end</pre>
+<ol type="1">
+<li><strong>Batch</strong>：将多个客户端请求合并为一次 Raft
+日志提交</li>
+<li><strong>Pipeline</strong>：Leader 不等待上一个 AppendEntries
+的响应就发送下一个</li>
+<li><strong>Read Index / Lease Read</strong>：优化只读请求，避免走完整的
+Raft 流程</li>
+<li><strong>PreVote</strong>：在正式发起选举前先预投票，避免网络分区恢复后的无谓选举</li>
+</ol>
+<h2 id="总结">总结</h2>
+<p>共识算法是分布式系统的核心基石。Paxos
+奠定了理论基础但工程实现困难，Raft 通过分解问题和强 Leader
+模型让共识算法变得可理解和可实现。在实际选型中，Raft
+已经成为事实标准，被 etcd、Consul、TiKV、CockroachDB
+等系统广泛采用。理解这些算法的原理，对于设计和运维分布式系统至关重要。</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2023-11-22</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">3.1k 字 · 8 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/cqrs-event-sourcing/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">CQRS与事件溯源架构实践</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/go-pprof-profiling/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Go性能分析：pprof工具全解</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%B1%E8%AF%86%E9%97%AE%E9%A2%98%E7%9A%84%E6%9C%AC%E8%B4%A8"><span class="toc-text">共识问题的本质</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BB%80%E4%B9%88%E6%98%AF%E5%85%B1%E8%AF%86"><span class="toc-text">什么是共识</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#flp-%E4%B8%8D%E5%8F%AF%E8%83%BD%E5%AE%9A%E7%90%86"><span class="toc-text">FLP 不可能定理</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#paxos-%E7%AE%97%E6%B3%95"><span class="toc-text">Paxos 算法</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9F%BA%E6%9C%AC%E6%A6%82%E5%BF%B5"><span class="toc-text">基本概念</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#basic-paxos%E4%B8%A4%E9%98%B6%E6%AE%B5%E5%8D%8F%E8%AE%AE"><span class="toc-text">Basic Paxos：两阶段协议</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%AB%9E%E4%BA%89%E5%9C%BA%E6%99%AF"><span class="toc-text">竞争场景</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#multi-paxos"><span class="toc-text">Multi-Paxos</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#raft-%E7%AE%97%E6%B3%95"><span class="toc-text">Raft 算法</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%AE%BE%E8%AE%A1%E7%90%86%E5%BF%B5"><span class="toc-text">设计理念</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%8A%82%E7%82%B9%E7%8A%B6%E6%80%81"><span class="toc-text">节点状态</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#leader-election"><span class="toc-text">Leader Election</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#log-replication"><span class="toc-text">Log Replication</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#safety-%E4%BF%9D%E8%AF%81"><span class="toc-text">Safety 保证</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#paxos-vs-raft-%E5%AF%B9%E6%AF%94"><span class="toc-text">Paxos vs Raft 对比</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E9%99%85%E5%BA%94%E7%94%A8"><span class="toc-text">实际应用</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#etcd%E4%BD%BF%E7%94%A8-raft"><span class="toc-text">etcd（使用 Raft）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#zookeeper%E4%BD%BF%E7%94%A8-zab"><span class="toc-text">ZooKeeper（使用 ZAB）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%B7%A5%E7%A8%8B%E5%AE%9E%E8%B7%B5%E5%BB%BA%E8%AE%AE"><span class="toc-text">工程实践建议</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%9B%86%E7%BE%A4%E8%A7%84%E6%A8%A1"><span class="toc-text">集群规模</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96"><span class="toc-text">性能优化</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

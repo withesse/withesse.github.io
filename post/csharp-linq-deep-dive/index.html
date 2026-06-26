@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>C# LINQ深入解析：从入门到性能优化 · zt&#39;s Blog</title>
+  <meta name="description" content="深入解析 C# LINQ 的工作原理，涵盖延迟执行、方法语法与查询语法对比，以及常见的性能陷阱。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/csharp-linq-deep-dive/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="C# LINQ深入解析：从入门到性能优化">
+  <meta property="og:description" content="深入解析 C# LINQ 的工作原理，涵盖延迟执行、方法语法与查询语法对比，以及常见的性能陷阱。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/csharp-linq-deep-dive/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2015-03-14T16:00:00.000Z">
+  <meta property="article:modified_time" content="2015-03-14T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="C# LINQ深入解析：从入门到性能优化">
+  <meta name="twitter:description" content="深入解析 C# LINQ 的工作原理，涵盖延迟执行、方法语法与查询语法对比，以及常见的性能陷阱。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"C# LINQ深入解析：从入门到性能优化","description":"深入解析 C# LINQ 的工作原理，涵盖延迟执行、方法语法与查询语法对比，以及常见的性能陷阱。","datePublished":"2015-03-14T16:00:00.000Z","dateModified":"2015-03-14T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/csharp-linq-deep-dive/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"C#","item":"https://withesse.co/categories/C/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:145">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/C/">C#</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/csharp/"><span class="hash">#</span>csharp</a><a class="tag" href="/tags/dotnet/"><span class="hash">#</span>dotnet</a><a class="tag" href="/tags/linq/"><span class="hash">#</span>linq</a>
+        
+      </div>
+
+      <h1>C# LINQ深入解析：从入门到性能优化</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2015.03.15</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          <span class="row gap8" style="align-items:center"><span class="lang-dot" style="background:#178600"></span>C#</span>
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 3 min</span>
+        </span>
+        <span class="wc"><span class="num">1.3k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9F%A5%E8%AF%A2%E8%AF%AD%E6%B3%95-vs-%E6%96%B9%E6%B3%95%E8%AF%AD%E6%B3%95"><span class="toc-text">1. 查询语法 vs 方法语法</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BB%B6%E8%BF%9F%E6%89%A7%E8%A1%8Cdeferred-execution"><span class="toc-text">2. 延迟执行（Deferred
+Execution）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%B8%B8%E7%94%A8%E6%93%8D%E4%BD%9C%E7%AC%A6%E8%AF%A6%E8%A7%A3"><span class="toc-text">3. 常用操作符详解</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%81%9A%E5%90%88%E6%93%8D%E4%BD%9C"><span class="toc-text">3.1 聚合操作</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%9B%86%E5%90%88%E6%93%8D%E4%BD%9C"><span class="toc-text">3.2 集合操作</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%88%86%E9%A1%B5"><span class="toc-text">3.3 分页</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%89%81%E5%B9%B3%E5%8C%96"><span class="toc-text">3.4 扁平化</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#linq-to-objects-vs-linq-to-sql"><span class="toc-text">4. LINQ to Objects vs LINQ to
+SQL</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%A7%E8%83%BD%E6%B3%A8%E6%84%8F%E4%BA%8B%E9%A1%B9"><span class="toc-text">5. 性能注意事项</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <p>LINQ（Language Integrated Query）是 C# 3.0
+引入的最重要特性之一，它将查询能力直接内嵌到语言本身，让操作集合、数据库、XML
+变得统一而优雅。用了一段时间之后我发现，大多数人只会用
+<code>Where</code>/<code>Select</code>
+这几个基础操作，而对延迟执行、表达式树这些核心机制缺乏了解，导致踩了不少坑。这篇文章是我的一个系统梳理。</p>
+<h2 id="查询语法-vs-方法语法">1. 查询语法 vs 方法语法</h2>
+<p>LINQ 有两种写法，底层完全等价：</p>
+<figure class="highlight csharp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><code class="hljs csharp"><span class="hljs-comment">// 查询语法（Query Syntax）</span><br><span class="hljs-keyword">var</span> result1 = <span class="hljs-keyword">from</span> u <span class="hljs-keyword">in</span> users<br>              <span class="hljs-keyword">where</span> u.Age &gt; <span class="hljs-number">18</span><br>              <span class="hljs-keyword">orderby</span> u.Name<br>              <span class="hljs-keyword">select</span> <span class="hljs-keyword">new</span> &#123; u.Name, u.Email &#125;;<br><br><span class="hljs-comment">// 方法语法（Method Syntax / Fluent API）</span><br><span class="hljs-keyword">var</span> result2 = users<br>    .Where(u =&gt; u.Age &gt; <span class="hljs-number">18</span>)<br>    .OrderBy(u =&gt; u.Name)<br>    .Select(u =&gt; <span class="hljs-keyword">new</span> &#123; u.Name, u.Email &#125;);<br></code></pre></td></tr></table></figure>
+<p>查询语法编译后会转换为方法语法，所以两者性能完全一致。我个人更习惯方法语法，链式调用更易于扩展，也更适合复杂查询的逐步调试。</p>
+<p>查询语法有一个优势：<code>join</code> 和 <code>group by</code>
+写起来更直观：</p>
+<figure class="highlight csharp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><code class="hljs csharp"><span class="hljs-keyword">var</span> orderDetails = <span class="hljs-keyword">from</span> o <span class="hljs-keyword">in</span> orders<br>                   <span class="hljs-keyword">join</span> p <span class="hljs-keyword">in</span> products <span class="hljs-keyword">on</span> o.ProductId <span class="hljs-keyword">equals</span> p.Id<br>                   <span class="hljs-keyword">group</span> o <span class="hljs-keyword">by</span> p.Category <span class="hljs-keyword">into</span> g<br>                   <span class="hljs-keyword">select</span> <span class="hljs-keyword">new</span> &#123;<br>                       Category = g.Key,<br>                       TotalAmount = g.Sum(o =&gt; o.Amount)<br>                   &#125;;<br></code></pre></td></tr></table></figure>
+<h2 id="延迟执行deferred-execution">2. 延迟执行（Deferred
+Execution）</h2>
+<p>这是 LINQ 最重要的特性，也是最容易踩坑的地方。</p>
+<figure class="highlight csharp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><code class="hljs csharp"><span class="hljs-keyword">var</span> query = users.Where(u =&gt; u.IsActive); <span class="hljs-comment">// 此时没有执行任何查询</span><br><br>Console.WriteLine(<span class="hljs-string">&quot;查询还没开始&quot;</span>);<br><br><span class="hljs-keyword">foreach</span> (<span class="hljs-keyword">var</span> user <span class="hljs-keyword">in</span> query) <span class="hljs-comment">// 迭代时才真正执行</span><br>&#123;<br>    Console.WriteLine(user.Name);<br>&#125;<br></code></pre></td></tr></table></figure>
+<p><strong>陷阱一：多次枚举</strong></p>
+<figure class="highlight csharp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><code class="hljs csharp"><span class="hljs-keyword">var</span> activeUsers = users.Where(u =&gt; u.IsActive);<br><br><span class="hljs-built_in">int</span> count = activeUsers.Count();    <span class="hljs-comment">// 第一次遍历</span><br><span class="hljs-keyword">var</span> list  = activeUsers.ToList();   <span class="hljs-comment">// 第二次遍历 — 重复计算！</span><br><br><span class="hljs-comment">// 正确做法：物化一次</span><br><span class="hljs-keyword">var</span> activeUsersList = users.Where(u =&gt; u.IsActive).ToList();<br><span class="hljs-built_in">int</span> count2 = activeUsersList.Count;<br><span class="hljs-keyword">var</span> list2  = activeUsersList;<br></code></pre></td></tr></table></figure>
+<p><strong>陷阱二：闭包捕获变量</strong></p>
+<figure class="highlight csharp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><code class="hljs csharp"><span class="hljs-keyword">var</span> queries = <span class="hljs-keyword">new</span> List&lt;IEnumerable&lt;User&gt;&gt;();<br><span class="hljs-keyword">for</span> (<span class="hljs-built_in">int</span> i = <span class="hljs-number">0</span>; i &lt; <span class="hljs-number">3</span>; i++)<br>&#123;<br>    <span class="hljs-comment">// 错误：所有 query 都捕获了同一个 i，最终都是 i=3</span><br>    queries.Add(users.Where(u =&gt; u.DeptId == i));<br>&#125;<br><br><span class="hljs-comment">// 正确：在循环内创建局部变量</span><br><span class="hljs-keyword">for</span> (<span class="hljs-built_in">int</span> i = <span class="hljs-number">0</span>; i &lt; <span class="hljs-number">3</span>; i++)<br>&#123;<br>    <span class="hljs-built_in">int</span> deptId = i;<br>    queries.Add(users.Where(u =&gt; u.DeptId == deptId));<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="常用操作符详解">3. 常用操作符详解</h2>
+<h3 id="聚合操作">3.1 聚合操作</h3>
+<figure class="highlight csharp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><code class="hljs csharp"><span class="hljs-keyword">var</span> stats = users.Where(u =&gt; u.IsActive)<br>                 .GroupBy(u =&gt; u.Department)<br>                 .Select(g =&gt; <span class="hljs-keyword">new</span> &#123;<br>                     Department = g.Key,<br>                     Count    = g.Count(),<br>                     AvgAge   = g.Average(u =&gt; u.Age),<br>                     MaxSalary = g.Max(u =&gt; u.Salary)<br>                 &#125;);<br></code></pre></td></tr></table></figure>
+<h3 id="集合操作">3.2 集合操作</h3>
+<figure class="highlight csharp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs csharp"><span class="hljs-keyword">var</span> list1 = <span class="hljs-keyword">new</span>[] &#123; <span class="hljs-number">1</span>, <span class="hljs-number">2</span>, <span class="hljs-number">3</span>, <span class="hljs-number">4</span>, <span class="hljs-number">5</span> &#125;;<br><span class="hljs-keyword">var</span> list2 = <span class="hljs-keyword">new</span>[] &#123; <span class="hljs-number">3</span>, <span class="hljs-number">4</span>, <span class="hljs-number">5</span>, <span class="hljs-number">6</span>, <span class="hljs-number">7</span> &#125;;<br><br><span class="hljs-keyword">var</span> union     = list1.Union(list2);      <span class="hljs-comment">// &#123; 1,2,3,4,5,6,7 &#125;</span><br><span class="hljs-keyword">var</span> intersect = list1.Intersect(list2);  <span class="hljs-comment">// &#123; 3,4,5 &#125;</span><br><span class="hljs-keyword">var</span> except    = list1.Except(list2);     <span class="hljs-comment">// &#123; 1,2 &#125;</span><br></code></pre></td></tr></table></figure>
+<h3 id="分页">3.3 分页</h3>
+<figure class="highlight csharp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs csharp"><span class="hljs-built_in">int</span> page = <span class="hljs-number">2</span>, pageSize = <span class="hljs-number">10</span>;<br><span class="hljs-keyword">var</span> paged = users.OrderBy(u =&gt; u.Id)<br>                 .Skip((page - <span class="hljs-number">1</span>) * pageSize)<br>                 .Take(pageSize)<br>                 .ToList();<br></code></pre></td></tr></table></figure>
+<h3 id="扁平化">3.4 扁平化</h3>
+<figure class="highlight csharp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs csharp"><span class="hljs-comment">// 每个 Department 有多个 User，获取所有 User</span><br><span class="hljs-keyword">var</span> allUsers = departments.SelectMany(d =&gt; d.Users);<br><br><span class="hljs-comment">// 带父对象</span><br><span class="hljs-keyword">var</span> userDeptPairs = departments<br>    .SelectMany(d =&gt; d.Users, (dept, user) =&gt; <span class="hljs-keyword">new</span> &#123; dept.Name, user &#125;);<br></code></pre></td></tr></table></figure>
+<h2 id="linq-to-objects-vs-linq-to-sql">4. LINQ to Objects vs LINQ to
+SQL</h2>
+<p>两者语法一样，但执行方式完全不同：</p>
+<table>
+<thead>
+<tr class="header">
+<th></th>
+<th>LINQ to Objects</th>
+<th>LINQ to SQL / EF</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>数据来源</td>
+<td>内存集合</td>
+<td>数据库</td>
+</tr>
+<tr class="even">
+<td>Lambda 类型</td>
+<td><code>Func&lt;T, bool&gt;</code></td>
+<td><code>Expression&lt;Func&lt;T, bool&gt;&gt;</code></td>
+</tr>
+<tr class="odd">
+<td>执行位置</td>
+<td>.NET 运行时</td>
+<td>转换为 SQL 在数据库执行</td>
+</tr>
+<tr class="even">
+<td>过滤时机</td>
+<td>全量加载后过滤</td>
+<td>数据库层面过滤</td>
+</tr>
+</tbody>
+</table>
+<figure class="highlight csharp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs csharp"><span class="hljs-comment">// LINQ to Objects — 先把所有数据加载到内存再过滤（危险！）</span><br><span class="hljs-keyword">var</span> result = dbContext.Users.ToList().Where(u =&gt; u.Age &gt; <span class="hljs-number">18</span>);<br><br><span class="hljs-comment">// LINQ to SQL — 生成 WHERE age &gt; 18 的 SQL，只取需要的数据</span><br><span class="hljs-keyword">var</span> result = dbContext.Users.Where(u =&gt; u.Age &gt; <span class="hljs-number">18</span>).ToList();<br></code></pre></td></tr></table></figure>
+<p>这个区别非常重要：第一种写法会把整张表加载到内存，百万行数据下直接
+OOM。</p>
+<h2 id="性能注意事项">5. 性能注意事项</h2>
+<p><strong>避免 N+1 查询（EF 场景）：</strong></p>
+<figure class="highlight csharp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><code class="hljs csharp"><span class="hljs-comment">// 错误：每个订单都触发一次 SQL 查询用户信息</span><br><span class="hljs-keyword">var</span> orders = dbContext.Orders.ToList();<br><span class="hljs-keyword">foreach</span> (<span class="hljs-keyword">var</span> order <span class="hljs-keyword">in</span> orders)<br>&#123;<br>    Console.WriteLine(order.User.Name); <span class="hljs-comment">// N 次查询</span><br>&#125;<br><br><span class="hljs-comment">// 正确：用 Include 预加载</span><br><span class="hljs-keyword">var</span> orders = dbContext.Orders.Include(o =&gt; o.User).ToList();<br></code></pre></td></tr></table></figure>
+<p><strong>使用 <code>Any()</code> 代替
+<code>Count() &gt; 0</code>：</strong></p>
+<figure class="highlight csharp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs csharp"><span class="hljs-comment">// 低效：需要遍历所有元素计数</span><br><span class="hljs-keyword">if</span> (users.Count() &gt; <span class="hljs-number">0</span>) &#123; &#125;<br><br><span class="hljs-comment">// 高效：找到第一个就返回</span><br><span class="hljs-keyword">if</span> (users.Any()) &#123; &#125;<br></code></pre></td></tr></table></figure>
+<p><strong><code>FirstOrDefault()</code> 优于
+<code>Where().FirstOrDefault()</code>：</strong></p>
+<figure class="highlight csharp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><code class="hljs csharp"><span class="hljs-comment">// 同等效果，但语义更清晰</span><br><span class="hljs-keyword">var</span> user = users.FirstOrDefault(u =&gt; u.Id == id);<br><span class="hljs-comment">// 等价于</span><br><span class="hljs-keyword">var</span> user = users.Where(u =&gt; u.Id == id).FirstOrDefault();<br></code></pre></td></tr></table></figure>
+<h2 id="总结">总结</h2>
+<p>LINQ 是 C#
+最强大的特性之一，理解延迟执行和表达式树是用好它的前提：</p>
+<ul>
+<li><strong>延迟执行</strong>：查询定义时不执行，迭代时才执行——避免重复枚举，注意闭包陷阱</li>
+<li><strong>物化时机</strong>：在需要多次访问结果时，用
+<code>ToList()</code>/<code>ToArray()</code> 物化一次</li>
+<li><strong>LINQ to
+SQL</strong>：过滤、排序、投影尽量在数据库层完成，不要
+<code>ToList()</code> 之后再过滤</li>
+<li><strong>可读性</strong>：复杂查询拆成多步，每步赋予有意义的变量名，比一条超长链式调用好维护</li>
+</ul>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2015-03-15</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">1.3k 字 · 3 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/aspnet-mvc5-guide/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">ASP.NET MVC 5 实战：从路由到过滤器</span>
+          </a>
+        
+        <span></span>
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9F%A5%E8%AF%A2%E8%AF%AD%E6%B3%95-vs-%E6%96%B9%E6%B3%95%E8%AF%AD%E6%B3%95"><span class="toc-text">1. 查询语法 vs 方法语法</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BB%B6%E8%BF%9F%E6%89%A7%E8%A1%8Cdeferred-execution"><span class="toc-text">2. 延迟执行（Deferred
+Execution）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%B8%B8%E7%94%A8%E6%93%8D%E4%BD%9C%E7%AC%A6%E8%AF%A6%E8%A7%A3"><span class="toc-text">3. 常用操作符详解</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%81%9A%E5%90%88%E6%93%8D%E4%BD%9C"><span class="toc-text">3.1 聚合操作</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%9B%86%E5%90%88%E6%93%8D%E4%BD%9C"><span class="toc-text">3.2 集合操作</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%88%86%E9%A1%B5"><span class="toc-text">3.3 分页</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%89%81%E5%B9%B3%E5%8C%96"><span class="toc-text">3.4 扁平化</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#linq-to-objects-vs-linq-to-sql"><span class="toc-text">4. LINQ to Objects vs LINQ to
+SQL</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%A7%E8%83%BD%E6%B3%A8%E6%84%8F%E4%BA%8B%E9%A1%B9"><span class="toc-text">5. 性能注意事项</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

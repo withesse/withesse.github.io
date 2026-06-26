@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Spring Boot自动配置原理深度剖析 · zt&#39;s Blog</title>
+  <meta name="description" content="深度剖析Spring Boot自动配置的实现原理，从@SpringBootApplication注解到自定义Starter开发的完整链路">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/spring-boot-auto-configuration/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Spring Boot自动配置原理深度剖析">
+  <meta property="og:description" content="深度剖析Spring Boot自动配置的实现原理，从@SpringBootApplication注解到自定义Starter开发的完整链路">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/spring-boot-auto-configuration/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2025-01-07T16:00:00.000Z">
+  <meta property="article:modified_time" content="2025-01-07T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Spring Boot自动配置原理深度剖析">
+  <meta name="twitter:description" content="深度剖析Spring Boot自动配置的实现原理，从@SpringBootApplication注解到自定义Starter开发的完整链路">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Spring Boot自动配置原理深度剖析","description":"深度剖析Spring Boot自动配置的实现原理，从@SpringBootApplication注解到自定义Starter开发的完整链路","datePublished":"2025-01-07T16:00:00.000Z","dateModified":"2025-01-07T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/spring-boot-auto-configuration/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Java","item":"https://withesse.co/categories/Java/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:25">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Java/">Java</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/java/"><span class="hash">#</span>java</a><a class="tag" href="/tags/spring-boot/"><span class="hash">#</span>spring-boot</a><a class="tag" href="/tags/auto-configuration/"><span class="hash">#</span>auto-configuration</a>
+        
+      </div>
+
+      <h1>Spring Boot自动配置原理深度剖析</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2025.01.08</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          <span class="row gap8" style="align-items:center"><span class="lang-dot" style="background:#E76F00"></span>Java</span>
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 10 min</span>
+        </span>
+        <span class="wc"><span class="num">3.8k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">1. 引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#springbootapplication%E6%B3%A8%E8%A7%A3%E6%8B%86%E8%A7%A3"><span class="toc-text">2. @SpringBootApplication注解拆解</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#enableautoconfiguration%E7%9A%84%E5%B7%A5%E4%BD%9C%E5%8E%9F%E7%90%86"><span class="toc-text">3. @EnableAutoConfiguration的工作原理</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#autoconfigurationimportselector"><span class="toc-text">3.1
+AutoConfigurationImportSelector</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6%E7%9A%84%E6%BC%94%E5%8F%98"><span class="toc-text">3.2 配置文件的演变</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#conditional%E6%9D%A1%E4%BB%B6%E6%B3%A8%E8%A7%A3%E4%BD%93%E7%B3%BB"><span class="toc-text">4. @Conditional条件注解体系</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#conditionalonmissingbean%E7%9A%84%E9%87%8D%E8%A6%81%E6%80%A7"><span class="toc-text">4.1 @ConditionalOnMissingBean的重要性</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%85%8D%E7%BD%AE%E5%8A%A0%E8%BD%BD%E9%A1%BA%E5%BA%8F"><span class="toc-text">5. 配置加载顺序</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%87%AA%E5%8A%A8%E9%85%8D%E7%BD%AE%E7%B1%BB%E7%9A%84%E5%8A%A0%E8%BD%BD%E9%A1%BA%E5%BA%8F%E6%8E%A7%E5%88%B6"><span class="toc-text">5.1 自动配置类的加载顺序控制</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%87%AA%E5%AE%9A%E4%B9%89starter%E5%BC%80%E5%8F%91%E5%AE%9E%E6%88%98"><span class="toc-text">6. 自定义Starter开发实战</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%A1%B9%E7%9B%AE%E7%BB%93%E6%9E%84"><span class="toc-text">6.1 项目结构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%8C%E6%95%B4%E5%AE%9E%E7%8E%B0"><span class="toc-text">6.2 完整实现</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%B0%83%E8%AF%95%E8%87%AA%E5%8A%A8%E9%85%8D%E7%BD%AE"><span class="toc-text">7. 调试自动配置</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%9F%A5%E7%9C%8B%E8%87%AA%E5%8A%A8%E9%85%8D%E7%BD%AE%E6%8A%A5%E5%91%8A"><span class="toc-text">7.1 查看自动配置报告</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%8E%92%E9%99%A4%E7%89%B9%E5%AE%9A%E8%87%AA%E5%8A%A8%E9%85%8D%E7%BD%AE"><span class="toc-text">7.2 排除特定自动配置</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5"><span class="toc-text">8. 最佳实践</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">9. 总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="引言">1. 引言</h2>
+<p>Spring
+Boot最为人称道的特性就是”约定优于配置”——只需引入一个starter依赖，相关的Bean就会被自动注册到Spring容器中，无需手动编写XML配置或大量的<code>@Bean</code>定义。那么这背后的魔法是如何实现的？</p>
+<p>本文将从<code>@SpringBootApplication</code>注解出发，逐层拆解Spring
+Boot自动配置的完整链路，最后通过开发一个自定义Starter来将理论付诸实践。</p>
+<h2 id="springbootapplication注解拆解">2. <span class="citation"
+data-cites="SpringBootApplication注解拆解">@SpringBootApplication注解拆解</span></h2>
+<p>一切从主类上的<code>@SpringBootApplication</code>开始：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-meta">@SpringBootApplication</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">MyApplication</span> &#123;<br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">main</span><span class="hljs-params">(String[] args)</span> &#123;<br>        SpringApplication.run(MyApplication.class, args);<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<p><code>@SpringBootApplication</code>是一个组合注解，包含三个核心注解：</p>
+<pre class="mermaid">graph TB
+    SBA["@SpringBootApplication"] --&gt; SC["@SpringBootConfiguration&lt;br/&gt;（本质是@Configuration）"]
+    SBA --&gt; EAC["@EnableAutoConfiguration&lt;br/&gt;自动配置的核心入口"]
+    SBA --&gt; CS["@ComponentScan&lt;br/&gt;包扫描"]
+
+    EAC --&gt; AI["@AutoConfigurationPackage&lt;br/&gt;注册主类所在包"]
+    EAC --&gt; ISR["@Import(AutoConfigurationImportSelector.class)&lt;br/&gt;加载自动配置类"]
+
+    ISR --&gt; SF["读取META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports"]
+
+    style SBA fill:#FF6347,color:#fff
+    style EAC fill:#FFD700,stroke:#333,stroke-width:2px
+    style ISR fill:#90EE90
+    style SF fill:#87CEEB</pre>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">// @SpringBootApplication的定义（简化）</span><br><span class="hljs-meta">@Target(ElementType.TYPE)</span><br><span class="hljs-meta">@Retention(RetentionPolicy.RUNTIME)</span><br><span class="hljs-meta">@SpringBootConfiguration</span>  <span class="hljs-comment">// 标识这是一个配置类</span><br><span class="hljs-meta">@EnableAutoConfiguration</span>   <span class="hljs-comment">// 开启自动配置</span><br><span class="hljs-meta">@ComponentScan(excludeFilters = &#123;</span><br><span class="hljs-meta">    @Filter(type = FilterType.CUSTOM, classes = TypeExcludeFilter.class),</span><br><span class="hljs-meta">    @Filter(type = FilterType.CUSTOM, classes = AutoConfigurationExcludeFilter.class)</span><br><span class="hljs-meta">&#125;)</span><br><span class="hljs-keyword">public</span> <span class="hljs-meta">@interface</span> SpringBootApplication &#123;<br>    <span class="hljs-comment">// 可通过exclude/excludeName排除特定的自动配置类</span><br>    <span class="hljs-meta">@AliasFor(annotation = EnableAutoConfiguration.class, attribute = &quot;exclude&quot;)</span><br>    Class&lt;?&gt;[] exclude() <span class="hljs-keyword">default</span> &#123;&#125;;<br><br>    <span class="hljs-meta">@AliasFor(annotation = EnableAutoConfiguration.class, attribute = &quot;excludeName&quot;)</span><br>    String[] excludeName() <span class="hljs-keyword">default</span> &#123;&#125;;<br><br>    <span class="hljs-meta">@AliasFor(annotation = ComponentScan.class, attribute = &quot;basePackages&quot;)</span><br>    String[] scanBasePackages() <span class="hljs-keyword">default</span> &#123;&#125;;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="enableautoconfiguration的工作原理">3. <span class="citation"
+data-cites="EnableAutoConfiguration的工作原理">@EnableAutoConfiguration的工作原理</span></h2>
+<h3 id="autoconfigurationimportselector">3.1
+AutoConfigurationImportSelector</h3>
+<p>这是自动配置的核心引擎，它实现了<code>DeferredImportSelector</code>接口，负责筛选和加载自动配置类：</p>
+<pre class="mermaid">sequenceDiagram
+    participant Spring as Spring容器启动
+    participant Selector as AutoConfigurationImportSelector
+    participant Loader as 配置文件加载器
+    participant Filter as 条件过滤器
+
+    Spring-&gt;&gt;Selector: process()
+    Selector-&gt;&gt;Loader: 读取AutoConfiguration.imports
+    Loader--&gt;&gt;Selector: 返回所有候选配置类(100+个)
+    Selector-&gt;&gt;Selector: 去重
+    Selector-&gt;&gt;Selector: 应用exclude排除
+    Selector-&gt;&gt;Filter: 应用@Conditional条件过滤
+    Filter--&gt;&gt;Selector: 返回满足条件的配置类
+    Selector--&gt;&gt;Spring: 返回最终要导入的配置类(通常20-30个)
+    Spring-&gt;&gt;Spring: 注册Bean定义</pre>
+<p>核心加载流程代码分析：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">/**</span><br><span class="hljs-comment"> * AutoConfigurationImportSelector核心方法（简化版）</span><br><span class="hljs-comment"> * 完整源码位于spring-boot-autoconfigure模块</span><br><span class="hljs-comment"> */</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">AutoConfigurationImportSelector</span> <span class="hljs-keyword">implements</span> <span class="hljs-title class_">DeferredImportSelector</span> &#123;<br><br>    <span class="hljs-meta">@Override</span><br>    <span class="hljs-keyword">public</span> String[] selectImports(AnnotationMetadata annotationMetadata) &#123;<br>        <span class="hljs-keyword">if</span> (!isEnabled(annotationMetadata)) &#123;<br>            <span class="hljs-keyword">return</span> NO_IMPORTS;<br>        &#125;<br>        <span class="hljs-comment">// 获取所有候选自动配置类</span><br>        <span class="hljs-type">AutoConfigurationEntry</span> <span class="hljs-variable">autoConfigurationEntry</span> <span class="hljs-operator">=</span><br>            getAutoConfigurationEntry(annotationMetadata);<br>        <span class="hljs-keyword">return</span> autoConfigurationEntry.getConfigurations().toArray(<span class="hljs-keyword">new</span> <span class="hljs-title class_">String</span>[<span class="hljs-number">0</span>]);<br>    &#125;<br><br>    <span class="hljs-keyword">protected</span> AutoConfigurationEntry <span class="hljs-title function_">getAutoConfigurationEntry</span><span class="hljs-params">(</span><br><span class="hljs-params">            AnnotationMetadata annotationMetadata)</span> &#123;<br><br>        <span class="hljs-comment">// 1. 从配置文件中加载所有候选自动配置类</span><br>        List&lt;String&gt; configurations = getCandidateConfigurations(<br>            annotationMetadata, <span class="hljs-literal">null</span>);<br>        <span class="hljs-comment">// 在Spring Boot 3.x中，约有150+个候选配置类</span><br><br>        <span class="hljs-comment">// 2. 去重</span><br>        configurations = removeDuplicates(configurations);<br><br>        <span class="hljs-comment">// 3. 获取用户配置的排除列表</span><br>        Set&lt;String&gt; exclusions = getExclusions(annotationMetadata, <span class="hljs-literal">null</span>);<br>        configurations.removeAll(exclusions);<br><br>        <span class="hljs-comment">// 4. 应用配置类过滤器（基于@Conditional注解）</span><br>        configurations = getConfigurationClassFilter().filter(configurations);<br><br>        <span class="hljs-comment">// 5. 触发AutoConfigurationImportEvent事件</span><br>        fireAutoConfigurationImportEvents(configurations, exclusions);<br><br>        <span class="hljs-keyword">return</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">AutoConfigurationEntry</span>(configurations, exclusions);<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="配置文件的演变">3.2 配置文件的演变</h3>
+<p>Spring Boot加载自动配置类的配置文件经历了一次重要变化：</p>
+<pre class="mermaid">graph LR
+    subgraph "Spring Boot 2.x"
+        SF2["META-INF/spring.factories"]
+        SF2 --&gt; SF2C["org.springframework.boot.autoconfigure.EnableAutoConfiguration=\&lt;br/&gt;com.example.FooAutoConfiguration,\&lt;br/&gt;com.example.BarAutoConfiguration"]
+    end
+    subgraph "Spring Boot 3.x"
+        SF3["META-INF/spring/&lt;br/&gt;org.springframework.boot.autoconfigure.AutoConfiguration.imports"]
+        SF3 --&gt; SF3C["com.example.FooAutoConfiguration&lt;br/&gt;com.example.BarAutoConfiguration&lt;br/&gt;（每行一个类名）"]
+    end
+
+    SF2 --&gt;|"Spring Boot 2.7开始&lt;br/&gt;并行支持，3.0移除旧方式"| SF3
+
+    style SF2 fill:#FFD700
+    style SF3 fill:#90EE90</pre>
+<p><strong>Spring Boot
+2.x</strong>：使用<code>META-INF/spring.factories</code>文件，以key-value格式配置</p>
+<figure class="highlight properties"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><code class="hljs properties"><span class="hljs-comment"># META-INF/spring.factories (Spring Boot 2.x)</span><br><span class="hljs-attr">org.springframework.boot.autoconfigure.EnableAutoConfiguration</span>=<span class="hljs-string">\</span><br><span class="hljs-string">com.example.autoconfigure.FooAutoConfiguration,\</span><br><span class="hljs-string">com.example.autoconfigure.BarAutoConfiguration</span><br></code></pre></td></tr></table></figure>
+<p><strong>Spring Boot
+3.x</strong>：使用新的<code>META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports</code>文件</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><code class="hljs text"># META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports<br>com.example.autoconfigure.FooAutoConfiguration<br>com.example.autoconfigure.BarAutoConfiguration<br></code></pre></td></tr></table></figure>
+<h2 id="conditional条件注解体系">4. <span class="citation"
+data-cites="Conditional条件注解体系">@Conditional条件注解体系</span></h2>
+<p>自动配置的关键在于”按需加载”——只有满足特定条件时才生效。Spring
+Boot提供了丰富的<code>@Conditional</code>注解：</p>
+<pre class="mermaid">graph TB
+    C["@Conditional&lt;br/&gt;(Spring Framework)"] --&gt; CB["@ConditionalOnBean&lt;br/&gt;容器中存在指定Bean"]
+    C --&gt; CMB["@ConditionalOnMissingBean&lt;br/&gt;容器中不存在指定Bean"]
+    C --&gt; CC["@ConditionalOnClass&lt;br/&gt;classpath中存在指定类"]
+    C --&gt; CMC["@ConditionalOnMissingClass&lt;br/&gt;classpath中不存在指定类"]
+    C --&gt; CP["@ConditionalOnProperty&lt;br/&gt;配置属性满足条件"]
+    C --&gt; CWA["@ConditionalOnWebApplication&lt;br/&gt;是Web应用"]
+    C --&gt; CR["@ConditionalOnResource&lt;br/&gt;存在指定资源"]
+    C --&gt; CE["@ConditionalOnExpression&lt;br/&gt;SpEL表达式为true"]
+
+    style C fill:#FFD700,stroke:#333,stroke-width:2px</pre>
+<p>以<code>DataSourceAutoConfiguration</code>为例：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">/**</span><br><span class="hljs-comment"> * 数据源自动配置（简化版）</span><br><span class="hljs-comment"> * 演示各种<span class="hljs-doctag">@Conditional</span>注解的组合使用</span><br><span class="hljs-comment"> */</span><br><span class="hljs-meta">@AutoConfiguration(before = SqlInitializationAutoConfiguration.class)</span><br><span class="hljs-meta">@ConditionalOnClass(&#123; DataSource.class, EmbeddedDatabaseType.class &#125;)</span><br><span class="hljs-comment">// 只有classpath中存在DataSource类时才生效</span><br><span class="hljs-meta">@ConditionalOnMissingBean(type = &quot;io.r2dbc.spi.ConnectionFactory&quot;)</span><br><span class="hljs-comment">// 不存在R2DBC的ConnectionFactory时才生效（避免与响应式数据源冲突）</span><br><span class="hljs-meta">@EnableConfigurationProperties(DataSourceProperties.class)</span><br><span class="hljs-comment">// 绑定application.properties中spring.datasource.*前缀的配置</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">DataSourceAutoConfiguration</span> &#123;<br><br>    <span class="hljs-meta">@Configuration(proxyBeanMethods = false)</span><br>    <span class="hljs-meta">@Conditional(EmbeddedDatabaseCondition.class)</span><br>    <span class="hljs-meta">@ConditionalOnMissingBean(&#123; DataSource.class, XADataSource.class &#125;)</span><br>    <span class="hljs-meta">@Import(EmbeddedDataSourceConfiguration.class)</span><br>    <span class="hljs-keyword">protected</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">EmbeddedDatabaseConfiguration</span> &#123;<br>        <span class="hljs-comment">// 当没有配置外部数据源时，自动配置嵌入式数据库（如H2）</span><br>    &#125;<br><br>    <span class="hljs-meta">@Configuration(proxyBeanMethods = false)</span><br>    <span class="hljs-meta">@Conditional(PooledDataSourceCondition.class)</span><br>    <span class="hljs-meta">@ConditionalOnMissingBean(&#123; DataSource.class, XADataSource.class &#125;)</span><br>    <span class="hljs-meta">@Import(&#123;</span><br><span class="hljs-meta">        DataSourceConfiguration.Hikari.class, // HikariCP数据源</span><br><span class="hljs-meta">        DataSourceConfiguration.Tomcat.class,  // Tomcat JDBC数据源</span><br><span class="hljs-meta">        DataSourceConfiguration.Dbcp2.class,   // DBCP2数据源</span><br><span class="hljs-meta">    &#125;)</span><br>    <span class="hljs-keyword">protected</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">PooledDataSourceConfiguration</span> &#123;<br>        <span class="hljs-comment">// 当classpath中存在连接池实现时，自动配置连接池数据源</span><br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="conditionalonmissingbean的重要性">4.1 <span class="citation"
+data-cites="ConditionalOnMissingBean的重要性">@ConditionalOnMissingBean的重要性</span></h3>
+<p>这是自动配置中最常用的条件注解，它确保了”用户配置优先”的原则：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">/**</span><br><span class="hljs-comment"> * 自动配置的核心设计模式：</span><br><span class="hljs-comment"> * 先用<span class="hljs-doctag">@ConditionalOnMissingBean</span>检查用户是否已自定义Bean</span><br><span class="hljs-comment"> * 如果用户未自定义，才提供默认配置</span><br><span class="hljs-comment"> */</span><br><span class="hljs-meta">@Configuration</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">MyServiceAutoConfiguration</span> &#123;<br><br>    <span class="hljs-meta">@Bean</span><br>    <span class="hljs-meta">@ConditionalOnMissingBean</span>  <span class="hljs-comment">// 用户已经定义了MyService Bean则跳过</span><br>    <span class="hljs-keyword">public</span> MyService <span class="hljs-title function_">myService</span><span class="hljs-params">()</span> &#123;<br>        <span class="hljs-keyword">return</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">DefaultMyService</span>(); <span class="hljs-comment">// 提供默认实现</span><br>    &#125;<br>&#125;<br><br><span class="hljs-comment">// 用户自定义配置 - 如果存在，则自动配置不生效</span><br><span class="hljs-meta">@Configuration</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">UserConfig</span> &#123;<br>    <span class="hljs-meta">@Bean</span><br>    <span class="hljs-keyword">public</span> MyService <span class="hljs-title function_">myService</span><span class="hljs-params">()</span> &#123;<br>        <span class="hljs-keyword">return</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">CustomMyService</span>(); <span class="hljs-comment">// 用户自定义实现</span><br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="配置加载顺序">5. 配置加载顺序</h2>
+<p>Spring Boot有严格的配置加载优先级，优先级高的会覆盖优先级低的：</p>
+<pre class="mermaid">graph TB
+    P1["1. 命令行参数&lt;br/&gt;--server.port=8080"] --&gt; P2
+    P2["2. Java系统属性&lt;br/&gt;System.getProperties()"] --&gt; P3
+    P3["3. OS环境变量"] --&gt; P4
+    P4["4. application-{profile}.properties&lt;br/&gt;特定Profile配置"] --&gt; P5
+    P5["5. application.properties&lt;br/&gt;默认配置"] --&gt; P6
+    P6["6. @PropertySource注解"] --&gt; P7
+    P7["7. SpringApplication.setDefaultProperties()&lt;br/&gt;默认属性"]
+
+    style P1 fill:#FF6347,color:#fff
+    style P7 fill:#90EE90
+
+    P1 ~~~ NOTE["优先级从高到低&lt;br/&gt;高优先级覆盖低优先级"]</pre>
+<p>配置文件的搜索路径（优先级从高到低）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs plaintext">1. file:./config/           # 项目根目录/config/<br>2. file:./config/*/         # 项目根目录/config/子目录/<br>3. file:./                  # 项目根目录<br>4. classpath:/config/       # classpath下的config/<br>5. classpath:/              # classpath根目录<br></code></pre></td></tr></table></figure>
+<h3 id="自动配置类的加载顺序控制">5.1 自动配置类的加载顺序控制</h3>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">/**</span><br><span class="hljs-comment"> * 自动配置类之间可以通过注解控制加载顺序</span><br><span class="hljs-comment"> */</span><br><span class="hljs-meta">@AutoConfiguration(</span><br><span class="hljs-meta">    after = DataSourceAutoConfiguration.class,    // 在数据源配置之后</span><br><span class="hljs-meta">    before = FlywayAutoConfiguration.class        // 在Flyway配置之前</span><br><span class="hljs-meta">)</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">MyAutoConfiguration</span> &#123;<br>    <span class="hljs-comment">// 确保数据源已就绪后再配置</span><br>&#125;<br><br><span class="hljs-comment">// Spring Boot 2.x中使用以下注解</span><br><span class="hljs-meta">@AutoConfigureAfter(DataSourceAutoConfiguration.class)</span><br><span class="hljs-meta">@AutoConfigureBefore(FlywayAutoConfiguration.class)</span><br></code></pre></td></tr></table></figure>
+<h2 id="自定义starter开发实战">6. 自定义Starter开发实战</h2>
+<h3 id="项目结构">6.1 项目结构</h3>
+<p>开发一个自定义Starter，通常由两个模块组成：</p>
+<pre class="mermaid">graph TB
+    subgraph "my-spring-boot-starter"
+        STARTER["my-service-spring-boot-starter&lt;br/&gt;(starter模块)"]
+        AC["my-service-spring-boot-autoconfigure&lt;br/&gt;(autoconfigure模块)"]
+        STARTER --&gt;|依赖| AC
+    end
+
+    STARTER --&gt; NOTE1["只包含pom.xml&lt;br/&gt;聚合依赖"]
+    AC --&gt; NOTE2["包含自动配置类&lt;br/&gt;@Conditional逻辑&lt;br/&gt;配置属性绑定"]
+
+    style STARTER fill:#87CEEB
+    style AC fill:#FFD700</pre>
+<p>命名规范： -
+官方Starter：<code>spring-boot-starter-{name}</code>（如<code>spring-boot-starter-web</code>）
+-
+第三方Starter：<code>{name}-spring-boot-starter</code>（如<code>mybatis-spring-boot-starter</code>）</p>
+<h3 id="完整实现">6.2 完整实现</h3>
+<p>下面实现一个短信发送服务的自定义Starter。</p>
+<p><strong>Step 1: 配置属性类</strong></p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-keyword">package</span> com.example.sms.autoconfigure;<br><br><span class="hljs-keyword">import</span> org.springframework.boot.context.properties.ConfigurationProperties;<br><br><span class="hljs-comment">/**</span><br><span class="hljs-comment"> * SMS服务配置属性</span><br><span class="hljs-comment"> * 绑定application.properties中sms.*前缀的配置</span><br><span class="hljs-comment"> */</span><br><span class="hljs-meta">@ConfigurationProperties(prefix = &quot;sms&quot;)</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">SmsProperties</span> &#123;<br>    <span class="hljs-comment">/**</span><br><span class="hljs-comment">     * 是否启用SMS服务</span><br><span class="hljs-comment">     */</span><br>    <span class="hljs-keyword">private</span> <span class="hljs-type">boolean</span> <span class="hljs-variable">enabled</span> <span class="hljs-operator">=</span> <span class="hljs-literal">true</span>;<br><br>    <span class="hljs-comment">/**</span><br><span class="hljs-comment">     * SMS服务提供商：aliyun / tencent</span><br><span class="hljs-comment">     */</span><br>    <span class="hljs-keyword">private</span> <span class="hljs-type">String</span> <span class="hljs-variable">provider</span> <span class="hljs-operator">=</span> <span class="hljs-string">&quot;aliyun&quot;</span>;<br><br>    <span class="hljs-comment">/**</span><br><span class="hljs-comment">     * Access Key ID</span><br><span class="hljs-comment">     */</span><br>    <span class="hljs-keyword">private</span> String accessKeyId;<br><br>    <span class="hljs-comment">/**</span><br><span class="hljs-comment">     * Access Key Secret</span><br><span class="hljs-comment">     */</span><br>    <span class="hljs-keyword">private</span> String accessKeySecret;<br><br>    <span class="hljs-comment">/**</span><br><span class="hljs-comment">     * 短信签名</span><br><span class="hljs-comment">     */</span><br>    <span class="hljs-keyword">private</span> String signName;<br><br>    <span class="hljs-comment">/**</span><br><span class="hljs-comment">     * 发送超时时间（毫秒）</span><br><span class="hljs-comment">     */</span><br>    <span class="hljs-keyword">private</span> <span class="hljs-type">int</span> <span class="hljs-variable">timeoutMs</span> <span class="hljs-operator">=</span> <span class="hljs-number">5000</span>;<br><br>    <span class="hljs-comment">/**</span><br><span class="hljs-comment">     * 最大重试次数</span><br><span class="hljs-comment">     */</span><br>    <span class="hljs-keyword">private</span> <span class="hljs-type">int</span> <span class="hljs-variable">maxRetries</span> <span class="hljs-operator">=</span> <span class="hljs-number">3</span>;<br><br>    <span class="hljs-comment">// getters and setters</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-type">boolean</span> <span class="hljs-title function_">isEnabled</span><span class="hljs-params">()</span> &#123; <span class="hljs-keyword">return</span> enabled; &#125;<br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">setEnabled</span><span class="hljs-params">(<span class="hljs-type">boolean</span> enabled)</span> &#123; <span class="hljs-built_in">this</span>.enabled = enabled; &#125;<br>    <span class="hljs-keyword">public</span> String <span class="hljs-title function_">getProvider</span><span class="hljs-params">()</span> &#123; <span class="hljs-keyword">return</span> provider; &#125;<br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">setProvider</span><span class="hljs-params">(String provider)</span> &#123; <span class="hljs-built_in">this</span>.provider = provider; &#125;<br>    <span class="hljs-keyword">public</span> String <span class="hljs-title function_">getAccessKeyId</span><span class="hljs-params">()</span> &#123; <span class="hljs-keyword">return</span> accessKeyId; &#125;<br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">setAccessKeyId</span><span class="hljs-params">(String accessKeyId)</span> &#123; <span class="hljs-built_in">this</span>.accessKeyId = accessKeyId; &#125;<br>    <span class="hljs-keyword">public</span> String <span class="hljs-title function_">getAccessKeySecret</span><span class="hljs-params">()</span> &#123; <span class="hljs-keyword">return</span> accessKeySecret; &#125;<br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">setAccessKeySecret</span><span class="hljs-params">(String accessKeySecret)</span> &#123; <span class="hljs-built_in">this</span>.accessKeySecret = accessKeySecret; &#125;<br>    <span class="hljs-keyword">public</span> String <span class="hljs-title function_">getSignName</span><span class="hljs-params">()</span> &#123; <span class="hljs-keyword">return</span> signName; &#125;<br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">setSignName</span><span class="hljs-params">(String signName)</span> &#123; <span class="hljs-built_in">this</span>.signName = signName; &#125;<br>    <span class="hljs-keyword">public</span> <span class="hljs-type">int</span> <span class="hljs-title function_">getTimeoutMs</span><span class="hljs-params">()</span> &#123; <span class="hljs-keyword">return</span> timeoutMs; &#125;<br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">setTimeoutMs</span><span class="hljs-params">(<span class="hljs-type">int</span> timeoutMs)</span> &#123; <span class="hljs-built_in">this</span>.timeoutMs = timeoutMs; &#125;<br>    <span class="hljs-keyword">public</span> <span class="hljs-type">int</span> <span class="hljs-title function_">getMaxRetries</span><span class="hljs-params">()</span> &#123; <span class="hljs-keyword">return</span> maxRetries; &#125;<br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">setMaxRetries</span><span class="hljs-params">(<span class="hljs-type">int</span> maxRetries)</span> &#123; <span class="hljs-built_in">this</span>.maxRetries = maxRetries; &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<p><strong>Step 2: 服务接口和实现</strong></p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-keyword">package</span> com.example.sms;<br><br><span class="hljs-comment">/**</span><br><span class="hljs-comment"> * SMS发送服务接口</span><br><span class="hljs-comment"> */</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">interface</span> <span class="hljs-title class_">SmsService</span> &#123;<br>    <span class="hljs-comment">/**</span><br><span class="hljs-comment">     * 发送短信</span><br><span class="hljs-comment">     * <span class="hljs-doctag">@param</span> phoneNumber 手机号</span><br><span class="hljs-comment">     * <span class="hljs-doctag">@param</span> templateCode 模板编码</span><br><span class="hljs-comment">     * <span class="hljs-doctag">@param</span> params 模板参数</span><br><span class="hljs-comment">     * <span class="hljs-doctag">@return</span> 是否发送成功</span><br><span class="hljs-comment">     */</span><br>    <span class="hljs-type">boolean</span> <span class="hljs-title function_">send</span><span class="hljs-params">(String phoneNumber, String templateCode, java.util.Map&lt;String, String&gt; params)</span>;<br>&#125;<br></code></pre></td></tr></table></figure>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-keyword">package</span> com.example.sms;<br><br><span class="hljs-keyword">import</span> java.util.Map;<br><br><span class="hljs-comment">/**</span><br><span class="hljs-comment"> * 阿里云SMS实现</span><br><span class="hljs-comment"> */</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">AliyunSmsService</span> <span class="hljs-keyword">implements</span> <span class="hljs-title class_">SmsService</span> &#123;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> String accessKeyId;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> String accessKeySecret;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> String signName;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> <span class="hljs-type">int</span> timeoutMs;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> <span class="hljs-type">int</span> maxRetries;<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-title function_">AliyunSmsService</span><span class="hljs-params">(String accessKeyId, String accessKeySecret,</span><br><span class="hljs-params">                            String signName, <span class="hljs-type">int</span> timeoutMs, <span class="hljs-type">int</span> maxRetries)</span> &#123;<br>        <span class="hljs-built_in">this</span>.accessKeyId = accessKeyId;<br>        <span class="hljs-built_in">this</span>.accessKeySecret = accessKeySecret;<br>        <span class="hljs-built_in">this</span>.signName = signName;<br>        <span class="hljs-built_in">this</span>.timeoutMs = timeoutMs;<br>        <span class="hljs-built_in">this</span>.maxRetries = maxRetries;<br>    &#125;<br><br>    <span class="hljs-meta">@Override</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-type">boolean</span> <span class="hljs-title function_">send</span><span class="hljs-params">(String phoneNumber, String templateCode, Map&lt;String, String&gt; params)</span> &#123;<br>        <span class="hljs-comment">// 实际实现中调用阿里云SDK</span><br>        System.out.printf(<span class="hljs-string">&quot;Aliyun SMS: sending to %s, template=%s, sign=%s, params=%s%n&quot;</span>,<br>            phoneNumber, templateCode, signName, params);<br>        <span class="hljs-keyword">return</span> <span class="hljs-literal">true</span>;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-keyword">package</span> com.example.sms;<br><br><span class="hljs-keyword">import</span> java.util.Map;<br><br><span class="hljs-comment">/**</span><br><span class="hljs-comment"> * 腾讯云SMS实现</span><br><span class="hljs-comment"> */</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">TencentSmsService</span> <span class="hljs-keyword">implements</span> <span class="hljs-title class_">SmsService</span> &#123;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> String accessKeyId;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> String accessKeySecret;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> String signName;<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-title function_">TencentSmsService</span><span class="hljs-params">(String accessKeyId, String accessKeySecret, String signName)</span> &#123;<br>        <span class="hljs-built_in">this</span>.accessKeyId = accessKeyId;<br>        <span class="hljs-built_in">this</span>.accessKeySecret = accessKeySecret;<br>        <span class="hljs-built_in">this</span>.signName = signName;<br>    &#125;<br><br>    <span class="hljs-meta">@Override</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-type">boolean</span> <span class="hljs-title function_">send</span><span class="hljs-params">(String phoneNumber, String templateCode, Map&lt;String, String&gt; params)</span> &#123;<br>        System.out.printf(<span class="hljs-string">&quot;Tencent SMS: sending to %s, template=%s, sign=%s, params=%s%n&quot;</span>,<br>            phoneNumber, templateCode, signName, params);<br>        <span class="hljs-keyword">return</span> <span class="hljs-literal">true</span>;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<p><strong>Step 3: 自动配置类</strong></p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-keyword">package</span> com.example.sms.autoconfigure;<br><br><span class="hljs-keyword">import</span> com.example.sms.AliyunSmsService;<br><span class="hljs-keyword">import</span> com.example.sms.SmsService;<br><span class="hljs-keyword">import</span> com.example.sms.TencentSmsService;<br><span class="hljs-keyword">import</span> org.springframework.boot.autoconfigure.AutoConfiguration;<br><span class="hljs-keyword">import</span> org.springframework.boot.autoconfigure.condition.ConditionalOnClass;<br><span class="hljs-keyword">import</span> org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;<br><span class="hljs-keyword">import</span> org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;<br><span class="hljs-keyword">import</span> org.springframework.boot.context.properties.EnableConfigurationProperties;<br><span class="hljs-keyword">import</span> org.springframework.context.annotation.Bean;<br><span class="hljs-keyword">import</span> org.springframework.context.annotation.Configuration;<br><br><span class="hljs-comment">/**</span><br><span class="hljs-comment"> * SMS服务自动配置类</span><br><span class="hljs-comment"> *</span><br><span class="hljs-comment"> * 生效条件：</span><br><span class="hljs-comment"> * 1. classpath中存在SmsService类</span><br><span class="hljs-comment"> * 2. 配置了sms.enabled=true（默认true）</span><br><span class="hljs-comment"> */</span><br><span class="hljs-meta">@AutoConfiguration</span><br><span class="hljs-meta">@ConditionalOnClass(SmsService.class)</span><br><span class="hljs-meta">@ConditionalOnProperty(prefix = &quot;sms&quot;, name = &quot;enabled&quot;, havingValue = &quot;true&quot;, matchIfMissing = true)</span><br><span class="hljs-meta">@EnableConfigurationProperties(SmsProperties.class)</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">SmsAutoConfiguration</span> &#123;<br><br>    <span class="hljs-comment">/**</span><br><span class="hljs-comment">     * 阿里云SMS配置</span><br><span class="hljs-comment">     * 当sms.provider=aliyun时生效</span><br><span class="hljs-comment">     */</span><br>    <span class="hljs-meta">@Configuration(proxyBeanMethods = false)</span><br>    <span class="hljs-meta">@ConditionalOnProperty(prefix = &quot;sms&quot;, name = &quot;provider&quot;, havingValue = &quot;aliyun&quot;,</span><br><span class="hljs-meta">                           matchIfMissing = true)</span><br>    <span class="hljs-keyword">static</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">AliyunSmsConfiguration</span> &#123;<br><br>        <span class="hljs-meta">@Bean</span><br>        <span class="hljs-meta">@ConditionalOnMissingBean(SmsService.class)</span><br>        <span class="hljs-keyword">public</span> SmsService <span class="hljs-title function_">aliyunSmsService</span><span class="hljs-params">(SmsProperties properties)</span> &#123;<br>            <span class="hljs-keyword">return</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">AliyunSmsService</span>(<br>                properties.getAccessKeyId(),<br>                properties.getAccessKeySecret(),<br>                properties.getSignName(),<br>                properties.getTimeoutMs(),<br>                properties.getMaxRetries()<br>            );<br>        &#125;<br>    &#125;<br><br>    <span class="hljs-comment">/**</span><br><span class="hljs-comment">     * 腾讯云SMS配置</span><br><span class="hljs-comment">     * 当sms.provider=tencent时生效</span><br><span class="hljs-comment">     */</span><br>    <span class="hljs-meta">@Configuration(proxyBeanMethods = false)</span><br>    <span class="hljs-meta">@ConditionalOnProperty(prefix = &quot;sms&quot;, name = &quot;provider&quot;, havingValue = &quot;tencent&quot;)</span><br>    <span class="hljs-keyword">static</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">TencentSmsConfiguration</span> &#123;<br><br>        <span class="hljs-meta">@Bean</span><br>        <span class="hljs-meta">@ConditionalOnMissingBean(SmsService.class)</span><br>        <span class="hljs-keyword">public</span> SmsService <span class="hljs-title function_">tencentSmsService</span><span class="hljs-params">(SmsProperties properties)</span> &#123;<br>            <span class="hljs-keyword">return</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">TencentSmsService</span>(<br>                properties.getAccessKeyId(),<br>                properties.getAccessKeySecret(),<br>                properties.getSignName()<br>            );<br>        &#125;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<p><strong>Step 4: 注册自动配置</strong></p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><code class="hljs text"># 文件: META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports<br># (Spring Boot 3.x)<br>com.example.sms.autoconfigure.SmsAutoConfiguration<br></code></pre></td></tr></table></figure>
+<figure class="highlight properties"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><code class="hljs properties"><span class="hljs-comment"># 文件: META-INF/spring.factories</span><br><span class="hljs-comment"># (Spring Boot 2.x兼容)</span><br><span class="hljs-attr">org.springframework.boot.autoconfigure.EnableAutoConfiguration</span>=<span class="hljs-string">\</span><br><span class="hljs-string">com.example.sms.autoconfigure.SmsAutoConfiguration</span><br></code></pre></td></tr></table></figure>
+<p><strong>Step 5: 使用方配置</strong></p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># application.yml</span><br><span class="hljs-attr">sms:</span><br>  <span class="hljs-attr">enabled:</span> <span class="hljs-literal">true</span><br>  <span class="hljs-attr">provider:</span> <span class="hljs-string">aliyun</span><br>  <span class="hljs-attr">access-key-id:</span> <span class="hljs-string">$&#123;SMS_ACCESS_KEY_ID&#125;</span><br>  <span class="hljs-attr">access-key-secret:</span> <span class="hljs-string">$&#123;SMS_ACCESS_KEY_SECRET&#125;</span><br>  <span class="hljs-attr">sign-name:</span> <span class="hljs-string">MyApp</span><br>  <span class="hljs-attr">timeout-ms:</span> <span class="hljs-number">3000</span><br>  <span class="hljs-attr">max-retries:</span> <span class="hljs-number">2</span><br></code></pre></td></tr></table></figure>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">/**</span><br><span class="hljs-comment"> * 使用方只需引入starter依赖，配置属性即可直接注入使用</span><br><span class="hljs-comment"> */</span><br><span class="hljs-meta">@RestController</span><br><span class="hljs-meta">@RequestMapping(&quot;/api/sms&quot;)</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">SmsController</span> &#123;<br><br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> SmsService smsService;<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-title function_">SmsController</span><span class="hljs-params">(SmsService smsService)</span> &#123;<br>        <span class="hljs-built_in">this</span>.smsService = smsService;<br>    &#125;<br><br>    <span class="hljs-meta">@PostMapping(&quot;/send&quot;)</span><br>    <span class="hljs-keyword">public</span> ResponseEntity&lt;String&gt; <span class="hljs-title function_">send</span><span class="hljs-params">(<span class="hljs-meta">@RequestParam</span> String phone,</span><br><span class="hljs-params">                                       <span class="hljs-meta">@RequestParam</span> String templateCode)</span> &#123;<br>        <span class="hljs-type">boolean</span> <span class="hljs-variable">success</span> <span class="hljs-operator">=</span> smsService.send(phone, templateCode,<br>            java.util.Map.of(<span class="hljs-string">&quot;code&quot;</span>, <span class="hljs-string">&quot;123456&quot;</span>));<br>        <span class="hljs-keyword">return</span> success<br>            ? ResponseEntity.ok(<span class="hljs-string">&quot;sent&quot;</span>)<br>            : ResponseEntity.status(<span class="hljs-number">500</span>).body(<span class="hljs-string">&quot;failed&quot;</span>);<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="调试自动配置">7. 调试自动配置</h2>
+<h3 id="查看自动配置报告">7.1 查看自动配置报告</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 方式1：启动参数</span><br>java -jar app.jar --debug<br><br><span class="hljs-comment"># 方式2：配置文件</span><br><span class="hljs-comment"># application.properties</span><br>debug=<span class="hljs-literal">true</span><br></code></pre></td></tr></table></figure>
+<p>启动日志中会输出详细的自动配置报告：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><code class="hljs plaintext">============================<br>CONDITIONS EVALUATION REPORT<br>============================<br><br>Positive matches:<br>-----------------<br>   DataSourceAutoConfiguration matched:<br>      - @ConditionalOnClass found required classes &#x27;javax.sql.DataSource&#x27;,<br>        &#x27;org.springframework.jdbc.datasource.embedded.EmbeddedDatabaseType&#x27;<br><br>Negative matches:<br>-----------------<br>   MongoAutoConfiguration:<br>      Did not match:<br>         - @ConditionalOnClass did not find required class<br>           &#x27;com.mongodb.client.MongoClient&#x27;<br></code></pre></td></tr></table></figure>
+<h3 id="排除特定自动配置">7.2 排除特定自动配置</h3>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">// 方式1：注解排除</span><br><span class="hljs-meta">@SpringBootApplication(exclude = &#123;</span><br><span class="hljs-meta">    DataSourceAutoConfiguration.class,</span><br><span class="hljs-meta">    RedisAutoConfiguration.class</span><br><span class="hljs-meta">&#125;)</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">MyApplication</span> &#123; &#125;<br><br><span class="hljs-comment">// 方式2：配置文件排除</span><br><span class="hljs-comment">// application.properties</span><br><span class="hljs-comment">// spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration</span><br></code></pre></td></tr></table></figure>
+<h2 id="最佳实践">8. 最佳实践</h2>
+<ol type="1">
+<li><strong>自定义Bean优先于自动配置</strong>：始终使用<code>@ConditionalOnMissingBean</code>确保用户自定义配置能覆盖默认配置。</li>
+<li><strong>配置属性要有合理的默认值</strong>：让用户在最少配置的情况下就能使用。</li>
+<li><strong>使用<code>@AutoConfiguration</code>替代<code>@Configuration</code></strong>：Spring
+Boot 3.x推荐使用专门的注解来标识自动配置类。</li>
+<li><strong>不要在自动配置类中使用<code>@ComponentScan</code></strong>：避免意外扫描到用户的Bean。</li>
+<li><strong>提供配置元数据</strong>：创建<code>META-INF/additional-spring-configuration-metadata.json</code>，让IDE能提供配置提示。</li>
+<li><strong>合理使用<code>@Conditional</code>组合</strong>：精确控制配置生效条件，避免不必要的Bean创建。</li>
+<li><strong>注意自动配置的顺序</strong>：使用<code>@AutoConfiguration(after/before)</code>明确依赖关系。</li>
+</ol>
+<h2 id="总结">9. 总结</h2>
+<p>Spring Boot自动配置的核心链路可以概括为：</p>
+<ol type="1">
+<li><code>@SpringBootApplication</code> -&gt;
+<code>@EnableAutoConfiguration</code> -&gt;
+<code>AutoConfigurationImportSelector</code></li>
+<li><code>AutoConfigurationImportSelector</code>从<code>AutoConfiguration.imports</code>文件中加载所有候选配置类</li>
+<li>通过<code>@Conditional</code>系列注解进行条件过滤，只有满足条件的配置类才会生效</li>
+<li>生效的配置类中定义的<code>@Bean</code>方法被执行，Bean被注册到Spring容器</li>
+<li><code>@ConditionalOnMissingBean</code>确保了用户自定义配置始终优先于自动配置</li>
+</ol>
+<p>理解这个链路后，不仅能更好地使用Spring
+Boot提供的自动配置，还能开发高质量的自定义Starter，将通用功能封装为可复用的组件，提升团队的开发效率。</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2025-01-08</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">3.8k 字 · 10 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/postgresql-vs-mysql/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">PostgreSQL vs MySQL深度对比分析</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/redis-cluster-architecture/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Redis Cluster集群架构与运维实战</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">1. 引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#springbootapplication%E6%B3%A8%E8%A7%A3%E6%8B%86%E8%A7%A3"><span class="toc-text">2. @SpringBootApplication注解拆解</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#enableautoconfiguration%E7%9A%84%E5%B7%A5%E4%BD%9C%E5%8E%9F%E7%90%86"><span class="toc-text">3. @EnableAutoConfiguration的工作原理</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#autoconfigurationimportselector"><span class="toc-text">3.1
+AutoConfigurationImportSelector</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6%E7%9A%84%E6%BC%94%E5%8F%98"><span class="toc-text">3.2 配置文件的演变</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#conditional%E6%9D%A1%E4%BB%B6%E6%B3%A8%E8%A7%A3%E4%BD%93%E7%B3%BB"><span class="toc-text">4. @Conditional条件注解体系</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#conditionalonmissingbean%E7%9A%84%E9%87%8D%E8%A6%81%E6%80%A7"><span class="toc-text">4.1 @ConditionalOnMissingBean的重要性</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%85%8D%E7%BD%AE%E5%8A%A0%E8%BD%BD%E9%A1%BA%E5%BA%8F"><span class="toc-text">5. 配置加载顺序</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%87%AA%E5%8A%A8%E9%85%8D%E7%BD%AE%E7%B1%BB%E7%9A%84%E5%8A%A0%E8%BD%BD%E9%A1%BA%E5%BA%8F%E6%8E%A7%E5%88%B6"><span class="toc-text">5.1 自动配置类的加载顺序控制</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%87%AA%E5%AE%9A%E4%B9%89starter%E5%BC%80%E5%8F%91%E5%AE%9E%E6%88%98"><span class="toc-text">6. 自定义Starter开发实战</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%A1%B9%E7%9B%AE%E7%BB%93%E6%9E%84"><span class="toc-text">6.1 项目结构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%8C%E6%95%B4%E5%AE%9E%E7%8E%B0"><span class="toc-text">6.2 完整实现</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%B0%83%E8%AF%95%E8%87%AA%E5%8A%A8%E9%85%8D%E7%BD%AE"><span class="toc-text">7. 调试自动配置</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%9F%A5%E7%9C%8B%E8%87%AA%E5%8A%A8%E9%85%8D%E7%BD%AE%E6%8A%A5%E5%91%8A"><span class="toc-text">7.1 查看自动配置报告</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%8E%92%E9%99%A4%E7%89%B9%E5%AE%9A%E8%87%AA%E5%8A%A8%E9%85%8D%E7%BD%AE"><span class="toc-text">7.2 排除特定自动配置</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5"><span class="toc-text">8. 最佳实践</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">9. 总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

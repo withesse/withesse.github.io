@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EF Core Code First 实战：从建模到迁移管理 · zt&#39;s Blog</title>
+  <meta name="description" content="系统讲解 EF Core Code First 工作流：实体建模、Fluent API 配置、数据库迁移管理，以及生产环境的最佳实践。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/efcore-code-first/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="EF Core Code First 实战：从建模到迁移管理">
+  <meta property="og:description" content="系统讲解 EF Core Code First 工作流：实体建模、Fluent API 配置、数据库迁移管理，以及生产环境的最佳实践。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/efcore-code-first/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2018-02-13T16:00:00.000Z">
+  <meta property="article:modified_time" content="2018-02-13T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="EF Core Code First 实战：从建模到迁移管理">
+  <meta name="twitter:description" content="系统讲解 EF Core Code First 工作流：实体建模、Fluent API 配置、数据库迁移管理，以及生产环境的最佳实践。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"EF Core Code First 实战：从建模到迁移管理","description":"系统讲解 EF Core Code First 工作流：实体建模、Fluent API 配置、数据库迁移管理，以及生产环境的最佳实践。","datePublished":"2018-02-13T16:00:00.000Z","dateModified":"2018-02-13T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/efcore-code-first/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"C#","item":"https://withesse.co/categories/C/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:145">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/C/">C#</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/csharp/"><span class="hash">#</span>csharp</a><a class="tag" href="/tags/ef-core/"><span class="hash">#</span>ef-core</a><a class="tag" href="/tags/orm/"><span class="hash">#</span>orm</a><a class="tag" href="/tags/database/"><span class="hash">#</span>database</a>
+        
+      </div>
+
+      <h1>EF Core Code First 实战：从建模到迁移管理</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2018.02.14</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          <span class="row gap8" style="align-items:center"><span class="lang-dot" style="background:#178600"></span>C#</span>
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 3 min</span>
+        </span>
+        <span class="wc"><span class="num">1.3k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E4%BD%93%E5%BB%BA%E6%A8%A1"><span class="toc-text">1. 实体建模</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#fluent-api-%E9%85%8D%E7%BD%AE"><span class="toc-text">2. Fluent API 配置</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%BF%81%E7%A7%BB%E7%AE%A1%E7%90%86"><span class="toc-text">3. 迁移管理</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%94%9F%E4%BA%A7%E7%8E%AF%E5%A2%83%E8%BF%81%E7%A7%BB%E7%AD%96%E7%95%A5"><span class="toc-text">4. 生产环境迁移策略</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%80%BC%E5%AF%B9%E8%B1%A1value-object"><span class="toc-text">5. 值对象（Value Object）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%B8%A9%E5%9D%91%E8%AE%B0%E5%BD%95"><span class="toc-text">踩坑记录</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <p>从 EF 6 迁移到 EF Core 之后，API 有不少变化，但整体思路是一致的。EF
+Core 的 Code First 工作流在团队协作和版本管理上比直接写 SQL
+更顺畅，这篇文章总结了我在实际项目中的使用经验。</p>
+<h2 id="实体建模">1. 实体建模</h2>
+<figure class="highlight csharp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><code class="hljs csharp"><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title">Order</span><br>&#123;<br>    <span class="hljs-keyword">public</span> <span class="hljs-built_in">int</span> Id &#123; <span class="hljs-keyword">get</span>; <span class="hljs-keyword">set</span>; &#125;<br>    <span class="hljs-keyword">public</span> <span class="hljs-built_in">string</span> OrderNo &#123; <span class="hljs-keyword">get</span>; <span class="hljs-keyword">set</span>; &#125;<br>    <span class="hljs-keyword">public</span> DateTime CreatedAt &#123; <span class="hljs-keyword">get</span>; <span class="hljs-keyword">set</span>; &#125;<br>    <span class="hljs-keyword">public</span> OrderStatus Status &#123; <span class="hljs-keyword">get</span>; <span class="hljs-keyword">set</span>; &#125;<br>    <span class="hljs-keyword">public</span> <span class="hljs-built_in">decimal</span> TotalAmount &#123; <span class="hljs-keyword">get</span>; <span class="hljs-keyword">set</span>; &#125;<br><br>    <span class="hljs-comment">// 外键</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-built_in">int</span> UserId &#123; <span class="hljs-keyword">get</span>; <span class="hljs-keyword">set</span>; &#125;<br>    <span class="hljs-keyword">public</span> User User &#123; <span class="hljs-keyword">get</span>; <span class="hljs-keyword">set</span>; &#125; <span class="hljs-comment">// 导航属性</span><br><br>    <span class="hljs-comment">// 一对多</span><br>    <span class="hljs-keyword">public</span> List&lt;OrderItem&gt; Items &#123; <span class="hljs-keyword">get</span>; <span class="hljs-keyword">set</span>; &#125; = <span class="hljs-keyword">new</span> List&lt;OrderItem&gt;();<br>&#125;<br><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title">OrderItem</span><br>&#123;<br>    <span class="hljs-keyword">public</span> <span class="hljs-built_in">int</span> Id &#123; <span class="hljs-keyword">get</span>; <span class="hljs-keyword">set</span>; &#125;<br>    <span class="hljs-keyword">public</span> <span class="hljs-built_in">int</span> OrderId &#123; <span class="hljs-keyword">get</span>; <span class="hljs-keyword">set</span>; &#125;<br>    <span class="hljs-keyword">public</span> Order Order &#123; <span class="hljs-keyword">get</span>; <span class="hljs-keyword">set</span>; &#125;<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-built_in">int</span> ProductId &#123; <span class="hljs-keyword">get</span>; <span class="hljs-keyword">set</span>; &#125;<br>    <span class="hljs-keyword">public</span> Product Product &#123; <span class="hljs-keyword">get</span>; <span class="hljs-keyword">set</span>; &#125;<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-built_in">int</span> Quantity &#123; <span class="hljs-keyword">get</span>; <span class="hljs-keyword">set</span>; &#125;<br>    <span class="hljs-keyword">public</span> <span class="hljs-built_in">decimal</span> UnitPrice &#123; <span class="hljs-keyword">get</span>; <span class="hljs-keyword">set</span>; &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="fluent-api-配置">2. Fluent API 配置</h2>
+<p>Data Annotation（特性）适合简单场景，Fluent API
+更强大且不污染实体类：</p>
+<figure class="highlight csharp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br></pre></td><td class="code"><pre><code class="hljs csharp"><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title">AppDbContext</span> : <span class="hljs-title">DbContext</span><br>&#123;<br>    <span class="hljs-keyword">public</span> DbSet&lt;Order&gt; Orders &#123; <span class="hljs-keyword">get</span>; <span class="hljs-keyword">set</span>; &#125;<br>    <span class="hljs-keyword">public</span> DbSet&lt;OrderItem&gt; OrderItems &#123; <span class="hljs-keyword">get</span>; <span class="hljs-keyword">set</span>; &#125;<br>    <span class="hljs-keyword">public</span> DbSet&lt;User&gt; Users &#123; <span class="hljs-keyword">get</span>; <span class="hljs-keyword">set</span>; &#125;<br><br>    <span class="hljs-function"><span class="hljs-keyword">protected</span> <span class="hljs-keyword">override</span> <span class="hljs-keyword">void</span> <span class="hljs-title">OnModelCreating</span>(<span class="hljs-params">ModelBuilder modelBuilder</span>)</span><br>    &#123;<br>        <span class="hljs-comment">// 推荐：把每个实体的配置分离到独立类</span><br>        modelBuilder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());<br>    &#125;<br>&#125;<br><br><span class="hljs-comment">// 独立的实体配置类</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title">OrderConfiguration</span> : <span class="hljs-title">IEntityTypeConfiguration</span>&lt;<span class="hljs-title">Order</span>&gt;<br>&#123;<br>    <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title">Configure</span>(<span class="hljs-params">EntityTypeBuilder&lt;Order&gt; builder</span>)</span><br>    &#123;<br>        builder.ToTable(<span class="hljs-string">&quot;orders&quot;</span>);<br>        builder.HasKey(o =&gt; o.Id);<br><br>        builder.Property(o =&gt; o.OrderNo)<br>               .IsRequired()<br>               .HasMaxLength(<span class="hljs-number">32</span>);<br><br>        builder.Property(o =&gt; o.TotalAmount)<br>               .HasColumnType(<span class="hljs-string">&quot;decimal(18, 2)&quot;</span>);<br><br>        builder.Property(o =&gt; o.CreatedAt)<br>               .HasDefaultValueSql(<span class="hljs-string">&quot;GETUTCDATE()&quot;</span>);<br><br>        <span class="hljs-comment">// 索引</span><br>        builder.HasIndex(o =&gt; o.OrderNo).IsUnique();<br>        builder.HasIndex(o =&gt; <span class="hljs-keyword">new</span> &#123; o.UserId, o.Status, o.CreatedAt &#125;);<br><br>        <span class="hljs-comment">// 关联</span><br>        builder.HasOne(o =&gt; o.User)<br>               .WithMany(u =&gt; u.Orders)<br>               .HasForeignKey(o =&gt; o.UserId)<br>               .OnDelete(DeleteBehavior.Restrict);<br><br>        builder.HasMany(o =&gt; o.Items)<br>               .WithOne(i =&gt; i.Order)<br>               .HasForeignKey(i =&gt; i.OrderId);<br><br>        <span class="hljs-comment">// 全局查询过滤器（软删除）</span><br>        builder.HasQueryFilter(o =&gt; !o.IsDeleted);<br><br>        <span class="hljs-comment">// 枚举存储为字符串</span><br>        builder.Property(o =&gt; o.Status)<br>               .HasConversion&lt;<span class="hljs-built_in">string</span>&gt;();<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="迁移管理">3. 迁移管理</h2>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 创建迁移</span><br>dotnet ef migrations add InitialCreate<br><br><span class="hljs-comment"># 查看迁移生成的 SQL（不执行）</span><br>dotnet ef migrations script<br><br><span class="hljs-comment"># 应用迁移到数据库</span><br>dotnet ef database update<br><br><span class="hljs-comment"># 回滚到指定迁移</span><br>dotnet ef database update PreviousMigrationName<br><br><span class="hljs-comment"># 删除最后一个迁移（只在尚未应用时）</span><br>dotnet ef migrations remove<br></code></pre></td></tr></table></figure>
+<p>生成的迁移文件：</p>
+<figure class="highlight csharp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><code class="hljs csharp"><span class="hljs-keyword">public</span> <span class="hljs-keyword">partial</span> <span class="hljs-keyword">class</span> <span class="hljs-title">AddOrderStatusIndex</span> : <span class="hljs-title">Migration</span><br>&#123;<br>    <span class="hljs-function"><span class="hljs-keyword">protected</span> <span class="hljs-keyword">override</span> <span class="hljs-keyword">void</span> <span class="hljs-title">Up</span>(<span class="hljs-params">MigrationBuilder migrationBuilder</span>)</span><br>    &#123;<br>        migrationBuilder.CreateIndex(<br>            name: <span class="hljs-string">&quot;IX_orders_UserId_Status_CreatedAt&quot;</span>,<br>            table: <span class="hljs-string">&quot;orders&quot;</span>,<br>            columns: <span class="hljs-keyword">new</span>[] &#123; <span class="hljs-string">&quot;UserId&quot;</span>, <span class="hljs-string">&quot;Status&quot;</span>, <span class="hljs-string">&quot;CreatedAt&quot;</span> &#125;);<br>    &#125;<br><br>    <span class="hljs-function"><span class="hljs-keyword">protected</span> <span class="hljs-keyword">override</span> <span class="hljs-keyword">void</span> <span class="hljs-title">Down</span>(<span class="hljs-params">MigrationBuilder migrationBuilder</span>)</span><br>    &#123;<br>        migrationBuilder.DropIndex(<br>            name: <span class="hljs-string">&quot;IX_orders_UserId_Status_CreatedAt&quot;</span>,<br>            table: <span class="hljs-string">&quot;orders&quot;</span>);<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="生产环境迁移策略">4. 生产环境迁移策略</h2>
+<p><strong>不推荐</strong>：在应用启动时自动迁移（<code>db.Database.Migrate()</code>）——如果有多个实例同时启动，并发迁移可能导致问题。</p>
+<p><strong>推荐</strong>：生成 SQL 脚本，通过 CI/CD
+流水线在部署前应用：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 生成从当前版本到最新版本的 SQL</span><br>dotnet ef migrations script --idempotent -o migration.sql<br></code></pre></td></tr></table></figure>
+<p><code>--idempotent</code>
+参数生成的脚本包含版本检查，可以安全地重复执行。</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- EF Core 生成的幂等脚本示例</span><br>IF <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">EXISTS</span>(<span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> [__EFMigrationsHistory] <span class="hljs-keyword">WHERE</span> [MigrationId] <span class="hljs-operator">=</span> N<span class="hljs-string">&#x27;20180214_AddOrderStatusIndex&#x27;</span>)<br><span class="hljs-keyword">BEGIN</span><br>    <span class="hljs-keyword">CREATE</span> INDEX [IX_orders_UserId_Status_CreatedAt] <span class="hljs-keyword">ON</span> [orders] ([UserId], [Status], [CreatedAt]);<br>    <span class="hljs-keyword">INSERT</span> <span class="hljs-keyword">INTO</span> [__EFMigrationsHistory] ([MigrationId], [ProductVersion])<br>    <span class="hljs-keyword">VALUES</span> (N<span class="hljs-string">&#x27;20180214_AddOrderStatusIndex&#x27;</span>, N<span class="hljs-string">&#x27;2.0.1&#x27;</span>);<br><span class="hljs-keyword">END</span>;<br></code></pre></td></tr></table></figure>
+<h2 id="值对象value-object">5. 值对象（Value Object）</h2>
+<p>DDD 中的值对象（没有独立 ID）在 EF Core 2.0+ 可以用 Owned Entity
+实现：</p>
+<figure class="highlight csharp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><code class="hljs csharp"><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title">Order</span><br>&#123;<br>    <span class="hljs-keyword">public</span> Address ShippingAddress &#123; <span class="hljs-keyword">get</span>; <span class="hljs-keyword">set</span>; &#125;<br>&#125;<br><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title">Address</span><br>&#123;<br>    <span class="hljs-keyword">public</span> <span class="hljs-built_in">string</span> Province &#123; <span class="hljs-keyword">get</span>; <span class="hljs-keyword">set</span>; &#125;<br>    <span class="hljs-keyword">public</span> <span class="hljs-built_in">string</span> City &#123; <span class="hljs-keyword">get</span>; <span class="hljs-keyword">set</span>; &#125;<br>    <span class="hljs-keyword">public</span> <span class="hljs-built_in">string</span> Street &#123; <span class="hljs-keyword">get</span>; <span class="hljs-keyword">set</span>; &#125;<br>    <span class="hljs-keyword">public</span> <span class="hljs-built_in">string</span> ZipCode &#123; <span class="hljs-keyword">get</span>; <span class="hljs-keyword">set</span>; &#125;<br>&#125;<br><br><span class="hljs-comment">// 配置</span><br>builder.OwnsOne(o =&gt; o.ShippingAddress, address =&gt;<br>&#123;<br>    address.Property(a =&gt; a.Province).HasColumnName(<span class="hljs-string">&quot;shipping_province&quot;</span>);<br>    address.Property(a =&gt; a.City).HasColumnName(<span class="hljs-string">&quot;shipping_city&quot;</span>);<br>    address.Property(a =&gt; a.Street).HasColumnName(<span class="hljs-string">&quot;shipping_street&quot;</span>);<br>    address.Property(a =&gt; a.ZipCode).HasColumnName(<span class="hljs-string">&quot;shipping_zipcode&quot;</span>);<br>&#125;);<br></code></pre></td></tr></table></figure>
+<p><code>Address</code> 的字段会被内联到 <code>orders</code>
+表中，不会创建独立的表。</p>
+<h2 id="踩坑记录">踩坑记录</h2>
+<p>我们有个迁移在本地和测试环境都没问题，在生产环境应用时出错了。原因是生产环境数据库有一张历史遗留表
+<code>user_profiles</code>，而这次迁移恰好要创建同名的表（我们重构了模型）。</p>
+<p>EF Core
+的迁移只知道它自己管理的历史（<code>__EFMigrationsHistory</code>
+表），不知道数据库里已有的对象。</p>
+<p>解决方案：迁移前先手动备份并 rename 旧表，或者在迁移文件里加
+<code>migrationBuilder.Sql("EXEC sp_rename...")</code>
+手动处理冲突。</p>
+<p>从那以后，我们在 CI
+里加了一步：在一个干净的数据库快照上跑迁移，确认没问题后再上生产。</p>
+<h2 id="总结">总结</h2>
+<p>EF Core Code First 最佳实践：</p>
+<ul>
+<li><strong>Fluent API 放在独立的 Configuration
+类里</strong>，实体类保持干净</li>
+<li><strong>迁移文件提交到版本控制</strong>，团队成员 pull
+后能重建数据库</li>
+<li><strong>生产环境用幂等 SQL
+脚本</strong>，而不是程序启动时自动迁移</li>
+<li><strong><code>HasQueryFilter</code>
+实现软删除</strong>，全局生效，无需每次手写 WHERE</li>
+<li><strong><code>HasConversion</code> 存储枚举为字符串</strong>，比存
+int 更具可读性</li>
+</ul>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2018-02-14</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">1.3k 字 · 3 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/aspnetcore-middleware/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">ASP.NET Core 中间件管道深入解析</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/dotnet-core2-migration/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">.NET Core 2.0 迁移实战：从 1.x 到 2.0</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E4%BD%93%E5%BB%BA%E6%A8%A1"><span class="toc-text">1. 实体建模</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#fluent-api-%E9%85%8D%E7%BD%AE"><span class="toc-text">2. Fluent API 配置</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%BF%81%E7%A7%BB%E7%AE%A1%E7%90%86"><span class="toc-text">3. 迁移管理</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%94%9F%E4%BA%A7%E7%8E%AF%E5%A2%83%E8%BF%81%E7%A7%BB%E7%AD%96%E7%95%A5"><span class="toc-text">4. 生产环境迁移策略</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%80%BC%E5%AF%B9%E8%B1%A1value-object"><span class="toc-text">5. 值对象（Value Object）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%B8%A9%E5%9D%91%E8%AE%B0%E5%BD%95"><span class="toc-text">踩坑记录</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

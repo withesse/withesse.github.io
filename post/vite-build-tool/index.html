@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vite构建工具原理与插件开发 · zt&#39;s Blog</title>
+  <meta name="description" content="深入理解Vite的架构设计、Dev Server机制、HMR原理、生产构建流程以及自定义插件开发">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/vite-build-tool/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Vite构建工具原理与插件开发">
+  <meta property="og:description" content="深入理解Vite的架构设计、Dev Server机制、HMR原理、生产构建流程以及自定义插件开发">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/vite-build-tool/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2025-07-29T16:00:00.000Z">
+  <meta property="article:modified_time" content="2025-07-29T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Vite构建工具原理与插件开发">
+  <meta name="twitter:description" content="深入理解Vite的架构设计、Dev Server机制、HMR原理、生产构建流程以及自定义插件开发">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Vite构建工具原理与插件开发","description":"深入理解Vite的架构设计、Dev Server机制、HMR原理、生产构建流程以及自定义插件开发","datePublished":"2025-07-29T16:00:00.000Z","dateModified":"2025-07-29T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/vite-build-tool/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Frontend","item":"https://withesse.co/categories/Frontend/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:200">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Frontend/">Frontend</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/vite/"><span class="hash">#</span>vite</a><a class="tag" href="/tags/build-tool/"><span class="hash">#</span>build-tool</a><a class="tag" href="/tags/esbuild/"><span class="hash">#</span>esbuild</a><a class="tag" href="/tags/rollup/"><span class="hash">#</span>rollup</a>
+        
+      </div>
+
+      <h1>Vite构建工具原理与插件开发</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2025.07.30</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 7 min</span>
+        </span>
+        <span class="wc"><span class="num">2.8k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#vite-%E6%9E%B6%E6%9E%84%E6%A6%82%E8%A7%88"><span class="toc-text">Vite 架构概览</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88-vite-%E8%BF%99%E4%B9%88%E5%BF%AB"><span class="toc-text">为什么 Vite 这么快？</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#dev-server-%E6%B7%B1%E5%85%A5"><span class="toc-text">Dev Server 深入</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BE%9D%E8%B5%96%E9%A2%84%E6%9E%84%E5%BB%BA"><span class="toc-text">依赖预构建</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A8%A1%E5%9D%97%E8%A7%A3%E6%9E%90%E4%B8%8E%E8%BD%AC%E6%8D%A2"><span class="toc-text">模块解析与转换</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#hmr-%E6%9C%BA%E5%88%B6"><span class="toc-text">HMR 机制</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#hmr-api"><span class="toc-text">HMR API</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A1%86%E6%9E%B6-hmr-%E9%9B%86%E6%88%90"><span class="toc-text">框架 HMR 集成</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%94%9F%E4%BA%A7%E6%9E%84%E5%BB%BArollup"><span class="toc-text">生产构建（Rollup）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%9E%84%E5%BB%BA%E9%85%8D%E7%BD%AE"><span class="toc-text">构建配置</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%9E%84%E5%BB%BA%E5%88%86%E6%9E%90"><span class="toc-text">构建分析</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%8F%92%E4%BB%B6-api"><span class="toc-text">插件 API</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%87%AA%E5%AE%9A%E4%B9%89%E6%8F%92%E4%BB%B6%E5%BC%80%E5%8F%91"><span class="toc-text">自定义插件开发</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BC%98%E5%8C%96%E7%AD%96%E7%95%A5"><span class="toc-text">优化策略</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%BC%80%E5%8F%91%E7%8E%AF%E5%A2%83%E4%BC%98%E5%8C%96"><span class="toc-text">开发环境优化</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%94%9F%E4%BA%A7%E7%8E%AF%E5%A2%83%E4%BC%98%E5%8C%96"><span class="toc-text">生产环境优化</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#vite-vs-%E5%85%B6%E4%BB%96%E6%9E%84%E5%BB%BA%E5%B7%A5%E5%85%B7"><span class="toc-text">Vite vs 其他构建工具</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="引言">引言</h2>
+<p>Vite（法语”快”的意思）已经成为现代前端项目的首选构建工具。它通过开发环境使用原生
+ESM + esbuild 预构建，生产环境使用 Rollup
+打包的双引擎架构，实现了极速的开发体验和优化的生产构建。本文将从架构设计讲起，深入分析
+Dev Server 的工作原理、HMR 机制、生产构建流程，并手把手教你开发自定义
+Vite 插件。</p>
+<h2 id="vite-架构概览">Vite 架构概览</h2>
+<pre class="mermaid">graph TB
+    subgraph "Development 开发模式"
+        A[浏览器请求] --&gt; B[Vite Dev Server]
+        B --&gt; C[esbuild 预构建&lt;br/&gt;node_modules → ESM]
+        B --&gt; D[原生 ESM&lt;br/&gt;按需编译源码]
+        B --&gt; E[HMR WebSocket&lt;br/&gt;热模块替换]
+    end
+
+    subgraph "Production 生产模式"
+        F[vite build] --&gt; G[Rollup 打包]
+        G --&gt; H[代码分割 Code Splitting]
+        G --&gt; I[Tree Shaking]
+        G --&gt; J[CSS 提取 &amp; 压缩]
+        G --&gt; K[资源处理 &amp; Hash]
+    end
+
+    style B fill:#646cff,color:#fff
+    style C fill:#ffcf00,color:#000
+    style G fill:#ef4444,color:#fff</pre>
+<h3 id="为什么-vite-这么快">为什么 Vite 这么快？</h3>
+<p>传统打包工具（如
+Webpack）在开发模式下需要先打包所有模块，然后才能启动开发服务器。而 Vite
+利用了两个关键优势：</p>
+<ol type="1">
+<li><strong>原生 ESM</strong>：浏览器原生支持 ES Module，Vite
+直接按需提供模块，无需打包</li>
+<li><strong>esbuild 预构建</strong>：用 Go 编写的 esbuild 比 JavaScript
+打包器快 10-100 倍</li>
+</ol>
+<pre class="mermaid">sequenceDiagram
+    participant B as 浏览器
+    participant V as Vite Dev Server
+    participant E as esbuild
+    participant FS as 文件系统
+
+    Note over V: 启动时: 预构建 node_modules
+    V-&gt;&gt;E: 预构建依赖 (react, lodash...)
+    E--&gt;&gt;V: ESM 格式的依赖缓存
+
+    B-&gt;&gt;V: GET /src/App.tsx
+    V-&gt;&gt;FS: 读取 App.tsx
+    FS--&gt;&gt;V: 源码
+    V-&gt;&gt;V: 按需编译 (esbuild transform)
+    V--&gt;&gt;B: 编译后的 ESM 模块
+
+    B-&gt;&gt;V: GET /node_modules/.vite/deps/react.js
+    V--&gt;&gt;B: 预构建的 React ESM (缓存)
+
+    Note over B,V: 文件修改
+    FS-&gt;&gt;V: 文件变更事件
+    V-&gt;&gt;V: 判断 HMR 边界
+    V-&gt;&gt;B: WebSocket: HMR update
+    B-&gt;&gt;V: GET /src/App.tsx?t=123456
+    V--&gt;&gt;B: 更新后的模块</pre>
+<h2 id="dev-server-深入">Dev Server 深入</h2>
+<h3 id="依赖预构建">依赖预构建</h3>
+<p>Vite 在首次启动时，会使用 esbuild 将 <code>node_modules</code>
+中的依赖预构建为 ESM 格式：</p>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-comment">// vite.config.ts</span><br><span class="hljs-keyword">import</span> &#123; defineConfig &#125; <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;vite&#x27;</span>;<br><br><span class="hljs-keyword">export</span> <span class="hljs-keyword">default</span> <span class="hljs-title function_">defineConfig</span>(&#123;<br>  <span class="hljs-attr">optimizeDeps</span>: &#123;<br>    <span class="hljs-comment">// Force include dependencies that aren&#x27;t auto-detected</span><br>    <span class="hljs-attr">include</span>: [<span class="hljs-string">&#x27;lodash-es&#x27;</span>, <span class="hljs-string">&#x27;axios&#x27;</span>],<br><br>    <span class="hljs-comment">// Exclude dependencies (e.g., already ESM)</span><br>    <span class="hljs-attr">exclude</span>: [<span class="hljs-string">&#x27;@vueuse/core&#x27;</span>],<br><br>    <span class="hljs-comment">// esbuild options for pre-bundling</span><br>    <span class="hljs-attr">esbuildOptions</span>: &#123;<br>      <span class="hljs-attr">target</span>: <span class="hljs-string">&#x27;esnext&#x27;</span>,<br>      <span class="hljs-attr">plugins</span>: [<span class="hljs-comment">/* custom esbuild plugins */</span>],<br>    &#125;,<br>  &#125;,<br>&#125;);<br></code></pre></td></tr></table></figure>
+<p>预构建解决了两个问题： 1. <strong>CommonJS/UMD 转
+ESM</strong>：浏览器只认 ESM 2.
+<strong>依赖合并</strong>：<code>lodash-es</code> 有 600+ 个 ESM
+文件，预构建合并为单个模块，减少 HTTP 请求</p>
+<h3 id="模块解析与转换">模块解析与转换</h3>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-comment">// When browser requests /src/App.tsx, Vite:</span><br><br><span class="hljs-comment">// 1. Resolves bare imports to pre-built deps</span><br><span class="hljs-comment">// Input:</span><br><span class="hljs-keyword">import</span> <span class="hljs-title class_">React</span> <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;react&#x27;</span>;<br><span class="hljs-keyword">import</span> &#123; useState &#125; <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;react&#x27;</span>;<br><span class="hljs-keyword">import</span> dayjs <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;dayjs&#x27;</span>;<br><br><span class="hljs-comment">// Output (rewritten by Vite):</span><br><span class="hljs-keyword">import</span> <span class="hljs-title class_">React</span> <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;/node_modules/.vite/deps/react.js?v=abc123&#x27;</span>;<br><span class="hljs-keyword">import</span> &#123; useState &#125; <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;/node_modules/.vite/deps/react.js?v=abc123&#x27;</span>;<br><span class="hljs-keyword">import</span> dayjs <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;/node_modules/.vite/deps/dayjs.js?v=def456&#x27;</span>;<br><br><span class="hljs-comment">// 2. Transforms TypeScript/JSX on the fly (using esbuild)</span><br><span class="hljs-comment">// 3. Handles CSS imports as side-effect modules</span><br><span class="hljs-comment">// 4. Converts asset imports to URLs</span><br><span class="hljs-keyword">import</span> logo <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;./logo.png&#x27;</span>;<br><span class="hljs-comment">// → const logo = &#x27;/src/logo.png&#x27;;</span><br></code></pre></td></tr></table></figure>
+<h2 id="hmr-机制">HMR 机制</h2>
+<h3 id="hmr-api">HMR API</h3>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-comment">// Vite&#x27;s HMR API (import.meta.hot)</span><br><span class="hljs-keyword">if</span> (<span class="hljs-keyword">import</span>.<span class="hljs-property">meta</span>.<span class="hljs-property">hot</span>) &#123;<br>  <span class="hljs-comment">// Accept self-update</span><br>  <span class="hljs-keyword">import</span>.<span class="hljs-property">meta</span>.<span class="hljs-property">hot</span>.<span class="hljs-title function_">accept</span>(<span class="hljs-function">(<span class="hljs-params">newModule</span>) =&gt;</span> &#123;<br>    <span class="hljs-comment">// Re-execute with updated module</span><br>    <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">&#x27;Module updated:&#x27;</span>, newModule);<br>  &#125;);<br><br>  <span class="hljs-comment">// Accept dependency updates</span><br>  <span class="hljs-keyword">import</span>.<span class="hljs-property">meta</span>.<span class="hljs-property">hot</span>.<span class="hljs-title function_">accept</span>(<span class="hljs-string">&#x27;./utils.js&#x27;</span>, <span class="hljs-function">(<span class="hljs-params">newUtils</span>) =&gt;</span> &#123;<br>    <span class="hljs-comment">// Re-run dependent logic</span><br>    <span class="hljs-title function_">recompute</span>(newUtils);<br>  &#125;);<br><br>  <span class="hljs-comment">// Cleanup side effects</span><br>  <span class="hljs-keyword">import</span>.<span class="hljs-property">meta</span>.<span class="hljs-property">hot</span>.<span class="hljs-title function_">dispose</span>(<span class="hljs-function">(<span class="hljs-params">data</span>) =&gt;</span> &#123;<br>    <span class="hljs-comment">// Store state for next update</span><br>    data.<span class="hljs-property">count</span> = currentCount;<br>    <span class="hljs-built_in">clearInterval</span>(timer);<br>  &#125;);<br><br>  <span class="hljs-comment">// Restore state after update</span><br>  <span class="hljs-keyword">if</span> (<span class="hljs-keyword">import</span>.<span class="hljs-property">meta</span>.<span class="hljs-property">hot</span>.<span class="hljs-property">data</span>.<span class="hljs-property">count</span>) &#123;<br>    currentCount = <span class="hljs-keyword">import</span>.<span class="hljs-property">meta</span>.<span class="hljs-property">hot</span>.<span class="hljs-property">data</span>.<span class="hljs-property">count</span>;<br>  &#125;<br><br>  <span class="hljs-comment">// Invalidate: propagate update to parent</span><br>  <span class="hljs-keyword">import</span>.<span class="hljs-property">meta</span>.<span class="hljs-property">hot</span>.<span class="hljs-title function_">invalidate</span>();<br><br>  <span class="hljs-comment">// Full reload when HMR can&#x27;t handle the change</span><br>  <span class="hljs-keyword">import</span>.<span class="hljs-property">meta</span>.<span class="hljs-property">hot</span>.<span class="hljs-title function_">on</span>(<span class="hljs-string">&#x27;vite:beforeFullReload&#x27;</span>, <span class="hljs-function">() =&gt;</span> &#123;<br>    <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">&#x27;Full reload triggered&#x27;</span>);<br>  &#125;);<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="框架-hmr-集成">框架 HMR 集成</h3>
+<pre class="mermaid">graph TD
+    A[文件修改] --&gt; B{文件类型?}
+    B --&gt;|.vue| C["@vitejs/plugin-vue&lt;br/&gt;SFC HMR"]
+    B --&gt;|.tsx/.jsx| D["@vitejs/plugin-react&lt;br/&gt;React Fast Refresh"]
+    B --&gt;|.css| E[CSS HMR&lt;br/&gt;替换 style 标签]
+    B --&gt;|.module.css| F[CSS Modules HMR&lt;br/&gt;更新 JS 模块]
+
+    C --&gt; G[保持组件状态]
+    D --&gt; G
+    E --&gt; H[无需 JS 执行]
+    F --&gt; I[更新样式映射]
+
+    style A fill:#646cff,color:#fff
+    style G fill:#2ecc71,color:#fff
+    style H fill:#2ecc71,color:#fff</pre>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-comment">// React Fast Refresh integration (simplified)</span><br><span class="hljs-comment">// @vitejs/plugin-react automatically adds:</span><br><span class="hljs-keyword">if</span> (<span class="hljs-keyword">import</span>.<span class="hljs-property">meta</span>.<span class="hljs-property">hot</span>) &#123;<br>  <span class="hljs-comment">// Register component for React Fast Refresh</span><br>  <span class="hljs-variable language_">window</span>.$RefreshReg$(<span class="hljs-title class_">Component</span>, <span class="hljs-string">&#x27;Component&#x27;</span>);<br>  <span class="hljs-variable language_">window</span>.$RefreshSig$();<br><br>  <span class="hljs-keyword">import</span>.<span class="hljs-property">meta</span>.<span class="hljs-property">hot</span>.<span class="hljs-title function_">accept</span>(<span class="hljs-function">(<span class="hljs-params">mod</span>) =&gt;</span> &#123;<br>    <span class="hljs-comment">// React Refresh runtime handles state preservation</span><br>    <span class="hljs-comment">// Only re-renders changed components</span><br>  &#125;);<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="生产构建rollup">生产构建（Rollup）</h2>
+<h3 id="构建配置">构建配置</h3>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-comment">// vite.config.ts</span><br><span class="hljs-keyword">import</span> &#123; defineConfig &#125; <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;vite&#x27;</span>;<br><span class="hljs-keyword">import</span> react <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;@vitejs/plugin-react&#x27;</span>;<br><br><span class="hljs-keyword">export</span> <span class="hljs-keyword">default</span> <span class="hljs-title function_">defineConfig</span>(&#123;<br>  <span class="hljs-attr">plugins</span>: [<span class="hljs-title function_">react</span>()],<br><br>  <span class="hljs-attr">build</span>: &#123;<br>    <span class="hljs-comment">// Output directory</span><br>    <span class="hljs-attr">outDir</span>: <span class="hljs-string">&#x27;dist&#x27;</span>,<br><br>    <span class="hljs-comment">// Rollup options</span><br>    <span class="hljs-attr">rollupOptions</span>: &#123;<br>      <span class="hljs-attr">input</span>: &#123;<br>        <span class="hljs-attr">main</span>: <span class="hljs-string">&#x27;./index.html&#x27;</span>,<br>        <span class="hljs-attr">admin</span>: <span class="hljs-string">&#x27;./admin.html&#x27;</span>, <span class="hljs-comment">// Multi-page app</span><br>      &#125;,<br>      <span class="hljs-attr">output</span>: &#123;<br>        <span class="hljs-comment">// Manual chunk splitting</span><br>        <span class="hljs-attr">manualChunks</span>: &#123;<br>          <span class="hljs-attr">vendor</span>: [<span class="hljs-string">&#x27;react&#x27;</span>, <span class="hljs-string">&#x27;react-dom&#x27;</span>],<br>          <span class="hljs-attr">charts</span>: [<span class="hljs-string">&#x27;chart.js&#x27;</span>, <span class="hljs-string">&#x27;d3&#x27;</span>],<br>        &#125;,<br><br>        <span class="hljs-comment">// Or use a function for more control</span><br>        <span class="hljs-title function_">manualChunks</span>(<span class="hljs-params">id</span>) &#123;<br>          <span class="hljs-keyword">if</span> (id.<span class="hljs-title function_">includes</span>(<span class="hljs-string">&#x27;node_modules&#x27;</span>)) &#123;<br>            <span class="hljs-keyword">if</span> (id.<span class="hljs-title function_">includes</span>(<span class="hljs-string">&#x27;react&#x27;</span>)) <span class="hljs-keyword">return</span> <span class="hljs-string">&#x27;vendor-react&#x27;</span>;<br>            <span class="hljs-keyword">if</span> (id.<span class="hljs-title function_">includes</span>(<span class="hljs-string">&#x27;lodash&#x27;</span>)) <span class="hljs-keyword">return</span> <span class="hljs-string">&#x27;vendor-lodash&#x27;</span>;<br>            <span class="hljs-keyword">return</span> <span class="hljs-string">&#x27;vendor&#x27;</span>; <span class="hljs-comment">// All other dependencies</span><br>          &#125;<br>        &#125;,<br><br>        <span class="hljs-comment">// Asset naming</span><br>        <span class="hljs-attr">assetFileNames</span>: <span class="hljs-string">&#x27;assets/[name]-[hash][extname]&#x27;</span>,<br>        <span class="hljs-attr">chunkFileNames</span>: <span class="hljs-string">&#x27;js/[name]-[hash].js&#x27;</span>,<br>        <span class="hljs-attr">entryFileNames</span>: <span class="hljs-string">&#x27;js/[name]-[hash].js&#x27;</span>,<br>      &#125;,<br>    &#125;,<br><br>    <span class="hljs-comment">// Minification</span><br>    <span class="hljs-attr">minify</span>: <span class="hljs-string">&#x27;terser&#x27;</span>, <span class="hljs-comment">// or &#x27;esbuild&#x27; (default, faster)</span><br>    <span class="hljs-attr">terserOptions</span>: &#123;<br>      <span class="hljs-attr">compress</span>: &#123;<br>        <span class="hljs-attr">drop_console</span>: <span class="hljs-literal">true</span>,<br>        <span class="hljs-attr">drop_debugger</span>: <span class="hljs-literal">true</span>,<br>      &#125;,<br>    &#125;,<br><br>    <span class="hljs-comment">// CSS</span><br>    <span class="hljs-attr">cssCodeSplit</span>: <span class="hljs-literal">true</span>, <span class="hljs-comment">// Split CSS per async chunk</span><br>    <span class="hljs-attr">cssMinify</span>: <span class="hljs-string">&#x27;lightningcss&#x27;</span>, <span class="hljs-comment">// Faster CSS minifier</span><br><br>    <span class="hljs-comment">// Source maps</span><br>    <span class="hljs-attr">sourcemap</span>: <span class="hljs-literal">true</span>, <span class="hljs-comment">// or &#x27;hidden&#x27; for production</span><br><br>    <span class="hljs-comment">// Chunk size warnings</span><br>    <span class="hljs-attr">chunkSizeWarningLimit</span>: <span class="hljs-number">500</span>,<br><br>    <span class="hljs-comment">// Target browsers</span><br>    <span class="hljs-attr">target</span>: <span class="hljs-string">&#x27;es2020&#x27;</span>,<br>  &#125;,<br>&#125;);<br></code></pre></td></tr></table></figure>
+<h3 id="构建分析">构建分析</h3>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-comment">// Install: npm i -D rollup-plugin-visualizer</span><br><span class="hljs-keyword">import</span> &#123; visualizer &#125; <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;rollup-plugin-visualizer&#x27;</span>;<br><br><span class="hljs-keyword">export</span> <span class="hljs-keyword">default</span> <span class="hljs-title function_">defineConfig</span>(&#123;<br>  <span class="hljs-attr">plugins</span>: [<br>    <span class="hljs-title function_">visualizer</span>(&#123;<br>      <span class="hljs-attr">open</span>: <span class="hljs-literal">true</span>,<br>      <span class="hljs-attr">gzipSize</span>: <span class="hljs-literal">true</span>,<br>      <span class="hljs-attr">brotliSize</span>: <span class="hljs-literal">true</span>,<br>      <span class="hljs-attr">filename</span>: <span class="hljs-string">&#x27;dist/stats.html&#x27;</span>,<br>    &#125;),<br>  ],<br>&#125;);<br></code></pre></td></tr></table></figure>
+<h2 id="插件-api">插件 API</h2>
+<p>Vite 插件兼容 Rollup 插件接口，并扩展了 Vite 特有的钩子：</p>
+<pre class="mermaid">graph TD
+    A[Vite 插件钩子] --&gt; B[通用钩子&lt;br/&gt;兼容 Rollup]
+    A --&gt; C[Vite 特有钩子]
+
+    B --&gt; B1[buildStart]
+    B --&gt; B2[resolveId]
+    B --&gt; B3[load]
+    B --&gt; B4[transform]
+    B --&gt; B5[buildEnd]
+
+    C --&gt; C1[config]
+    C --&gt; C2[configResolved]
+    C --&gt; C3[configureServer]
+    C --&gt; C4[transformIndexHtml]
+    C --&gt; C5[handleHotUpdate]
+
+    style A fill:#646cff,color:#fff
+    style B fill:#ef4444,color:#fff
+    style C fill:#10b981,color:#fff</pre>
+<h3 id="自定义插件开发">自定义插件开发</h3>
+<h4 id="示例一虚拟模块插件">示例一：虚拟模块插件</h4>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-comment">// plugins/vite-plugin-build-info.js</span><br><span class="hljs-keyword">export</span> <span class="hljs-keyword">default</span> <span class="hljs-keyword">function</span> <span class="hljs-title function_">buildInfoPlugin</span>(<span class="hljs-params"></span>) &#123;<br>  <span class="hljs-keyword">const</span> virtualModuleId = <span class="hljs-string">&#x27;virtual:build-info&#x27;</span>;<br>  <span class="hljs-keyword">const</span> resolvedVirtualModuleId = <span class="hljs-string">&#x27;\0&#x27;</span> + virtualModuleId;<br><br>  <span class="hljs-keyword">return</span> &#123;<br>    <span class="hljs-attr">name</span>: <span class="hljs-string">&#x27;vite-plugin-build-info&#x27;</span>,<br><br>    <span class="hljs-title function_">resolveId</span>(<span class="hljs-params">id</span>) &#123;<br>      <span class="hljs-keyword">if</span> (id === virtualModuleId) &#123;<br>        <span class="hljs-keyword">return</span> resolvedVirtualModuleId;<br>      &#125;<br>    &#125;,<br><br>    <span class="hljs-title function_">load</span>(<span class="hljs-params">id</span>) &#123;<br>      <span class="hljs-keyword">if</span> (id === resolvedVirtualModuleId) &#123;<br>        <span class="hljs-keyword">return</span> <span class="hljs-string">`</span><br><span class="hljs-string">          export const buildTime = &#x27;<span class="hljs-subst">$&#123;<span class="hljs-keyword">new</span> <span class="hljs-built_in">Date</span>().toISOString()&#125;</span>&#x27;;</span><br><span class="hljs-string">          export const nodeVersion = &#x27;<span class="hljs-subst">$&#123;process.version&#125;</span>&#x27;;</span><br><span class="hljs-string">          export const mode = &#x27;<span class="hljs-subst">$&#123;process.env.NODE_ENV || <span class="hljs-string">&#x27;development&#x27;</span>&#125;</span>&#x27;;</span><br><span class="hljs-string">        `</span>;<br>      &#125;<br>    &#125;,<br>  &#125;;<br>&#125;<br><br><span class="hljs-comment">// Usage in app:</span><br><span class="hljs-comment">// import &#123; buildTime, nodeVersion &#125; from &#x27;virtual:build-info&#x27;;</span><br></code></pre></td></tr></table></figure>
+<h4 id="示例二markdown-转换插件">示例二：Markdown 转换插件</h4>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-comment">// plugins/vite-plugin-markdown.js</span><br><span class="hljs-keyword">import</span> &#123; marked &#125; <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;marked&#x27;</span>;<br><br><span class="hljs-keyword">export</span> <span class="hljs-keyword">default</span> <span class="hljs-keyword">function</span> <span class="hljs-title function_">markdownPlugin</span>(<span class="hljs-params"></span>) &#123;<br>  <span class="hljs-keyword">return</span> &#123;<br>    <span class="hljs-attr">name</span>: <span class="hljs-string">&#x27;vite-plugin-markdown&#x27;</span>,<br><br>    <span class="hljs-comment">// Only apply during dev and build</span><br>    <span class="hljs-attr">enforce</span>: <span class="hljs-string">&#x27;pre&#x27;</span>,<br><br>    <span class="hljs-comment">// Transform .md files</span><br>    <span class="hljs-title function_">transform</span>(<span class="hljs-params">code, id</span>) &#123;<br>      <span class="hljs-keyword">if</span> (!id.<span class="hljs-title function_">endsWith</span>(<span class="hljs-string">&#x27;.md&#x27;</span>)) <span class="hljs-keyword">return</span> <span class="hljs-literal">null</span>;<br><br>      <span class="hljs-keyword">const</span> html = <span class="hljs-title function_">marked</span>(code);<br><br>      <span class="hljs-comment">// Return as a JS module</span><br>      <span class="hljs-keyword">return</span> &#123;<br>        <span class="hljs-attr">code</span>: <span class="hljs-string">`export default <span class="hljs-subst">$&#123;<span class="hljs-built_in">JSON</span>.stringify(html)&#125;</span>;`</span>,<br>        <span class="hljs-attr">map</span>: <span class="hljs-literal">null</span>,<br>      &#125;;<br>    &#125;,<br>  &#125;;<br>&#125;<br><br><span class="hljs-comment">// Usage:</span><br><span class="hljs-comment">// import content from &#x27;./README.md&#x27;;</span><br><span class="hljs-comment">// element.textContent = content;</span><br></code></pre></td></tr></table></figure>
+<h4 id="示例三api-自动导入插件">示例三：API 自动导入插件</h4>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-comment">// plugins/vite-plugin-auto-import-api.js</span><br><span class="hljs-keyword">import</span> fs <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;fs&#x27;</span>;<br><span class="hljs-keyword">import</span> path <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;path&#x27;</span>;<br><br><span class="hljs-keyword">export</span> <span class="hljs-keyword">default</span> <span class="hljs-keyword">function</span> <span class="hljs-title function_">autoImportApiPlugin</span>(<span class="hljs-params">options = &#123;&#125;</span>) &#123;<br>  <span class="hljs-keyword">const</span> &#123; apiDir = <span class="hljs-string">&#x27;src/api&#x27;</span>, prefix = <span class="hljs-string">&#x27;/api&#x27;</span> &#125; = options;<br><br>  <span class="hljs-keyword">return</span> &#123;<br>    <span class="hljs-attr">name</span>: <span class="hljs-string">&#x27;vite-plugin-auto-import-api&#x27;</span>,<br><br>    <span class="hljs-comment">// Configure dev server</span><br>    <span class="hljs-title function_">configureServer</span>(<span class="hljs-params">server</span>) &#123;<br>      server.<span class="hljs-property">middlewares</span>.<span class="hljs-title function_">use</span>(<span class="hljs-keyword">async</span> (req, res, next) =&gt; &#123;<br>        <span class="hljs-keyword">if</span> (!req.<span class="hljs-property">url</span>.<span class="hljs-title function_">startsWith</span>(prefix)) <span class="hljs-keyword">return</span> <span class="hljs-title function_">next</span>();<br><br>        <span class="hljs-keyword">const</span> apiPath = req.<span class="hljs-property">url</span>.<span class="hljs-title function_">replace</span>(prefix, <span class="hljs-string">&#x27;&#x27;</span>);<br>        <span class="hljs-keyword">const</span> filePath = path.<span class="hljs-title function_">resolve</span>(apiDir, <span class="hljs-string">`<span class="hljs-subst">$&#123;apiPath&#125;</span>.ts`</span>);<br><br>        <span class="hljs-keyword">if</span> (!fs.<span class="hljs-title function_">existsSync</span>(filePath)) <span class="hljs-keyword">return</span> <span class="hljs-title function_">next</span>();<br><br>        <span class="hljs-keyword">try</span> &#123;<br>          <span class="hljs-comment">// Load the API module via Vite&#x27;s module graph</span><br>          <span class="hljs-keyword">const</span> mod = <span class="hljs-keyword">await</span> server.<span class="hljs-title function_">ssrLoadModule</span>(filePath);<br>          <span class="hljs-keyword">const</span> handler = mod.<span class="hljs-property">default</span> || mod;<br><br>          <span class="hljs-comment">// Parse request body</span><br>          <span class="hljs-keyword">let</span> body = <span class="hljs-string">&#x27;&#x27;</span>;<br>          req.<span class="hljs-title function_">on</span>(<span class="hljs-string">&#x27;data&#x27;</span>, <span class="hljs-function"><span class="hljs-params">chunk</span> =&gt;</span> &#123; body += chunk; &#125;);<br>          req.<span class="hljs-title function_">on</span>(<span class="hljs-string">&#x27;end&#x27;</span>, <span class="hljs-keyword">async</span> () =&gt; &#123;<br>            <span class="hljs-keyword">const</span> result = <span class="hljs-keyword">await</span> <span class="hljs-title function_">handler</span>(&#123;<br>              <span class="hljs-attr">method</span>: req.<span class="hljs-property">method</span>,<br>              <span class="hljs-attr">body</span>: body ? <span class="hljs-title class_">JSON</span>.<span class="hljs-title function_">parse</span>(body) : <span class="hljs-literal">undefined</span>,<br>              <span class="hljs-attr">query</span>: <span class="hljs-keyword">new</span> <span class="hljs-title function_">URL</span>(req.<span class="hljs-property">url</span>, <span class="hljs-string">&#x27;http://localhost&#x27;</span>).<span class="hljs-property">searchParams</span>,<br>            &#125;);<br><br>            res.<span class="hljs-title function_">setHeader</span>(<span class="hljs-string">&#x27;Content-Type&#x27;</span>, <span class="hljs-string">&#x27;application/json&#x27;</span>);<br>            res.<span class="hljs-title function_">end</span>(<span class="hljs-title class_">JSON</span>.<span class="hljs-title function_">stringify</span>(result));<br>          &#125;);<br>        &#125; <span class="hljs-keyword">catch</span> (err) &#123;<br>          res.<span class="hljs-property">statusCode</span> = <span class="hljs-number">500</span>;<br>          res.<span class="hljs-title function_">end</span>(<span class="hljs-title class_">JSON</span>.<span class="hljs-title function_">stringify</span>(&#123; <span class="hljs-attr">error</span>: err.<span class="hljs-property">message</span> &#125;));<br>        &#125;<br>      &#125;);<br>    &#125;,<br>  &#125;;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h4 id="示例四hmr-感知插件">示例四：HMR 感知插件</h4>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-comment">// plugins/vite-plugin-i18n-hot.js</span><br><span class="hljs-keyword">export</span> <span class="hljs-keyword">default</span> <span class="hljs-keyword">function</span> <span class="hljs-title function_">i18nHotPlugin</span>(<span class="hljs-params"></span>) &#123;<br>  <span class="hljs-keyword">return</span> &#123;<br>    <span class="hljs-attr">name</span>: <span class="hljs-string">&#x27;vite-plugin-i18n-hot&#x27;</span>,<br><br>    <span class="hljs-comment">// Custom HMR handling</span><br>    <span class="hljs-title function_">handleHotUpdate</span>(<span class="hljs-params">&#123; file, server &#125;</span>) &#123;<br>      <span class="hljs-keyword">if</span> (file.<span class="hljs-title function_">endsWith</span>(<span class="hljs-string">&#x27;.json&#x27;</span>) &amp;&amp; file.<span class="hljs-title function_">includes</span>(<span class="hljs-string">&#x27;/locales/&#x27;</span>)) &#123;<br>        <span class="hljs-comment">// Send custom HMR event</span><br>        server.<span class="hljs-property">ws</span>.<span class="hljs-title function_">send</span>(&#123;<br>          <span class="hljs-attr">type</span>: <span class="hljs-string">&#x27;custom&#x27;</span>,<br>          <span class="hljs-attr">event</span>: <span class="hljs-string">&#x27;i18n-update&#x27;</span>,<br>          <span class="hljs-attr">data</span>: &#123; file &#125;,<br>        &#125;);<br>        <span class="hljs-comment">// Return empty array to prevent default HMR</span><br>        <span class="hljs-keyword">return</span> [];<br>      &#125;<br>    &#125;,<br><br>    <span class="hljs-comment">// Inject client-side HMR listener</span><br>    <span class="hljs-title function_">transformIndexHtml</span>(<span class="hljs-params">html</span>) &#123;<br>      <span class="hljs-keyword">return</span> html.<span class="hljs-title function_">replace</span>(<br>        <span class="hljs-string">&#x27;&lt;/body&gt;&#x27;</span>,<br>        <span class="hljs-string">`&lt;script type=&quot;module&quot;&gt;</span><br><span class="hljs-string">          if (import.meta.hot) &#123;</span><br><span class="hljs-string">            import.meta.hot.on(&#x27;i18n-update&#x27;, (data) =&gt; &#123;</span><br><span class="hljs-string">              console.log(&#x27;i18n updated:&#x27;, data.file);</span><br><span class="hljs-string">              // Reload translations without full page refresh</span><br><span class="hljs-string">              window.dispatchEvent(new CustomEvent(&#x27;i18n-reload&#x27;));</span><br><span class="hljs-string">            &#125;);</span><br><span class="hljs-string">          &#125;</span><br><span class="hljs-string">        &lt;/script&gt;&lt;/body&gt;`</span><br>      );<br>    &#125;,<br>  &#125;;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="优化策略">优化策略</h2>
+<h3 id="开发环境优化">开发环境优化</h3>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-keyword">export</span> <span class="hljs-keyword">default</span> <span class="hljs-title function_">defineConfig</span>(&#123;<br>  <span class="hljs-attr">server</span>: &#123;<br>    <span class="hljs-comment">// Pre-transform frequently used modules</span><br>    <span class="hljs-attr">warmup</span>: &#123;<br>      <span class="hljs-attr">clientFiles</span>: [<br>        <span class="hljs-string">&#x27;./src/components/**/*.tsx&#x27;</span>,<br>        <span class="hljs-string">&#x27;./src/pages/Home.tsx&#x27;</span>,<br>      ],<br>    &#125;,<br>  &#125;,<br><br>  <span class="hljs-comment">// Speed up dependency pre-bundling</span><br>  <span class="hljs-attr">optimizeDeps</span>: &#123;<br>    <span class="hljs-attr">holdUntilCrawlEnd</span>: <span class="hljs-literal">false</span>, <span class="hljs-comment">// Start serving before crawl completes</span><br>  &#125;,<br><br>  <span class="hljs-comment">// Use SWC instead of Babel for React</span><br>  <span class="hljs-attr">plugins</span>: [<br>    <span class="hljs-title function_">react</span>(&#123; <span class="hljs-attr">babel</span>: <span class="hljs-literal">false</span> &#125;), <span class="hljs-comment">// Uses SWC, faster transforms</span><br>  ],<br>&#125;);<br></code></pre></td></tr></table></figure>
+<h3 id="生产环境优化">生产环境优化</h3>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><code class="hljs javascript"><span class="hljs-keyword">export</span> <span class="hljs-keyword">default</span> <span class="hljs-title function_">defineConfig</span>(&#123;<br>  <span class="hljs-attr">build</span>: &#123;<br>    <span class="hljs-comment">// Modern browsers only — smaller output</span><br>    <span class="hljs-attr">target</span>: <span class="hljs-string">&#x27;esnext&#x27;</span>,<br><br>    <span class="hljs-comment">// Use Rollup&#x27;s tree shaking</span><br>    <span class="hljs-attr">rollupOptions</span>: &#123;<br>      <span class="hljs-attr">treeshake</span>: &#123;<br>        <span class="hljs-attr">moduleSideEffects</span>: <span class="hljs-literal">false</span>,<br>        <span class="hljs-attr">propertyReadSideEffects</span>: <span class="hljs-literal">false</span>,<br>      &#125;,<br>    &#125;,<br><br>    <span class="hljs-comment">// Compress assets</span><br>    <span class="hljs-attr">reportCompressedSize</span>: <span class="hljs-literal">true</span>,<br>  &#125;,<br><br>  <span class="hljs-comment">// CSS optimization</span><br>  <span class="hljs-attr">css</span>: &#123;<br>    <span class="hljs-attr">transformer</span>: <span class="hljs-string">&#x27;lightningcss&#x27;</span>,<br>    <span class="hljs-attr">lightningcss</span>: &#123;<br>      <span class="hljs-attr">targets</span>: &#123; <span class="hljs-attr">chrome</span>: <span class="hljs-number">100</span> &#125;,<br>    &#125;,<br>  &#125;,<br>&#125;);<br></code></pre></td></tr></table></figure>
+<h2 id="vite-vs-其他构建工具">Vite vs 其他构建工具</h2>
+<table>
+<thead>
+<tr class="header">
+<th>特性</th>
+<th>Vite</th>
+<th>Webpack</th>
+<th>Turbopack</th>
+<th>esbuild</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>开发启动速度</td>
+<td>极快</td>
+<td>慢</td>
+<td>快</td>
+<td>极快</td>
+</tr>
+<tr class="even">
+<td>HMR 速度</td>
+<td>极快</td>
+<td>中</td>
+<td>快</td>
+<td>无 HMR</td>
+</tr>
+<tr class="odd">
+<td>生产构建</td>
+<td>快（Rollup）</td>
+<td>中</td>
+<td>开发中</td>
+<td>极快但功能少</td>
+</tr>
+<tr class="even">
+<td>插件生态</td>
+<td>丰富</td>
+<td>最丰富</td>
+<td>有限</td>
+<td>有限</td>
+</tr>
+<tr class="odd">
+<td>配置复杂度</td>
+<td>低</td>
+<td>高</td>
+<td>低</td>
+<td>低</td>
+</tr>
+<tr class="even">
+<td>CSS 处理</td>
+<td>内置</td>
+<td>需要 loader</td>
+<td>内置</td>
+<td>基础</td>
+</tr>
+<tr class="odd">
+<td>SSR 支持</td>
+<td>内置</td>
+<td>需要配置</td>
+<td>通过 Next.js</td>
+<td>无</td>
+</tr>
+</tbody>
+</table>
+<h2 id="总结">总结</h2>
+<p>Vite 的双引擎架构（开发用 esbuild + 原生 ESM，生产用
+Rollup）在开发体验和构建质量之间找到了最佳平衡点。理解其原理有助于更好地调优配置和排查问题。插件开发方面，Vite
+兼容 Rollup
+插件接口并提供了额外的开发服务器钩子，使得自定义扩展变得简单。随着
+Rolldown（Rust 版 Rollup）的推进，Vite
+未来有望在开发和生产环境统一使用同一个打包器，进一步消除行为差异。</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2025-07-30</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">2.8k 字 · 7 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/langchain-practical-guide/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">LangChain实战：构建AI应用链</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/rust-ownership-borrowing/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Rust所有权与借用检查器详解</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#vite-%E6%9E%B6%E6%9E%84%E6%A6%82%E8%A7%88"><span class="toc-text">Vite 架构概览</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88-vite-%E8%BF%99%E4%B9%88%E5%BF%AB"><span class="toc-text">为什么 Vite 这么快？</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#dev-server-%E6%B7%B1%E5%85%A5"><span class="toc-text">Dev Server 深入</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BE%9D%E8%B5%96%E9%A2%84%E6%9E%84%E5%BB%BA"><span class="toc-text">依赖预构建</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A8%A1%E5%9D%97%E8%A7%A3%E6%9E%90%E4%B8%8E%E8%BD%AC%E6%8D%A2"><span class="toc-text">模块解析与转换</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#hmr-%E6%9C%BA%E5%88%B6"><span class="toc-text">HMR 机制</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#hmr-api"><span class="toc-text">HMR API</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A1%86%E6%9E%B6-hmr-%E9%9B%86%E6%88%90"><span class="toc-text">框架 HMR 集成</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%94%9F%E4%BA%A7%E6%9E%84%E5%BB%BArollup"><span class="toc-text">生产构建（Rollup）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%9E%84%E5%BB%BA%E9%85%8D%E7%BD%AE"><span class="toc-text">构建配置</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%9E%84%E5%BB%BA%E5%88%86%E6%9E%90"><span class="toc-text">构建分析</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%8F%92%E4%BB%B6-api"><span class="toc-text">插件 API</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%87%AA%E5%AE%9A%E4%B9%89%E6%8F%92%E4%BB%B6%E5%BC%80%E5%8F%91"><span class="toc-text">自定义插件开发</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BC%98%E5%8C%96%E7%AD%96%E7%95%A5"><span class="toc-text">优化策略</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%BC%80%E5%8F%91%E7%8E%AF%E5%A2%83%E4%BC%98%E5%8C%96"><span class="toc-text">开发环境优化</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%94%9F%E4%BA%A7%E7%8E%AF%E5%A2%83%E4%BC%98%E5%8C%96"><span class="toc-text">生产环境优化</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#vite-vs-%E5%85%B6%E4%BB%96%E6%9E%84%E5%BB%BA%E5%B7%A5%E5%85%B7"><span class="toc-text">Vite vs 其他构建工具</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

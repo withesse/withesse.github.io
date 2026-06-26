@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LLM微调实战：LoRA与QLoRA · zt&#39;s Blog</title>
+  <meta name="description" content="深入理解LLM微调方法论，从全量微调到LoRA/QLoRA的数学原理、数据准备、训练实践与部署">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/fine-tuning-llm/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="LLM微调实战：LoRA与QLoRA">
+  <meta property="og:description" content="深入理解LLM微调方法论，从全量微调到LoRA/QLoRA的数学原理、数据准备、训练实践与部署">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/fine-tuning-llm/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2025-09-30T16:00:00.000Z">
+  <meta property="article:modified_time" content="2025-09-30T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="LLM微调实战：LoRA与QLoRA">
+  <meta name="twitter:description" content="深入理解LLM微调方法论，从全量微调到LoRA/QLoRA的数学原理、数据准备、训练实践与部署">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"LLM微调实战：LoRA与QLoRA","description":"深入理解LLM微调方法论，从全量微调到LoRA/QLoRA的数学原理、数据准备、训练实践与部署","datePublished":"2025-09-30T16:00:00.000Z","dateModified":"2025-09-30T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/fine-tuning-llm/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"AI","item":"https://withesse.co/categories/AI/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:280">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/AI/">AI</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/llm/"><span class="hash">#</span>llm</a><a class="tag" href="/tags/fine-tuning/"><span class="hash">#</span>fine-tuning</a><a class="tag" href="/tags/lora/"><span class="hash">#</span>lora</a><a class="tag" href="/tags/qlora/"><span class="hash">#</span>qlora</a>
+        
+      </div>
+
+      <h1>LLM微调实战：LoRA与QLoRA</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2025.10.01</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 7 min</span>
+        </span>
+        <span class="wc"><span class="num">2.7k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BE%AE%E8%B0%83%E6%96%B9%E6%B3%95%E5%85%A8%E6%99%AF"><span class="toc-text">微调方法全景</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%A8%E9%87%8F%E5%BE%AE%E8%B0%83-vs-peft-%E5%AF%B9%E6%AF%94"><span class="toc-text">全量微调 vs PEFT 对比</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#lora-%E6%95%B0%E5%AD%A6%E5%8E%9F%E7%90%86"><span class="toc-text">LoRA 数学原理</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%AC%E5%BC%8F%E6%8E%A8%E5%AF%BC"><span class="toc-text">公式推导</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%B3%E9%94%AE%E8%B6%85%E5%8F%82%E6%95%B0"><span class="toc-text">关键超参数</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#qlora-%E9%87%8F%E5%8C%96-lora"><span class="toc-text">QLoRA — 量化 LoRA</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E5%87%86%E5%A4%87"><span class="toc-text">数据准备</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%8C%87%E4%BB%A4%E5%BE%AE%E8%B0%83%E6%95%B0%E6%8D%AE%E6%A0%BC%E5%BC%8F"><span class="toc-text">指令微调数据格式</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E8%B4%A8%E9%87%8F%E4%BF%9D%E8%AF%81"><span class="toc-text">数据质量保证</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%AE%AD%E7%BB%83%E5%AE%9E%E6%88%98"><span class="toc-text">训练实战</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BD%BF%E7%94%A8-hugging-face-peft"><span class="toc-text">使用 Hugging Face + PEFT</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%AE%AD%E7%BB%83%E7%9B%91%E6%8E%A7"><span class="toc-text">训练监控</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%AF%84%E4%BC%B0"><span class="toc-text">评估</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%83%A8%E7%BD%B2"><span class="toc-text">部署</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%90%88%E5%B9%B6-lora-%E6%9D%83%E9%87%8D"><span class="toc-text">合并 LoRA 权重</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%A4%9A-lora-serving"><span class="toc-text">多 LoRA Serving</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%B8%B8%E8%A7%81%E9%97%AE%E9%A2%98%E4%B8%8E%E8%B0%83%E4%BC%98"><span class="toc-text">常见问题与调优</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="引言">引言</h2>
+<p>大语言模型的通用能力令人惊叹，但在特定领域（如法律、医疗、代码）往往需要微调（Fine-tuning）来提升专业表现。全量微调需要的计算资源与模型参数量成正比，对于
+7B 甚至 70B 的模型来说成本高昂。LoRA（Low-Rank Adaptation）和 QLoRA
+通过参数高效微调（PEFT）大幅降低了微调的门槛。本文将从数学原理讲起，涵盖数据准备、训练配置、评估和部署的完整流程。</p>
+<h2 id="微调方法全景">微调方法全景</h2>
+<pre class="mermaid">graph TB
+    A[LLM 微调方法] --&gt; B[全量微调&lt;br/&gt;Full Fine-tuning]
+    A --&gt; C[参数高效微调&lt;br/&gt;PEFT]
+
+    B --&gt; B1[更新所有参数&lt;br/&gt;成本最高 / 效果最好]
+
+    C --&gt; D[Adapter 方法]
+    C --&gt; E[Prefix/Prompt 方法]
+    C --&gt; F[LoRA 方法]
+
+    D --&gt; D1[Adapter Layers&lt;br/&gt;在层间插入小网络]
+    E --&gt; E1[Prefix Tuning&lt;br/&gt;P-Tuning v2]
+    F --&gt; F1[LoRA&lt;br/&gt;低秩矩阵分解]
+    F --&gt; F2[QLoRA&lt;br/&gt;量化 + LoRA]
+    F --&gt; F3[DoRA&lt;br/&gt;Weight-Decomposed LoRA]
+
+    style B fill:#e74c3c,color:#fff
+    style F1 fill:#2ecc71,color:#fff
+    style F2 fill:#3498db,color:#fff</pre>
+<h3 id="全量微调-vs-peft-对比">全量微调 vs PEFT 对比</h3>
+<table>
+<thead>
+<tr class="header">
+<th>维度</th>
+<th>全量微调</th>
+<th>LoRA</th>
+<th>QLoRA</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>可训练参数</td>
+<td>100%</td>
+<td>~0.1-1%</td>
+<td>~0.1-1%</td>
+</tr>
+<tr class="even">
+<td>7B 模型 GPU 需求</td>
+<td>~60GB (A100)</td>
+<td>~16GB (V100)</td>
+<td>~6GB (RTX 3060)</td>
+</tr>
+<tr class="odd">
+<td>训练速度</td>
+<td>慢</td>
+<td>快</td>
+<td>中</td>
+</tr>
+<tr class="even">
+<td>效果</td>
+<td>最优</td>
+<td>接近全量</td>
+<td>略低于 LoRA</td>
+</tr>
+<tr class="odd">
+<td>灾难性遗忘风险</td>
+<td>高</td>
+<td>低</td>
+<td>低</td>
+</tr>
+</tbody>
+</table>
+<h2 id="lora-数学原理">LoRA 数学原理</h2>
+<p>LoRA
+的核心思想：预训练模型的权重更新矩阵是低秩的，可以用两个小矩阵的乘积来近似。</p>
+<h3 id="公式推导">公式推导</h3>
+<p>对于预训练权重矩阵 <code>W_0</code> (维度 d x k)：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><code class="hljs plaintext">全量微调: W = W_0 + ΔW    (ΔW 是 d x k 的全秩矩阵)<br><br>LoRA:     W = W_0 + BA     其中 B: d x r,  A: r x k,  r &lt;&lt; min(d, k)<br></code></pre></td></tr></table></figure>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-comment"># LoRA implementation concept</span><br><span class="hljs-keyword">import</span> torch<br><span class="hljs-keyword">import</span> torch.nn <span class="hljs-keyword">as</span> nn<br><br><span class="hljs-keyword">class</span> <span class="hljs-title class_">LoRALinear</span>(nn.Module):<br>    <span class="hljs-keyword">def</span> <span class="hljs-title function_">__init__</span>(<span class="hljs-params">self, original_linear: nn.Linear, rank: <span class="hljs-built_in">int</span> = <span class="hljs-number">8</span>, alpha: <span class="hljs-built_in">float</span> = <span class="hljs-number">16</span></span>):<br>        <span class="hljs-built_in">super</span>().__init__()<br>        self.original = original_linear<br>        self.original.weight.requires_grad = <span class="hljs-literal">False</span>  <span class="hljs-comment"># Freeze original weights</span><br><br>        d_out, d_in = original_linear.weight.shape<br><br>        <span class="hljs-comment"># Low-rank matrices</span><br>        self.lora_A = nn.Parameter(torch.randn(rank, d_in) * <span class="hljs-number">0.01</span>)  <span class="hljs-comment"># r x d_in</span><br>        self.lora_B = nn.Parameter(torch.zeros(d_out, rank))         <span class="hljs-comment"># d_out x r</span><br><br>        self.scaling = alpha / rank  <span class="hljs-comment"># Scaling factor</span><br><br>    <span class="hljs-keyword">def</span> <span class="hljs-title function_">forward</span>(<span class="hljs-params">self, x</span>):<br>        <span class="hljs-comment"># Original output + LoRA adjustment</span><br>        original_out = self.original(x)<br>        lora_out = (x @ self.lora_A.T @ self.lora_B.T) * self.scaling<br>        <span class="hljs-keyword">return</span> original_out + lora_out<br></code></pre></td></tr></table></figure>
+<pre class="mermaid">graph LR
+    subgraph "Original Layer"
+        X[Input x] --&gt; W["W₀ (d × k)&lt;br/&gt;Frozen"]
+        W --&gt; Y1[Output]
+    end
+
+    subgraph "LoRA Branch"
+        X --&gt; A["A (r × k)&lt;br/&gt;Trainable"]
+        A --&gt; B["B (d × r)&lt;br/&gt;Trainable"]
+        B --&gt; |"× α/r"| Y2[LoRA Output]
+    end
+
+    Y1 --&gt; PLUS((+))
+    Y2 --&gt; PLUS
+    PLUS --&gt; Y[Final Output]
+
+    style W fill:#95a5a6,color:#fff
+    style A fill:#2ecc71,color:#fff
+    style B fill:#2ecc71,color:#fff</pre>
+<h3 id="关键超参数">关键超参数</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><code class="hljs python">lora_config = &#123;<br>    <span class="hljs-string">&quot;r&quot;</span>: <span class="hljs-number">16</span>,           <span class="hljs-comment"># Rank: 越高表达能力越强，但参数越多</span><br>                       <span class="hljs-comment"># 典型值: 4, 8, 16, 32, 64</span><br>    <span class="hljs-string">&quot;alpha&quot;</span>: <span class="hljs-number">32</span>,       <span class="hljs-comment"># Scaling factor: 通常设为 2 * r</span><br>    <span class="hljs-string">&quot;dropout&quot;</span>: <span class="hljs-number">0.05</span>,   <span class="hljs-comment"># LoRA dropout</span><br>    <span class="hljs-string">&quot;target_modules&quot;</span>: [<br>        <span class="hljs-string">&quot;q_proj&quot;</span>, <span class="hljs-string">&quot;k_proj&quot;</span>, <span class="hljs-string">&quot;v_proj&quot;</span>, <span class="hljs-string">&quot;o_proj&quot;</span>,  <span class="hljs-comment"># Attention layers</span><br>        <span class="hljs-string">&quot;gate_proj&quot;</span>, <span class="hljs-string">&quot;up_proj&quot;</span>, <span class="hljs-string">&quot;down_proj&quot;</span>,      <span class="hljs-comment"># MLP layers</span><br>    ],<br>&#125;<br><br><span class="hljs-comment"># Trainable parameters calculation:</span><br><span class="hljs-comment"># For each target module (d x k):</span><br><span class="hljs-comment">#   LoRA params = r * (d + k)</span><br><span class="hljs-comment"># Example: Llama-2-7B attention q_proj (4096 x 4096), r=16:</span><br><span class="hljs-comment">#   LoRA params = 16 * (4096 + 4096) = 131,072  (vs 16,777,216 original)</span><br><span class="hljs-comment">#   Compression ratio: 128x</span><br></code></pre></td></tr></table></figure>
+<h2 id="qlora-量化-lora">QLoRA — 量化 LoRA</h2>
+<p>QLoRA 在 LoRA 基础上引入 4-bit 量化，进一步减少内存占用：</p>
+<pre class="mermaid">graph TB
+    A[QLoRA 创新点] --&gt; B[4-bit NormalFloat&lt;br/&gt;NF4 量化]
+    A --&gt; C[Double Quantization&lt;br/&gt;二次量化]
+    A --&gt; D[Paged Optimizers&lt;br/&gt;分页优化器]
+
+    B --&gt; B1[基于正态分布的&lt;br/&gt;最优4-bit编码]
+    C --&gt; C1[量化常数本身&lt;br/&gt;也做量化]
+    D --&gt; D1[GPU显存不足时&lt;br/&gt;自动迁移到CPU]
+
+    style A fill:#3498db,color:#fff
+    style B fill:#e74c3c,color:#fff
+    style C fill:#f39c12,color:#000
+    style D fill:#2ecc71,color:#fff</pre>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">from</span> transformers <span class="hljs-keyword">import</span> BitsAndBytesConfig<br><span class="hljs-keyword">import</span> torch<br><br><span class="hljs-comment"># QLoRA quantization config</span><br>quantization_config = BitsAndBytesConfig(<br>    load_in_4bit=<span class="hljs-literal">True</span>,                    <span class="hljs-comment"># 4-bit quantization</span><br>    bnb_4bit_quant_type=<span class="hljs-string">&quot;nf4&quot;</span>,           <span class="hljs-comment"># NormalFloat4 (better than FP4)</span><br>    bnb_4bit_compute_dtype=torch.bfloat16, <span class="hljs-comment"># Computation in bfloat16</span><br>    bnb_4bit_use_double_quant=<span class="hljs-literal">True</span>,      <span class="hljs-comment"># Double quantization</span><br>)<br><br><span class="hljs-comment"># Memory comparison for Llama-2-7B:</span><br><span class="hljs-comment"># FP32: ~28 GB</span><br><span class="hljs-comment"># FP16: ~14 GB</span><br><span class="hljs-comment"># 4-bit (QLoRA): ~3.5 GB</span><br><span class="hljs-comment"># + LoRA trainable params: ~0.1 GB</span><br><span class="hljs-comment"># Total: ~3.6 GB (fits on RTX 3060 12GB!)</span><br></code></pre></td></tr></table></figure>
+<h2 id="数据准备">数据准备</h2>
+<h3 id="指令微调数据格式">指令微调数据格式</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-comment"># Alpaca format</span><br>training_data = [<br>    &#123;<br>        <span class="hljs-string">&quot;instruction&quot;</span>: <span class="hljs-string">&quot;将以下英文翻译为中文&quot;</span>,<br>        <span class="hljs-string">&quot;input&quot;</span>: <span class="hljs-string">&quot;Machine learning is a subset of artificial intelligence.&quot;</span>,<br>        <span class="hljs-string">&quot;output&quot;</span>: <span class="hljs-string">&quot;机器学习是人工智能的一个子集。&quot;</span><br>    &#125;,<br>    &#123;<br>        <span class="hljs-string">&quot;instruction&quot;</span>: <span class="hljs-string">&quot;总结以下文章的要点&quot;</span>,<br>        <span class="hljs-string">&quot;input&quot;</span>: <span class="hljs-string">&quot;RAG（检索增强生成）是一种将外部知识库与大语言模型结合的技术...&quot;</span>,<br>        <span class="hljs-string">&quot;output&quot;</span>: <span class="hljs-string">&quot;1. RAG将LLM与外部知识库结合\n2. 通过检索相关文档增强生成质量\n3. 相比微调成本更低且数据可更新&quot;</span><br>    &#125;,<br>]<br><br><span class="hljs-comment"># ChatML format (preferred for chat models)</span><br>chat_data = [<br>    &#123;<br>        <span class="hljs-string">&quot;messages&quot;</span>: [<br>            &#123;<span class="hljs-string">&quot;role&quot;</span>: <span class="hljs-string">&quot;system&quot;</span>, <span class="hljs-string">&quot;content&quot;</span>: <span class="hljs-string">&quot;你是一个专业的技术文档助手。&quot;</span>&#125;,<br>            &#123;<span class="hljs-string">&quot;role&quot;</span>: <span class="hljs-string">&quot;user&quot;</span>, <span class="hljs-string">&quot;content&quot;</span>: <span class="hljs-string">&quot;什么是Docker?&quot;</span>&#125;,<br>            &#123;<span class="hljs-string">&quot;role&quot;</span>: <span class="hljs-string">&quot;assistant&quot;</span>, <span class="hljs-string">&quot;content&quot;</span>: <span class="hljs-string">&quot;Docker是一个容器化平台...&quot;</span>&#125;<br>        ]<br>    &#125;,<br>]<br></code></pre></td></tr></table></figure>
+<h3 id="数据质量保证">数据质量保证</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">import</span> json<br><span class="hljs-keyword">from</span> datasets <span class="hljs-keyword">import</span> Dataset<br><br><span class="hljs-keyword">def</span> <span class="hljs-title function_">validate_and_clean</span>(<span class="hljs-params">data: <span class="hljs-built_in">list</span>[<span class="hljs-built_in">dict</span>]</span>) -&gt; <span class="hljs-built_in">list</span>[<span class="hljs-built_in">dict</span>]:<br>    <span class="hljs-string">&quot;&quot;&quot;Validate and clean training data.&quot;&quot;&quot;</span><br>    cleaned = []<br>    <span class="hljs-keyword">for</span> item <span class="hljs-keyword">in</span> data:<br>        <span class="hljs-comment"># Check required fields</span><br>        <span class="hljs-keyword">if</span> <span class="hljs-keyword">not</span> item.get(<span class="hljs-string">&quot;instruction&quot;</span>) <span class="hljs-keyword">or</span> <span class="hljs-keyword">not</span> item.get(<span class="hljs-string">&quot;output&quot;</span>):<br>            <span class="hljs-keyword">continue</span><br><br>        <span class="hljs-comment"># Filter too short/long samples</span><br>        output_len = <span class="hljs-built_in">len</span>(item[<span class="hljs-string">&quot;output&quot;</span>])<br>        <span class="hljs-keyword">if</span> output_len &lt; <span class="hljs-number">10</span> <span class="hljs-keyword">or</span> output_len &gt; <span class="hljs-number">4096</span>:<br>            <span class="hljs-keyword">continue</span><br><br>        <span class="hljs-comment"># Remove duplicates by instruction</span><br>        instruction = item[<span class="hljs-string">&quot;instruction&quot;</span>].strip()<br>        item[<span class="hljs-string">&quot;instruction&quot;</span>] = instruction<br>        item[<span class="hljs-string">&quot;output&quot;</span>] = item[<span class="hljs-string">&quot;output&quot;</span>].strip()<br><br>        cleaned.append(item)<br><br>    <span class="hljs-comment"># Deduplicate</span><br>    seen = <span class="hljs-built_in">set</span>()<br>    unique = []<br>    <span class="hljs-keyword">for</span> item <span class="hljs-keyword">in</span> cleaned:<br>        key = item[<span class="hljs-string">&quot;instruction&quot;</span>]<br>        <span class="hljs-keyword">if</span> key <span class="hljs-keyword">not</span> <span class="hljs-keyword">in</span> seen:<br>            seen.add(key)<br>            unique.append(item)<br><br>    <span class="hljs-keyword">return</span> unique<br><br><span class="hljs-comment"># Format for training</span><br><span class="hljs-keyword">def</span> <span class="hljs-title function_">format_prompt</span>(<span class="hljs-params">example</span>):<br>    <span class="hljs-string">&quot;&quot;&quot;Format example into model&#x27;s expected prompt format.&quot;&quot;&quot;</span><br>    <span class="hljs-keyword">if</span> example.get(<span class="hljs-string">&quot;input&quot;</span>):<br>        text = <span class="hljs-string">f&quot;&quot;&quot;### Instruction:</span><br><span class="hljs-string"><span class="hljs-subst">&#123;example[<span class="hljs-string">&#x27;instruction&#x27;</span>]&#125;</span></span><br><span class="hljs-string"></span><br><span class="hljs-string">### Input:</span><br><span class="hljs-string"><span class="hljs-subst">&#123;example[<span class="hljs-string">&#x27;input&#x27;</span>]&#125;</span></span><br><span class="hljs-string"></span><br><span class="hljs-string">### Response:</span><br><span class="hljs-string"><span class="hljs-subst">&#123;example[<span class="hljs-string">&#x27;output&#x27;</span>]&#125;</span>&quot;&quot;&quot;</span><br>    <span class="hljs-keyword">else</span>:<br>        text = <span class="hljs-string">f&quot;&quot;&quot;### Instruction:</span><br><span class="hljs-string"><span class="hljs-subst">&#123;example[<span class="hljs-string">&#x27;instruction&#x27;</span>]&#125;</span></span><br><span class="hljs-string"></span><br><span class="hljs-string">### Response:</span><br><span class="hljs-string"><span class="hljs-subst">&#123;example[<span class="hljs-string">&#x27;output&#x27;</span>]&#125;</span>&quot;&quot;&quot;</span><br>    <span class="hljs-keyword">return</span> &#123;<span class="hljs-string">&quot;text&quot;</span>: text&#125;<br><br>dataset = Dataset.from_list(training_data)<br>dataset = dataset.<span class="hljs-built_in">map</span>(format_prompt)<br></code></pre></td></tr></table></figure>
+<h2 id="训练实战">训练实战</h2>
+<h3 id="使用-hugging-face-peft">使用 Hugging Face + PEFT</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">from</span> transformers <span class="hljs-keyword">import</span> (<br>    AutoModelForCausalLM,<br>    AutoTokenizer,<br>    TrainingArguments,<br>)<br><span class="hljs-keyword">from</span> peft <span class="hljs-keyword">import</span> LoraConfig, get_peft_model, prepare_model_for_kbit_training<br><span class="hljs-keyword">from</span> trl <span class="hljs-keyword">import</span> SFTTrainer<br><span class="hljs-keyword">import</span> torch<br><br><span class="hljs-comment"># 1. Load model with quantization</span><br>model_name = <span class="hljs-string">&quot;meta-llama/Llama-2-7b-hf&quot;</span><br><br>model = AutoModelForCausalLM.from_pretrained(<br>    model_name,<br>    quantization_config=quantization_config,  <span class="hljs-comment"># QLoRA 4-bit</span><br>    device_map=<span class="hljs-string">&quot;auto&quot;</span>,<br>    trust_remote_code=<span class="hljs-literal">True</span>,<br>)<br><br>tokenizer = AutoTokenizer.from_pretrained(model_name)<br>tokenizer.pad_token = tokenizer.eos_token<br><br><span class="hljs-comment"># 2. Prepare model for k-bit training</span><br>model = prepare_model_for_kbit_training(model)<br><br><span class="hljs-comment"># 3. Configure LoRA</span><br>lora_config = LoraConfig(<br>    r=<span class="hljs-number">16</span>,<br>    lora_alpha=<span class="hljs-number">32</span>,<br>    lora_dropout=<span class="hljs-number">0.05</span>,<br>    bias=<span class="hljs-string">&quot;none&quot;</span>,<br>    task_type=<span class="hljs-string">&quot;CAUSAL_LM&quot;</span>,<br>    target_modules=[<br>        <span class="hljs-string">&quot;q_proj&quot;</span>, <span class="hljs-string">&quot;k_proj&quot;</span>, <span class="hljs-string">&quot;v_proj&quot;</span>, <span class="hljs-string">&quot;o_proj&quot;</span>,<br>        <span class="hljs-string">&quot;gate_proj&quot;</span>, <span class="hljs-string">&quot;up_proj&quot;</span>, <span class="hljs-string">&quot;down_proj&quot;</span>,<br>    ],<br>)<br><br>model = get_peft_model(model, lora_config)<br>model.print_trainable_parameters()<br><span class="hljs-comment"># trainable params: 13,631,488 || all params: 6,751,539,200 || trainable%: 0.2019</span><br><br><span class="hljs-comment"># 4. Training arguments</span><br>training_args = TrainingArguments(<br>    output_dir=<span class="hljs-string">&quot;./output/llama2-7b-lora&quot;</span>,<br>    num_train_epochs=<span class="hljs-number">3</span>,<br>    per_device_train_batch_size=<span class="hljs-number">4</span>,<br>    gradient_accumulation_steps=<span class="hljs-number">4</span>,<br>    learning_rate=<span class="hljs-number">2e-4</span>,<br>    weight_decay=<span class="hljs-number">0.01</span>,<br>    warmup_ratio=<span class="hljs-number">0.03</span>,<br>    lr_scheduler_type=<span class="hljs-string">&quot;cosine&quot;</span>,<br>    logging_steps=<span class="hljs-number">10</span>,<br>    save_strategy=<span class="hljs-string">&quot;epoch&quot;</span>,<br>    evaluation_strategy=<span class="hljs-string">&quot;epoch&quot;</span>,<br>    bf16=<span class="hljs-literal">True</span>,<br>    optim=<span class="hljs-string">&quot;paged_adamw_8bit&quot;</span>,  <span class="hljs-comment"># Memory-efficient optimizer</span><br>    gradient_checkpointing=<span class="hljs-literal">True</span>,<br>    max_grad_norm=<span class="hljs-number">0.3</span>,<br>    report_to=<span class="hljs-string">&quot;wandb&quot;</span>,<br>)<br><br><span class="hljs-comment"># 5. Train</span><br>trainer = SFTTrainer(<br>    model=model,<br>    tokenizer=tokenizer,<br>    train_dataset=train_dataset,<br>    eval_dataset=eval_dataset,<br>    args=training_args,<br>    max_seq_length=<span class="hljs-number">2048</span>,<br>    dataset_text_field=<span class="hljs-string">&quot;text&quot;</span>,<br>    packing=<span class="hljs-literal">True</span>,  <span class="hljs-comment"># Pack multiple samples into one sequence</span><br>)<br><br>trainer.train()<br><br><span class="hljs-comment"># 6. Save LoRA adapter (only ~50MB!)</span><br>trainer.save_model(<span class="hljs-string">&quot;./output/llama2-7b-lora/final&quot;</span>)<br></code></pre></td></tr></table></figure>
+<h3 id="训练监控">训练监控</h3>
+<pre class="mermaid">graph LR
+    A[训练监控指标] --&gt; B[Loss Curve&lt;br/&gt;训练/验证损失]
+    A --&gt; C[Learning Rate&lt;br/&gt;学习率变化]
+    A --&gt; D[GPU Memory&lt;br/&gt;显存使用]
+    A --&gt; E[Gradient Norm&lt;br/&gt;梯度范数]
+
+    B --&gt; B1[过拟合: train↓ val↑]
+    B --&gt; B1b[欠拟合: 两者都高]
+    C --&gt; C1[Warmup + Cosine Decay]
+    D --&gt; D1[OOM → 减小batch_size&lt;br/&gt;或增加gradient_accumulation]
+
+    style B1 fill:#e74c3c,color:#fff
+    style C1 fill:#2ecc71,color:#fff</pre>
+<h2 id="评估">评估</h2>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">from</span> lm_eval <span class="hljs-keyword">import</span> evaluator<br><span class="hljs-keyword">from</span> lm_eval.models.huggingface <span class="hljs-keyword">import</span> HFLM<br><br><span class="hljs-comment"># Evaluation using lm-evaluation-harness</span><br>model_wrapper = HFLM(<br>    pretrained=<span class="hljs-string">&quot;./output/llama2-7b-lora/final&quot;</span>,<br>    batch_size=<span class="hljs-number">8</span>,<br>)<br><br>results = evaluator.simple_evaluate(<br>    model=model_wrapper,<br>    tasks=[<span class="hljs-string">&quot;mmlu&quot;</span>, <span class="hljs-string">&quot;hellaswag&quot;</span>, <span class="hljs-string">&quot;arc_challenge&quot;</span>],<br>    num_fewshot=<span class="hljs-number">5</span>,<br>)<br><br><span class="hljs-built_in">print</span>(results[<span class="hljs-string">&quot;results&quot;</span>])<br><br><span class="hljs-comment"># Custom evaluation</span><br><span class="hljs-keyword">def</span> <span class="hljs-title function_">evaluate_custom</span>(<span class="hljs-params">model, tokenizer, test_data</span>):<br>    <span class="hljs-string">&quot;&quot;&quot;Evaluate on custom test set.&quot;&quot;&quot;</span><br>    correct = <span class="hljs-number">0</span><br>    total = <span class="hljs-built_in">len</span>(test_data)<br><br>    <span class="hljs-keyword">for</span> item <span class="hljs-keyword">in</span> test_data:<br>        prompt = format_prompt(item)[<span class="hljs-string">&quot;text&quot;</span>].rsplit(<span class="hljs-string">&quot;### Response:&quot;</span>, <span class="hljs-number">1</span>)[<span class="hljs-number">0</span>] + <span class="hljs-string">&quot;### Response:\n&quot;</span><br>        inputs = tokenizer(prompt, return_tensors=<span class="hljs-string">&quot;pt&quot;</span>).to(model.device)<br><br>        <span class="hljs-keyword">with</span> torch.no_grad():<br>            outputs = model.generate(<br>                **inputs,<br>                max_new_tokens=<span class="hljs-number">512</span>,<br>                temperature=<span class="hljs-number">0.1</span>,<br>                do_sample=<span class="hljs-literal">False</span>,<br>            )<br><br>        response = tokenizer.decode(outputs[<span class="hljs-number">0</span>][inputs[<span class="hljs-string">&quot;input_ids&quot;</span>].shape[<span class="hljs-number">1</span>]:], skip_special_tokens=<span class="hljs-literal">True</span>)<br><br>        <span class="hljs-keyword">if</span> evaluate_response(response, item[<span class="hljs-string">&quot;output&quot;</span>]):<br>            correct += <span class="hljs-number">1</span><br><br>    accuracy = correct / total<br>    <span class="hljs-built_in">print</span>(<span class="hljs-string">f&quot;Accuracy: <span class="hljs-subst">&#123;accuracy:<span class="hljs-number">.2</span>%&#125;</span>&quot;</span>)<br>    <span class="hljs-keyword">return</span> accuracy<br></code></pre></td></tr></table></figure>
+<h2 id="部署">部署</h2>
+<h3 id="合并-lora-权重">合并 LoRA 权重</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">from</span> peft <span class="hljs-keyword">import</span> PeftModel<br><span class="hljs-keyword">from</span> transformers <span class="hljs-keyword">import</span> AutoModelForCausalLM, AutoTokenizer<br><br><span class="hljs-comment"># Load base model</span><br>base_model = AutoModelForCausalLM.from_pretrained(<br>    <span class="hljs-string">&quot;meta-llama/Llama-2-7b-hf&quot;</span>,<br>    torch_dtype=torch.float16,<br>    device_map=<span class="hljs-string">&quot;auto&quot;</span>,<br>)<br><br><span class="hljs-comment"># Load and merge LoRA adapter</span><br>model = PeftModel.from_pretrained(base_model, <span class="hljs-string">&quot;./output/llama2-7b-lora/final&quot;</span>)<br>merged_model = model.merge_and_unload()<br><br><span class="hljs-comment"># Save merged model</span><br>merged_model.save_pretrained(<span class="hljs-string">&quot;./output/llama2-7b-merged&quot;</span>)<br>tokenizer.save_pretrained(<span class="hljs-string">&quot;./output/llama2-7b-merged&quot;</span>)<br><br><span class="hljs-comment"># Now deploy as a standard model (e.g., with vLLM)</span><br><span class="hljs-comment"># vllm serve ./output/llama2-7b-merged</span><br></code></pre></td></tr></table></figure>
+<h3 id="多-lora-serving">多 LoRA Serving</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-comment"># vLLM supports serving multiple LoRA adapters on one base model</span><br><span class="hljs-comment"># Start server:</span><br><span class="hljs-comment"># vllm serve meta-llama/Llama-2-7b-hf \</span><br><span class="hljs-comment">#   --enable-lora \</span><br><span class="hljs-comment">#   --lora-modules \</span><br><span class="hljs-comment">#     legal=./adapters/legal \</span><br><span class="hljs-comment">#     medical=./adapters/medical \</span><br><span class="hljs-comment">#     code=./adapters/code</span><br><br><span class="hljs-comment"># Client request with specific adapter:</span><br><span class="hljs-keyword">import</span> openai<br><br>client = openai.OpenAI(base_url=<span class="hljs-string">&quot;http://localhost:8000/v1&quot;</span>)<br><br><span class="hljs-comment"># Use legal adapter</span><br>response = client.chat.completions.create(<br>    model=<span class="hljs-string">&quot;legal&quot;</span>,  <span class="hljs-comment"># LoRA adapter name</span><br>    messages=[&#123;<span class="hljs-string">&quot;role&quot;</span>: <span class="hljs-string">&quot;user&quot;</span>, <span class="hljs-string">&quot;content&quot;</span>: <span class="hljs-string">&quot;分析这个合同条款...&quot;</span>&#125;],<br>)<br></code></pre></td></tr></table></figure>
+<h2 id="常见问题与调优">常见问题与调优</h2>
+<table>
+<thead>
+<tr class="header">
+<th>问题</th>
+<th>可能原因</th>
+<th>解决方案</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>训练不收敛</td>
+<td>学习率过高/低</td>
+<td>从 2e-4 开始调整</td>
+</tr>
+<tr class="even">
+<td>过拟合</td>
+<td>数据量不足/epochs过多</td>
+<td>增加数据或减少epochs</td>
+</tr>
+<tr class="odd">
+<td>OOM</td>
+<td>batch_size 过大</td>
+<td>减小 batch_size + 增加 gradient_accumulation</td>
+</tr>
+<tr class="even">
+<td>生成质量差</td>
+<td>数据质量不足</td>
+<td>清洗数据，增加多样性</td>
+</tr>
+<tr class="odd">
+<td>灾难性遗忘</td>
+<td>LoRA rank 过高</td>
+<td>降低 r 值，增加正则化</td>
+</tr>
+</tbody>
+</table>
+<h2 id="总结">总结</h2>
+<p>LoRA 和 QLoRA 使得在消费级 GPU
+上微调大语言模型成为可能。关键要点：</p>
+<ol type="1">
+<li><strong>从 QLoRA 开始</strong>：6GB 显存就能微调 7B 模型</li>
+<li><strong>数据质量 &gt; 数据数量</strong>：1000 条高质量数据胜过 10000
+条低质量数据</li>
+<li><strong>从小 rank 开始</strong>：r=8 或 r=16
+通常足够，只在效果不佳时增大</li>
+<li><strong>target_modules 选择</strong>：至少包含 attention 的 q/v
+proj，MLP 层视情况添加</li>
+<li><strong>合并后部署</strong>：LoRA
+推理有额外开销，生产环境建议合并权重</li>
+<li><strong>多 LoRA serving</strong>：vLLM
+支持在同一个基座模型上动态切换 LoRA adapter</li>
+</ol>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2025-10-01</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">2.7k 字 · 7 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/git-advanced-workflow/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Git高级工作流：rebase/cherry-pick/bisect</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/vector-database-comparison/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">向量数据库对比：Milvus vs Pinecone vs Weaviate</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BE%AE%E8%B0%83%E6%96%B9%E6%B3%95%E5%85%A8%E6%99%AF"><span class="toc-text">微调方法全景</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%A8%E9%87%8F%E5%BE%AE%E8%B0%83-vs-peft-%E5%AF%B9%E6%AF%94"><span class="toc-text">全量微调 vs PEFT 对比</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#lora-%E6%95%B0%E5%AD%A6%E5%8E%9F%E7%90%86"><span class="toc-text">LoRA 数学原理</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%AC%E5%BC%8F%E6%8E%A8%E5%AF%BC"><span class="toc-text">公式推导</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%B3%E9%94%AE%E8%B6%85%E5%8F%82%E6%95%B0"><span class="toc-text">关键超参数</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#qlora-%E9%87%8F%E5%8C%96-lora"><span class="toc-text">QLoRA — 量化 LoRA</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E5%87%86%E5%A4%87"><span class="toc-text">数据准备</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%8C%87%E4%BB%A4%E5%BE%AE%E8%B0%83%E6%95%B0%E6%8D%AE%E6%A0%BC%E5%BC%8F"><span class="toc-text">指令微调数据格式</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E8%B4%A8%E9%87%8F%E4%BF%9D%E8%AF%81"><span class="toc-text">数据质量保证</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%AE%AD%E7%BB%83%E5%AE%9E%E6%88%98"><span class="toc-text">训练实战</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BD%BF%E7%94%A8-hugging-face-peft"><span class="toc-text">使用 Hugging Face + PEFT</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%AE%AD%E7%BB%83%E7%9B%91%E6%8E%A7"><span class="toc-text">训练监控</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%AF%84%E4%BC%B0"><span class="toc-text">评估</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%83%A8%E7%BD%B2"><span class="toc-text">部署</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%90%88%E5%B9%B6-lora-%E6%9D%83%E9%87%8D"><span class="toc-text">合并 LoRA 权重</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%A4%9A-lora-serving"><span class="toc-text">多 LoRA Serving</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%B8%B8%E8%A7%81%E9%97%AE%E9%A2%98%E4%B8%8E%E8%B0%83%E4%BC%98"><span class="toc-text">常见问题与调优</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

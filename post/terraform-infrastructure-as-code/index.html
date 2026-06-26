@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Terraform基础设施即代码实战 · zt&#39;s Blog</title>
+  <meta name="description" content="深入讲解Terraform基础设施即代码实践，涵盖HCL语法、资源管理、模块化设计、状态管理与最佳实践。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/terraform-infrastructure-as-code/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Terraform基础设施即代码实战">
+  <meta property="og:description" content="深入讲解Terraform基础设施即代码实践，涵盖HCL语法、资源管理、模块化设计、状态管理与最佳实践。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/terraform-infrastructure-as-code/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2024-06-25T16:00:00.000Z">
+  <meta property="article:modified_time" content="2024-06-25T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Terraform基础设施即代码实战">
+  <meta name="twitter:description" content="深入讲解Terraform基础设施即代码实践，涵盖HCL语法、资源管理、模块化设计、状态管理与最佳实践。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Terraform基础设施即代码实战","description":"深入讲解Terraform基础设施即代码实践，涵盖HCL语法、资源管理、模块化设计、状态管理与最佳实践。","datePublished":"2024-06-25T16:00:00.000Z","dateModified":"2024-06-25T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/terraform-infrastructure-as-code/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"DevOps","item":"https://withesse.co/categories/DevOps/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:45">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/DevOps/">DevOps</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/terraform/"><span class="hash">#</span>terraform</a><a class="tag" href="/tags/iac/"><span class="hash">#</span>iac</a><a class="tag" href="/tags/infrastructure/"><span class="hash">#</span>infrastructure</a>
+        
+      </div>
+
+      <h1>Terraform基础设施即代码实战</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2024.06.26</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 7 min</span>
+        </span>
+        <span class="wc"><span class="num">3.0k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#terraform%E6%9E%B6%E6%9E%84"><span class="toc-text">Terraform架构</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E6%A6%82%E5%BF%B5"><span class="toc-text">核心概念</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#hcl%E8%AF%AD%E6%B3%95%E5%9F%BA%E7%A1%80"><span class="toc-text">HCL语法基础</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#provider%E9%85%8D%E7%BD%AE"><span class="toc-text">Provider配置</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8F%98%E9%87%8F%E4%B8%8E%E8%BE%93%E5%87%BA"><span class="toc-text">变量与输出</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%B5%84%E6%BA%90%E5%AE%9A%E4%B9%89"><span class="toc-text">资源定义</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#data-sources"><span class="toc-text">Data Sources</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A8%A1%E5%9D%97%E5%8C%96%E8%AE%BE%E8%AE%A1"><span class="toc-text">模块化设计</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A8%A1%E5%9D%97%E7%BB%93%E6%9E%84"><span class="toc-text">模块结构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A8%A1%E5%9D%97%E5%AE%9A%E4%B9%89"><span class="toc-text">模块定义</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A8%A1%E5%9D%97%E8%B0%83%E7%94%A8"><span class="toc-text">模块调用</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%8A%B6%E6%80%81%E7%AE%A1%E7%90%86"><span class="toc-text">状态管理</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BF%9C%E7%A8%8B%E7%8A%B6%E6%80%81%E5%AD%98%E5%82%A8"><span class="toc-text">远程状态存储</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%8A%B6%E6%80%81%E6%93%8D%E4%BD%9C"><span class="toc-text">状态操作</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#workspaces"><span class="toc-text">Workspaces</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%AB%98%E7%BA%A7%E7%89%B9%E6%80%A7"><span class="toc-text">高级特性</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#lifecycle%E8%A7%84%E5%88%99"><span class="toc-text">Lifecycle规则</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#moved%E5%9D%97%E9%87%8D%E6%9E%84"><span class="toc-text">Moved块（重构）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%9D%A1%E4%BB%B6%E8%A1%A8%E8%BE%BE%E5%BC%8F%E4%B8%8E%E5%BE%AA%E7%8E%AF"><span class="toc-text">条件表达式与循环</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#cicd%E9%9B%86%E6%88%90"><span class="toc-text">CI&#x2F;CD集成</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5"><span class="toc-text">最佳实践</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="前言">前言</h2>
+<p>基础设施即代码（Infrastructure as Code,
+IaC）是DevOps的核心实践之一。Terraform作为最流行的IaC工具，支持多云环境的基础设施管理。本文将从HCL语法基础到生产级最佳实践进行全面讲解。</p>
+<h2 id="terraform架构">Terraform架构</h2>
+<pre class="mermaid">graph TB
+    subgraph Workflow["Terraform工作流"]
+        Write["编写 .tf 文件"] --&gt; Init["terraform init&lt;br&gt;初始化Provider"]
+        Init --&gt; Plan["terraform plan&lt;br&gt;生成执行计划"]
+        Plan --&gt; Apply["terraform apply&lt;br&gt;应用变更"]
+        Apply --&gt; State["terraform.tfstate&lt;br&gt;状态文件"]
+    end
+
+    subgraph Providers["Providers"]
+        AWS["AWS Provider"]
+        GCP["GCP Provider"]
+        Azure["Azure Provider"]
+        K8s["Kubernetes Provider"]
+    end
+
+    Init --&gt; Providers
+    Apply --&gt; |"API调用"| Cloud["Cloud Resources"]
+    State --&gt; |"记录映射"| Cloud</pre>
+<h3 id="核心概念">核心概念</h3>
+<pre class="mermaid">graph LR
+    Config[".tf配置文件"] --&gt; |"terraform plan"| Plan["执行计划&lt;br&gt;(+create, ~update, -destroy)"]
+    Plan --&gt; |"terraform apply"| Resources["云资源"]
+    Resources --&gt; |"记录状态"| State["State文件"]
+    State --&gt; |"terraform plan时对比"| Config</pre>
+<h2 id="hcl语法基础">HCL语法基础</h2>
+<h3 id="provider配置">Provider配置</h3>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><code class="hljs hcl"># versions.tf - Provider版本锁定<br>terraform &#123;<br>  required_version = &quot;&gt;= 1.6.0&quot;<br><br>  required_providers &#123;<br>    aws = &#123;<br>      source  = &quot;hashicorp/aws&quot;<br>      version = &quot;~&gt; 5.0&quot;<br>    &#125;<br>    kubernetes = &#123;<br>      source  = &quot;hashicorp/kubernetes&quot;<br>      version = &quot;~&gt; 2.25&quot;<br>    &#125;<br>  &#125;<br><br>  # 远程状态存储<br>  backend &quot;s3&quot; &#123;<br>    bucket         = &quot;mycompany-terraform-state&quot;<br>    key            = &quot;production/terraform.tfstate&quot;<br>    region         = &quot;ap-northeast-1&quot;<br>    dynamodb_table = &quot;terraform-locks&quot;<br>    encrypt        = true<br>  &#125;<br>&#125;<br><br>provider &quot;aws&quot; &#123;<br>  region = var.aws_region<br><br>  default_tags &#123;<br>    tags = &#123;<br>      Environment = var.environment<br>      ManagedBy   = &quot;terraform&quot;<br>      Project     = var.project_name<br>    &#125;<br>  &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="变量与输出">变量与输出</h3>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br></pre></td><td class="code"><pre><code class="hljs hcl"># variables.tf<br>variable &quot;aws_region&quot; &#123;<br>  description = &quot;AWS region&quot;<br>  type        = string<br>  default     = &quot;ap-northeast-1&quot;<br>&#125;<br><br>variable &quot;environment&quot; &#123;<br>  description = &quot;Environment name&quot;<br>  type        = string<br>  validation &#123;<br>    condition     = contains([&quot;dev&quot;, &quot;staging&quot;, &quot;production&quot;], var.environment)<br>    error_message = &quot;Environment must be one of: dev, staging, production.&quot;<br>  &#125;<br>&#125;<br><br>variable &quot;vpc_cidr&quot; &#123;<br>  description = &quot;VPC CIDR block&quot;<br>  type        = string<br>  default     = &quot;10.0.0.0/16&quot;<br>&#125;<br><br>variable &quot;private_subnets&quot; &#123;<br>  description = &quot;Private subnet CIDRs&quot;<br>  type        = list(string)<br>  default     = [&quot;10.0.1.0/24&quot;, &quot;10.0.2.0/24&quot;, &quot;10.0.3.0/24&quot;]<br>&#125;<br><br>variable &quot;cluster_config&quot; &#123;<br>  description = &quot;EKS cluster configuration&quot;<br>  type = object(&#123;<br>    name            = string<br>    version         = string<br>    node_count      = number<br>    instance_types  = list(string)<br>    enable_logging  = bool<br>  &#125;)<br>  default = &#123;<br>    name           = &quot;main&quot;<br>    version        = &quot;1.29&quot;<br>    node_count     = 3<br>    instance_types = [&quot;m6i.large&quot;]<br>    enable_logging = true<br>  &#125;<br>&#125;<br><br># outputs.tf<br>output &quot;vpc_id&quot; &#123;<br>  description = &quot;VPC ID&quot;<br>  value       = aws_vpc.main.id<br>&#125;<br><br>output &quot;cluster_endpoint&quot; &#123;<br>  description = &quot;EKS cluster endpoint&quot;<br>  value       = aws_eks_cluster.main.endpoint<br>  sensitive   = true<br>&#125;<br><br>output &quot;subnet_ids&quot; &#123;<br>  description = &quot;Private subnet IDs&quot;<br>  value       = aws_subnet.private[*].id<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="资源定义">资源定义</h3>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br></pre></td><td class="code"><pre><code class="hljs hcl"># vpc.tf - VPC网络基础设施<br>resource &quot;aws_vpc&quot; &quot;main&quot; &#123;<br>  cidr_block           = var.vpc_cidr<br>  enable_dns_hostnames = true<br>  enable_dns_support   = true<br><br>  tags = &#123;<br>    Name = &quot;$&#123;var.project_name&#125;-$&#123;var.environment&#125;-vpc&quot;<br>  &#125;<br>&#125;<br><br># 使用count创建多个子网<br>resource &quot;aws_subnet&quot; &quot;private&quot; &#123;<br>  count = length(var.private_subnets)<br><br>  vpc_id            = aws_vpc.main.id<br>  cidr_block        = var.private_subnets[count.index]<br>  availability_zone = data.aws_availability_zones.available.names[count.index]<br><br>  tags = &#123;<br>    Name = &quot;$&#123;var.project_name&#125;-private-$&#123;count.index + 1&#125;&quot;<br>    &quot;kubernetes.io/role/internal-elb&quot; = &quot;1&quot;<br>  &#125;<br>&#125;<br><br># 使用for_each创建安全组规则<br>resource &quot;aws_security_group&quot; &quot;app&quot; &#123;<br>  name_prefix = &quot;$&#123;var.project_name&#125;-app-&quot;<br>  vpc_id      = aws_vpc.main.id<br><br>  dynamic &quot;ingress&quot; &#123;<br>    for_each = var.app_ports<br>    content &#123;<br>      from_port   = ingress.value.port<br>      to_port     = ingress.value.port<br>      protocol    = ingress.value.protocol<br>      cidr_blocks = ingress.value.cidr_blocks<br>      description = ingress.value.description<br>    &#125;<br>  &#125;<br><br>  egress &#123;<br>    from_port   = 0<br>    to_port     = 0<br>    protocol    = &quot;-1&quot;<br>    cidr_blocks = [&quot;0.0.0.0/0&quot;]<br>  &#125;<br><br>  lifecycle &#123;<br>    create_before_destroy = true<br>  &#125;<br>&#125;<br><br># NAT Gateway<br>resource &quot;aws_nat_gateway&quot; &quot;main&quot; &#123;<br>  allocation_id = aws_eip.nat.id<br>  subnet_id     = aws_subnet.public[0].id<br><br>  tags = &#123;<br>    Name = &quot;$&#123;var.project_name&#125;-nat&quot;<br>  &#125;<br><br>  depends_on = [aws_internet_gateway.main]<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="data-sources">Data Sources</h3>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><code class="hljs hcl"># 查询现有资源<br>data &quot;aws_availability_zones&quot; &quot;available&quot; &#123;<br>  state = &quot;available&quot;<br>&#125;<br><br>data &quot;aws_ami&quot; &quot;ubuntu&quot; &#123;<br>  most_recent = true<br>  owners      = [&quot;099720109477&quot;]  # Canonical<br><br>  filter &#123;<br>    name   = &quot;name&quot;<br>    values = [&quot;ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*&quot;]<br>  &#125;<br><br>  filter &#123;<br>    name   = &quot;virtualization-type&quot;<br>    values = [&quot;hvm&quot;]<br>  &#125;<br>&#125;<br><br>data &quot;aws_caller_identity&quot; &quot;current&quot; &#123;&#125;<br><br>data &quot;aws_eks_cluster_auth&quot; &quot;main&quot; &#123;<br>  name = aws_eks_cluster.main.name<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="模块化设计">模块化设计</h2>
+<h3 id="模块结构">模块结构</h3>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><code class="hljs plaintext">infrastructure/<br>├── modules/<br>│   ├── vpc/<br>│   │   ├── main.tf<br>│   │   ├── variables.tf<br>│   │   ├── outputs.tf<br>│   │   └── README.md<br>│   ├── eks/<br>│   │   ├── main.tf<br>│   │   ├── variables.tf<br>│   │   ├── outputs.tf<br>│   │   └── iam.tf<br>│   └── rds/<br>│       ├── main.tf<br>│       ├── variables.tf<br>│       └── outputs.tf<br>├── environments/<br>│   ├── dev/<br>│   │   ├── main.tf<br>│   │   ├── terraform.tfvars<br>│   │   └── backend.tf<br>│   ├── staging/<br>│   │   ├── main.tf<br>│   │   ├── terraform.tfvars<br>│   │   └── backend.tf<br>│   └── production/<br>│       ├── main.tf<br>│       ├── terraform.tfvars<br>│       └── backend.tf<br>└── modules.tf<br></code></pre></td></tr></table></figure>
+<pre class="mermaid">graph TB
+    subgraph Environments["环境配置"]
+        Dev["dev/main.tf"]
+        Staging["staging/main.tf"]
+        Prod["production/main.tf"]
+    end
+
+    subgraph Modules["可复用模块"]
+        VPC["modules/vpc"]
+        EKS["modules/eks"]
+        RDS["modules/rds"]
+    end
+
+    Dev --&gt; VPC
+    Dev --&gt; EKS
+    Staging --&gt; VPC
+    Staging --&gt; EKS
+    Staging --&gt; RDS
+    Prod --&gt; VPC
+    Prod --&gt; EKS
+    Prod --&gt; RDS</pre>
+<h3 id="模块定义">模块定义</h3>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br></pre></td><td class="code"><pre><code class="hljs hcl"># modules/vpc/main.tf<br>resource &quot;aws_vpc&quot; &quot;this&quot; &#123;<br>  cidr_block           = var.vpc_cidr<br>  enable_dns_hostnames = true<br>  enable_dns_support   = true<br><br>  tags = merge(var.tags, &#123;<br>    Name = &quot;$&#123;var.name&#125;-vpc&quot;<br>  &#125;)<br>&#125;<br><br>resource &quot;aws_subnet&quot; &quot;private&quot; &#123;<br>  for_each = &#123; for idx, cidr in var.private_subnet_cidrs : idx =&gt; cidr &#125;<br><br>  vpc_id            = aws_vpc.this.id<br>  cidr_block        = each.value<br>  availability_zone = var.azs[each.key]<br><br>  tags = merge(var.tags, &#123;<br>    Name = &quot;$&#123;var.name&#125;-private-$&#123;each.key&#125;&quot;<br>    Tier = &quot;private&quot;<br>  &#125;)<br>&#125;<br><br># modules/vpc/variables.tf<br>variable &quot;name&quot; &#123;<br>  type = string<br>&#125;<br><br>variable &quot;vpc_cidr&quot; &#123;<br>  type = string<br>&#125;<br><br>variable &quot;private_subnet_cidrs&quot; &#123;<br>  type = list(string)<br>&#125;<br><br>variable &quot;azs&quot; &#123;<br>  type = list(string)<br>&#125;<br><br>variable &quot;tags&quot; &#123;<br>  type    = map(string)<br>  default = &#123;&#125;<br>&#125;<br><br># modules/vpc/outputs.tf<br>output &quot;vpc_id&quot; &#123;<br>  value = aws_vpc.this.id<br>&#125;<br><br>output &quot;private_subnet_ids&quot; &#123;<br>  value = [for s in aws_subnet.private : s.id]<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="模块调用">模块调用</h3>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br></pre></td><td class="code"><pre><code class="hljs hcl"># environments/production/main.tf<br>module &quot;vpc&quot; &#123;<br>  source = &quot;../../modules/vpc&quot;<br><br>  name                 = &quot;production&quot;<br>  vpc_cidr             = &quot;10.0.0.0/16&quot;<br>  private_subnet_cidrs = [&quot;10.0.1.0/24&quot;, &quot;10.0.2.0/24&quot;, &quot;10.0.3.0/24&quot;]<br>  azs                  = [&quot;ap-northeast-1a&quot;, &quot;ap-northeast-1c&quot;, &quot;ap-northeast-1d&quot;]<br><br>  tags = local.common_tags<br>&#125;<br><br>module &quot;eks&quot; &#123;<br>  source = &quot;../../modules/eks&quot;<br><br>  cluster_name    = &quot;production&quot;<br>  cluster_version = &quot;1.29&quot;<br>  vpc_id          = module.vpc.vpc_id<br>  subnet_ids      = module.vpc.private_subnet_ids<br>  node_count      = 5<br>  instance_types  = [&quot;m6i.xlarge&quot;]<br><br>  tags = local.common_tags<br>&#125;<br><br>module &quot;rds&quot; &#123;<br>  source = &quot;../../modules/rds&quot;<br><br>  name               = &quot;production&quot;<br>  engine_version     = &quot;15.4&quot;<br>  instance_class     = &quot;db.r6g.xlarge&quot;<br>  allocated_storage  = 100<br>  vpc_id             = module.vpc.vpc_id<br>  subnet_ids         = module.vpc.private_subnet_ids<br>  multi_az           = true<br><br>  tags = local.common_tags<br>&#125;<br><br>locals &#123;<br>  common_tags = &#123;<br>    Environment = &quot;production&quot;<br>    Project     = &quot;myproject&quot;<br>    ManagedBy   = &quot;terraform&quot;<br>  &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="状态管理">状态管理</h2>
+<h3 id="远程状态存储">远程状态存储</h3>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><code class="hljs hcl"># 创建S3后端存储基础设施<br>resource &quot;aws_s3_bucket&quot; &quot;terraform_state&quot; &#123;<br>  bucket = &quot;mycompany-terraform-state&quot;<br><br>  lifecycle &#123;<br>    prevent_destroy = true<br>  &#125;<br>&#125;<br><br>resource &quot;aws_s3_bucket_versioning&quot; &quot;terraform_state&quot; &#123;<br>  bucket = aws_s3_bucket.terraform_state.id<br>  versioning_configuration &#123;<br>    status = &quot;Enabled&quot;<br>  &#125;<br>&#125;<br><br>resource &quot;aws_s3_bucket_server_side_encryption_configuration&quot; &quot;terraform_state&quot; &#123;<br>  bucket = aws_s3_bucket.terraform_state.id<br>  rule &#123;<br>    apply_server_side_encryption_by_default &#123;<br>      sse_algorithm = &quot;aws:kms&quot;<br>    &#125;<br>  &#125;<br>&#125;<br><br># DynamoDB用于状态锁<br>resource &quot;aws_dynamodb_table&quot; &quot;terraform_locks&quot; &#123;<br>  name         = &quot;terraform-locks&quot;<br>  billing_mode = &quot;PAY_PER_REQUEST&quot;<br>  hash_key     = &quot;LockID&quot;<br><br>  attribute &#123;<br>    name = &quot;LockID&quot;<br>    type = &quot;S&quot;<br>  &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="状态操作">状态操作</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 查看当前状态</span><br>terraform state list<br>terraform state show aws_vpc.main<br><br><span class="hljs-comment"># 移动资源（重命名）</span><br>terraform state <span class="hljs-built_in">mv</span> aws_vpc.main aws_vpc.primary<br><br><span class="hljs-comment"># 导入现有资源</span><br>terraform import aws_vpc.main vpc-12345678<br><br><span class="hljs-comment"># 移除资源（不删除实际资源）</span><br>terraform state <span class="hljs-built_in">rm</span> aws_vpc.legacy<br><br><span class="hljs-comment"># 拉取远程状态</span><br>terraform state pull &gt; state_backup.json<br><br><span class="hljs-comment"># 刷新状态</span><br>terraform refresh<br></code></pre></td></tr></table></figure>
+<pre class="mermaid">sequenceDiagram
+    participant Dev as 开发者A
+    participant Lock as DynamoDB Lock
+    participant State as S3 State
+    participant Cloud as AWS
+
+    Dev-&gt;&gt;Lock: 获取状态锁
+    Lock--&gt;&gt;Dev: 锁定成功
+    Dev-&gt;&gt;State: 读取当前状态
+    State--&gt;&gt;Dev: terraform.tfstate
+    Dev-&gt;&gt;Cloud: API调用（创建/修改/删除）
+    Cloud--&gt;&gt;Dev: 操作结果
+    Dev-&gt;&gt;State: 更新状态文件
+    Dev-&gt;&gt;Lock: 释放锁</pre>
+<h2 id="workspaces">Workspaces</h2>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 创建workspace</span><br>terraform workspace new staging<br>terraform workspace new production<br><br><span class="hljs-comment"># 切换workspace</span><br>terraform workspace <span class="hljs-keyword">select</span> production<br><br><span class="hljs-comment"># 列出workspace</span><br>terraform workspace list<br><br><span class="hljs-comment"># 在配置中使用workspace</span><br><span class="hljs-comment"># terraform.workspace 返回当前workspace名称</span><br></code></pre></td></tr></table></figure>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><code class="hljs hcl"># 基于workspace的配置差异<br>locals &#123;<br>  env_config = &#123;<br>    dev = &#123;<br>      instance_type = &quot;t3.small&quot;<br>      node_count    = 2<br>      multi_az      = false<br>    &#125;<br>    staging = &#123;<br>      instance_type = &quot;t3.medium&quot;<br>      node_count    = 3<br>      multi_az      = false<br>    &#125;<br>    production = &#123;<br>      instance_type = &quot;m6i.large&quot;<br>      node_count    = 5<br>      multi_az      = true<br>    &#125;<br>  &#125;<br><br>  config = local.env_config[terraform.workspace]<br>&#125;<br><br>resource &quot;aws_instance&quot; &quot;app&quot; &#123;<br>  count         = local.config.node_count<br>  instance_type = local.config.instance_type<br>  ami           = data.aws_ami.ubuntu.id<br><br>  tags = &#123;<br>    Name        = &quot;app-$&#123;terraform.workspace&#125;-$&#123;count.index&#125;&quot;<br>    Environment = terraform.workspace<br>  &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="高级特性">高级特性</h2>
+<h3 id="lifecycle规则">Lifecycle规则</h3>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><code class="hljs hcl">resource &quot;aws_instance&quot; &quot;app&quot; &#123;<br>  ami           = data.aws_ami.ubuntu.id<br>  instance_type = &quot;m6i.large&quot;<br><br>  lifecycle &#123;<br>    # 先创建新资源再销毁旧资源<br>    create_before_destroy = true<br><br>    # 禁止销毁（需要先移除此规则才能destroy）<br>    prevent_destroy = true<br><br>    # 忽略外部变更<br>    ignore_changes = [<br>      tags[&quot;LastModified&quot;],<br>      user_data,<br>    ]<br><br>    # 替换触发器<br>    replace_triggered_by = [<br>      aws_security_group.app.id,<br>    ]<br>  &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="moved块重构">Moved块（重构）</h3>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><code class="hljs hcl"># 重命名资源时，使用moved块避免destroy+create<br>moved &#123;<br>  from = aws_instance.web<br>  to   = aws_instance.app<br>&#125;<br><br># 从count迁移到for_each<br>moved &#123;<br>  from = aws_subnet.private[0]<br>  to   = aws_subnet.private[&quot;az-a&quot;]<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="条件表达式与循环">条件表达式与循环</h3>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><code class="hljs hcl"># 条件创建<br>resource &quot;aws_cloudwatch_log_group&quot; &quot;app&quot; &#123;<br>  count = var.enable_logging ? 1 : 0<br>  name  = &quot;/app/$&#123;var.environment&#125;&quot;<br>&#125;<br><br># for表达式<br>locals &#123;<br>  # 列表转换<br>  upper_names = [for name in var.names : upper(name)]<br><br>  # Map转换<br>  tag_map = &#123; for k, v in var.raw_tags : lower(k) =&gt; v &#125;<br><br>  # 过滤<br>  production_instances = [<br>    for instance in aws_instance.app :<br>    instance.id<br>    if instance.tags[&quot;Environment&quot;] == &quot;production&quot;<br>  ]<br>&#125;<br><br># for_each遍历<br>resource &quot;aws_iam_user&quot; &quot;users&quot; &#123;<br>  for_each = toset(var.user_names)<br>  name     = each.value<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="cicd集成">CI/CD集成</h2>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-comment"># .github/workflows/terraform.yaml</span><br><span class="hljs-attr">name:</span> <span class="hljs-string">Terraform</span><br><br><span class="hljs-attr">on:</span><br>  <span class="hljs-attr">pull_request:</span><br>    <span class="hljs-attr">paths:</span> [<span class="hljs-string">&#x27;infrastructure/**&#x27;</span>]<br>  <span class="hljs-attr">push:</span><br>    <span class="hljs-attr">branches:</span> [<span class="hljs-string">main</span>]<br>    <span class="hljs-attr">paths:</span> [<span class="hljs-string">&#x27;infrastructure/**&#x27;</span>]<br><br><span class="hljs-attr">jobs:</span><br>  <span class="hljs-attr">plan:</span><br>    <span class="hljs-attr">runs-on:</span> <span class="hljs-string">ubuntu-latest</span><br>    <span class="hljs-attr">steps:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">uses:</span> <span class="hljs-string">actions/checkout@v4</span><br><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">uses:</span> <span class="hljs-string">hashicorp/setup-terraform@v3</span><br>        <span class="hljs-attr">with:</span><br>          <span class="hljs-attr">terraform_version:</span> <span class="hljs-number">1.7</span><span class="hljs-number">.0</span><br><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Terraform</span> <span class="hljs-string">Init</span><br>        <span class="hljs-attr">run:</span> <span class="hljs-string">terraform</span> <span class="hljs-string">init</span><br>        <span class="hljs-attr">working-directory:</span> <span class="hljs-string">infrastructure/environments/production</span><br><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Terraform</span> <span class="hljs-string">Plan</span><br>        <span class="hljs-attr">id:</span> <span class="hljs-string">plan</span><br>        <span class="hljs-attr">run:</span> <span class="hljs-string">terraform</span> <span class="hljs-string">plan</span> <span class="hljs-string">-no-color</span> <span class="hljs-string">-out=tfplan</span><br>        <span class="hljs-attr">working-directory:</span> <span class="hljs-string">infrastructure/environments/production</span><br><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Comment</span> <span class="hljs-string">PR</span><br>        <span class="hljs-attr">if:</span> <span class="hljs-string">github.event_name</span> <span class="hljs-string">==</span> <span class="hljs-string">&#x27;pull_request&#x27;</span><br>        <span class="hljs-attr">uses:</span> <span class="hljs-string">actions/github-script@v7</span><br>        <span class="hljs-attr">with:</span><br>          <span class="hljs-attr">script:</span> <span class="hljs-string">|</span><br><span class="hljs-string">            const plan = `$&#123;&#123; steps.plan.outputs.stdout &#125;&#125;`;</span><br><span class="hljs-string">            github.rest.issues.createComment(&#123;</span><br><span class="hljs-string">              issue_number: context.issue.number,</span><br><span class="hljs-string">              owner: context.repo.owner,</span><br><span class="hljs-string">              repo: context.repo.repo,</span><br><span class="hljs-string">              body: `## Terraform Plan\n\`\`\`\n$&#123;plan&#125;\n\`\`\``</span><br><span class="hljs-string">            &#125;);</span><br><span class="hljs-string"></span><br>  <span class="hljs-attr">apply:</span><br>    <span class="hljs-attr">needs:</span> <span class="hljs-string">plan</span><br>    <span class="hljs-attr">if:</span> <span class="hljs-string">github.ref</span> <span class="hljs-string">==</span> <span class="hljs-string">&#x27;refs/heads/main&#x27;</span><br>    <span class="hljs-attr">runs-on:</span> <span class="hljs-string">ubuntu-latest</span><br>    <span class="hljs-attr">environment:</span> <span class="hljs-string">production</span><br>    <span class="hljs-attr">steps:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">uses:</span> <span class="hljs-string">actions/checkout@v4</span><br><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">uses:</span> <span class="hljs-string">hashicorp/setup-terraform@v3</span><br><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Terraform</span> <span class="hljs-string">Apply</span><br>        <span class="hljs-attr">run:</span> <span class="hljs-string">|</span><br><span class="hljs-string">          terraform init</span><br><span class="hljs-string">          terraform apply -auto-approve</span><br><span class="hljs-string"></span>        <span class="hljs-attr">working-directory:</span> <span class="hljs-string">infrastructure/environments/production</span><br></code></pre></td></tr></table></figure>
+<h2 id="最佳实践">最佳实践</h2>
+<ol type="1">
+<li><strong>状态文件永远不要提交到Git</strong>：使用远程后端（S3/GCS/Azure
+Blob）</li>
+<li><strong>启用状态锁</strong>：防止并发操作导致状态损坏</li>
+<li><strong>使用模块化设计</strong>：DRY原则，公共模块复用</li>
+<li><strong>锁定Provider版本</strong>：避免意外升级导致破坏性变更</li>
+<li><strong>Plan审查</strong>：所有变更先plan，review后再apply</li>
+<li><strong>敏感数据管理</strong>：使用<code>sensitive = true</code>标记敏感输出，不在tfvars中存储密钥</li>
+<li><strong>标签规范</strong>：通过default_tags统一管理资源标签</li>
+<li><strong>小步变更</strong>：避免一次性大规模变更，降低风险</li>
+</ol>
+<pre class="mermaid">graph LR
+    A["编写代码"] --&gt; B["terraform plan"]
+    B --&gt; C["代码审查"]
+    C --&gt; D["terraform apply"]
+    D --&gt; E["验证资源"]
+    E --&gt; F["提交代码"]
+
+    style C fill:#FF9800,color:#fff</pre>
+<h2 id="总结">总结</h2>
+<p>Terraform通过声明式的方式管理基础设施，配合模块化设计和远程状态管理，能够实现基础设施的版本化、可审计、可复用。在团队协作中，结合CI/CD流水线和严格的Plan-Review-Apply流程，可以安全高效地管理复杂的多云基础设施。</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2024-06-26</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">3.0k 字 · 7 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/docker-multi-stage-build/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Docker多阶段构建与镜像优化</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/cicd-pipeline-design/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">CI/CD流水线设计：从Jenkins到GitHub Actions</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#terraform%E6%9E%B6%E6%9E%84"><span class="toc-text">Terraform架构</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E6%A6%82%E5%BF%B5"><span class="toc-text">核心概念</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#hcl%E8%AF%AD%E6%B3%95%E5%9F%BA%E7%A1%80"><span class="toc-text">HCL语法基础</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#provider%E9%85%8D%E7%BD%AE"><span class="toc-text">Provider配置</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8F%98%E9%87%8F%E4%B8%8E%E8%BE%93%E5%87%BA"><span class="toc-text">变量与输出</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%B5%84%E6%BA%90%E5%AE%9A%E4%B9%89"><span class="toc-text">资源定义</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#data-sources"><span class="toc-text">Data Sources</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A8%A1%E5%9D%97%E5%8C%96%E8%AE%BE%E8%AE%A1"><span class="toc-text">模块化设计</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A8%A1%E5%9D%97%E7%BB%93%E6%9E%84"><span class="toc-text">模块结构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A8%A1%E5%9D%97%E5%AE%9A%E4%B9%89"><span class="toc-text">模块定义</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A8%A1%E5%9D%97%E8%B0%83%E7%94%A8"><span class="toc-text">模块调用</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%8A%B6%E6%80%81%E7%AE%A1%E7%90%86"><span class="toc-text">状态管理</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BF%9C%E7%A8%8B%E7%8A%B6%E6%80%81%E5%AD%98%E5%82%A8"><span class="toc-text">远程状态存储</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%8A%B6%E6%80%81%E6%93%8D%E4%BD%9C"><span class="toc-text">状态操作</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#workspaces"><span class="toc-text">Workspaces</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%AB%98%E7%BA%A7%E7%89%B9%E6%80%A7"><span class="toc-text">高级特性</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#lifecycle%E8%A7%84%E5%88%99"><span class="toc-text">Lifecycle规则</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#moved%E5%9D%97%E9%87%8D%E6%9E%84"><span class="toc-text">Moved块（重构）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%9D%A1%E4%BB%B6%E8%A1%A8%E8%BE%BE%E5%BC%8F%E4%B8%8E%E5%BE%AA%E7%8E%AF"><span class="toc-text">条件表达式与循环</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#cicd%E9%9B%86%E6%88%90"><span class="toc-text">CI&#x2F;CD集成</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5"><span class="toc-text">最佳实践</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

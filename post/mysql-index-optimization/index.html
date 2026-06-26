@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MySQL索引优化：从B+Tree到实战调优 · zt&#39;s Blog</title>
+  <meta name="description" content="深入解析MySQL索引的底层数据结构B+Tree，以及聚簇索引、覆盖索引、索引下推等优化技术的原理与实战应用。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/mysql-index-optimization/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="MySQL索引优化：从B+Tree到实战调优">
+  <meta property="og:description" content="深入解析MySQL索引的底层数据结构B+Tree，以及聚簇索引、覆盖索引、索引下推等优化技术的原理与实战应用。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/mysql-index-optimization/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2020-07-19T16:00:00.000Z">
+  <meta property="article:modified_time" content="2020-07-19T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="MySQL索引优化：从B+Tree到实战调优">
+  <meta name="twitter:description" content="深入解析MySQL索引的底层数据结构B+Tree，以及聚簇索引、覆盖索引、索引下推等优化技术的原理与实战应用。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"MySQL索引优化：从B+Tree到实战调优","description":"深入解析MySQL索引的底层数据结构B+Tree，以及聚簇索引、覆盖索引、索引下推等优化技术的原理与实战应用。","datePublished":"2020-07-19T16:00:00.000Z","dateModified":"2020-07-19T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/mysql-index-optimization/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Database","item":"https://withesse.co/categories/Database/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:330">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Database/">Database</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/mysql/"><span class="hash">#</span>mysql</a><a class="tag" href="/tags/index/"><span class="hash">#</span>index</a><a class="tag" href="/tags/b-tree/"><span class="hash">#</span>b+tree</a><a class="tag" href="/tags/optimization/"><span class="hash">#</span>optimization</a>
+        
+      </div>
+
+      <h1>MySQL索引优化：从B+Tree到实战调优</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2020.07.20</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 9 min</span>
+        </span>
+        <span class="wc"><span class="num">3.6k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#btree-%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84"><span class="toc-text">B+Tree 数据结构</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E9%80%89%E6%8B%A9btree"><span class="toc-text">为什么选择B+Tree</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#btree-vs-b-tree-vs-hash"><span class="toc-text">B+Tree vs B-Tree vs Hash</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#innodb%E7%9A%84btree%E9%A1%B5%E7%BB%93%E6%9E%84"><span class="toc-text">InnoDB的B+Tree页结构</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%81%9A%E7%B0%87%E7%B4%A2%E5%BC%95%E4%B8%8E%E4%BA%8C%E7%BA%A7%E7%B4%A2%E5%BC%95"><span class="toc-text">聚簇索引与二级索引</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%81%9A%E7%B0%87%E7%B4%A2%E5%BC%95clustered-index"><span class="toc-text">聚簇索引（Clustered Index）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9B%9E%E8%A1%A8%E6%9F%A5%E8%AF%A2%E7%9A%84%E4%BB%A3%E4%BB%B7"><span class="toc-text">回表查询的代价</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%81%94%E5%90%88%E7%B4%A2%E5%BC%95%E4%B8%8E%E6%9C%80%E5%B7%A6%E5%89%8D%E7%BC%80%E5%8E%9F%E5%88%99"><span class="toc-text">联合索引与最左前缀原则</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%81%94%E5%90%88%E7%B4%A2%E5%BC%95%E7%9A%84%E7%BB%93%E6%9E%84"><span class="toc-text">联合索引的结构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%9C%80%E5%B7%A6%E5%89%8D%E7%BC%80%E5%8C%B9%E9%85%8D%E8%A7%84%E5%88%99"><span class="toc-text">最左前缀匹配规则</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%B4%A2%E5%BC%95%E5%88%97%E9%A1%BA%E5%BA%8F%E7%9A%84%E9%80%89%E6%8B%A9%E5%8E%9F%E5%88%99"><span class="toc-text">索引列顺序的选择原则</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%A6%86%E7%9B%96%E7%B4%A2%E5%BC%95"><span class="toc-text">覆盖索引</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%B4%A2%E5%BC%95%E4%B8%8B%E6%8E%A8icp"><span class="toc-text">索引下推（ICP）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%B4%A2%E5%BC%95%E5%90%88%E5%B9%B6index-merge"><span class="toc-text">索引合并（Index Merge）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#explain-%E6%89%A7%E8%A1%8C%E8%AE%A1%E5%88%92%E5%88%86%E6%9E%90"><span class="toc-text">EXPLAIN 执行计划分析</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#explain-%E5%85%B3%E9%94%AE%E5%AD%97%E6%AE%B5"><span class="toc-text">EXPLAIN 关键字段</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#type-%E8%AE%BF%E9%97%AE%E7%B1%BB%E5%9E%8B%E8%AF%A6%E8%A7%A3"><span class="toc-text">type 访问类型详解</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%85%A2%E6%9F%A5%E8%AF%A2%E4%BC%98%E5%8C%96%E5%AE%9E%E6%88%98"><span class="toc-text">慢查询优化实战</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A1%88%E4%BE%8B%E4%B8%80%E5%88%86%E9%A1%B5%E6%9F%A5%E8%AF%A2%E4%BC%98%E5%8C%96"><span class="toc-text">案例一：分页查询优化</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A1%88%E4%BE%8B%E4%BA%8C%E6%8E%92%E5%BA%8F%E4%BC%98%E5%8C%96"><span class="toc-text">案例二：排序优化</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A1%88%E4%BE%8B%E4%B8%89%E7%B4%A2%E5%BC%95%E5%A4%B1%E6%95%88%E7%9A%84%E5%B8%B8%E8%A7%81%E5%8E%9F%E5%9B%A0"><span class="toc-text">案例三：索引失效的常见原因</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A1%88%E4%BE%8B%E5%9B%9Bjoin%E4%BC%98%E5%8C%96"><span class="toc-text">案例四：JOIN优化</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%B4%A2%E5%BC%95%E8%AE%BE%E8%AE%A1%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5"><span class="toc-text">索引设计最佳实践</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%B8%A9%E5%9D%91%E8%AE%B0%E5%BD%95"><span class="toc-text">踩坑记录</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E6%B5%8B%E7%BB%93%E6%9E%9C"><span class="toc-text">实测结果</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%88%91%E7%9A%84%E7%9C%8B%E6%B3%95"><span class="toc-text">我的看法</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="引言">引言</h2>
+<p>索引是MySQL性能优化的核心武器。一个设计良好的索引可以将查询速度提升几个数量级，而一个不合理的索引则可能成为数据库性能的瓶颈。本文将从B+Tree的底层结构出发，逐步深入到各种索引优化技术的原理与实战。</p>
+<h2 id="btree-数据结构">B+Tree 数据结构</h2>
+<h3 id="为什么选择btree">为什么选择B+Tree</h3>
+<p>MySQL的InnoDB存储引擎选择B+Tree作为索引的底层数据结构，核心原因在于：</p>
+<ol type="1">
+<li><strong>磁盘IO友好</strong>：B+Tree的节点大小通常与磁盘页（16KB）对齐，减少随机IO</li>
+<li><strong>范围查询高效</strong>：叶子节点通过双向链表连接，支持高效的范围扫描</li>
+<li><strong>树高度低</strong>：3-4层即可支撑千万级数据，每次查询只需3-4次IO</li>
+</ol>
+<pre class="mermaid">graph TD
+    A[Root Node&lt;br/&gt;P1|30|P2|60|P3] --&gt; B[Internal Node&lt;br/&gt;P1|10|P2|20|P3]
+    A --&gt; C[Internal Node&lt;br/&gt;P1|40|P2|50|P3]
+    A --&gt; D[Internal Node&lt;br/&gt;P1|70|P2|80|P3]
+    B --&gt; E[Leaf Node&lt;br/&gt;1,5,8,10]
+    B --&gt; F[Leaf Node&lt;br/&gt;12,15,18,20]
+    B --&gt; G[Leaf Node&lt;br/&gt;22,25,28]
+    C --&gt; H[Leaf Node&lt;br/&gt;30,33,35]
+    C --&gt; I[Leaf Node&lt;br/&gt;40,43,45]
+    C --&gt; J[Leaf Node&lt;br/&gt;50,53,55]
+    E &lt;-.-&gt;|双向链表| F
+    F &lt;-.-&gt;|双向链表| G
+    G &lt;-.-&gt;|双向链表| H
+    H &lt;-.-&gt;|双向链表| I
+    I &lt;-.-&gt;|双向链表| J</pre>
+<h3 id="btree-vs-b-tree-vs-hash">B+Tree vs B-Tree vs Hash</h3>
+<table>
+<thead>
+<tr class="header">
+<th>特性</th>
+<th>B+Tree</th>
+<th>B-Tree</th>
+<th>Hash</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>范围查询</td>
+<td>高效（叶子链表）</td>
+<td>需要中序遍历</td>
+<td>不支持</td>
+</tr>
+<tr class="even">
+<td>等值查询</td>
+<td>O(log n)</td>
+<td>O(log n)</td>
+<td>O(1)</td>
+</tr>
+<tr class="odd">
+<td>排序</td>
+<td>天然有序</td>
+<td>需额外排序</td>
+<td>不支持</td>
+</tr>
+<tr class="even">
+<td>磁盘IO</td>
+<td>更少（非叶节点不存数据）</td>
+<td>较多</td>
+<td>取决于冲突率</td>
+</tr>
+</tbody>
+</table>
+<h3 id="innodb的btree页结构">InnoDB的B+Tree页结构</h3>
+<p>InnoDB每个B+Tree节点对应一个16KB的页（Page），页内部结构如下：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><code class="hljs plaintext">+------------------------------------------+<br>| File Header (38 bytes)                    |<br>+------------------------------------------+<br>| Page Header (56 bytes)                    |<br>+------------------------------------------+<br>| Infimum + Supremum Records               |<br>+------------------------------------------+<br>| User Records (实际数据行)                  |<br>|   Record1 -&gt; Record2 -&gt; Record3 -&gt; ...   |<br>+------------------------------------------+<br>| Free Space                                |<br>+------------------------------------------+<br>| Page Directory (槽位，用于二分查找)         |<br>+------------------------------------------+<br>| File Trailer (8 bytes)                    |<br>+------------------------------------------+<br></code></pre></td></tr></table></figure>
+<h2 id="聚簇索引与二级索引">聚簇索引与二级索引</h2>
+<h3 id="聚簇索引clustered-index">聚簇索引（Clustered Index）</h3>
+<p>InnoDB的主键索引就是聚簇索引，数据行直接存储在B+Tree的叶子节点中。</p>
+<pre class="mermaid">graph TD
+    subgraph 聚簇索引
+        A[主键: 1, 5, 10, 20] --&gt; B[叶子节点&lt;br/&gt;PK=1, name=Alice, age=25&lt;br/&gt;PK=5, name=Bob, age=30]
+        A --&gt; C[叶子节点&lt;br/&gt;PK=10, name=Carol, age=28&lt;br/&gt;PK=20, name=Dave, age=35]
+    end
+    subgraph 二级索引 idx_name
+        D[索引键: Alice, Bob, Carol, Dave] --&gt; E[叶子节点&lt;br/&gt;name=Alice, PK=1&lt;br/&gt;name=Bob, PK=5]
+        D --&gt; F[叶子节点&lt;br/&gt;name=Carol, PK=10&lt;br/&gt;name=Dave, PK=20]
+    end
+    E -.-&gt;|回表查询| B
+    F -.-&gt;|回表查询| C</pre>
+<p><strong>聚簇索引的选择规则：</strong></p>
+<ol type="1">
+<li>如果有主键，以主键作为聚簇索引</li>
+<li>如果没有主键，选择第一个非空唯一索引</li>
+<li>如果都没有，InnoDB会创建一个隐藏的<code>row_id</code>作为聚簇索引</li>
+</ol>
+<h3 id="回表查询的代价">回表查询的代价</h3>
+<p>通过二级索引查询时，如果需要获取非索引列的数据，就需要回表——根据二级索引中存储的主键值，再到聚簇索引中查找完整的行记录。</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 假设有索引 idx_name(name)</span><br><span class="hljs-comment">-- 这个查询需要回表</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> users <span class="hljs-keyword">WHERE</span> name <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;Alice&#x27;</span>;<br><br><span class="hljs-comment">-- 执行过程：</span><br><span class="hljs-comment">-- 1. 在 idx_name 中找到 name=&#x27;Alice&#x27; 对应的主键 PK=1</span><br><span class="hljs-comment">-- 2. 用 PK=1 到聚簇索引中查找完整行数据</span><br><span class="hljs-comment">-- 3. 返回结果</span><br></code></pre></td></tr></table></figure>
+<h2 id="联合索引与最左前缀原则">联合索引与最左前缀原则</h2>
+<h3 id="联合索引的结构">联合索引的结构</h3>
+<p>联合索引<code>(a, b, c)</code>在B+Tree中的排序规则是：先按<code>a</code>排序，<code>a</code>相同时按<code>b</code>排序，<code>b</code>相同时按<code>c</code>排序。</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 创建联合索引</span><br><span class="hljs-keyword">ALTER</span> <span class="hljs-keyword">TABLE</span> orders <span class="hljs-keyword">ADD</span> INDEX idx_user_status_time(user_id, status, created_at);<br></code></pre></td></tr></table></figure>
+<pre class="mermaid">graph LR
+    subgraph "联合索引 (user_id, status, created_at)"
+        A["(1, 'paid', '2025-01-01')"] --&gt; B["(1, 'paid', '2025-01-15')"]
+        B --&gt; C["(1, 'shipped', '2025-01-10')"]
+        C --&gt; D["(2, 'paid', '2025-01-05')"]
+        D --&gt; E["(2, 'shipped', '2025-01-20')"]
+        E --&gt; F["(3, 'paid', '2025-01-03')"]
+    end</pre>
+<h3 id="最左前缀匹配规则">最左前缀匹配规则</h3>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 能使用索引的查询</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> orders <span class="hljs-keyword">WHERE</span> user_id <span class="hljs-operator">=</span> <span class="hljs-number">1</span>;                                    <span class="hljs-comment">-- 使用 (user_id)</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> orders <span class="hljs-keyword">WHERE</span> user_id <span class="hljs-operator">=</span> <span class="hljs-number">1</span> <span class="hljs-keyword">AND</span> status <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;paid&#x27;</span>;               <span class="hljs-comment">-- 使用 (user_id, status)</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> orders <span class="hljs-keyword">WHERE</span> user_id <span class="hljs-operator">=</span> <span class="hljs-number">1</span> <span class="hljs-keyword">AND</span> status <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;paid&#x27;</span> <span class="hljs-keyword">AND</span> created_at <span class="hljs-operator">&gt;</span> <span class="hljs-string">&#x27;2025-01-01&#x27;</span>; <span class="hljs-comment">-- 全部使用</span><br><br><span class="hljs-comment">-- 不能使用索引的查询</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> orders <span class="hljs-keyword">WHERE</span> status <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;paid&#x27;</span>;                                <span class="hljs-comment">-- 跳过了 user_id</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> orders <span class="hljs-keyword">WHERE</span> status <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;paid&#x27;</span> <span class="hljs-keyword">AND</span> created_at <span class="hljs-operator">&gt;</span> <span class="hljs-string">&#x27;2025-01-01&#x27;</span>; <span class="hljs-comment">-- 跳过了 user_id</span><br><br><span class="hljs-comment">-- 部分使用索引</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> orders <span class="hljs-keyword">WHERE</span> user_id <span class="hljs-operator">=</span> <span class="hljs-number">1</span> <span class="hljs-keyword">AND</span> created_at <span class="hljs-operator">&gt;</span> <span class="hljs-string">&#x27;2025-01-01&#x27;</span>;     <span class="hljs-comment">-- 只使用 (user_id)，跳过了 status</span><br></code></pre></td></tr></table></figure>
+<h3 id="索引列顺序的选择原则">索引列顺序的选择原则</h3>
+<ol type="1">
+<li><strong>区分度高的列放前面</strong>：区分度 = COUNT(DISTINCT col) /
+COUNT(*)</li>
+<li><strong>等值查询的列放前面，范围查询的列放后面</strong></li>
+<li><strong>频繁出现在WHERE条件中的列优先</strong></li>
+</ol>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 查看列的区分度</span><br><span class="hljs-keyword">SELECT</span><br>    <span class="hljs-built_in">COUNT</span>(<span class="hljs-keyword">DISTINCT</span> user_id) <span class="hljs-operator">/</span> <span class="hljs-built_in">COUNT</span>(<span class="hljs-operator">*</span>) <span class="hljs-keyword">AS</span> user_id_selectivity,<br>    <span class="hljs-built_in">COUNT</span>(<span class="hljs-keyword">DISTINCT</span> status) <span class="hljs-operator">/</span> <span class="hljs-built_in">COUNT</span>(<span class="hljs-operator">*</span>) <span class="hljs-keyword">AS</span> status_selectivity,<br>    <span class="hljs-built_in">COUNT</span>(<span class="hljs-keyword">DISTINCT</span> created_at) <span class="hljs-operator">/</span> <span class="hljs-built_in">COUNT</span>(<span class="hljs-operator">*</span>) <span class="hljs-keyword">AS</span> created_at_selectivity<br><span class="hljs-keyword">FROM</span> orders;<br></code></pre></td></tr></table></figure>
+<h2 id="覆盖索引">覆盖索引</h2>
+<p>覆盖索引是指查询所需的所有列都包含在索引中，不需要回表查询。</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 联合索引 idx_user_status_time(user_id, status, created_at)</span><br><br><span class="hljs-comment">-- 覆盖索引查询（不需要回表）</span><br><span class="hljs-keyword">SELECT</span> user_id, status, created_at <span class="hljs-keyword">FROM</span> orders <span class="hljs-keyword">WHERE</span> user_id <span class="hljs-operator">=</span> <span class="hljs-number">1</span>;<br><br><span class="hljs-comment">-- 非覆盖索引查询（需要回表获取 amount 列）</span><br><span class="hljs-keyword">SELECT</span> user_id, status, amount <span class="hljs-keyword">FROM</span> orders <span class="hljs-keyword">WHERE</span> user_id <span class="hljs-operator">=</span> <span class="hljs-number">1</span>;<br></code></pre></td></tr></table></figure>
+<p>在<code>EXPLAIN</code>输出中，如果<code>Extra</code>列显示<code>Using index</code>，说明使用了覆盖索引。</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs sql">EXPLAIN <span class="hljs-keyword">SELECT</span> user_id, status, created_at <span class="hljs-keyword">FROM</span> orders <span class="hljs-keyword">WHERE</span> user_id <span class="hljs-operator">=</span> <span class="hljs-number">1</span>;<br><span class="hljs-comment">-- +----+-------+------+---------------------+---------+------+-------+-------------+</span><br><span class="hljs-comment">-- | id | type  | key  | key_len             | ref     | rows | Extra              |</span><br><span class="hljs-comment">-- +----+-------+------+---------------------+---------+------+-------+-------------+</span><br><span class="hljs-comment">-- |  1 | ref   | idx_user_status_time | 4      | const   |   10 | Using index |</span><br><span class="hljs-comment">-- +----+-------+------+---------------------+---------+------+-------+-------------+</span><br></code></pre></td></tr></table></figure>
+<h2 id="索引下推icp">索引下推（ICP）</h2>
+<p>索引下推（Index Condition Pushdown）是MySQL
+5.6引入的优化。在使用联合索引时，将部分WHERE条件下推到存储引擎层进行过滤，减少回表次数。</p>
+<pre class="mermaid">sequenceDiagram
+    participant Client as 客户端
+    participant Server as Server层
+    participant Engine as 存储引擎层
+
+    Note over Server, Engine: 不使用ICP
+    Server-&gt;&gt;Engine: 查询 user_id=1
+    Engine-&gt;&gt;Server: 返回所有 user_id=1 的记录（含回表）
+    Server-&gt;&gt;Server: 在Server层过滤 status='paid'
+    Server-&gt;&gt;Client: 返回结果
+
+    Note over Server, Engine: 使用ICP
+    Server-&gt;&gt;Engine: 查询 user_id=1 AND status='paid'
+    Engine-&gt;&gt;Engine: 在索引中过滤 status='paid'
+    Engine-&gt;&gt;Engine: 只对满足条件的记录回表
+    Engine-&gt;&gt;Server: 返回过滤后的记录
+    Server-&gt;&gt;Client: 返回结果</pre>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 索引 idx_user_status(user_id, status)</span><br><span class="hljs-comment">-- 查询条件同时涉及 user_id 和 LIKE 模式匹配</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> orders <span class="hljs-keyword">WHERE</span> user_id <span class="hljs-operator">=</span> <span class="hljs-number">1</span> <span class="hljs-keyword">AND</span> status <span class="hljs-keyword">LIKE</span> <span class="hljs-string">&#x27;%pai%&#x27;</span>;<br><br><span class="hljs-comment">-- EXPLAIN 中 Extra 显示 Using index condition 表示使用了ICP</span><br></code></pre></td></tr></table></figure>
+<h2 id="索引合并index-merge">索引合并（Index Merge）</h2>
+<p>当查询涉及多个单列索引时，MySQL可能会使用索引合并优化：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 假设有两个单独的索引：idx_user(user_id) 和 idx_status(status)</span><br><br><span class="hljs-comment">-- Index Merge - Intersection（交集）</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> orders <span class="hljs-keyword">WHERE</span> user_id <span class="hljs-operator">=</span> <span class="hljs-number">1</span> <span class="hljs-keyword">AND</span> status <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;paid&#x27;</span>;<br><br><span class="hljs-comment">-- Index Merge - Union（并集）</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> orders <span class="hljs-keyword">WHERE</span> user_id <span class="hljs-operator">=</span> <span class="hljs-number">1</span> <span class="hljs-keyword">OR</span> status <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;paid&#x27;</span>;<br><br><span class="hljs-comment">-- EXPLAIN 中 type 显示 index_merge</span><br></code></pre></td></tr></table></figure>
+<p>通常来说，使用联合索引比索引合并更高效。如果频繁出现Index
+Merge，应考虑创建联合索引。</p>
+<h2 id="explain-执行计划分析">EXPLAIN 执行计划分析</h2>
+<h3 id="explain-关键字段">EXPLAIN 关键字段</h3>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><code class="hljs sql">EXPLAIN <span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> orders<br><span class="hljs-keyword">WHERE</span> user_id <span class="hljs-operator">=</span> <span class="hljs-number">1</span> <span class="hljs-keyword">AND</span> status <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;paid&#x27;</span><br><span class="hljs-keyword">ORDER</span> <span class="hljs-keyword">BY</span> created_at <span class="hljs-keyword">DESC</span><br>LIMIT <span class="hljs-number">10</span>;<br></code></pre></td></tr></table></figure>
+<table>
+<colgroup>
+<col style="width: 30%" />
+<col style="width: 30%" />
+<col style="width: 40%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>字段</th>
+<th>含义</th>
+<th>关键值</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>type</td>
+<td>访问类型</td>
+<td>system &gt; const &gt; eq_ref &gt; ref &gt; range &gt; index &gt;
+ALL</td>
+</tr>
+<tr class="even">
+<td>possible_keys</td>
+<td>可能使用的索引</td>
+<td>-</td>
+</tr>
+<tr class="odd">
+<td>key</td>
+<td>实际使用的索引</td>
+<td>NULL表示全表扫描</td>
+</tr>
+<tr class="even">
+<td>key_len</td>
+<td>使用的索引长度</td>
+<td>越短越好</td>
+</tr>
+<tr class="odd">
+<td>rows</td>
+<td>预估扫描行数</td>
+<td>越少越好</td>
+</tr>
+<tr class="even">
+<td>filtered</td>
+<td>过滤比例</td>
+<td>越接近100越好</td>
+</tr>
+<tr class="odd">
+<td>Extra</td>
+<td>额外信息</td>
+<td>Using index / Using filesort / Using temporary</td>
+</tr>
+</tbody>
+</table>
+<h3 id="type-访问类型详解">type 访问类型详解</h3>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- const: 通过主键或唯一索引等值查询</span><br>EXPLAIN <span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> users <span class="hljs-keyword">WHERE</span> id <span class="hljs-operator">=</span> <span class="hljs-number">1</span>;<br><br><span class="hljs-comment">-- eq_ref: 联表时对驱动表使用主键或唯一索引</span><br>EXPLAIN <span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> orders o <span class="hljs-keyword">JOIN</span> users u <span class="hljs-keyword">ON</span> o.user_id <span class="hljs-operator">=</span> u.id;<br><br><span class="hljs-comment">-- ref: 使用非唯一索引等值查询</span><br>EXPLAIN <span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> orders <span class="hljs-keyword">WHERE</span> user_id <span class="hljs-operator">=</span> <span class="hljs-number">1</span>;<br><br><span class="hljs-comment">-- range: 范围查询</span><br>EXPLAIN <span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> orders <span class="hljs-keyword">WHERE</span> created_at <span class="hljs-keyword">BETWEEN</span> <span class="hljs-string">&#x27;2025-01-01&#x27;</span> <span class="hljs-keyword">AND</span> <span class="hljs-string">&#x27;2025-03-01&#x27;</span>;<br><br><span class="hljs-comment">-- index: 全索引扫描</span><br>EXPLAIN <span class="hljs-keyword">SELECT</span> user_id <span class="hljs-keyword">FROM</span> orders;<br><br><span class="hljs-comment">-- ALL: 全表扫描（最差）</span><br>EXPLAIN <span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> orders <span class="hljs-keyword">WHERE</span> amount <span class="hljs-operator">&gt;</span> <span class="hljs-number">100</span>;<br></code></pre></td></tr></table></figure>
+<h2 id="慢查询优化实战">慢查询优化实战</h2>
+<h3 id="案例一分页查询优化">案例一：分页查询优化</h3>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 慢查询：深分页</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> orders <span class="hljs-keyword">ORDER</span> <span class="hljs-keyword">BY</span> id LIMIT <span class="hljs-number">1000000</span>, <span class="hljs-number">20</span>;<br><span class="hljs-comment">-- 扫描 1000020 行，丢弃前 1000000 行</span><br><br><span class="hljs-comment">-- 优化方案1：使用延迟关联</span><br><span class="hljs-keyword">SELECT</span> o.<span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> orders o<br><span class="hljs-keyword">INNER</span> <span class="hljs-keyword">JOIN</span> (<span class="hljs-keyword">SELECT</span> id <span class="hljs-keyword">FROM</span> orders <span class="hljs-keyword">ORDER</span> <span class="hljs-keyword">BY</span> id LIMIT <span class="hljs-number">1000000</span>, <span class="hljs-number">20</span>) t<br><span class="hljs-keyword">ON</span> o.id <span class="hljs-operator">=</span> t.id;<br><br><span class="hljs-comment">-- 优化方案2：使用游标分页（推荐）</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> orders <span class="hljs-keyword">WHERE</span> id <span class="hljs-operator">&gt;</span> <span class="hljs-number">1000000</span> <span class="hljs-keyword">ORDER</span> <span class="hljs-keyword">BY</span> id LIMIT <span class="hljs-number">20</span>;<br></code></pre></td></tr></table></figure>
+<h3 id="案例二排序优化">案例二：排序优化</h3>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 慢查询：Using filesort</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> orders <span class="hljs-keyword">WHERE</span> user_id <span class="hljs-operator">=</span> <span class="hljs-number">1</span> <span class="hljs-keyword">ORDER</span> <span class="hljs-keyword">BY</span> amount <span class="hljs-keyword">DESC</span>;<br><br><span class="hljs-comment">-- 如果索引是 idx_user_status_time(user_id, status, created_at)</span><br><span class="hljs-comment">-- amount 不在索引中，需要 filesort</span><br><br><span class="hljs-comment">-- 优化：创建合适的索引</span><br><span class="hljs-keyword">ALTER</span> <span class="hljs-keyword">TABLE</span> orders <span class="hljs-keyword">ADD</span> INDEX idx_user_amount(user_id, amount);<br><span class="hljs-comment">-- 现在排序可以利用索引</span><br></code></pre></td></tr></table></figure>
+<h3 id="案例三索引失效的常见原因">案例三：索引失效的常见原因</h3>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 1. 对索引列使用函数</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> users <span class="hljs-keyword">WHERE</span> <span class="hljs-keyword">YEAR</span>(created_at) <span class="hljs-operator">=</span> <span class="hljs-number">2025</span>;        <span class="hljs-comment">-- 索引失效</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> users <span class="hljs-keyword">WHERE</span> created_at <span class="hljs-operator">&gt;=</span> <span class="hljs-string">&#x27;2025-01-01&#x27;</span><br>    <span class="hljs-keyword">AND</span> created_at <span class="hljs-operator">&lt;</span> <span class="hljs-string">&#x27;2026-01-01&#x27;</span>;                         <span class="hljs-comment">-- 使用索引</span><br><br><span class="hljs-comment">-- 2. 隐式类型转换</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> users <span class="hljs-keyword">WHERE</span> phone <span class="hljs-operator">=</span> <span class="hljs-number">13800138000</span>;             <span class="hljs-comment">-- phone是varchar，索引失效</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> users <span class="hljs-keyword">WHERE</span> phone <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;13800138000&#x27;</span>;           <span class="hljs-comment">-- 使用索引</span><br><br><span class="hljs-comment">-- 3. LIKE以通配符开头</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> users <span class="hljs-keyword">WHERE</span> name <span class="hljs-keyword">LIKE</span> <span class="hljs-string">&#x27;%Alice%&#x27;</span>;             <span class="hljs-comment">-- 索引失效</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> users <span class="hljs-keyword">WHERE</span> name <span class="hljs-keyword">LIKE</span> <span class="hljs-string">&#x27;Alice%&#x27;</span>;              <span class="hljs-comment">-- 使用索引</span><br><br><span class="hljs-comment">-- 4. OR条件中有非索引列</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> users <span class="hljs-keyword">WHERE</span> name <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;Alice&#x27;</span> <span class="hljs-keyword">OR</span> age <span class="hljs-operator">&gt;</span> <span class="hljs-number">25</span>;     <span class="hljs-comment">-- 如果age无索引，全表扫描</span><br><br><span class="hljs-comment">-- 5. NOT IN / NOT EXISTS / != 的情况</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> users <span class="hljs-keyword">WHERE</span> status <span class="hljs-operator">!=</span> <span class="hljs-string">&#x27;active&#x27;</span>;              <span class="hljs-comment">-- 可能索引失效（取决于数据分布）</span><br></code></pre></td></tr></table></figure>
+<h3 id="案例四join优化">案例四：JOIN优化</h3>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 确保JOIN字段有索引，且类型一致</span><br><span class="hljs-comment">-- 小表驱动大表</span><br><span class="hljs-keyword">SELECT</span> o.<span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> orders o<br><span class="hljs-keyword">INNER</span> <span class="hljs-keyword">JOIN</span> users u <span class="hljs-keyword">ON</span> o.user_id <span class="hljs-operator">=</span> u.id<br><span class="hljs-keyword">WHERE</span> u.vip_level <span class="hljs-operator">=</span> <span class="hljs-number">3</span>;<br><br><span class="hljs-comment">-- 如果 users 表 vip_level=3 的记录很少（小结果集）</span><br><span class="hljs-comment">-- MySQL会选择 users 作为驱动表，orders 作为被驱动表</span><br><span class="hljs-comment">-- 需要确保 orders.user_id 上有索引</span><br></code></pre></td></tr></table></figure>
+<h2 id="索引设计最佳实践">索引设计最佳实践</h2>
+<pre class="mermaid">flowchart TD
+    A[分析查询模式] --&gt; B{频繁查询?}
+    B --&gt;|是| C[确定WHERE/JOIN/ORDER BY列]
+    B --&gt;|否| D[不创建索引]
+    C --&gt; E[计算列区分度]
+    E --&gt; F{需要多列?}
+    F --&gt;|是| G[创建联合索引&lt;br/&gt;等值列在前 范围列在后]
+    F --&gt;|否| H[创建单列索引]
+    G --&gt; I{能覆盖查询?}
+    H --&gt; I
+    I --&gt;|是| J[使用覆盖索引]
+    I --&gt;|否| K[考虑加入SELECT列]
+    K --&gt; L{索引太宽?}
+    L --&gt;|是| M[保持当前索引]
+    L --&gt;|否| J
+    J --&gt; N[验证EXPLAIN]
+    M --&gt; N
+    N --&gt; O[监控慢查询日志]</pre>
+<p><strong>索引设计原则总结：</strong></p>
+<ol type="1">
+<li><strong>控制索引数量</strong>：单表索引不超过5-6个，避免过度索引影响写入性能</li>
+<li><strong>优先使用联合索引</strong>：一个联合索引可以替代多个单列索引</li>
+<li><strong>关注索引长度</strong>：使用前缀索引减少索引大小（<code>ALTER TABLE t ADD INDEX idx_name(name(10))</code>）</li>
+<li><strong>定期清理无用索引</strong>：通过<code>sys.schema_unused_indexes</code>查看未使用的索引</li>
+<li><strong>避免冗余索引</strong>：<code>(a, b)</code>已包含<code>(a)</code>，无需再单独创建<code>(a)</code>索引</li>
+</ol>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-comment">-- 查看表的索引使用情况（MySQL 8.0+ sys schema）</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> sys.schema_unused_indexes <span class="hljs-keyword">WHERE</span> object_schema <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;your_database&#x27;</span>;<br><br><span class="hljs-comment">-- 查看冗余索引</span><br><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> sys.schema_redundant_indexes <span class="hljs-keyword">WHERE</span> table_schema <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;your_database&#x27;</span>;<br><br><span class="hljs-comment">-- 慢查询日志配置</span><br><span class="hljs-keyword">SET</span> <span class="hljs-keyword">GLOBAL</span> slow_query_log <span class="hljs-operator">=</span> <span class="hljs-keyword">ON</span>;<br><span class="hljs-keyword">SET</span> <span class="hljs-keyword">GLOBAL</span> long_query_time <span class="hljs-operator">=</span> <span class="hljs-number">1</span>;  <span class="hljs-comment">-- 超过1秒的查询记录到慢查询日志</span><br><span class="hljs-keyword">SET</span> <span class="hljs-keyword">GLOBAL</span> slow_query_log_file <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;/var/log/mysql/slow.log&#x27;</span>;<br></code></pre></td></tr></table></figure>
+<h2 id="总结">总结</h2>
+<p>MySQL索引优化是一个系统工程，核心要点包括：</p>
+<ul>
+<li><strong>理解B+Tree结构</strong>是一切优化的基础，它决定了索引的能力和局限</li>
+<li><strong>聚簇索引与二级索引</strong>的区别直接影响查询是否需要回表</li>
+<li><strong>联合索引的最左前缀原则</strong>指导我们如何设计索引列的顺序</li>
+<li><strong>覆盖索引</strong>是消除回表查询的利器</li>
+<li><strong>EXPLAIN</strong>是诊断查询性能的必备工具</li>
+<li>实际优化中，需要结合<strong>慢查询日志</strong>和<strong>业务场景</strong>综合考虑</li>
+</ul>
+<p>索引不是银弹，过多的索引会增加写入开销和存储空间。好的索引设计需要在查询性能和写入性能之间找到平衡点。</p>
+<hr />
+<h2 id="踩坑记录">踩坑记录</h2>
+<p>业务增长后订单表突破 3000 万行，用户订单列表接口开始超时。SQL 是
+<code>WHERE user_id = ? AND status = ? ORDER BY create_time DESC</code>，<code>user_id</code>
+和 <code>status</code> 都有独立索引，但 <code>EXPLAIN</code> 显示走的是
+<code>status</code> 索引，扫描了 120 万行。原因是 <code>status</code>
+枚举值只有 5 种，区分度极低，优化器选错了索引。</p>
+<p>加了 <code>(user_id, status, create_time)</code>
+联合索引后，<code>rows_examined</code> 从 120 万降到
+1。顺序很关键：<code>user_id</code>
+放第一位是因为它区分度最高，<code>create_time</code>
+放最后支持排序，这样整个查询走覆盖索引，不需要回表。</p>
+<p>还有一个坑是 <code>ORDER BY</code> 方向。联合索引是
+<code>(user_id, create_time ASC)</code>，业务要
+<code>ORDER BY create_time DESC</code>，MySQL
+依然可以用这个索引反向扫描，但如果是
+<code>(user_id ASC, create_time DESC)</code>
+混合排序，索引就用不上了。这个细节坑了我一次。</p>
+<h2 id="实测结果">实测结果</h2>
+<p>数据量：3,200 万行订单，测试用户有 8,000 条记录，8 核 16G MySQL
+5.7</p>
+<table style="width:100%;">
+<colgroup>
+<col style="width: 15%" />
+<col style="width: 23%" />
+<col style="width: 36%" />
+<col style="width: 23%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>方案</th>
+<th>平均耗时</th>
+<th>rows_examined</th>
+<th>是否回表</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>走 <code>status</code> 索引（优化器误选）</td>
+<td>1,800ms</td>
+<td>1,200,000</td>
+<td>是</td>
+</tr>
+<tr class="even">
+<td>加联合索引 <code>(user_id, status, create_time)</code></td>
+<td>3ms</td>
+<td>1</td>
+<td>否（覆盖索引）</td>
+</tr>
+</tbody>
+</table>
+<p>索引额外空间：约 2.1GB，对于这个查询频率完全值得。</p>
+<h2 id="我的看法">我的看法</h2>
+<p>覆盖索引的价值被严重低估。很多人加了索引还是慢，根本原因是回表。设计索引时我会先问自己：<strong>这条
+SQL 能不能只靠索引就拿到所有需要的字段？</strong>
+能的话就设计成覆盖索引，性能会有数量级的差距。</p>
+<p>另外，不要迷信
+<code>FORCE INDEX</code>。优化器选错索引应该通过优化索引设计来解决，而不是强制指定——一旦数据分布变化，强制索引可能反而变成拖累，而且代码里埋的
+hint 很难被后人注意到。</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2020-07-20</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">3.6k 字 · 9 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/rest-client/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">VS Code REST Client：最好用的 API 测试工具之一</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/linux-command-cheatsheet-v1/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Linux Commands Cheat Sheet/Linux常用命令速查手册</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#btree-%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84"><span class="toc-text">B+Tree 数据结构</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E9%80%89%E6%8B%A9btree"><span class="toc-text">为什么选择B+Tree</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#btree-vs-b-tree-vs-hash"><span class="toc-text">B+Tree vs B-Tree vs Hash</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#innodb%E7%9A%84btree%E9%A1%B5%E7%BB%93%E6%9E%84"><span class="toc-text">InnoDB的B+Tree页结构</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%81%9A%E7%B0%87%E7%B4%A2%E5%BC%95%E4%B8%8E%E4%BA%8C%E7%BA%A7%E7%B4%A2%E5%BC%95"><span class="toc-text">聚簇索引与二级索引</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%81%9A%E7%B0%87%E7%B4%A2%E5%BC%95clustered-index"><span class="toc-text">聚簇索引（Clustered Index）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9B%9E%E8%A1%A8%E6%9F%A5%E8%AF%A2%E7%9A%84%E4%BB%A3%E4%BB%B7"><span class="toc-text">回表查询的代价</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%81%94%E5%90%88%E7%B4%A2%E5%BC%95%E4%B8%8E%E6%9C%80%E5%B7%A6%E5%89%8D%E7%BC%80%E5%8E%9F%E5%88%99"><span class="toc-text">联合索引与最左前缀原则</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%81%94%E5%90%88%E7%B4%A2%E5%BC%95%E7%9A%84%E7%BB%93%E6%9E%84"><span class="toc-text">联合索引的结构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%9C%80%E5%B7%A6%E5%89%8D%E7%BC%80%E5%8C%B9%E9%85%8D%E8%A7%84%E5%88%99"><span class="toc-text">最左前缀匹配规则</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%B4%A2%E5%BC%95%E5%88%97%E9%A1%BA%E5%BA%8F%E7%9A%84%E9%80%89%E6%8B%A9%E5%8E%9F%E5%88%99"><span class="toc-text">索引列顺序的选择原则</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%A6%86%E7%9B%96%E7%B4%A2%E5%BC%95"><span class="toc-text">覆盖索引</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%B4%A2%E5%BC%95%E4%B8%8B%E6%8E%A8icp"><span class="toc-text">索引下推（ICP）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%B4%A2%E5%BC%95%E5%90%88%E5%B9%B6index-merge"><span class="toc-text">索引合并（Index Merge）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#explain-%E6%89%A7%E8%A1%8C%E8%AE%A1%E5%88%92%E5%88%86%E6%9E%90"><span class="toc-text">EXPLAIN 执行计划分析</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#explain-%E5%85%B3%E9%94%AE%E5%AD%97%E6%AE%B5"><span class="toc-text">EXPLAIN 关键字段</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#type-%E8%AE%BF%E9%97%AE%E7%B1%BB%E5%9E%8B%E8%AF%A6%E8%A7%A3"><span class="toc-text">type 访问类型详解</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%85%A2%E6%9F%A5%E8%AF%A2%E4%BC%98%E5%8C%96%E5%AE%9E%E6%88%98"><span class="toc-text">慢查询优化实战</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A1%88%E4%BE%8B%E4%B8%80%E5%88%86%E9%A1%B5%E6%9F%A5%E8%AF%A2%E4%BC%98%E5%8C%96"><span class="toc-text">案例一：分页查询优化</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A1%88%E4%BE%8B%E4%BA%8C%E6%8E%92%E5%BA%8F%E4%BC%98%E5%8C%96"><span class="toc-text">案例二：排序优化</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A1%88%E4%BE%8B%E4%B8%89%E7%B4%A2%E5%BC%95%E5%A4%B1%E6%95%88%E7%9A%84%E5%B8%B8%E8%A7%81%E5%8E%9F%E5%9B%A0"><span class="toc-text">案例三：索引失效的常见原因</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A1%88%E4%BE%8B%E5%9B%9Bjoin%E4%BC%98%E5%8C%96"><span class="toc-text">案例四：JOIN优化</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%B4%A2%E5%BC%95%E8%AE%BE%E8%AE%A1%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5"><span class="toc-text">索引设计最佳实践</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%B8%A9%E5%9D%91%E8%AE%B0%E5%BD%95"><span class="toc-text">踩坑记录</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E6%B5%8B%E7%BB%93%E6%9E%9C"><span class="toc-text">实测结果</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%88%91%E7%9A%84%E7%9C%8B%E6%B3%95"><span class="toc-text">我的看法</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

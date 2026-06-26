@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>限流算法详解：令牌桶、滑动窗口与实现 · zt&#39;s Blog</title>
+  <meta name="description" content="深入剖析四大限流算法的原理与实现，涵盖固定窗口、滑动窗口、令牌桶、漏桶算法，含Java/Go实现、Redis分布式限流及Nginx配置。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/rate-limiting-algorithms/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="限流算法详解：令牌桶、滑动窗口与实现">
+  <meta property="og:description" content="深入剖析四大限流算法的原理与实现，涵盖固定窗口、滑动窗口、令牌桶、漏桶算法，含Java/Go实现、Redis分布式限流及Nginx配置。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/rate-limiting-algorithms/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2024-02-20T16:00:00.000Z">
+  <meta property="article:modified_time" content="2024-02-20T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="限流算法详解：令牌桶、滑动窗口与实现">
+  <meta name="twitter:description" content="深入剖析四大限流算法的原理与实现，涵盖固定窗口、滑动窗口、令牌桶、漏桶算法，含Java/Go实现、Redis分布式限流及Nginx配置。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"限流算法详解：令牌桶、滑动窗口与实现","description":"深入剖析四大限流算法的原理与实现，涵盖固定窗口、滑动窗口、令牌桶、漏桶算法，含Java/Go实现、Redis分布式限流及Nginx配置。","datePublished":"2024-02-20T16:00:00.000Z","dateModified":"2024-02-20T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/rate-limiting-algorithms/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Architecture","item":"https://withesse.co/categories/Architecture/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:152">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Architecture/">Architecture</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/rate-limiting/"><span class="hash">#</span>rate-limiting</a><a class="tag" href="/tags/algorithms/"><span class="hash">#</span>algorithms</a><a class="tag" href="/tags/system-design/"><span class="hash">#</span>system-design</a>
+        
+      </div>
+
+      <h1>限流算法详解：令牌桶、滑动窗口与实现</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2024.02.21</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 8 min</span>
+        </span>
+        <span class="wc"><span class="num">3.3k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E9%9C%80%E8%A6%81%E9%99%90%E6%B5%81"><span class="toc-text">为什么需要限流</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%BA%E5%AE%9A%E7%AA%97%E5%8F%A3%E7%AE%97%E6%B3%95fixed-window"><span class="toc-text">固定窗口算法（Fixed Window）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8E%9F%E7%90%86"><span class="toc-text">原理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%9E%E7%8E%B0"><span class="toc-text">实现</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%B4%E7%95%8C%E9%97%AE%E9%A2%98"><span class="toc-text">临界问题</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%BB%91%E5%8A%A8%E7%AA%97%E5%8F%A3%E7%AE%97%E6%B3%95sliding-window"><span class="toc-text">滑动窗口算法（Sliding Window）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8E%9F%E7%90%86-1"><span class="toc-text">原理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%9E%E7%8E%B0-1"><span class="toc-text">实现</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9F%BA%E4%BA%8E-redis-sorted-set-%E7%9A%84%E6%BB%91%E5%8A%A8%E7%AA%97%E5%8F%A3"><span class="toc-text">基于 Redis Sorted Set
+的滑动窗口</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BB%A4%E7%89%8C%E6%A1%B6%E7%AE%97%E6%B3%95token-bucket"><span class="toc-text">令牌桶算法（Token Bucket）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8E%9F%E7%90%86-2"><span class="toc-text">原理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%9E%E7%8E%B0-2"><span class="toc-text">实现</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#redis-%E5%88%86%E5%B8%83%E5%BC%8F%E4%BB%A4%E7%89%8C%E6%A1%B6"><span class="toc-text">Redis 分布式令牌桶</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%BC%8F%E6%A1%B6%E7%AE%97%E6%B3%95leaky-bucket"><span class="toc-text">漏桶算法（Leaky Bucket）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8E%9F%E7%90%86-3"><span class="toc-text">原理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%9E%E7%8E%B0-3"><span class="toc-text">实现</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%AE%97%E6%B3%95%E5%AF%B9%E6%AF%94"><span class="toc-text">算法对比</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#nginx-%E9%99%90%E6%B5%81%E9%85%8D%E7%BD%AE"><span class="toc-text">Nginx 限流配置</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#go-%E6%A0%87%E5%87%86%E5%BA%93%E9%99%90%E6%B5%81"><span class="toc-text">Go 标准库限流</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%A4%9A%E7%BA%A7%E9%99%90%E6%B5%81%E7%AD%96%E7%95%A5"><span class="toc-text">多级限流策略</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="前言">前言</h2>
+<p>限流（Rate
+Limiting）是保护系统稳定性的核心机制。当系统面临突发流量、恶意攻击或上下游异常时，限流可以确保系统在可承受的负载下运行，避免因过载导致的级联故障。本文将深入分析四种主流限流算法的原理，并提供
+Java、Go 和 Redis 的实际实现。</p>
+<h2 id="为什么需要限流">为什么需要限流</h2>
+<pre class="mermaid">graph LR
+    subgraph 无限流保护
+        Users1[大量用户] --&gt;|10万QPS| Server1[服务器&lt;br/&gt;容量:1万QPS]
+        Server1 --&gt;|过载崩溃| X[系统不可用]
+    end
+
+    subgraph 有限流保护
+        Users2[大量用户] --&gt;|10万QPS| RateLimiter[限流器]
+        RateLimiter --&gt;|1万QPS| Server2[服务器&lt;br/&gt;容量:1万QPS]
+        RateLimiter --&gt;|9万QPS| Reject[拒绝/排队]
+        Server2 --&gt; OK[系统正常运行]
+    end</pre>
+<p>限流的核心目的： 1. <strong>保护系统</strong>：防止过载导致宕机 2.
+<strong>公平分配</strong>：确保所有用户公平使用资源 3.
+<strong>防止滥用</strong>：阻止爬虫或恶意调用 4.
+<strong>成本控制</strong>：避免资源消耗超出预算</p>
+<h2 id="固定窗口算法fixed-window">固定窗口算法（Fixed Window）</h2>
+<h3 id="原理">原理</h3>
+<p>将时间划分为固定大小的窗口（如每分钟一个窗口），在每个窗口内使用计数器记录请求数。当计数超过阈值时拒绝后续请求。</p>
+<pre class="mermaid">graph LR
+    subgraph "窗口1: 00:00-01:00"
+        W1[计数: 95/100 ✓]
+    end
+    subgraph "窗口2: 01:00-02:00"
+        W2[计数: 100/100 ✗]
+    end
+    subgraph "窗口3: 02:00-03:00"
+        W3[计数: 42/100 ✓]
+    end</pre>
+<h3 id="实现">实现</h3>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">FixedWindowRateLimiter</span> &#123;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> <span class="hljs-type">int</span> maxRequests;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> <span class="hljs-type">long</span> windowSizeMs;<br>    <span class="hljs-keyword">private</span> <span class="hljs-type">long</span> windowStart;<br>    <span class="hljs-keyword">private</span> <span class="hljs-type">int</span> counter;<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-title function_">FixedWindowRateLimiter</span><span class="hljs-params">(<span class="hljs-type">int</span> maxRequests, <span class="hljs-type">long</span> windowSizeMs)</span> &#123;<br>        <span class="hljs-built_in">this</span>.maxRequests = maxRequests;<br>        <span class="hljs-built_in">this</span>.windowSizeMs = windowSizeMs;<br>        <span class="hljs-built_in">this</span>.windowStart = System.currentTimeMillis();<br>        <span class="hljs-built_in">this</span>.counter = <span class="hljs-number">0</span>;<br>    &#125;<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">synchronized</span> <span class="hljs-type">boolean</span> <span class="hljs-title function_">tryAcquire</span><span class="hljs-params">()</span> &#123;<br>        <span class="hljs-type">long</span> <span class="hljs-variable">now</span> <span class="hljs-operator">=</span> System.currentTimeMillis();<br><br>        <span class="hljs-comment">// 进入新窗口，重置计数器</span><br>        <span class="hljs-keyword">if</span> (now - windowStart &gt;= windowSizeMs) &#123;<br>            windowStart = now;<br>            counter = <span class="hljs-number">0</span>;<br>        &#125;<br><br>        <span class="hljs-keyword">if</span> (counter &lt; maxRequests) &#123;<br>            counter++;<br>            <span class="hljs-keyword">return</span> <span class="hljs-literal">true</span>;<br>        &#125;<br>        <span class="hljs-keyword">return</span> <span class="hljs-literal">false</span>;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-keyword">type</span> FixedWindowLimiter <span class="hljs-keyword">struct</span> &#123;<br>    mu          sync.Mutex<br>    maxRequests <span class="hljs-type">int</span><br>    windowSize  time.Duration<br>    windowStart time.Time<br>    counter     <span class="hljs-type">int</span><br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">NewFixedWindowLimiter</span><span class="hljs-params">(maxRequests <span class="hljs-type">int</span>, windowSize time.Duration)</span></span> *FixedWindowLimiter &#123;<br>    <span class="hljs-keyword">return</span> &amp;FixedWindowLimiter&#123;<br>        maxRequests: maxRequests,<br>        windowSize:  windowSize,<br>        windowStart: time.Now(),<br>    &#125;<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-params">(l *FixedWindowLimiter)</span></span> Allow() <span class="hljs-type">bool</span> &#123;<br>    l.mu.Lock()<br>    <span class="hljs-keyword">defer</span> l.mu.Unlock()<br><br>    now := time.Now()<br>    <span class="hljs-keyword">if</span> now.Sub(l.windowStart) &gt;= l.windowSize &#123;<br>        l.windowStart = now<br>        l.counter = <span class="hljs-number">0</span><br>    &#125;<br><br>    <span class="hljs-keyword">if</span> l.counter &lt; l.maxRequests &#123;<br>        l.counter++<br>        <span class="hljs-keyword">return</span> <span class="hljs-literal">true</span><br>    &#125;<br>    <span class="hljs-keyword">return</span> <span class="hljs-literal">false</span><br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="临界问题">临界问题</h3>
+<p>固定窗口的最大问题是<strong>窗口边界的突发流量</strong>：如果在窗口末尾和下个窗口开头分别涌入最大量请求，实际瞬时流量可能达到限制值的两倍。</p>
+<pre class="mermaid">graph LR
+    subgraph "问题场景: 限制100/min"
+        A["窗口1末尾&lt;br/&gt;00:59 → 100请求"] --&gt; B["窗口2开头&lt;br/&gt;01:00 → 100请求"]
+    end
+    C["实际: 1秒内200请求&lt;br/&gt;是限制的2倍!"]</pre>
+<h2 id="滑动窗口算法sliding-window">滑动窗口算法（Sliding Window）</h2>
+<h3 id="原理-1">原理</h3>
+<p>滑动窗口通过将窗口细分为多个小格子，用加权计算来平滑边界效应。</p>
+<pre class="mermaid">graph TB
+    subgraph "滑动窗口 (窗口=1min, 6个格子)"
+        G1["0-10s&lt;br/&gt;15"] --&gt; G2["10-20s&lt;br/&gt;20"]
+        G2 --&gt; G3["20-30s&lt;br/&gt;10"]
+        G3 --&gt; G4["30-40s&lt;br/&gt;25"]
+        G4 --&gt; G5["40-50s&lt;br/&gt;18"]
+        G5 --&gt; G6["50-60s&lt;br/&gt;12"]
+    end
+    Note["当前时间: 35s&lt;br/&gt;窗口范围: 前35s到当前&lt;br/&gt;总计 = 15+20+10+25×0.5 = 57.5"]</pre>
+<h3 id="实现-1">实现</h3>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">SlidingWindowRateLimiter</span> &#123;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> <span class="hljs-type">int</span> maxRequests;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> <span class="hljs-type">long</span> windowSizeMs;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> <span class="hljs-type">int</span> bucketCount;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> <span class="hljs-type">long</span> bucketSizeMs;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> <span class="hljs-type">int</span>[] buckets;<br>    <span class="hljs-keyword">private</span> <span class="hljs-type">long</span> lastBucketTime;<br>    <span class="hljs-keyword">private</span> <span class="hljs-type">int</span> lastBucketIndex;<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-title function_">SlidingWindowRateLimiter</span><span class="hljs-params">(<span class="hljs-type">int</span> maxRequests, <span class="hljs-type">long</span> windowSizeMs, <span class="hljs-type">int</span> bucketCount)</span> &#123;<br>        <span class="hljs-built_in">this</span>.maxRequests = maxRequests;<br>        <span class="hljs-built_in">this</span>.windowSizeMs = windowSizeMs;<br>        <span class="hljs-built_in">this</span>.bucketCount = bucketCount;<br>        <span class="hljs-built_in">this</span>.bucketSizeMs = windowSizeMs / bucketCount;<br>        <span class="hljs-built_in">this</span>.buckets = <span class="hljs-keyword">new</span> <span class="hljs-title class_">int</span>[bucketCount];<br>        <span class="hljs-built_in">this</span>.lastBucketTime = System.currentTimeMillis();<br>        <span class="hljs-built_in">this</span>.lastBucketIndex = <span class="hljs-number">0</span>;<br>    &#125;<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">synchronized</span> <span class="hljs-type">boolean</span> <span class="hljs-title function_">tryAcquire</span><span class="hljs-params">()</span> &#123;<br>        <span class="hljs-type">long</span> <span class="hljs-variable">now</span> <span class="hljs-operator">=</span> System.currentTimeMillis();<br>        advanceWindow(now);<br><br>        <span class="hljs-type">int</span> <span class="hljs-variable">totalCount</span> <span class="hljs-operator">=</span> <span class="hljs-number">0</span>;<br>        <span class="hljs-keyword">for</span> (<span class="hljs-type">int</span> count : buckets) &#123;<br>            totalCount += count;<br>        &#125;<br><br>        <span class="hljs-keyword">if</span> (totalCount &lt; maxRequests) &#123;<br>            buckets[lastBucketIndex]++;<br>            <span class="hljs-keyword">return</span> <span class="hljs-literal">true</span>;<br>        &#125;<br>        <span class="hljs-keyword">return</span> <span class="hljs-literal">false</span>;<br>    &#125;<br><br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">advanceWindow</span><span class="hljs-params">(<span class="hljs-type">long</span> now)</span> &#123;<br>        <span class="hljs-type">long</span> <span class="hljs-variable">elapsed</span> <span class="hljs-operator">=</span> now - lastBucketTime;<br>        <span class="hljs-type">int</span> <span class="hljs-variable">bucketsToAdvance</span> <span class="hljs-operator">=</span> (<span class="hljs-type">int</span>) (elapsed / bucketSizeMs);<br><br>        <span class="hljs-keyword">if</span> (bucketsToAdvance &gt; <span class="hljs-number">0</span>) &#123;<br>            <span class="hljs-keyword">for</span> (<span class="hljs-type">int</span> <span class="hljs-variable">i</span> <span class="hljs-operator">=</span> <span class="hljs-number">0</span>; i &lt; Math.min(bucketsToAdvance, bucketCount); i++) &#123;<br>                lastBucketIndex = (lastBucketIndex + <span class="hljs-number">1</span>) % bucketCount;<br>                buckets[lastBucketIndex] = <span class="hljs-number">0</span>;<br>            &#125;<br>            lastBucketTime += bucketsToAdvance * bucketSizeMs;<br>        &#125;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="基于-redis-sorted-set-的滑动窗口">基于 Redis Sorted Set
+的滑动窗口</h3>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">RedisSlidingWindowLimiter</span> &#123;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> RedisTemplate&lt;String, String&gt; redis;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> <span class="hljs-type">int</span> maxRequests;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> <span class="hljs-type">long</span> windowSizeMs;<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-type">boolean</span> <span class="hljs-title function_">tryAcquire</span><span class="hljs-params">(String key)</span> &#123;<br>        <span class="hljs-type">long</span> <span class="hljs-variable">now</span> <span class="hljs-operator">=</span> System.currentTimeMillis();<br>        <span class="hljs-type">String</span> <span class="hljs-variable">member</span> <span class="hljs-operator">=</span> now + <span class="hljs-string">&quot;:&quot;</span> + UUID.randomUUID();<br><br>        <span class="hljs-type">String</span> <span class="hljs-variable">redisKey</span> <span class="hljs-operator">=</span> <span class="hljs-string">&quot;rate_limit:&quot;</span> + key;<br><br>        <span class="hljs-comment">// 使用 Lua 脚本保证原子性</span><br>        <span class="hljs-type">String</span> <span class="hljs-variable">luaScript</span> <span class="hljs-operator">=</span> <span class="hljs-string">&quot;&quot;&quot;</span><br><span class="hljs-string">            -- 移除窗口外的旧请求</span><br><span class="hljs-string">            redis.call(&#x27;ZREMRANGEBYSCORE&#x27;, KEYS[1], 0, ARGV[1])</span><br><span class="hljs-string">            -- 统计窗口内的请求数</span><br><span class="hljs-string">            local count = redis.call(&#x27;ZCARD&#x27;, KEYS[1])</span><br><span class="hljs-string">            if count &lt; tonumber(ARGV[2]) then</span><br><span class="hljs-string">                -- 未超限，添加新请求</span><br><span class="hljs-string">                redis.call(&#x27;ZADD&#x27;, KEYS[1], ARGV[3], ARGV[4])</span><br><span class="hljs-string">                redis.call(&#x27;PEXPIRE&#x27;, KEYS[1], ARGV[5])</span><br><span class="hljs-string">                return 1</span><br><span class="hljs-string">            end</span><br><span class="hljs-string">            return 0</span><br><span class="hljs-string">            &quot;&quot;&quot;</span>;<br><br>        <span class="hljs-type">Long</span> <span class="hljs-variable">result</span> <span class="hljs-operator">=</span> redis.execute(<br>            <span class="hljs-keyword">new</span> <span class="hljs-title class_">DefaultRedisScript</span>&lt;&gt;(luaScript, Long.class),<br>            List.of(redisKey),<br>            String.valueOf(now - windowSizeMs),   <span class="hljs-comment">// 窗口起始时间</span><br>            String.valueOf(maxRequests),           <span class="hljs-comment">// 最大请求数</span><br>            String.valueOf(now),                   <span class="hljs-comment">// 当前时间作为 score</span><br>            member,                                <span class="hljs-comment">// 唯一成员</span><br>            String.valueOf(windowSizeMs)           <span class="hljs-comment">// TTL</span><br>        );<br><br>        <span class="hljs-keyword">return</span> result != <span class="hljs-literal">null</span> &amp;&amp; result == <span class="hljs-number">1</span>;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="令牌桶算法token-bucket">令牌桶算法（Token Bucket）</h2>
+<h3 id="原理-2">原理</h3>
+<p>系统以固定速率向桶中添加令牌，每个请求需要消耗一个令牌。桶有固定容量，满了之后新令牌被丢弃。这允许一定程度的突发流量（桶中积累的令牌）。</p>
+<pre class="mermaid">graph TB
+    subgraph 令牌桶
+        Generator[令牌生成器&lt;br/&gt;10个/秒] --&gt;|定时添加| Bucket[令牌桶&lt;br/&gt;容量:100]
+        Request[请求] --&gt;|取令牌| Bucket
+        Bucket --&gt;|有令牌| Allow[放行]
+        Bucket --&gt;|无令牌| Deny[拒绝]
+    end</pre>
+<pre class="mermaid">sequenceDiagram
+    participant G as 令牌生成器
+    participant B as 令牌桶(容量=5)
+    participant R as 请求
+
+    Note over B: 初始令牌数: 5
+    G-&gt;&gt;B: +1 令牌 (桶满,丢弃)
+    R-&gt;&gt;B: 请求1, 取1令牌 ✓ (剩余4)
+    R-&gt;&gt;B: 请求2, 取1令牌 ✓ (剩余3)
+    R-&gt;&gt;B: 请求3, 取1令牌 ✓ (剩余2)
+    G-&gt;&gt;B: +1 令牌 (剩余3)
+    R-&gt;&gt;B: 请求4, 取1令牌 ✓ (剩余2)
+    R-&gt;&gt;B: 突发: 取3令牌 ✗ (不足,拒绝)</pre>
+<h3 id="实现-2">实现</h3>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">TokenBucketRateLimiter</span> &#123;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> <span class="hljs-type">double</span> maxTokens;      <span class="hljs-comment">// 桶容量</span><br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> <span class="hljs-type">double</span> refillRate;     <span class="hljs-comment">// 令牌填充速率(个/秒)</span><br>    <span class="hljs-keyword">private</span> <span class="hljs-type">double</span> currentTokens;        <span class="hljs-comment">// 当前令牌数</span><br>    <span class="hljs-keyword">private</span> <span class="hljs-type">long</span> lastRefillTime;         <span class="hljs-comment">// 上次填充时间</span><br><br>    <span class="hljs-keyword">public</span> <span class="hljs-title function_">TokenBucketRateLimiter</span><span class="hljs-params">(<span class="hljs-type">double</span> maxTokens, <span class="hljs-type">double</span> refillRate)</span> &#123;<br>        <span class="hljs-built_in">this</span>.maxTokens = maxTokens;<br>        <span class="hljs-built_in">this</span>.refillRate = refillRate;<br>        <span class="hljs-built_in">this</span>.currentTokens = maxTokens;<br>        <span class="hljs-built_in">this</span>.lastRefillTime = System.nanoTime();<br>    &#125;<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">synchronized</span> <span class="hljs-type">boolean</span> <span class="hljs-title function_">tryAcquire</span><span class="hljs-params">()</span> &#123;<br>        <span class="hljs-keyword">return</span> tryAcquire(<span class="hljs-number">1</span>);<br>    &#125;<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">synchronized</span> <span class="hljs-type">boolean</span> <span class="hljs-title function_">tryAcquire</span><span class="hljs-params">(<span class="hljs-type">int</span> tokens)</span> &#123;<br>        refill();<br>        <span class="hljs-keyword">if</span> (currentTokens &gt;= tokens) &#123;<br>            currentTokens -= tokens;<br>            <span class="hljs-keyword">return</span> <span class="hljs-literal">true</span>;<br>        &#125;<br>        <span class="hljs-keyword">return</span> <span class="hljs-literal">false</span>;<br>    &#125;<br><br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">refill</span><span class="hljs-params">()</span> &#123;<br>        <span class="hljs-type">long</span> <span class="hljs-variable">now</span> <span class="hljs-operator">=</span> System.nanoTime();<br>        <span class="hljs-type">double</span> <span class="hljs-variable">elapsed</span> <span class="hljs-operator">=</span> (now - lastRefillTime) / <span class="hljs-number">1_000_000_000.0</span>;<br>        <span class="hljs-type">double</span> <span class="hljs-variable">tokensToAdd</span> <span class="hljs-operator">=</span> elapsed * refillRate;<br>        currentTokens = Math.min(maxTokens, currentTokens + tokensToAdd);<br>        lastRefillTime = now;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-keyword">type</span> TokenBucket <span class="hljs-keyword">struct</span> &#123;<br>    mu           sync.Mutex<br>    maxTokens    <span class="hljs-type">float64</span><br>    refillRate   <span class="hljs-type">float64</span> <span class="hljs-comment">// tokens per second</span><br>    tokens       <span class="hljs-type">float64</span><br>    lastRefillAt time.Time<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">NewTokenBucket</span><span class="hljs-params">(maxTokens, refillRate <span class="hljs-type">float64</span>)</span></span> *TokenBucket &#123;<br>    <span class="hljs-keyword">return</span> &amp;TokenBucket&#123;<br>        maxTokens:    maxTokens,<br>        refillRate:   refillRate,<br>        tokens:       maxTokens,<br>        lastRefillAt: time.Now(),<br>    &#125;<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-params">(tb *TokenBucket)</span></span> Allow() <span class="hljs-type">bool</span> &#123;<br>    <span class="hljs-keyword">return</span> tb.AllowN(<span class="hljs-number">1</span>)<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-params">(tb *TokenBucket)</span></span> AllowN(n <span class="hljs-type">int</span>) <span class="hljs-type">bool</span> &#123;<br>    tb.mu.Lock()<br>    <span class="hljs-keyword">defer</span> tb.mu.Unlock()<br><br>    tb.refill()<br><br>    requested := <span class="hljs-type">float64</span>(n)<br>    <span class="hljs-keyword">if</span> tb.tokens &gt;= requested &#123;<br>        tb.tokens -= requested<br>        <span class="hljs-keyword">return</span> <span class="hljs-literal">true</span><br>    &#125;<br>    <span class="hljs-keyword">return</span> <span class="hljs-literal">false</span><br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-params">(tb *TokenBucket)</span></span> refill() &#123;<br>    now := time.Now()<br>    elapsed := now.Sub(tb.lastRefillAt).Seconds()<br>    tb.tokens = math.Min(tb.maxTokens, tb.tokens+elapsed*tb.refillRate)<br>    tb.lastRefillAt = now<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="redis-分布式令牌桶">Redis 分布式令牌桶</h3>
+<figure class="highlight lua"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><code class="hljs lua"><span class="hljs-comment">-- Redis Lua 脚本: 分布式令牌桶</span><br><span class="hljs-comment">-- KEYS[1] = 令牌桶 key</span><br><span class="hljs-comment">-- ARGV[1] = maxTokens</span><br><span class="hljs-comment">-- ARGV[2] = refillRate (tokens/sec)</span><br><span class="hljs-comment">-- ARGV[3] = now (当前时间戳,毫秒)</span><br><span class="hljs-comment">-- ARGV[4] = requested (请求的令牌数)</span><br><br><span class="hljs-keyword">local</span> key = KEYS[<span class="hljs-number">1</span>]<br><span class="hljs-keyword">local</span> maxTokens = <span class="hljs-built_in">tonumber</span>(ARGV[<span class="hljs-number">1</span>])<br><span class="hljs-keyword">local</span> refillRate = <span class="hljs-built_in">tonumber</span>(ARGV[<span class="hljs-number">2</span>])<br><span class="hljs-keyword">local</span> now = <span class="hljs-built_in">tonumber</span>(ARGV[<span class="hljs-number">3</span>])<br><span class="hljs-keyword">local</span> requested = <span class="hljs-built_in">tonumber</span>(ARGV[<span class="hljs-number">4</span>])<br><br><span class="hljs-comment">-- 获取当前状态</span><br><span class="hljs-keyword">local</span> bucket = redis.call(<span class="hljs-string">&#x27;HMGET&#x27;</span>, key, <span class="hljs-string">&#x27;tokens&#x27;</span>, <span class="hljs-string">&#x27;lastRefillTime&#x27;</span>)<br><span class="hljs-keyword">local</span> tokens = <span class="hljs-built_in">tonumber</span>(bucket[<span class="hljs-number">1</span>]) <span class="hljs-keyword">or</span> maxTokens<br><span class="hljs-keyword">local</span> lastRefillTime = <span class="hljs-built_in">tonumber</span>(bucket[<span class="hljs-number">2</span>]) <span class="hljs-keyword">or</span> now<br><br><span class="hljs-comment">-- 计算需要补充的令牌</span><br><span class="hljs-keyword">local</span> elapsed = (now - lastRefillTime) / <span class="hljs-number">1000.0</span><br><span class="hljs-keyword">local</span> tokensToAdd = elapsed * refillRate<br>tokens = <span class="hljs-built_in">math</span>.<span class="hljs-built_in">min</span>(maxTokens, tokens + tokensToAdd)<br><br><span class="hljs-comment">-- 尝试获取令牌</span><br><span class="hljs-keyword">local</span> allowed = <span class="hljs-number">0</span><br><span class="hljs-keyword">if</span> tokens &gt;= requested <span class="hljs-keyword">then</span><br>    tokens = tokens - requested<br>    allowed = <span class="hljs-number">1</span><br><span class="hljs-keyword">end</span><br><br><span class="hljs-comment">-- 更新状态</span><br>redis.call(<span class="hljs-string">&#x27;HMSET&#x27;</span>, key, <span class="hljs-string">&#x27;tokens&#x27;</span>, tokens, <span class="hljs-string">&#x27;lastRefillTime&#x27;</span>, now)<br>redis.call(<span class="hljs-string">&#x27;PEXPIRE&#x27;</span>, key, <span class="hljs-built_in">math</span>.<span class="hljs-built_in">ceil</span>(maxTokens / refillRate) * <span class="hljs-number">1000</span> + <span class="hljs-number">1000</span>)<br><br><span class="hljs-keyword">return</span> allowed<br></code></pre></td></tr></table></figure>
+<h2 id="漏桶算法leaky-bucket">漏桶算法（Leaky Bucket）</h2>
+<h3 id="原理-3">原理</h3>
+<p>漏桶以固定速率处理请求（像水从桶底漏出），请求以任意速率进入桶中。桶满时新请求被丢弃。与令牌桶不同，漏桶不允许突发流量，它的输出速率是恒定的。</p>
+<pre class="mermaid">graph TB
+    subgraph 漏桶
+        Input[请求入口&lt;br/&gt;速率不定] --&gt;|入桶| Bucket[漏桶&lt;br/&gt;容量:100]
+        Bucket --&gt;|恒定速率&lt;br/&gt;10个/秒| Output[处理请求]
+        Input -.-&gt;|桶满| Overflow[溢出/丢弃]
+    end</pre>
+<h3 id="实现-3">实现</h3>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">LeakyBucketRateLimiter</span> &#123;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> <span class="hljs-type">int</span> capacity;      <span class="hljs-comment">// 桶容量</span><br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> <span class="hljs-type">double</span> leakRate;   <span class="hljs-comment">// 漏出速率(个/秒)</span><br>    <span class="hljs-keyword">private</span> <span class="hljs-type">double</span> water;            <span class="hljs-comment">// 当前水量</span><br>    <span class="hljs-keyword">private</span> <span class="hljs-type">long</span> lastLeakTime;       <span class="hljs-comment">// 上次漏水时间</span><br><br>    <span class="hljs-keyword">public</span> <span class="hljs-title function_">LeakyBucketRateLimiter</span><span class="hljs-params">(<span class="hljs-type">int</span> capacity, <span class="hljs-type">double</span> leakRate)</span> &#123;<br>        <span class="hljs-built_in">this</span>.capacity = capacity;<br>        <span class="hljs-built_in">this</span>.leakRate = leakRate;<br>        <span class="hljs-built_in">this</span>.water = <span class="hljs-number">0</span>;<br>        <span class="hljs-built_in">this</span>.lastLeakTime = System.nanoTime();<br>    &#125;<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">synchronized</span> <span class="hljs-type">boolean</span> <span class="hljs-title function_">tryAcquire</span><span class="hljs-params">()</span> &#123;<br>        leak();<br><br>        <span class="hljs-keyword">if</span> (water &lt; capacity) &#123;<br>            water++;<br>            <span class="hljs-keyword">return</span> <span class="hljs-literal">true</span>;<br>        &#125;<br>        <span class="hljs-keyword">return</span> <span class="hljs-literal">false</span>; <span class="hljs-comment">// 桶满，拒绝</span><br>    &#125;<br><br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">leak</span><span class="hljs-params">()</span> &#123;<br>        <span class="hljs-type">long</span> <span class="hljs-variable">now</span> <span class="hljs-operator">=</span> System.nanoTime();<br>        <span class="hljs-type">double</span> <span class="hljs-variable">elapsed</span> <span class="hljs-operator">=</span> (now - lastLeakTime) / <span class="hljs-number">1_000_000_000.0</span>;<br>        <span class="hljs-type">double</span> <span class="hljs-variable">leaked</span> <span class="hljs-operator">=</span> elapsed * leakRate;<br>        water = Math.max(<span class="hljs-number">0</span>, water - leaked);<br>        lastLeakTime = now;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="算法对比">算法对比</h2>
+<pre class="mermaid">graph TB
+    subgraph "固定窗口"
+        FW[简单高效&lt;br/&gt;有边界突发问题]
+    end
+    subgraph "滑动窗口"
+        SW[平滑计数&lt;br/&gt;解决边界问题&lt;br/&gt;内存开销稍大]
+    end
+    subgraph "令牌桶"
+        TB2[允许突发&lt;br/&gt;平均速率控制&lt;br/&gt;最常用]
+    end
+    subgraph "漏桶"
+        LB[严格恒定速率&lt;br/&gt;不允许突发&lt;br/&gt;队列模型]
+    end</pre>
+<table>
+<thead>
+<tr class="header">
+<th>算法</th>
+<th>突发处理</th>
+<th>精确度</th>
+<th>内存</th>
+<th>适用场景</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>固定窗口</td>
+<td>有边界问题</td>
+<td>低</td>
+<td>O(1)</td>
+<td>简单场景，粗粒度限流</td>
+</tr>
+<tr class="even">
+<td>滑动窗口</td>
+<td>平滑</td>
+<td>中</td>
+<td>O(N)</td>
+<td>需要精确计数的场景</td>
+</tr>
+<tr class="odd">
+<td>令牌桶</td>
+<td>允许突发</td>
+<td>高</td>
+<td>O(1)</td>
+<td>API 限流（最推荐）</td>
+</tr>
+<tr class="even">
+<td>漏桶</td>
+<td>不允许</td>
+<td>高</td>
+<td>O(1)</td>
+<td>需要恒定处理速率</td>
+</tr>
+</tbody>
+</table>
+<h2 id="nginx-限流配置">Nginx 限流配置</h2>
+<figure class="highlight nginx"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><code class="hljs nginx"><span class="hljs-comment"># 基于漏桶算法的限流</span><br><span class="hljs-section">http</span> &#123;<br>    <span class="hljs-comment"># 定义限流区域</span><br>    <span class="hljs-comment"># $binary_remote_addr 按 IP 限流</span><br>    <span class="hljs-comment"># zone=api:10m 共享内存区域名和大小</span><br>    <span class="hljs-comment"># rate=10r/s 每秒10个请求</span><br>    <span class="hljs-attribute">limit_req_zone</span> <span class="hljs-variable">$binary_remote_addr</span> zone=api:<span class="hljs-number">10m</span> rate=10r/s;<br><br>    <span class="hljs-comment"># 按 API Key 限流</span><br>    <span class="hljs-attribute">map</span> <span class="hljs-variable">$http_x_api_key</span> <span class="hljs-variable">$api_key</span> &#123;<br>        <span class="hljs-attribute">default</span> <span class="hljs-variable">$http_x_api_key</span>;<br>        &quot;&quot;      $binary_remote_addr;<br>    &#125;<br>    <span class="hljs-attribute">limit_req_zone</span> <span class="hljs-variable">$api_key</span> zone=api_key:<span class="hljs-number">10m</span> rate=100r/s;<br><br>    <span class="hljs-section">server</span> &#123;<br>        <span class="hljs-section">location</span> /api/ &#123;<br>            <span class="hljs-comment"># burst=20: 允许20个突发请求排队</span><br>            <span class="hljs-comment"># nodelay: 突发请求不延迟，直接处理</span><br>            <span class="hljs-attribute">limit_req</span> zone=api burst=<span class="hljs-number">20</span> nodelay;<br><br>            <span class="hljs-comment"># 超限返回 429</span><br>            <span class="hljs-attribute">limit_req_status</span> <span class="hljs-number">429</span>;<br><br>            <span class="hljs-attribute">proxy_pass</span> http://backend;<br>        &#125;<br><br>        <span class="hljs-section">location</span> /api/v1/upload &#123;<br>            <span class="hljs-comment"># 上传接口更严格的限流</span><br>            <span class="hljs-attribute">limit_req</span> zone=api burst=<span class="hljs-number">5</span>;<br>            <span class="hljs-attribute">limit_req_status</span> <span class="hljs-number">429</span>;<br><br>            <span class="hljs-attribute">proxy_pass</span> http://upload-backend;<br>        &#125;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="go-标准库限流">Go 标准库限流</h2>
+<p>Go 标准库提供了基于令牌桶的 <code>rate.Limiter</code>：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-keyword">package</span> main<br><br><span class="hljs-keyword">import</span> (<br>    <span class="hljs-string">&quot;net/http&quot;</span><br>    <span class="hljs-string">&quot;golang.org/x/time/rate&quot;</span><br>    <span class="hljs-string">&quot;sync&quot;</span><br>)<br><br><span class="hljs-comment">// 每用户独立限流器</span><br><span class="hljs-keyword">type</span> UserRateLimiter <span class="hljs-keyword">struct</span> &#123;<br>    limiters <span class="hljs-keyword">map</span>[<span class="hljs-type">string</span>]*rate.Limiter<br>    mu       sync.RWMutex<br>    rate     rate.Limit<br>    burst    <span class="hljs-type">int</span><br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">NewUserRateLimiter</span><span class="hljs-params">(r rate.Limit, burst <span class="hljs-type">int</span>)</span></span> *UserRateLimiter &#123;<br>    <span class="hljs-keyword">return</span> &amp;UserRateLimiter&#123;<br>        limiters: <span class="hljs-built_in">make</span>(<span class="hljs-keyword">map</span>[<span class="hljs-type">string</span>]*rate.Limiter),<br>        rate:     r,<br>        burst:    burst,<br>    &#125;<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-params">(u *UserRateLimiter)</span></span> GetLimiter(userID <span class="hljs-type">string</span>) *rate.Limiter &#123;<br>    u.mu.RLock()<br>    limiter, exists := u.limiters[userID]<br>    u.mu.RUnlock()<br><br>    <span class="hljs-keyword">if</span> exists &#123;<br>        <span class="hljs-keyword">return</span> limiter<br>    &#125;<br><br>    u.mu.Lock()<br>    <span class="hljs-keyword">defer</span> u.mu.Unlock()<br><br>    limiter = rate.NewLimiter(u.rate, u.burst)<br>    u.limiters[userID] = limiter<br>    <span class="hljs-keyword">return</span> limiter<br>&#125;<br><br><span class="hljs-comment">// 限流中间件</span><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">RateLimitMiddleware</span><span class="hljs-params">(limiter *UserRateLimiter)</span></span> <span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">(http.Handler)</span></span> http.Handler &#123;<br>    <span class="hljs-keyword">return</span> <span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">(next http.Handler)</span></span> http.Handler &#123;<br>        <span class="hljs-keyword">return</span> http.HandlerFunc(<span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">(w http.ResponseWriter, r *http.Request)</span></span> &#123;<br>            userID := r.Header.Get(<span class="hljs-string">&quot;X-User-ID&quot;</span>)<br>            <span class="hljs-keyword">if</span> userID == <span class="hljs-string">&quot;&quot;</span> &#123;<br>                userID = r.RemoteAddr<br>            &#125;<br><br>            <span class="hljs-keyword">if</span> !limiter.GetLimiter(userID).Allow() &#123;<br>                http.Error(w, <span class="hljs-string">`&#123;&quot;error&quot;:&quot;rate limit exceeded&quot;&#125;`</span>,<br>                    http.StatusTooManyRequests)<br>                <span class="hljs-keyword">return</span><br>            &#125;<br><br>            next.ServeHTTP(w, r)<br>        &#125;)<br>    &#125;<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">main</span><span class="hljs-params">()</span></span> &#123;<br>    <span class="hljs-comment">// 每用户每秒10个请求，允许突发20个</span><br>    userLimiter := NewUserRateLimiter(<span class="hljs-number">10</span>, <span class="hljs-number">20</span>)<br>    mux := http.NewServeMux()<br>    mux.HandleFunc(<span class="hljs-string">&quot;/api/&quot;</span>, <span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">(w http.ResponseWriter, r *http.Request)</span></span> &#123;<br>        w.Write([]<span class="hljs-type">byte</span>(<span class="hljs-string">&quot;OK&quot;</span>))<br>    &#125;)<br><br>    handler := RateLimitMiddleware(userLimiter)(mux)<br>    http.ListenAndServe(<span class="hljs-string">&quot;:8080&quot;</span>, handler)<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="多级限流策略">多级限流策略</h2>
+<p>在实际生产环境中，通常需要多级限流：</p>
+<pre class="mermaid">graph TB
+    Request[请求] --&gt; L1[第1层: CDN/WAF&lt;br/&gt;IP级别限流]
+    L1 --&gt; L2[第2层: API Gateway&lt;br/&gt;用户/API Key限流]
+    L2 --&gt; L3[第3层: 服务级别&lt;br/&gt;单机限流]
+    L3 --&gt; L4[第4层: 方法级别&lt;br/&gt;热点接口限流]
+    L4 --&gt; Business[业务处理]</pre>
+<h2 id="总结">总结</h2>
+<p>限流是系统稳定性的重要保障。四种算法各有特点：固定窗口实现最简单但有边界问题，滑动窗口更精确，令牌桶允许突发且最为通用，漏桶保证恒定处理速率。在实际应用中，推荐使用令牌桶作为默认选择，结合
+Redis 实现分布式限流，并在网关、服务和方法级别部署多级限流策略。</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2024-02-21</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">3.3k 字 · 8 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/using-ollama-to-deploy-local-llm/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">使用 Ollama 在本地跑大语言模型</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/a-comparison-of-event-driven-architecture-and-request-response-architecture/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">事件驱动架构（EDA）与请求/响应架构（RR）的深度比较</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E9%9C%80%E8%A6%81%E9%99%90%E6%B5%81"><span class="toc-text">为什么需要限流</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%BA%E5%AE%9A%E7%AA%97%E5%8F%A3%E7%AE%97%E6%B3%95fixed-window"><span class="toc-text">固定窗口算法（Fixed Window）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8E%9F%E7%90%86"><span class="toc-text">原理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%9E%E7%8E%B0"><span class="toc-text">实现</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%B4%E7%95%8C%E9%97%AE%E9%A2%98"><span class="toc-text">临界问题</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%BB%91%E5%8A%A8%E7%AA%97%E5%8F%A3%E7%AE%97%E6%B3%95sliding-window"><span class="toc-text">滑动窗口算法（Sliding Window）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8E%9F%E7%90%86-1"><span class="toc-text">原理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%9E%E7%8E%B0-1"><span class="toc-text">实现</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9F%BA%E4%BA%8E-redis-sorted-set-%E7%9A%84%E6%BB%91%E5%8A%A8%E7%AA%97%E5%8F%A3"><span class="toc-text">基于 Redis Sorted Set
+的滑动窗口</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BB%A4%E7%89%8C%E6%A1%B6%E7%AE%97%E6%B3%95token-bucket"><span class="toc-text">令牌桶算法（Token Bucket）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8E%9F%E7%90%86-2"><span class="toc-text">原理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%9E%E7%8E%B0-2"><span class="toc-text">实现</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#redis-%E5%88%86%E5%B8%83%E5%BC%8F%E4%BB%A4%E7%89%8C%E6%A1%B6"><span class="toc-text">Redis 分布式令牌桶</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%BC%8F%E6%A1%B6%E7%AE%97%E6%B3%95leaky-bucket"><span class="toc-text">漏桶算法（Leaky Bucket）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8E%9F%E7%90%86-3"><span class="toc-text">原理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%9E%E7%8E%B0-3"><span class="toc-text">实现</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%AE%97%E6%B3%95%E5%AF%B9%E6%AF%94"><span class="toc-text">算法对比</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#nginx-%E9%99%90%E6%B5%81%E9%85%8D%E7%BD%AE"><span class="toc-text">Nginx 限流配置</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#go-%E6%A0%87%E5%87%86%E5%BA%93%E9%99%90%E6%B5%81"><span class="toc-text">Go 标准库限流</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%A4%9A%E7%BA%A7%E9%99%90%E6%B5%81%E7%AD%96%E7%95%A5"><span class="toc-text">多级限流策略</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

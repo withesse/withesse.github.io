@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Go Channel模式与并发编程实战 · zt&#39;s Blog</title>
+  <meta name="description" content="深入理解Go Channel的内部实现与常用并发模式，掌握Fan-in/Fan-out、Pipeline等实战技巧">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/go-channel-patterns/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Go Channel模式与并发编程实战">
+  <meta property="og:description" content="深入理解Go Channel的内部实现与常用并发模式，掌握Fan-in/Fan-out、Pipeline等实战技巧">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/go-channel-patterns/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2023-07-11T16:00:00.000Z">
+  <meta property="article:modified_time" content="2023-07-11T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Go Channel模式与并发编程实战">
+  <meta name="twitter:description" content="深入理解Go Channel的内部实现与常用并发模式，掌握Fan-in/Fan-out、Pipeline等实战技巧">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Go Channel模式与并发编程实战","description":"深入理解Go Channel的内部实现与常用并发模式，掌握Fan-in/Fan-out、Pipeline等实战技巧","datePublished":"2023-07-11T16:00:00.000Z","dateModified":"2023-07-11T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/go-channel-patterns/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Go","item":"https://withesse.co/categories/Go/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:190">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Go/">Go</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/patterns/"><span class="hash">#</span>patterns</a><a class="tag" href="/tags/go/"><span class="hash">#</span>go</a><a class="tag" href="/tags/channel/"><span class="hash">#</span>channel</a><a class="tag" href="/tags/concurrency/"><span class="hash">#</span>concurrency</a>
+        
+      </div>
+
+      <h1>Go Channel模式与并发编程实战</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2023.07.12</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          <span class="row gap8" style="align-items:center"><span class="lang-dot" style="background:#00ADD8"></span>Go</span>
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 8 min</span>
+        </span>
+        <span class="wc"><span class="num">3.2k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#channel%E5%86%85%E9%83%A8%E7%BB%93%E6%9E%84"><span class="toc-text">Channel内部结构</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#buffered-vs-unbuffered-channel"><span class="toc-text">Buffered vs Unbuffered
+Channel</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#channel%E6%93%8D%E4%BD%9C%E7%9A%84%E8%A1%8C%E4%B8%BA%E6%80%BB%E7%BB%93"><span class="toc-text">Channel操作的行为总结</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A8%A1%E5%BC%8F%E4%B8%80fan-out-fan-in"><span class="toc-text">模式一：Fan-Out &#x2F; Fan-In</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A8%A1%E5%BC%8F%E4%BA%8Cpipeline"><span class="toc-text">模式二：Pipeline</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A8%A1%E5%BC%8F%E4%B8%89timeout%E4%B8%8Ecancellation"><span class="toc-text">模式三：Timeout与Cancellation</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BD%BF%E7%94%A8select-time.after%E5%AE%9E%E7%8E%B0%E8%B6%85%E6%97%B6"><span class="toc-text">使用select +
+time.After实现超时</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BD%BF%E7%94%A8done-channel%E5%AE%9E%E7%8E%B0%E5%8F%96%E6%B6%88"><span class="toc-text">使用done channel实现取消</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A8%A1%E5%BC%8F%E5%9B%9Brate-limiting%E9%80%9F%E7%8E%87%E9%99%90%E5%88%B6"><span class="toc-text">模式四：Rate
+Limiting（速率限制）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A8%A1%E5%BC%8F%E4%BA%94or-done-channel"><span class="toc-text">模式五：Or-Done Channel</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A8%A1%E5%BC%8F%E5%85%ADsemaphore%E4%BF%A1%E5%8F%B7%E9%87%8F"><span class="toc-text">模式六：Semaphore（信号量）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A8%A1%E5%BC%8F%E4%B8%83generator%E7%94%9F%E6%88%90%E5%99%A8"><span class="toc-text">模式七：Generator（生成器）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%A7%E8%83%BD%E8%80%83%E9%87%8F"><span class="toc-text">性能考量</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#channel-vs-mutex"><span class="toc-text">Channel vs Mutex</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%81%BF%E5%85%8Dchannel%E6%B3%84%E6%BC%8F"><span class="toc-text">避免Channel泄漏</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="引言">引言</h2>
+<p>Channel是Go语言并发编程的核心原语之一。Go的设计哲学——“Don’t
+communicate by sharing memory; share memory by
+communicating”——正是通过channel来实现的。本文将从channel的底层实现出发，系统介绍各种channel并发模式，并通过实际案例展示如何在生产环境中运用这些模式。</p>
+<h2 id="channel内部结构">Channel内部结构</h2>
+<p>每个channel在runtime中由<code>hchan</code>结构体表示：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-comment">// runtime/chan.go (simplified)</span><br><span class="hljs-keyword">type</span> hchan <span class="hljs-keyword">struct</span> &#123;<br>    qcount   <span class="hljs-type">uint</span>           <span class="hljs-comment">// 当前队列中的元素数量</span><br>    dataqsiz <span class="hljs-type">uint</span>           <span class="hljs-comment">// 环形缓冲区大小（buffered channel的容量）</span><br>    buf      unsafe.Pointer <span class="hljs-comment">// 指向环形缓冲区</span><br>    elemsize <span class="hljs-type">uint16</span>         <span class="hljs-comment">// 每个元素的大小</span><br>    closed   <span class="hljs-type">uint32</span>         <span class="hljs-comment">// 是否已关闭</span><br>    elemtype *_type          <span class="hljs-comment">// 元素类型</span><br>    sendx    <span class="hljs-type">uint</span>           <span class="hljs-comment">// 发送索引</span><br>    recvx    <span class="hljs-type">uint</span>           <span class="hljs-comment">// 接收索引</span><br>    recvq    waitq          <span class="hljs-comment">// 等待接收的goroutine队列</span><br>    sendq    waitq          <span class="hljs-comment">// 等待发送的goroutine队列</span><br>    lock     mutex          <span class="hljs-comment">// 互斥锁</span><br>&#125;<br></code></pre></td></tr></table></figure>
+<pre class="mermaid">graph LR
+    subgraph "hchan 结构"
+        Lock["mutex lock"]
+        Buf["环形缓冲区&lt;br/&gt;[0][1][2]...[n]"]
+        SendQ["sendq&lt;br/&gt;等待发送队列"]
+        RecvQ["recvq&lt;br/&gt;等待接收队列"]
+        SendX["sendx: 发送指针"]
+        RecvX["recvx: 接收指针"]
+    end
+
+    G1["G1 (sender)"] --&gt;|阻塞| SendQ
+    G2["G2 (receiver)"] --&gt;|阻塞| RecvQ
+    SendX --&gt; Buf
+    RecvX --&gt; Buf</pre>
+<h3 id="buffered-vs-unbuffered-channel">Buffered vs Unbuffered
+Channel</h3>
+<pre class="mermaid">sequenceDiagram
+    participant S as Sender
+    participant CH as Unbuffered Channel
+    participant R as Receiver
+
+    Note over CH: Unbuffered (同步)
+    S-&gt;&gt;CH: send (阻塞等待接收者)
+    R-&gt;&gt;CH: receive
+    CH--&gt;&gt;S: 解除阻塞
+    CH--&gt;&gt;R: 获取数据
+
+    Note over CH: Buffered (异步)
+    S-&gt;&gt;CH: send (缓冲区未满，立即返回)
+    S-&gt;&gt;CH: send (缓冲区已满，阻塞)
+    R-&gt;&gt;CH: receive (缓冲区非空，立即返回)
+    CH--&gt;&gt;S: 缓冲区有空位，解除阻塞</pre>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-keyword">package</span> main<br><br><span class="hljs-keyword">import</span> <span class="hljs-string">&quot;fmt&quot;</span><br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">main</span><span class="hljs-params">()</span></span> &#123;<br>    <span class="hljs-comment">// Unbuffered channel: 发送和接收必须同时就绪</span><br>    unbuffered := <span class="hljs-built_in">make</span>(<span class="hljs-keyword">chan</span> <span class="hljs-type">int</span>)<br>    <span class="hljs-keyword">go</span> <span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">()</span></span> &#123;<br>        unbuffered &lt;- <span class="hljs-number">42</span> <span class="hljs-comment">// 阻塞，直到有接收者</span><br>    &#125;()<br>    val := &lt;-unbuffered <span class="hljs-comment">// 阻塞，直到有发送者</span><br>    fmt.Println(<span class="hljs-string">&quot;Unbuffered:&quot;</span>, val)<br><br>    <span class="hljs-comment">// Buffered channel: 缓冲区未满时发送不阻塞</span><br>    buffered := <span class="hljs-built_in">make</span>(<span class="hljs-keyword">chan</span> <span class="hljs-type">int</span>, <span class="hljs-number">3</span>)<br>    buffered &lt;- <span class="hljs-number">1</span> <span class="hljs-comment">// 不阻塞</span><br>    buffered &lt;- <span class="hljs-number">2</span> <span class="hljs-comment">// 不阻塞</span><br>    buffered &lt;- <span class="hljs-number">3</span> <span class="hljs-comment">// 不阻塞</span><br>    <span class="hljs-comment">// buffered &lt;- 4 // 会阻塞，因为缓冲区已满</span><br><br>    fmt.Println(<span class="hljs-string">&quot;Buffered:&quot;</span>, &lt;-buffered, &lt;-buffered, &lt;-buffered)<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="channel操作的行为总结">Channel操作的行为总结</h2>
+<table>
+<thead>
+<tr class="header">
+<th>操作</th>
+<th>nil channel</th>
+<th>closed channel</th>
+<th>正常 channel</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>发送</td>
+<td>永久阻塞</td>
+<td>panic</td>
+<td>阻塞或成功</td>
+</tr>
+<tr class="even">
+<td>接收</td>
+<td>永久阻塞</td>
+<td>返回零值</td>
+<td>阻塞或成功</td>
+</tr>
+<tr class="odd">
+<td>关闭</td>
+<td>panic</td>
+<td>panic</td>
+<td>成功关闭</td>
+</tr>
+</tbody>
+</table>
+<h2 id="模式一fan-out-fan-in">模式一：Fan-Out / Fan-In</h2>
+<p>Fan-Out将工作分发给多个goroutine并行处理，Fan-In将多个goroutine的结果汇聚到一个channel。</p>
+<pre class="mermaid">graph LR
+    subgraph "Fan-Out"
+        Source["数据源"] --&gt; W1["Worker 1"]
+        Source --&gt; W2["Worker 2"]
+        Source --&gt; W3["Worker 3"]
+    end
+
+    subgraph "Fan-In"
+        W1 --&gt; Merge["合并"]
+        W2 --&gt; Merge
+        W3 --&gt; Merge
+        Merge --&gt; Output["输出"]
+    end</pre>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-keyword">package</span> main<br><br><span class="hljs-keyword">import</span> (<br>    <span class="hljs-string">&quot;fmt&quot;</span><br>    <span class="hljs-string">&quot;sync&quot;</span><br>)<br><br><span class="hljs-comment">// fanOut 将任务分发给多个worker</span><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">fanOut</span><span class="hljs-params">(input &lt;-<span class="hljs-keyword">chan</span> <span class="hljs-type">int</span>, numWorkers <span class="hljs-type">int</span>)</span></span> []&lt;-<span class="hljs-keyword">chan</span> <span class="hljs-type">int</span> &#123;<br>    workers := <span class="hljs-built_in">make</span>([]&lt;-<span class="hljs-keyword">chan</span> <span class="hljs-type">int</span>, numWorkers)<br>    <span class="hljs-keyword">for</span> i := <span class="hljs-number">0</span>; i &lt; numWorkers; i++ &#123;<br>        workers[i] = worker(input, i)<br>    &#125;<br>    <span class="hljs-keyword">return</span> workers<br>&#125;<br><br><span class="hljs-comment">// worker 处理输入并返回结果channel</span><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">worker</span><span class="hljs-params">(input &lt;-<span class="hljs-keyword">chan</span> <span class="hljs-type">int</span>, id <span class="hljs-type">int</span>)</span></span> &lt;-<span class="hljs-keyword">chan</span> <span class="hljs-type">int</span> &#123;<br>    output := <span class="hljs-built_in">make</span>(<span class="hljs-keyword">chan</span> <span class="hljs-type">int</span>)<br>    <span class="hljs-keyword">go</span> <span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">()</span></span> &#123;<br>        <span class="hljs-keyword">defer</span> <span class="hljs-built_in">close</span>(output)<br>        <span class="hljs-keyword">for</span> val := <span class="hljs-keyword">range</span> input &#123;<br>            <span class="hljs-comment">// 模拟处理：将值翻倍</span><br>            result := val * <span class="hljs-number">2</span><br>            fmt.Printf(<span class="hljs-string">&quot;Worker %d: %d -&gt; %d\n&quot;</span>, id, val, result)<br>            output &lt;- result<br>        &#125;<br>    &#125;()<br>    <span class="hljs-keyword">return</span> output<br>&#125;<br><br><span class="hljs-comment">// fanIn 将多个channel合并为一个</span><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">fanIn</span><span class="hljs-params">(channels ...&lt;-<span class="hljs-keyword">chan</span> <span class="hljs-type">int</span>)</span></span> &lt;-<span class="hljs-keyword">chan</span> <span class="hljs-type">int</span> &#123;<br>    merged := <span class="hljs-built_in">make</span>(<span class="hljs-keyword">chan</span> <span class="hljs-type">int</span>)<br>    <span class="hljs-keyword">var</span> wg sync.WaitGroup<br><br>    <span class="hljs-keyword">for</span> _, ch := <span class="hljs-keyword">range</span> channels &#123;<br>        wg.Add(<span class="hljs-number">1</span>)<br>        <span class="hljs-keyword">go</span> <span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">(c &lt;-<span class="hljs-keyword">chan</span> <span class="hljs-type">int</span>)</span></span> &#123;<br>            <span class="hljs-keyword">defer</span> wg.Done()<br>            <span class="hljs-keyword">for</span> val := <span class="hljs-keyword">range</span> c &#123;<br>                merged &lt;- val<br>            &#125;<br>        &#125;(ch)<br>    &#125;<br><br>    <span class="hljs-keyword">go</span> <span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">()</span></span> &#123;<br>        wg.Wait()<br>        <span class="hljs-built_in">close</span>(merged)<br>    &#125;()<br><br>    <span class="hljs-keyword">return</span> merged<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">main</span><span class="hljs-params">()</span></span> &#123;<br>    <span class="hljs-comment">// 创建数据源</span><br>    input := <span class="hljs-built_in">make</span>(<span class="hljs-keyword">chan</span> <span class="hljs-type">int</span>)<br>    <span class="hljs-keyword">go</span> <span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">()</span></span> &#123;<br>        <span class="hljs-keyword">defer</span> <span class="hljs-built_in">close</span>(input)<br>        <span class="hljs-keyword">for</span> i := <span class="hljs-number">1</span>; i &lt;= <span class="hljs-number">20</span>; i++ &#123;<br>            input &lt;- i<br>        &#125;<br>    &#125;()<br><br>    <span class="hljs-comment">// Fan-Out: 3个worker并行处理</span><br>    workers := fanOut(input, <span class="hljs-number">3</span>)<br><br>    <span class="hljs-comment">// Fan-In: 合并结果</span><br>    results := fanIn(workers...)<br><br>    <span class="hljs-comment">// 收集结果</span><br>    <span class="hljs-keyword">var</span> total <span class="hljs-type">int</span><br>    <span class="hljs-keyword">for</span> result := <span class="hljs-keyword">range</span> results &#123;<br>        total += result<br>    &#125;<br>    fmt.Printf(<span class="hljs-string">&quot;Total: %d\n&quot;</span>, total)<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="模式二pipeline">模式二：Pipeline</h2>
+<p>Pipeline模式将处理过程分解为多个阶段，每个阶段通过channel连接，形成数据处理流水线。</p>
+<pre class="mermaid">graph LR
+    A["生成器&lt;br/&gt;generate"] --&gt;|chan int| B["过滤器&lt;br/&gt;filter"]
+    B --&gt;|chan int| C["转换器&lt;br/&gt;transform"]
+    C --&gt;|chan int| D["消费者&lt;br/&gt;consume"]</pre>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-keyword">package</span> main<br><br><span class="hljs-keyword">import</span> <span class="hljs-string">&quot;fmt&quot;</span><br><br><span class="hljs-comment">// generate 生成整数序列</span><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">generate</span><span class="hljs-params">(nums ...<span class="hljs-type">int</span>)</span></span> &lt;-<span class="hljs-keyword">chan</span> <span class="hljs-type">int</span> &#123;<br>    out := <span class="hljs-built_in">make</span>(<span class="hljs-keyword">chan</span> <span class="hljs-type">int</span>)<br>    <span class="hljs-keyword">go</span> <span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">()</span></span> &#123;<br>        <span class="hljs-keyword">defer</span> <span class="hljs-built_in">close</span>(out)<br>        <span class="hljs-keyword">for</span> _, n := <span class="hljs-keyword">range</span> nums &#123;<br>            out &lt;- n<br>        &#125;<br>    &#125;()<br>    <span class="hljs-keyword">return</span> out<br>&#125;<br><br><span class="hljs-comment">// filter 只保留偶数</span><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">filter</span><span class="hljs-params">(in &lt;-<span class="hljs-keyword">chan</span> <span class="hljs-type">int</span>)</span></span> &lt;-<span class="hljs-keyword">chan</span> <span class="hljs-type">int</span> &#123;<br>    out := <span class="hljs-built_in">make</span>(<span class="hljs-keyword">chan</span> <span class="hljs-type">int</span>)<br>    <span class="hljs-keyword">go</span> <span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">()</span></span> &#123;<br>        <span class="hljs-keyword">defer</span> <span class="hljs-built_in">close</span>(out)<br>        <span class="hljs-keyword">for</span> n := <span class="hljs-keyword">range</span> in &#123;<br>            <span class="hljs-keyword">if</span> n%<span class="hljs-number">2</span> == <span class="hljs-number">0</span> &#123;<br>                out &lt;- n<br>            &#125;<br>        &#125;<br>    &#125;()<br>    <span class="hljs-keyword">return</span> out<br>&#125;<br><br><span class="hljs-comment">// square 计算平方</span><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">square</span><span class="hljs-params">(in &lt;-<span class="hljs-keyword">chan</span> <span class="hljs-type">int</span>)</span></span> &lt;-<span class="hljs-keyword">chan</span> <span class="hljs-type">int</span> &#123;<br>    out := <span class="hljs-built_in">make</span>(<span class="hljs-keyword">chan</span> <span class="hljs-type">int</span>)<br>    <span class="hljs-keyword">go</span> <span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">()</span></span> &#123;<br>        <span class="hljs-keyword">defer</span> <span class="hljs-built_in">close</span>(out)<br>        <span class="hljs-keyword">for</span> n := <span class="hljs-keyword">range</span> in &#123;<br>            out &lt;- n * n<br>        &#125;<br>    &#125;()<br>    <span class="hljs-keyword">return</span> out<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">main</span><span class="hljs-params">()</span></span> &#123;<br>    <span class="hljs-comment">// 构建 pipeline: generate -&gt; filter(偶数) -&gt; square</span><br>    nums := generate(<span class="hljs-number">1</span>, <span class="hljs-number">2</span>, <span class="hljs-number">3</span>, <span class="hljs-number">4</span>, <span class="hljs-number">5</span>, <span class="hljs-number">6</span>, <span class="hljs-number">7</span>, <span class="hljs-number">8</span>, <span class="hljs-number">9</span>, <span class="hljs-number">10</span>)<br>    evens := filter(nums)<br>    squared := square(evens)<br><br>    <span class="hljs-comment">// 消费结果</span><br>    <span class="hljs-keyword">for</span> result := <span class="hljs-keyword">range</span> squared &#123;<br>        fmt.Println(result) <span class="hljs-comment">// 4, 16, 36, 64, 100</span><br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="模式三timeout与cancellation">模式三：Timeout与Cancellation</h2>
+<h3 id="使用select-time.after实现超时">使用select +
+time.After实现超时</h3>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-keyword">package</span> main<br><br><span class="hljs-keyword">import</span> (<br>    <span class="hljs-string">&quot;fmt&quot;</span><br>    <span class="hljs-string">&quot;time&quot;</span><br>)<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">slowOperation</span><span class="hljs-params">()</span></span> &lt;-<span class="hljs-keyword">chan</span> <span class="hljs-type">string</span> &#123;<br>    ch := <span class="hljs-built_in">make</span>(<span class="hljs-keyword">chan</span> <span class="hljs-type">string</span>)<br>    <span class="hljs-keyword">go</span> <span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">()</span></span> &#123;<br>        time.Sleep(<span class="hljs-number">3</span> * time.Second) <span class="hljs-comment">// 模拟慢操作</span><br>        ch &lt;- <span class="hljs-string">&quot;operation completed&quot;</span><br>    &#125;()<br>    <span class="hljs-keyword">return</span> ch<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">main</span><span class="hljs-params">()</span></span> &#123;<br>    result := slowOperation()<br><br>    <span class="hljs-keyword">select</span> &#123;<br>    <span class="hljs-keyword">case</span> val := &lt;-result:<br>        fmt.Println(<span class="hljs-string">&quot;Got result:&quot;</span>, val)<br>    <span class="hljs-keyword">case</span> &lt;-time.After(<span class="hljs-number">2</span> * time.Second):<br>        fmt.Println(<span class="hljs-string">&quot;Timeout! Operation took too long.&quot;</span>)<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="使用done-channel实现取消">使用done channel实现取消</h3>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-keyword">package</span> main<br><br><span class="hljs-keyword">import</span> (<br>    <span class="hljs-string">&quot;fmt&quot;</span><br>    <span class="hljs-string">&quot;time&quot;</span><br>)<br><br><span class="hljs-comment">// longRunningTask 支持通过done channel取消</span><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">longRunningTask</span><span class="hljs-params">(done &lt;-<span class="hljs-keyword">chan</span> <span class="hljs-keyword">struct</span>&#123;&#125;)</span></span> &lt;-<span class="hljs-keyword">chan</span> <span class="hljs-type">int</span> &#123;<br>    results := <span class="hljs-built_in">make</span>(<span class="hljs-keyword">chan</span> <span class="hljs-type">int</span>)<br>    <span class="hljs-keyword">go</span> <span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">()</span></span> &#123;<br>        <span class="hljs-keyword">defer</span> <span class="hljs-built_in">close</span>(results)<br>        <span class="hljs-keyword">for</span> i := <span class="hljs-number">0</span>; ; i++ &#123;<br>            <span class="hljs-keyword">select</span> &#123;<br>            <span class="hljs-keyword">case</span> &lt;-done:<br>                fmt.Println(<span class="hljs-string">&quot;Task cancelled&quot;</span>)<br>                <span class="hljs-keyword">return</span><br>            <span class="hljs-keyword">case</span> results &lt;- i:<br>                time.Sleep(<span class="hljs-number">200</span> * time.Millisecond)<br>            &#125;<br>        &#125;<br>    &#125;()<br>    <span class="hljs-keyword">return</span> results<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">main</span><span class="hljs-params">()</span></span> &#123;<br>    done := <span class="hljs-built_in">make</span>(<span class="hljs-keyword">chan</span> <span class="hljs-keyword">struct</span>&#123;&#125;)<br>    results := longRunningTask(done)<br><br>    <span class="hljs-comment">// 读取5个结果后取消</span><br>    <span class="hljs-keyword">for</span> i := <span class="hljs-number">0</span>; i &lt; <span class="hljs-number">5</span>; i++ &#123;<br>        fmt.Println(<span class="hljs-string">&quot;Result:&quot;</span>, &lt;-results)<br>    &#125;<br><br>    <span class="hljs-built_in">close</span>(done) <span class="hljs-comment">// 发送取消信号</span><br>    time.Sleep(<span class="hljs-number">100</span> * time.Millisecond) <span class="hljs-comment">// 等待清理</span><br>    fmt.Println(<span class="hljs-string">&quot;Done&quot;</span>)<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="模式四rate-limiting速率限制">模式四：Rate
+Limiting（速率限制）</h2>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-keyword">package</span> main<br><br><span class="hljs-keyword">import</span> (<br>    <span class="hljs-string">&quot;fmt&quot;</span><br>    <span class="hljs-string">&quot;time&quot;</span><br>)<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">main</span><span class="hljs-params">()</span></span> &#123;<br>    requests := <span class="hljs-built_in">make</span>(<span class="hljs-keyword">chan</span> <span class="hljs-type">int</span>, <span class="hljs-number">10</span>)<br>    <span class="hljs-keyword">for</span> i := <span class="hljs-number">1</span>; i &lt;= <span class="hljs-number">10</span>; i++ &#123;<br>        requests &lt;- i<br>    &#125;<br>    <span class="hljs-built_in">close</span>(requests)<br><br>    <span class="hljs-comment">// 简单速率限制：每200ms处理一个请求</span><br>    limiter := time.Tick(<span class="hljs-number">200</span> * time.Millisecond)<br>    <span class="hljs-keyword">for</span> req := <span class="hljs-keyword">range</span> requests &#123;<br>        &lt;-limiter <span class="hljs-comment">// 等待令牌</span><br>        fmt.Println(<span class="hljs-string">&quot;Processing request&quot;</span>, req, <span class="hljs-string">&quot;at&quot;</span>, time.Now().Format(<span class="hljs-string">&quot;15:04:05.000&quot;</span>))<br>    &#125;<br><br>    <span class="hljs-comment">// 突发速率限制：允许短时间突发3个请求</span><br>    burstyLimiter := <span class="hljs-built_in">make</span>(<span class="hljs-keyword">chan</span> time.Time, <span class="hljs-number">3</span>)<br>    <span class="hljs-comment">// 预填充3个令牌</span><br>    <span class="hljs-keyword">for</span> i := <span class="hljs-number">0</span>; i &lt; <span class="hljs-number">3</span>; i++ &#123;<br>        burstyLimiter &lt;- time.Now()<br>    &#125;<br>    <span class="hljs-comment">// 每200ms补充一个令牌</span><br>    <span class="hljs-keyword">go</span> <span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">()</span></span> &#123;<br>        <span class="hljs-keyword">for</span> t := <span class="hljs-keyword">range</span> time.Tick(<span class="hljs-number">200</span> * time.Millisecond) &#123;<br>            burstyLimiter &lt;- t<br>        &#125;<br>    &#125;()<br><br>    burstyRequests := <span class="hljs-built_in">make</span>(<span class="hljs-keyword">chan</span> <span class="hljs-type">int</span>, <span class="hljs-number">10</span>)<br>    <span class="hljs-keyword">for</span> i := <span class="hljs-number">1</span>; i &lt;= <span class="hljs-number">10</span>; i++ &#123;<br>        burstyRequests &lt;- i<br>    &#125;<br>    <span class="hljs-built_in">close</span>(burstyRequests)<br><br>    <span class="hljs-keyword">for</span> req := <span class="hljs-keyword">range</span> burstyRequests &#123;<br>        &lt;-burstyLimiter<br>        fmt.Println(<span class="hljs-string">&quot;Bursty request&quot;</span>, req, <span class="hljs-string">&quot;at&quot;</span>, time.Now().Format(<span class="hljs-string">&quot;15:04:05.000&quot;</span>))<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="模式五or-done-channel">模式五：Or-Done Channel</h2>
+<p>Or-Done模式用于从一个channel读取数据，同时支持提前取消：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-keyword">package</span> main<br><br><span class="hljs-keyword">import</span> <span class="hljs-string">&quot;fmt&quot;</span><br><br><span class="hljs-comment">// orDone 包装一个channel，使其在done关闭时也能退出</span><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">orDone</span><span class="hljs-params">(done &lt;-<span class="hljs-keyword">chan</span> <span class="hljs-keyword">struct</span>&#123;&#125;, c &lt;-<span class="hljs-keyword">chan</span> <span class="hljs-type">int</span>)</span></span> &lt;-<span class="hljs-keyword">chan</span> <span class="hljs-type">int</span> &#123;<br>    valStream := <span class="hljs-built_in">make</span>(<span class="hljs-keyword">chan</span> <span class="hljs-type">int</span>)<br>    <span class="hljs-keyword">go</span> <span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">()</span></span> &#123;<br>        <span class="hljs-keyword">defer</span> <span class="hljs-built_in">close</span>(valStream)<br>        <span class="hljs-keyword">for</span> &#123;<br>            <span class="hljs-keyword">select</span> &#123;<br>            <span class="hljs-keyword">case</span> &lt;-done:<br>                <span class="hljs-keyword">return</span><br>            <span class="hljs-keyword">case</span> v, ok := &lt;-c:<br>                <span class="hljs-keyword">if</span> !ok &#123;<br>                    <span class="hljs-keyword">return</span><br>                &#125;<br>                <span class="hljs-keyword">select</span> &#123;<br>                <span class="hljs-keyword">case</span> valStream &lt;- v:<br>                <span class="hljs-keyword">case</span> &lt;-done:<br>                    <span class="hljs-keyword">return</span><br>                &#125;<br>            &#125;<br>        &#125;<br>    &#125;()<br>    <span class="hljs-keyword">return</span> valStream<br>&#125;<br><br><span class="hljs-comment">// or 合并多个done channel，任一关闭则返回</span><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">or</span><span class="hljs-params">(channels ...&lt;-<span class="hljs-keyword">chan</span> <span class="hljs-keyword">struct</span>&#123;&#125;)</span></span> &lt;-<span class="hljs-keyword">chan</span> <span class="hljs-keyword">struct</span>&#123;&#125; &#123;<br>    <span class="hljs-keyword">switch</span> <span class="hljs-built_in">len</span>(channels) &#123;<br>    <span class="hljs-keyword">case</span> <span class="hljs-number">0</span>:<br>        <span class="hljs-keyword">return</span> <span class="hljs-literal">nil</span><br>    <span class="hljs-keyword">case</span> <span class="hljs-number">1</span>:<br>        <span class="hljs-keyword">return</span> channels[<span class="hljs-number">0</span>]<br>    &#125;<br><br>    orDone := <span class="hljs-built_in">make</span>(<span class="hljs-keyword">chan</span> <span class="hljs-keyword">struct</span>&#123;&#125;)<br>    <span class="hljs-keyword">go</span> <span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">()</span></span> &#123;<br>        <span class="hljs-keyword">defer</span> <span class="hljs-built_in">close</span>(orDone)<br>        <span class="hljs-keyword">switch</span> <span class="hljs-built_in">len</span>(channels) &#123;<br>        <span class="hljs-keyword">case</span> <span class="hljs-number">2</span>:<br>            <span class="hljs-keyword">select</span> &#123;<br>            <span class="hljs-keyword">case</span> &lt;-channels[<span class="hljs-number">0</span>]:<br>            <span class="hljs-keyword">case</span> &lt;-channels[<span class="hljs-number">1</span>]:<br>            &#125;<br>        <span class="hljs-keyword">default</span>:<br>            <span class="hljs-keyword">select</span> &#123;<br>            <span class="hljs-keyword">case</span> &lt;-channels[<span class="hljs-number">0</span>]:<br>            <span class="hljs-keyword">case</span> &lt;-channels[<span class="hljs-number">1</span>]:<br>            <span class="hljs-keyword">case</span> &lt;-channels[<span class="hljs-number">2</span>]:<br>            <span class="hljs-keyword">case</span> &lt;-or(<span class="hljs-built_in">append</span>(channels[<span class="hljs-number">3</span>:], orDone)...):<br>            &#125;<br>        &#125;<br>    &#125;()<br>    <span class="hljs-keyword">return</span> orDone<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">main</span><span class="hljs-params">()</span></span> &#123;<br>    <span class="hljs-comment">// 使用or模式合并多个取消信号</span><br>    done := <span class="hljs-built_in">make</span>(<span class="hljs-keyword">chan</span> <span class="hljs-keyword">struct</span>&#123;&#125;)<br>    data := <span class="hljs-built_in">make</span>(<span class="hljs-keyword">chan</span> <span class="hljs-type">int</span>)<br><br>    <span class="hljs-keyword">go</span> <span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">()</span></span> &#123;<br>        <span class="hljs-keyword">defer</span> <span class="hljs-built_in">close</span>(data)<br>        <span class="hljs-keyword">for</span> i := <span class="hljs-number">0</span>; i &lt; <span class="hljs-number">100</span>; i++ &#123;<br>            data &lt;- i<br>        &#125;<br>    &#125;()<br><br>    <span class="hljs-comment">// 读取前5个值后取消</span><br>    count := <span class="hljs-number">0</span><br>    <span class="hljs-keyword">for</span> val := <span class="hljs-keyword">range</span> orDone(done, data) &#123;<br>        fmt.Println(val)<br>        count++<br>        <span class="hljs-keyword">if</span> count &gt;= <span class="hljs-number">5</span> &#123;<br>            <span class="hljs-built_in">close</span>(done)<br>            <span class="hljs-keyword">break</span><br>        &#125;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="模式六semaphore信号量">模式六：Semaphore（信号量）</h2>
+<p>使用buffered channel实现信号量，控制并发度：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-keyword">package</span> main<br><br><span class="hljs-keyword">import</span> (<br>    <span class="hljs-string">&quot;fmt&quot;</span><br>    <span class="hljs-string">&quot;sync&quot;</span><br>    <span class="hljs-string">&quot;time&quot;</span><br>)<br><br><span class="hljs-comment">// Semaphore 使用buffered channel实现信号量</span><br><span class="hljs-keyword">type</span> Semaphore <span class="hljs-keyword">struct</span> &#123;<br>    sem <span class="hljs-keyword">chan</span> <span class="hljs-keyword">struct</span>&#123;&#125;<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">NewSemaphore</span><span class="hljs-params">(maxConcurrency <span class="hljs-type">int</span>)</span></span> *Semaphore &#123;<br>    <span class="hljs-keyword">return</span> &amp;Semaphore&#123;<br>        sem: <span class="hljs-built_in">make</span>(<span class="hljs-keyword">chan</span> <span class="hljs-keyword">struct</span>&#123;&#125;, maxConcurrency),<br>    &#125;<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-params">(s *Semaphore)</span></span> Acquire() &#123;<br>    s.sem &lt;- <span class="hljs-keyword">struct</span>&#123;&#125;&#123;&#125; <span class="hljs-comment">// 获取令牌，满则阻塞</span><br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-params">(s *Semaphore)</span></span> Release() &#123;<br>    &lt;-s.sem <span class="hljs-comment">// 释放令牌</span><br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">main</span><span class="hljs-params">()</span></span> &#123;<br>    sem := NewSemaphore(<span class="hljs-number">3</span>) <span class="hljs-comment">// 最多3个并发</span><br>    <span class="hljs-keyword">var</span> wg sync.WaitGroup<br><br>    <span class="hljs-keyword">for</span> i := <span class="hljs-number">0</span>; i &lt; <span class="hljs-number">10</span>; i++ &#123;<br>        wg.Add(<span class="hljs-number">1</span>)<br>        <span class="hljs-keyword">go</span> <span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">(id <span class="hljs-type">int</span>)</span></span> &#123;<br>            <span class="hljs-keyword">defer</span> wg.Done()<br>            sem.Acquire()<br>            <span class="hljs-keyword">defer</span> sem.Release()<br><br>            fmt.Printf(<span class="hljs-string">&quot;Worker %d started at %s\n&quot;</span>, id, time.Now().Format(<span class="hljs-string">&quot;15:04:05&quot;</span>))<br>            time.Sleep(<span class="hljs-number">1</span> * time.Second) <span class="hljs-comment">// 模拟工作</span><br>            fmt.Printf(<span class="hljs-string">&quot;Worker %d finished at %s\n&quot;</span>, id, time.Now().Format(<span class="hljs-string">&quot;15:04:05&quot;</span>))<br>        &#125;(i)<br>    &#125;<br><br>    wg.Wait()<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="模式七generator生成器">模式七：Generator（生成器）</h2>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-keyword">package</span> main<br><br><span class="hljs-keyword">import</span> <span class="hljs-string">&quot;fmt&quot;</span><br><br><span class="hljs-comment">// fibonacci 返回一个斐波那契数列生成器channel</span><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">fibonacci</span><span class="hljs-params">(done &lt;-<span class="hljs-keyword">chan</span> <span class="hljs-keyword">struct</span>&#123;&#125;)</span></span> &lt;-<span class="hljs-keyword">chan</span> <span class="hljs-type">int</span> &#123;<br>    ch := <span class="hljs-built_in">make</span>(<span class="hljs-keyword">chan</span> <span class="hljs-type">int</span>)<br>    <span class="hljs-keyword">go</span> <span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">()</span></span> &#123;<br>        <span class="hljs-keyword">defer</span> <span class="hljs-built_in">close</span>(ch)<br>        a, b := <span class="hljs-number">0</span>, <span class="hljs-number">1</span><br>        <span class="hljs-keyword">for</span> &#123;<br>            <span class="hljs-keyword">select</span> &#123;<br>            <span class="hljs-keyword">case</span> &lt;-done:<br>                <span class="hljs-keyword">return</span><br>            <span class="hljs-keyword">case</span> ch &lt;- a:<br>                a, b = b, a+b<br>            &#125;<br>        &#125;<br>    &#125;()<br>    <span class="hljs-keyword">return</span> ch<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">main</span><span class="hljs-params">()</span></span> &#123;<br>    done := <span class="hljs-built_in">make</span>(<span class="hljs-keyword">chan</span> <span class="hljs-keyword">struct</span>&#123;&#125;)<br>    fib := fibonacci(done)<br><br>    <span class="hljs-comment">// 获取前10个斐波那契数</span><br>    <span class="hljs-keyword">for</span> i := <span class="hljs-number">0</span>; i &lt; <span class="hljs-number">10</span>; i++ &#123;<br>        fmt.Printf(<span class="hljs-string">&quot;F(%d) = %d\n&quot;</span>, i, &lt;-fib)<br>    &#125;<br>    <span class="hljs-built_in">close</span>(done)<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="性能考量">性能考量</h2>
+<h3 id="channel-vs-mutex">Channel vs Mutex</h3>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-keyword">package</span> main<br><br><span class="hljs-keyword">import</span> (<br>    <span class="hljs-string">&quot;sync&quot;</span><br>    <span class="hljs-string">&quot;sync/atomic&quot;</span><br>    <span class="hljs-string">&quot;testing&quot;</span><br>)<br><br><span class="hljs-comment">// channel方式的计数器</span><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">BenchmarkChannelCounter</span><span class="hljs-params">(b *testing.B)</span></span> &#123;<br>    ch := <span class="hljs-built_in">make</span>(<span class="hljs-keyword">chan</span> <span class="hljs-type">int</span>, <span class="hljs-number">1</span>)<br>    ch &lt;- <span class="hljs-number">0</span><br>    <span class="hljs-keyword">for</span> i := <span class="hljs-number">0</span>; i &lt; b.N; i++ &#123;<br>        val := &lt;-ch<br>        val++<br>        ch &lt;- val<br>    &#125;<br>&#125;<br><br><span class="hljs-comment">// mutex方式的计数器</span><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">BenchmarkMutexCounter</span><span class="hljs-params">(b *testing.B)</span></span> &#123;<br>    <span class="hljs-keyword">var</span> mu sync.Mutex<br>    counter := <span class="hljs-number">0</span><br>    <span class="hljs-keyword">for</span> i := <span class="hljs-number">0</span>; i &lt; b.N; i++ &#123;<br>        mu.Lock()<br>        counter++<br>        mu.Unlock()<br>    &#125;<br>&#125;<br><br><span class="hljs-comment">// atomic方式的计数器</span><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">BenchmarkAtomicCounter</span><span class="hljs-params">(b *testing.B)</span></span> &#123;<br>    <span class="hljs-keyword">var</span> counter <span class="hljs-type">int64</span><br>    <span class="hljs-keyword">for</span> i := <span class="hljs-number">0</span>; i &lt; b.N; i++ &#123;<br>        atomic.AddInt64(&amp;counter, <span class="hljs-number">1</span>)<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<p>一般规则： -
+<strong>通信场景</strong>用channel：goroutine之间传递数据 -
+<strong>保护共享资源</strong>用mutex：简单的共享状态 -
+<strong>简单数值操作</strong>用atomic：计数器、标志位</p>
+<h3 id="避免channel泄漏">避免Channel泄漏</h3>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-comment">// 错误示例：goroutine泄漏</span><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">leakySearch</span><span class="hljs-params">(query <span class="hljs-type">string</span>)</span></span> &lt;-<span class="hljs-keyword">chan</span> <span class="hljs-type">string</span> &#123;<br>    ch := <span class="hljs-built_in">make</span>(<span class="hljs-keyword">chan</span> <span class="hljs-type">string</span>)<br>    <span class="hljs-keyword">go</span> <span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">()</span></span> &#123;<br>        <span class="hljs-comment">// 如果没人接收，这个goroutine永远不会结束</span><br>        ch &lt;- doSearch(query)<br>    &#125;()<br>    <span class="hljs-keyword">return</span> ch<br>&#125;<br><br><span class="hljs-comment">// 正确做法：使用buffered channel或context</span><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">safeSearch</span><span class="hljs-params">(ctx context.Context, query <span class="hljs-type">string</span>)</span></span> &lt;-<span class="hljs-keyword">chan</span> <span class="hljs-type">string</span> &#123;<br>    ch := <span class="hljs-built_in">make</span>(<span class="hljs-keyword">chan</span> <span class="hljs-type">string</span>, <span class="hljs-number">1</span>) <span class="hljs-comment">// buffered，即使无人接收也不会泄漏</span><br>    <span class="hljs-keyword">go</span> <span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">()</span></span> &#123;<br>        <span class="hljs-keyword">select</span> &#123;<br>        <span class="hljs-keyword">case</span> ch &lt;- doSearch(query):<br>        <span class="hljs-keyword">case</span> &lt;-ctx.Done():<br>        &#125;<br>    &#125;()<br>    <span class="hljs-keyword">return</span> ch<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="总结">总结</h2>
+<p>本文系统介绍了Go Channel的核心知识和常用并发模式：</p>
+<ol type="1">
+<li><strong>Channel内部结构</strong>：基于环形缓冲区和等待队列的实现</li>
+<li><strong>Fan-Out/Fan-In</strong>：并行处理与结果汇聚</li>
+<li><strong>Pipeline</strong>：多阶段流水线处理</li>
+<li><strong>Timeout/Cancellation</strong>：超时控制与优雅取消</li>
+<li><strong>Rate Limiting</strong>：速率限制与突发控制</li>
+<li><strong>Or-Done</strong>：组合取消信号</li>
+<li><strong>Semaphore</strong>：并发度控制</li>
+</ol>
+<p>掌握这些模式并理解其适用场景，是编写健壮、高效的Go并发程序的关键。在实际开发中，建议优先使用标准库提供的高层抽象（如<code>context</code>、<code>errgroup</code>），只在需要精细控制时才使用底层的channel模式。</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2023-07-12</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">3.2k 字 · 8 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/go-interface-internals/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Go接口底层实现与设计哲学</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/go-goroutine-scheduler/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Go协程调度器GMP模型深入解析</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#channel%E5%86%85%E9%83%A8%E7%BB%93%E6%9E%84"><span class="toc-text">Channel内部结构</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#buffered-vs-unbuffered-channel"><span class="toc-text">Buffered vs Unbuffered
+Channel</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#channel%E6%93%8D%E4%BD%9C%E7%9A%84%E8%A1%8C%E4%B8%BA%E6%80%BB%E7%BB%93"><span class="toc-text">Channel操作的行为总结</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A8%A1%E5%BC%8F%E4%B8%80fan-out-fan-in"><span class="toc-text">模式一：Fan-Out &#x2F; Fan-In</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A8%A1%E5%BC%8F%E4%BA%8Cpipeline"><span class="toc-text">模式二：Pipeline</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A8%A1%E5%BC%8F%E4%B8%89timeout%E4%B8%8Ecancellation"><span class="toc-text">模式三：Timeout与Cancellation</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BD%BF%E7%94%A8select-time.after%E5%AE%9E%E7%8E%B0%E8%B6%85%E6%97%B6"><span class="toc-text">使用select +
+time.After实现超时</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BD%BF%E7%94%A8done-channel%E5%AE%9E%E7%8E%B0%E5%8F%96%E6%B6%88"><span class="toc-text">使用done channel实现取消</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A8%A1%E5%BC%8F%E5%9B%9Brate-limiting%E9%80%9F%E7%8E%87%E9%99%90%E5%88%B6"><span class="toc-text">模式四：Rate
+Limiting（速率限制）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A8%A1%E5%BC%8F%E4%BA%94or-done-channel"><span class="toc-text">模式五：Or-Done Channel</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A8%A1%E5%BC%8F%E5%85%ADsemaphore%E4%BF%A1%E5%8F%B7%E9%87%8F"><span class="toc-text">模式六：Semaphore（信号量）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A8%A1%E5%BC%8F%E4%B8%83generator%E7%94%9F%E6%88%90%E5%99%A8"><span class="toc-text">模式七：Generator（生成器）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%A7%E8%83%BD%E8%80%83%E9%87%8F"><span class="toc-text">性能考量</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#channel-vs-mutex"><span class="toc-text">Channel vs Mutex</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%81%BF%E5%85%8Dchannel%E6%B3%84%E6%BC%8F"><span class="toc-text">避免Channel泄漏</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

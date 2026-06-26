@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Git高级工作流：rebase/cherry-pick/bisect · zt&#39;s Blog</title>
+  <meta name="description" content="深入解析Git高级操作，涵盖交互式rebase、cherry-pick、bisect调试、reflog恢复、stash管理、worktree和Git内部对象模型。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/git-advanced-workflow/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Git高级工作流：rebase/cherry-pick/bisect">
+  <meta property="og:description" content="深入解析Git高级操作，涵盖交互式rebase、cherry-pick、bisect调试、reflog恢复、stash管理、worktree和Git内部对象模型。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/git-advanced-workflow/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2025-10-07T16:00:00.000Z">
+  <meta property="article:modified_time" content="2025-10-07T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Git高级工作流：rebase/cherry-pick/bisect">
+  <meta name="twitter:description" content="深入解析Git高级操作，涵盖交互式rebase、cherry-pick、bisect调试、reflog恢复、stash管理、worktree和Git内部对象模型。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Git高级工作流：rebase/cherry-pick/bisect","description":"深入解析Git高级操作，涵盖交互式rebase、cherry-pick、bisect调试、reflog恢复、stash管理、worktree和Git内部对象模型。","datePublished":"2025-10-07T16:00:00.000Z","dateModified":"2025-10-07T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/git-advanced-workflow/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Productivity","item":"https://withesse.co/categories/Productivity/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:60">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Productivity/">Productivity</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/git/"><span class="hash">#</span>git</a><a class="tag" href="/tags/workflow/"><span class="hash">#</span>workflow</a><a class="tag" href="/tags/rebase/"><span class="hash">#</span>rebase</a>
+        
+      </div>
+
+      <h1>Git高级工作流：rebase/cherry-pick/bisect</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2025.10.08</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 7 min</span>
+        </span>
+        <span class="wc"><span class="num">2.8k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#git%E5%86%85%E9%83%A8%E5%AF%B9%E8%B1%A1%E6%A8%A1%E5%9E%8B"><span class="toc-text">Git内部对象模型</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#interactive-rebase"><span class="toc-text">Interactive Rebase</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9F%BA%E6%9C%AC%E7%94%A8%E6%B3%95"><span class="toc-text">基本用法</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%B8%B8%E8%A7%81%E5%9C%BA%E6%99%AF"><span class="toc-text">常见场景</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#rebase-vs-merge"><span class="toc-text">Rebase vs Merge</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#cherry-pick"><span class="toc-text">Cherry-pick</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#cherry-pick%E4%BD%BF%E7%94%A8%E5%9C%BA%E6%99%AF"><span class="toc-text">Cherry-pick使用场景</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#git-bisect"><span class="toc-text">Git Bisect</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#refloggit%E7%9A%84%E6%92%A4%E9%94%80%E5%8E%86%E5%8F%B2"><span class="toc-text">Reflog：Git的”撤销”历史</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#stash"><span class="toc-text">Stash</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#worktree"><span class="toc-text">Worktree</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#merge%E7%AD%96%E7%95%A5"><span class="toc-text">Merge策略</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%90%88%E5%B9%B6%E7%AD%96%E7%95%A5%E9%80%89%E6%8B%A9"><span class="toc-text">合并策略选择</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E7%94%A8%E6%8A%80%E5%B7%A7"><span class="toc-text">实用技巧</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%8E%A8%E8%8D%90%E7%9A%84git%E9%85%8D%E7%BD%AE"><span class="toc-text">推荐的Git配置</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="前言">前言</h2>
+<p>Git的基础命令（add、commit、push、pull）足以应对日常开发。但在复杂的团队协作中，掌握rebase、cherry-pick、bisect等高级操作，能让你更高效地管理代码历史和排查问题。本文将深入这些高级Git技巧和Git的内部机制。</p>
+<h2 id="git内部对象模型">Git内部对象模型</h2>
+<p>理解Git的内部结构有助于理解高级操作的本质。</p>
+<pre class="mermaid">graph TB
+    subgraph "Git Objects"
+        COMMIT[Commit Object&lt;br&gt;tree: abc123&lt;br&gt;parent: def456&lt;br&gt;author: ...&lt;br&gt;message: ...]
+        TREE[Tree Object&lt;br&gt;blob a1b2: README.md&lt;br&gt;blob c3d4: main.rs&lt;br&gt;tree e5f6: src/]
+        BLOB1[Blob Object&lt;br&gt;文件内容]
+        BLOB2[Blob Object&lt;br&gt;文件内容]
+    end
+
+    COMMIT --&gt; TREE
+    TREE --&gt; BLOB1
+    TREE --&gt; BLOB2
+
+    subgraph "References"
+        HEAD[HEAD → refs/heads/main]
+        MAIN[refs/heads/main → commit hash]
+        TAG[refs/tags/v1.0 → commit hash]
+    end
+
+    HEAD --&gt; MAIN
+    MAIN --&gt; COMMIT</pre>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 查看Git对象</span><br>git cat-file -t HEAD        <span class="hljs-comment"># 类型（commit）</span><br>git cat-file -p HEAD        <span class="hljs-comment"># 内容</span><br>git cat-file -p HEAD^&#123;tree&#125; <span class="hljs-comment"># 查看commit对应的tree</span><br><br><span class="hljs-comment"># 查看引用</span><br>git show-ref<br><span class="hljs-built_in">cat</span> .git/HEAD               <span class="hljs-comment"># 查看HEAD指向</span><br></code></pre></td></tr></table></figure>
+<p>Git有四种对象类型： - <strong>Blob</strong>：文件内容 -
+<strong>Tree</strong>：目录结构（包含blob和其他tree的引用） -
+<strong>Commit</strong>：快照（指向tree，包含父commit、作者、消息） -
+<strong>Tag</strong>：带注解的标签</p>
+<h2 id="interactive-rebase">Interactive Rebase</h2>
+<p>交互式rebase是整理提交历史的最强大工具。</p>
+<h3 id="基本用法">基本用法</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 对最近N个commit进行交互式rebase</span><br>git rebase -i HEAD~5<br><br><span class="hljs-comment"># 对某个分支基点以后的commit进行rebase</span><br>git rebase -i main<br></code></pre></td></tr></table></figure>
+<p>编辑器中的操作选项：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><code class="hljs plaintext">pick   abc1234 feat: add user model         # 保留<br>reword def5678 fix: typo                     # 修改commit message<br>edit   ghi9012 feat: add API endpoint        # 停下来修改<br>squash jkl3456 fix: address review comments  # 合并到上一个commit<br>fixup  mno7890 fix: another small fix        # 合并但丢弃message<br>drop   pqr1234 temp: debug logging           # 删除此commit<br><br># 也可以调整顺序，直接移动行<br></code></pre></td></tr></table></figure>
+<h3 id="常见场景">常见场景</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 场景1: 合并多个小commit为一个</span><br>git rebase -i HEAD~4<br><span class="hljs-comment"># 将后三个commit改为squash或fixup</span><br><br><span class="hljs-comment"># 场景2: 修改历史commit的message</span><br>git rebase -i HEAD~3<br><span class="hljs-comment"># 将目标commit改为reword</span><br><br><span class="hljs-comment"># 场景3: 删除错误的commit</span><br>git rebase -i HEAD~5<br><span class="hljs-comment"># 删除或drop对应行</span><br><br><span class="hljs-comment"># 场景4: 拆分一个大commit</span><br>git rebase -i HEAD~3<br><span class="hljs-comment"># 将目标commit改为edit</span><br><span class="hljs-comment"># rebase停下后：</span><br>git reset HEAD~1              <span class="hljs-comment"># 撤销commit但保留修改</span><br>git add file1.rs<br>git commit -m <span class="hljs-string">&quot;part 1&quot;</span><br>git add file2.rs<br>git commit -m <span class="hljs-string">&quot;part 2&quot;</span><br>git rebase --<span class="hljs-built_in">continue</span><br></code></pre></td></tr></table></figure>
+<pre class="mermaid">graph LR
+    subgraph "Rebase前"
+        A1[A] --&gt; B1[B: feat] --&gt; C1[C: fix typo] --&gt; D1[D: more fix] --&gt; E1[E: refactor]
+    end
+
+    subgraph "Rebase后 (squash C,D into B)"
+        A2[A] --&gt; B2["B': feat (含修复)"] --&gt; E2["E': refactor"]
+    end</pre>
+<h3 id="rebase-vs-merge">Rebase vs Merge</h3>
+<pre class="mermaid">graph TB
+    subgraph "Merge: 保留分支历史"
+        M_A[A] --&gt; M_B[B]
+        M_A --&gt; M_C[C]
+        M_B --&gt; M_D[D]
+        M_C --&gt; M_E[E]
+        M_D --&gt; M_F[Merge Commit]
+        M_E --&gt; M_F
+    end
+
+    subgraph "Rebase: 线性历史"
+        R_A[A] --&gt; R_C[C] --&gt; R_E[E] --&gt; R_B["B'"] --&gt; R_D["D'"]
+    end</pre>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># Merge: 保留完整的分支历史</span><br>git checkout main<br>git merge feature-branch<br><br><span class="hljs-comment"># Rebase: 将feature分支的commit移到main最新位置</span><br>git checkout feature-branch<br>git rebase main<br><span class="hljs-comment"># 然后fast-forward merge</span><br>git checkout main<br>git merge feature-branch  <span class="hljs-comment"># fast-forward，无merge commit</span><br></code></pre></td></tr></table></figure>
+<p><strong>黄金法则</strong>：不要rebase已经推送到远程的公共分支。Rebase会改写提交历史，在共享分支上这样做会导致协作问题。</p>
+<h2 id="cherry-pick">Cherry-pick</h2>
+<p>Cherry-pick从另一个分支选取特定commit应用到当前分支。</p>
+<pre class="mermaid">graph LR
+    subgraph "Before cherry-pick"
+        A[A] --&gt; B[B] --&gt; C[C]
+        A --&gt; D[D] --&gt; E[E] --&gt; F[F]
+    end
+
+    subgraph "After cherry-pick E to main"
+        A2[A] --&gt; B2[B] --&gt; C2[C] --&gt; E2["E' (cherry-picked)"]
+        A2 --&gt; D2[D] --&gt; E3[E] --&gt; F2[F]
+    end</pre>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 选取单个commit</span><br>git cherry-pick abc1234<br><br><span class="hljs-comment"># 选取多个commit</span><br>git cherry-pick abc1234 def5678<br><br><span class="hljs-comment"># 选取范围（不包含起始commit）</span><br>git cherry-pick abc1234..def5678<br><br><span class="hljs-comment"># 选取范围（包含起始commit）</span><br>git cherry-pick abc1234^..def5678<br><br><span class="hljs-comment"># 只应用变更，不自动commit</span><br>git cherry-pick --no-commit abc1234<br><br><span class="hljs-comment"># 解决冲突后继续</span><br>git cherry-pick --<span class="hljs-built_in">continue</span><br><br><span class="hljs-comment"># 放弃cherry-pick</span><br>git cherry-pick --abort<br></code></pre></td></tr></table></figure>
+<h3 id="cherry-pick使用场景">Cherry-pick使用场景</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 场景1: 将hotfix从release分支带回main</span><br>git checkout main<br>git cherry-pick release-hotfix-commit-hash<br><br><span class="hljs-comment"># 场景2: 从废弃的分支中拯救有用的commit</span><br>git cherry-pick old-branch~2<br><br><span class="hljs-comment"># 场景3: 将特定feature commit应用到多个版本分支</span><br>git checkout release/1.0<br>git cherry-pick feature-commit<br>git checkout release/2.0<br>git cherry-pick feature-commit<br></code></pre></td></tr></table></figure>
+<h2 id="git-bisect">Git Bisect</h2>
+<p>Bisect使用二分查找定位引入bug的commit。</p>
+<pre class="mermaid">graph LR
+    C1[v1.0&lt;br&gt;Good] --&gt; C2[...] --&gt; C3[...] --&gt; C4[???] --&gt; C5[...] --&gt; C6[...] --&gt; C7[v2.0&lt;br&gt;Bad]
+
+    C4 --&gt; |bisect测试| RESULT{测试结果}
+    RESULT --&gt; |good| RIGHT[搜索右半部分]
+    RESULT --&gt; |bad| LEFT[搜索左半部分]</pre>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 手动bisect</span><br>git bisect start<br>git bisect bad                <span class="hljs-comment"># 标记当前（或指定）commit为bad</span><br>git bisect good v1.0          <span class="hljs-comment"># 标记已知正确的commit</span><br><br><span class="hljs-comment"># Git自动checkout中间点，测试后标记</span><br>git bisect good               <span class="hljs-comment"># 如果这个commit没有bug</span><br>git bisect bad                <span class="hljs-comment"># 如果这个commit有bug</span><br><br><span class="hljs-comment"># 重复直到找到第一个引入bug的commit</span><br><span class="hljs-comment"># Git输出: abc1234 is the first bad commit</span><br><br><span class="hljs-comment"># 结束bisect</span><br>git bisect reset<br><br><span class="hljs-comment"># 自动bisect（使用脚本）</span><br>git bisect start HEAD v1.0<br>git bisect run ./test.sh<br><span class="hljs-comment"># test.sh返回0表示good，返回1表示bad</span><br><span class="hljs-comment"># Git自动二分查找</span><br></code></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 实际例子：找到引入测试失败的commit</span><br>git bisect start<br>git bisect bad HEAD           <span class="hljs-comment"># 当前测试失败</span><br>git bisect good v1.5          <span class="hljs-comment"># v1.5时测试通过</span><br><br><span class="hljs-comment"># 自动执行测试</span><br>git bisect run cargo <span class="hljs-built_in">test</span> -- test_user_login<br><br><span class="hljs-comment"># 完成后</span><br>git bisect reset<br></code></pre></td></tr></table></figure>
+<h2 id="refloggit的撤销历史">Reflog：Git的”撤销”历史</h2>
+<p>Reflog记录了HEAD和分支引用的所有变动，是恢复误操作的救命工具。</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 查看reflog</span><br>git reflog<br><span class="hljs-comment"># 输出:</span><br><span class="hljs-comment"># abc1234 HEAD@&#123;0&#125;: commit: add feature</span><br><span class="hljs-comment"># def5678 HEAD@&#123;1&#125;: rebase: squash</span><br><span class="hljs-comment"># ghi9012 HEAD@&#123;2&#125;: checkout: moving from main to feature</span><br><span class="hljs-comment"># jkl3456 HEAD@&#123;3&#125;: commit: old commit that was rebased away</span><br><br><span class="hljs-comment"># 恢复误删的commit</span><br>git checkout -b recovery HEAD@&#123;3&#125;<br><br><span class="hljs-comment"># 恢复误操作的rebase</span><br>git reset --hard HEAD@&#123;1&#125;<br><br><span class="hljs-comment"># 查看特定分支的reflog</span><br>git reflog show feature-branch<br><br><span class="hljs-comment"># 按时间查找</span><br>git reflog --since=<span class="hljs-string">&quot;2 hours ago&quot;</span><br></code></pre></td></tr></table></figure>
+<pre class="mermaid">flowchart TB
+    DISASTER[Git灾难] --&gt; Q1{git reflog&lt;br&gt;能找到旧commit?}
+    Q1 --&gt;|是| RESET["git reset --hard HEAD@{N}&lt;br&gt;或 git checkout -b rescue HEAD@{N}"]
+    Q1 --&gt;|否| Q2{文件在工作区?}
+    Q2 --&gt;|是| STASH[git stash / 手动备份]
+    Q2 --&gt;|否| FSCK["git fsck --lost-found&lt;br&gt;查找悬垂对象"]
+    FSCK --&gt; RECOVER["git show dangling-commit-hash"]</pre>
+<h2 id="stash">Stash</h2>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 基本stash操作</span><br>git stash                     <span class="hljs-comment"># 暂存工作区修改</span><br>git stash pop                 <span class="hljs-comment"># 恢复并删除最新stash</span><br>git stash apply               <span class="hljs-comment"># 恢复但保留stash</span><br><br><span class="hljs-comment"># 带消息的stash</span><br>git stash push -m <span class="hljs-string">&quot;WIP: user auth feature&quot;</span><br><br><span class="hljs-comment"># stash未追踪的文件</span><br>git stash push -u -m <span class="hljs-string">&quot;including untracked&quot;</span><br><br><span class="hljs-comment"># stash特定文件</span><br>git stash push -m <span class="hljs-string">&quot;partial stash&quot;</span> src/main.rs src/config.rs<br><br><span class="hljs-comment"># 查看stash列表</span><br>git stash list<br><span class="hljs-comment"># stash@&#123;0&#125;: On feature: WIP: user auth</span><br><span class="hljs-comment"># stash@&#123;1&#125;: On main: quick fix attempt</span><br><br><span class="hljs-comment"># 查看stash内容</span><br>git stash show stash@&#123;0&#125;        <span class="hljs-comment"># 概览</span><br>git stash show -p stash@&#123;0&#125;     <span class="hljs-comment"># 详细diff</span><br><br><span class="hljs-comment"># 应用特定stash</span><br>git stash apply stash@&#123;1&#125;<br><br><span class="hljs-comment"># 删除stash</span><br>git stash drop stash@&#123;0&#125;       <span class="hljs-comment"># 删除特定</span><br>git stash clear                  <span class="hljs-comment"># 清空所有</span><br><br><span class="hljs-comment"># 从stash创建分支</span><br>git stash branch new-branch stash@&#123;0&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="worktree">Worktree</h2>
+<p>Worktree允许同时检出多个分支到不同目录。</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 添加工作树</span><br>git worktree add ../hotfix-branch hotfix/v1.2<br><span class="hljs-comment"># 在../hotfix-branch目录检出hotfix/v1.2分支</span><br><br><span class="hljs-comment"># 创建新分支的工作树</span><br>git worktree add -b feature/new ../feature-work main<br><br><span class="hljs-comment"># 列出所有工作树</span><br>git worktree list<br><span class="hljs-comment"># /path/to/repo          abc1234 [main]</span><br><span class="hljs-comment"># /path/to/hotfix-branch def5678 [hotfix/v1.2]</span><br><br><span class="hljs-comment"># 删除工作树</span><br>git worktree remove ../hotfix-branch<br><br><span class="hljs-comment"># 使用场景：</span><br><span class="hljs-comment"># 1. 在修feature时需要紧急修hotfix，不用stash</span><br><span class="hljs-comment"># 2. 同时对比两个分支的运行结果</span><br><span class="hljs-comment"># 3. 运行长时间测试时切换到另一个分支工作</span><br></code></pre></td></tr></table></figure>
+<pre class="mermaid">graph TB
+    REPO[".git (共享)"] --&gt; WT1[Main Worktree&lt;br&gt;/project&lt;br&gt;branch: main]
+    REPO --&gt; WT2[Linked Worktree&lt;br&gt;/project-hotfix&lt;br&gt;branch: hotfix/v1.2]
+    REPO --&gt; WT3[Linked Worktree&lt;br&gt;/project-feature&lt;br&gt;branch: feature/new]</pre>
+<h2 id="merge策略">Merge策略</h2>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># Fast-forward merge（线性历史）</span><br>git merge --ff-only feature  <span class="hljs-comment"># 只允许fast-forward</span><br><br><span class="hljs-comment"># No-fast-forward merge（总是创建merge commit）</span><br>git merge --no-ff feature    <span class="hljs-comment"># 保留分支拓扑信息</span><br><br><span class="hljs-comment"># Squash merge（合并为单个commit）</span><br>git merge --squash feature   <span class="hljs-comment"># 将所有变更合并到工作区</span><br>git commit -m <span class="hljs-string">&quot;feat: merged feature branch&quot;</span><br><br><span class="hljs-comment"># Ours策略（保留当前分支，忽略对方）</span><br>git merge -s ours old-branch  <span class="hljs-comment"># 标记为已合并但不应用变更</span><br><br><span class="hljs-comment"># 解决冲突</span><br>git merge feature<br><span class="hljs-comment"># 冲突后</span><br>git mergetool                  <span class="hljs-comment"># 使用合并工具</span><br><span class="hljs-comment"># 或手动编辑冲突文件</span><br>git add resolved-file.rs<br>git merge --<span class="hljs-built_in">continue</span><br></code></pre></td></tr></table></figure>
+<h3 id="合并策略选择">合并策略选择</h3>
+<pre class="mermaid">flowchart TB
+    START[合并分支] --&gt; Q1{feature分支?}
+    Q1 --&gt;|长期feature| NOFF["--no-ff&lt;br&gt;保留分支历史"]
+    Q1 --&gt;|短期修复| Q2{commit数量?}
+    Q2 --&gt;|1-2个| FF["--ff-only&lt;br&gt;（先rebase）"]
+    Q2 --&gt;|多个| SQUASH["--squash&lt;br&gt;合并为单个commit"]</pre>
+<h2 id="实用技巧">实用技巧</h2>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 查看谁修改了某一行</span><br>git blame src/main.rs<br>git blame -L 10,20 src/main.rs  <span class="hljs-comment"># 只看10-20行</span><br><br><span class="hljs-comment"># 查看文件在特定commit时的内容</span><br>git show HEAD~5:src/main.rs<br><br><span class="hljs-comment"># 搜索commit消息</span><br>git <span class="hljs-built_in">log</span> --grep=<span class="hljs-string">&quot;fix login&quot;</span><br><br><span class="hljs-comment"># 搜索代码变更</span><br>git <span class="hljs-built_in">log</span> -S <span class="hljs-string">&quot;function_name&quot;</span>     <span class="hljs-comment"># 查找添加/删除某字符串的commit</span><br>git <span class="hljs-built_in">log</span> -G <span class="hljs-string">&quot;regex_pattern&quot;</span>     <span class="hljs-comment"># 正则搜索</span><br><br><span class="hljs-comment"># 查看两个分支的差异</span><br>git <span class="hljs-built_in">log</span> main..feature          <span class="hljs-comment"># feature有但main没有的commit</span><br>git <span class="hljs-built_in">log</span> main...feature         <span class="hljs-comment"># 两者独有的commit</span><br>git diff main...feature        <span class="hljs-comment"># feature分支上的改动</span><br><br><span class="hljs-comment"># 清理：删除已合并的本地分支</span><br>git branch --merged main | grep -v main | xargs git branch -d<br><br><span class="hljs-comment"># 清理：删除远程已删除的跟踪分支</span><br>git fetch --prune<br><br><span class="hljs-comment"># 查看大文件</span><br>git rev-list --objects --all | \<br>  git cat-file --batch-check=<span class="hljs-string">&#x27;%(objecttype) %(objectname) %(objectsize) %(rest)&#x27;</span> | \<br>  sed -n <span class="hljs-string">&#x27;s/^blob //p&#x27;</span> | <span class="hljs-built_in">sort</span> -rnk2 | <span class="hljs-built_in">head</span> -20<br></code></pre></td></tr></table></figure>
+<h2 id="推荐的git配置">推荐的Git配置</h2>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># ~/.gitconfig</span><br>[<span class="hljs-built_in">alias</span>]<br>    st = status -sb<br>    lg = <span class="hljs-built_in">log</span> --oneline --graph --decorate --all<br>    co = checkout<br>    br = branch<br>    <span class="hljs-built_in">cp</span> = cherry-pick<br>    unstage = reset HEAD --<br>    last = <span class="hljs-built_in">log</span> -1 HEAD<br>    diff-stat = diff --<span class="hljs-built_in">stat</span><br><br>[pull]<br>    rebase = <span class="hljs-literal">true</span>        <span class="hljs-comment"># pull时默认rebase</span><br><br>[rebase]<br>    autoSquash = <span class="hljs-literal">true</span>    <span class="hljs-comment"># 自动识别fixup!/squash! commit</span><br>    autoStash = <span class="hljs-literal">true</span>     <span class="hljs-comment"># rebase前自动stash</span><br><br>[merge]<br>    conflictstyle = diff3  <span class="hljs-comment"># 显示三方diff</span><br><br>[diff]<br>    algorithm = histogram  <span class="hljs-comment"># 更好的diff算法</span><br><br>[rerere]<br>    enabled = <span class="hljs-literal">true</span>         <span class="hljs-comment"># 记录冲突解决方案，自动应用</span><br></code></pre></td></tr></table></figure>
+<h2 id="总结">总结</h2>
+<p>Git高级操作的核心要点：</p>
+<ol type="1">
+<li><strong>Interactive
+Rebase</strong>：整理提交历史的最强工具，合并、拆分、重排commit</li>
+<li><strong>Cherry-pick</strong>：从其他分支精确选取commit，适合hotfix回移</li>
+<li><strong>Bisect</strong>：二分查找定位引入bug的commit，支持自动化脚本</li>
+<li><strong>Reflog</strong>：Git的”后悔药”，几乎所有误操作都可以通过reflog恢复</li>
+<li><strong>Worktree</strong>：同时检出多个分支，无需stash切换</li>
+<li><strong>黄金法则</strong>：不要rebase公共分支，不要force
+push到共享分支</li>
+</ol>
+<p>掌握这些高级操作，能让你在复杂的团队协作中游刃有余，高效管理代码历史。</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2025-10-08</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">2.8k 字 · 7 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/ai-agent-architecture/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">AI Agent架构设计与实现模式</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/fine-tuning-llm/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">LLM微调实战：LoRA与QLoRA</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#git%E5%86%85%E9%83%A8%E5%AF%B9%E8%B1%A1%E6%A8%A1%E5%9E%8B"><span class="toc-text">Git内部对象模型</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#interactive-rebase"><span class="toc-text">Interactive Rebase</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9F%BA%E6%9C%AC%E7%94%A8%E6%B3%95"><span class="toc-text">基本用法</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%B8%B8%E8%A7%81%E5%9C%BA%E6%99%AF"><span class="toc-text">常见场景</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#rebase-vs-merge"><span class="toc-text">Rebase vs Merge</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#cherry-pick"><span class="toc-text">Cherry-pick</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#cherry-pick%E4%BD%BF%E7%94%A8%E5%9C%BA%E6%99%AF"><span class="toc-text">Cherry-pick使用场景</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#git-bisect"><span class="toc-text">Git Bisect</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#refloggit%E7%9A%84%E6%92%A4%E9%94%80%E5%8E%86%E5%8F%B2"><span class="toc-text">Reflog：Git的”撤销”历史</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#stash"><span class="toc-text">Stash</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#worktree"><span class="toc-text">Worktree</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#merge%E7%AD%96%E7%95%A5"><span class="toc-text">Merge策略</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%90%88%E5%B9%B6%E7%AD%96%E7%95%A5%E9%80%89%E6%8B%A9"><span class="toc-text">合并策略选择</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E7%94%A8%E6%8A%80%E5%B7%A7"><span class="toc-text">实用技巧</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%8E%A8%E8%8D%90%E7%9A%84git%E9%85%8D%E7%BD%AE"><span class="toc-text">推荐的Git配置</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>事件驱动架构（EDA）与请求/响应架构（RR）的深度比较 · zt&#39;s Blog</title>
+  <meta name="description" content="对比事件驱动架构与请求/响应架构在耦合性、一致性、扩展性和数据重用上的核心差异。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/a-comparison-of-event-driven-architecture-and-request-response-architecture/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="事件驱动架构（EDA）与请求/响应架构（RR）的深度比较">
+  <meta property="og:description" content="对比事件驱动架构与请求/响应架构在耦合性、一致性、扩展性和数据重用上的核心差异。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/a-comparison-of-event-driven-architecture-and-request-response-architecture/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2024-02-06T16:00:00.000Z">
+  <meta property="article:modified_time" content="2024-02-06T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="事件驱动架构（EDA）与请求/响应架构（RR）的深度比较">
+  <meta name="twitter:description" content="对比事件驱动架构与请求/响应架构在耦合性、一致性、扩展性和数据重用上的核心差异。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"事件驱动架构（EDA）与请求/响应架构（RR）的深度比较","description":"对比事件驱动架构与请求/响应架构在耦合性、一致性、扩展性和数据重用上的核心差异。","datePublished":"2024-02-06T16:00:00.000Z","dateModified":"2024-02-06T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/a-comparison-of-event-driven-architecture-and-request-response-architecture/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Architecture","item":"https://withesse.co/categories/Architecture/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:152">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Architecture/">Architecture</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/event-driven-architecture/"><span class="hash">#</span>event-driven-architecture</a><a class="tag" href="/tags/request-response/"><span class="hash">#</span>request-response</a><a class="tag" href="/tags/distributed-systems/"><span class="hash">#</span>distributed-systems</a>
+        
+      </div>
+
+      <h1>事件驱动架构（EDA）与请求/响应架构（RR）的深度比较</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2024.02.07</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 5 min</span>
+        </span>
+        <span class="wc"><span class="num">2.1k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#a-deep-comparison-of-event-driven-architecture-eda-and-requestresponse-architecture-rr"><span class="toc-text">A
+Deep Comparison of Event-Driven Architecture (EDA) and Request&#x2F;Response
+Architecture (RR)</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%80%E6%A6%82%E8%BF%B0"><span class="toc-text">一、概述</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BA%8B%E4%BB%B6%E9%A9%B1%E5%8A%A8%E6%9E%B6%E6%9E%84eda"><span class="toc-text">1. 事件驱动架构（EDA）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%AF%B7%E6%B1%82%E5%93%8D%E5%BA%94%E6%9E%B6%E6%9E%84rr"><span class="toc-text">2. 请求&#x2F;响应架构（RR）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%8C%E5%85%AD%E4%B8%AA%E5%85%B3%E9%94%AE%E6%AF%94%E8%BE%83%E5%9B%A0%E7%B4%A0"><span class="toc-text">二、六个关键比较因素</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8F%8D%E5%BA%94%E6%80%A7reactivity"><span class="toc-text">1. 反应性（Reactivity）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%80%A6%E5%90%88%E6%80%A7coupling-in-space-and-time"><span class="toc-text">2. 耦合性（Coupling in
+Space and Time）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%80%E8%87%B4%E6%80%A7consistency"><span class="toc-text">3.
+一致性（Consistency）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8E%86%E5%8F%B2%E7%8A%B6%E6%80%81historical-state"><span class="toc-text">4. 历史状态（Historical
+State）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%9E%B6%E6%9E%84%E7%81%B5%E6%B4%BB%E6%80%A7architectural-flexibility"><span class="toc-text">5.
+架构灵活性（Architectural Flexibility）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E8%AE%BF%E9%97%AE%E5%92%8C%E6%95%B0%E6%8D%AE%E9%87%8D%E7%94%A8data-access-and-reuse"><span class="toc-text">6.
+数据访问和数据重用（Data Access and Reuse）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%89%E6%A1%88%E4%BE%8B%E5%88%86%E6%9E%90"><span class="toc-text">三、案例分析</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9C%BA%E6%99%AF%E6%8F%8F%E8%BF%B0"><span class="toc-text">场景描述</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9C%A8-eda-%E4%B8%AD"><span class="toc-text">1. 在 EDA 中</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9C%A8-rr-%E4%B8%AD"><span class="toc-text">2. 在 RR 中</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%9B%E5%A6%82%E4%BD%95%E9%80%89%E6%8B%A9%E5%90%88%E9%80%82%E7%9A%84%E6%9E%B6%E6%9E%84"><span class="toc-text">四、如何选择合适的架构</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%80%89%E6%8B%A9-eda-%E7%9A%84%E6%83%85%E5%BD%A2"><span class="toc-text">1. 选择 EDA 的情形</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%80%89%E6%8B%A9-rr-%E7%9A%84%E6%83%85%E5%BD%A2"><span class="toc-text">2. 选择 RR 的情形</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%BB%BC%E5%90%88%E8%80%83%E8%99%91"><span class="toc-text">3. 综合考虑</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%94%E7%BB%93%E8%AE%BA"><span class="toc-text">五、结论</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8F%82%E8%80%83%E8%B5%84%E6%96%99"><span class="toc-text">参考资料</span></a></li></ol></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h1
+id="a-deep-comparison-of-event-driven-architecture-eda-and-requestresponse-architecture-rr">A
+Deep Comparison of Event-Driven Architecture (EDA) and Request/Response
+Architecture (RR)</h1>
+<p>a-comparison-of-event-driven-architecture-and-request-response-architecture</p>
+<p>在现代软件设计中，选择合适的架构对于系统的性能、可扩展性和维护性都至关重要。两种常见的架构模式是事件驱动架构（Event-Driven
+Architecture，EDA）和请求/响应架构（Request/Response，RR）。本文将深入探讨这两种架构，比较它们在六个关键因素下的差异，帮助您在实际项目中做出明智的选择。</p>
+<h2 id="一概述">一、概述</h2>
+<h3 id="事件驱动架构eda">1. 事件驱动架构（EDA）</h3>
+<p>EDA
+是一种通过事件来实现系统间通信的架构模型。核心思想是系统各组件通过发布和订阅事件来进行解耦和异步通信。当某个事件发生时，系统会将事件消息发布到消息中间件（如
+Apache Kafka），由感兴趣的服务订阅并处理。</p>
+<h3 id="请求响应架构rr">2. 请求/响应架构（RR）</h3>
+<p>RR 是一种直接通信的架构模型，服务之间通过同步调用（如 REST API 或
+RPC）进行交互。调用方发送请求，接收方处理请求并返回响应，这种方式需要双方在同一时间在线并可达。</p>
+<h2 id="二六个关键比较因素">二、六个关键比较因素</h2>
+<h3 id="反应性reactivity">1. <strong>反应性（Reactivity）</strong></h3>
+<p><strong>EDA</strong>：具有高度的反应性。系统通过事件触发，在接收到新事件后自动进行处理。例如，当客户在商城下单后，订单服务会将订单信息发布到消息主题中，相关的履约服务订阅此主题后立即处理订单，减少了人工干预和延迟。</p>
+<p><strong>RR</strong>：反应性相对较低。服务之间需要直接的请求和响应来驱动业务流程。例如，商城需要调用履约服务的
+API 通知其处理订单，这增加了通信的复杂性和延迟。</p>
+<h3 id="耦合性coupling-in-space-and-time">2. <strong>耦合性（Coupling in
+Space and Time）</strong></h3>
+<p><strong>EDA</strong>：实现了 <strong>松耦合</strong> 和
+<strong>异步处理</strong>。服务之间通过消息主题进行通信，不需要了解彼此的具体实现和运行时位置。如果某个服务暂时不可用，其他服务仍可继续运行，待其恢复后处理未处理的事件。</p>
+<p><strong>RR</strong>：存在
+<strong>紧耦合</strong>。服务之间需要了解对方的 API
+和运行时位置，且必须同时在线。如果一个服务不可用，可能会导致整个业务流程的中断，需要处理重试和故障转移机制。</p>
+<h3 id="一致性consistency">3.
+<strong>一致性（Consistency）</strong></h3>
+<p><strong>EDA</strong>：遵循
+<strong>最终一致性</strong>。由于是异步处理，数据在一段时间后达到一致状态。履约服务处理订单的速度可能会因为事件数量和自身处理能力而有所不同，需要考虑数据延迟和系统设计。</p>
+<p><strong>RR</strong>：通常提供
+<strong>强一致性</strong>。请求和响应在同一会话中完成，数据在处理后立即达到一致状态。这对于需要即时数据同步的业务场景非常有利。</p>
+<h3 id="历史状态historical-state">4. <strong>历史状态（Historical
+State）</strong></h3>
+<p><strong>EDA</strong>：保留了完整的事件历史记录。消息主题可以配置为保存所有事件，这使得新加入的服务能够从头开始消费并处理历史数据，支持数据的回放、审计和故障恢复。</p>
+<p><strong>RR</strong>：通常只保留当前状态，历史数据可能会被覆盖。例如，当客户修改订单时，数据库中的订单记录可能被直接更新，历史变更信息需要额外的机制来保存。</p>
+<h3 id="架构灵活性architectural-flexibility">5.
+<strong>架构灵活性（Architectural Flexibility）</strong></h3>
+<p><strong>EDA</strong>：具有高灵活性。新服务可以随时加入，订阅相关的事件主题，利用现有的事件流来构建新的功能。例如，库存服务可以订阅订单和库存入库的事件，实时计算库存水平。</p>
+<p><strong>RR</strong>：扩展性受到一定限制。新服务需要与现有服务的 API
+进行集成，可能需要调用多个服务来获取所需的数据，增加了系统的复杂性和耦合度。</p>
+<h3 id="数据访问和数据重用data-access-and-reuse">6.
+<strong>数据访问和数据重用（Data Access and Reuse）</strong></h3>
+<p><strong>EDA</strong>：方便数据的重用和分析。事件流可以直接用于构建数据湖、数据仓库，支持机器学习、数据分析等应用。通过
+Kafka Connect 等工具，可以轻松地将事件数据导入各种数据处理平台。</p>
+<p><strong>RR</strong>：数据重用相对困难。需要编写额外的 ETL（Extract,
+Transform,
+Load）作业来提取和转换数据，过程复杂且容易出错，难以及时满足数据分析的需求。</p>
+<h2 id="三案例分析">三、案例分析</h2>
+<h3 id="场景描述">场景描述</h3>
+<p>假设有一个在线商城，客户可以浏览商品并下单购买。我们将分别从 EDA 和
+RR 的角度来分析订单处理流程。</p>
+<h3 id="在-eda-中">1. 在 EDA 中</h3>
+<ul>
+<li><strong>订单处理</strong>：客户下单后，订单服务将订单事件发布到
+Kafka 主题中。</li>
+<li><strong>履约服务</strong>：订阅订单事件，异步处理订单履约和发货。</li>
+<li><strong>库存服务</strong>：订阅订单和入库事件，实时更新库存信息。</li>
+<li><strong>数据分析</strong>：数据团队可以直接消费事件流，进行实时数据分析和机器学习模型训练。</li>
+</ul>
+<h3 id="在-rr-中">2. 在 RR 中</h3>
+<ul>
+<li><strong>订单处理</strong>：客户下单后，商城服务直接调用履约服务的
+API 请求处理订单。</li>
+<li><strong>服务依赖</strong>：履约服务可能需要调用库存服务的 API
+检查库存，库存服务再调用其他服务获取必要的信息。</li>
+<li><strong>数据分析</strong>：需要编写 ETL
+作业，从各个服务的数据库中提取数据进行分析，过程繁琐且效率低下。</li>
+</ul>
+<h2 id="四如何选择合适的架构">四、如何选择合适的架构</h2>
+<h3 id="选择-eda-的情形">1. <strong>选择 EDA 的情形</strong></h3>
+<ul>
+<li><strong>需要高度解耦和异步处理</strong>：系统要求服务独立部署、松耦合，能够容忍部分服务的暂时不可用。</li>
+<li><strong>需要完整的事件历史记录</strong>：业务需要审计、回放或从历史数据中获取洞察。</li>
+<li><strong>数据驱动的应用场景</strong>：需要实时数据分析、机器学习模型训练，或构建数据湖和数据仓库。</li>
+<li><strong>灵活的扩展性</strong>：业务需求多变，频繁新增或修改服务。</li>
+</ul>
+<h3 id="选择-rr-的情形">2. <strong>选择 RR 的情形</strong></h3>
+<ul>
+<li><strong>需要强一致性和同步处理</strong>：业务要求数据实时同步，不能容忍数据延迟。</li>
+<li><strong>系统复杂度较低</strong>：服务数量较少，业务逻辑简单，直接通信更高效。</li>
+<li><strong>明确的服务边界</strong>：服务职责清晰，边界稳定，服务间依赖关系明确。</li>
+</ul>
+<h3 id="综合考虑">3. <strong>综合考虑</strong></h3>
+<ul>
+<li><strong>业务需求评估</strong>：明确系统对实时性、一致性、扩展性和数据处理的要求。</li>
+<li><strong>团队技术能力</strong>：评估团队对相关技术栈的熟悉程度，包括消息中间件、微服务框架等。</li>
+<li><strong>未来发展规划</strong>：考虑系统的长期演进方向，是否需要支持高并发、大数据量和复杂业务逻辑。</li>
+<li><strong>成本和维护</strong>：权衡系统的开发成本、运维复杂度和故障恢复能力。</li>
+</ul>
+<h2 id="五结论">五、结论</h2>
+<p>事件驱动架构（EDA）和请求/响应架构（RR）各有优劣，关键在于根据具体的业务需求和技术环境做出合适的选择。</p>
+<ul>
+<li><p><strong>EDA</strong>
+适用于需要高度解耦、异步处理、支持复杂数据处理和分析的系统，提供了更高的灵活性和可扩展性。</p></li>
+<li><p><strong>RR</strong>
+更适合对实时性、一致性要求高，系统复杂度较低的场景，直接的服务调用方式更直观，开发和调试相对简单。</p></li>
+</ul>
+<p>在实际应用中，混合使用两种架构也是常见的做法。通过在核心业务逻辑中使用请求/响应架构，确保数据的一致性和及时性；在外围系统和数据处理部分使用事件驱动架构，支持异步处理和数据分析需求。</p>
+<p>最终，选择最适合业务目标和技术需求的架构，才能构建出高性能、易维护的系统，为企业创造更大的价值。</p>
+<h2 id="参考资料">参考资料</h2>
+<ul>
+<li><a target="_blank" rel="noopener external nofollow noreferrer" href="https://kafka.apache.org/documentation/">Apache Kafka
+官方文档</a></li>
+<li><a
+target="_blank" rel="noopener" href="https://martinfowler.com/articles/201701-event-driven.html">事件驱动架构模式</a></li>
+<li><a target="_blank" rel="noopener external nofollow noreferrer" href="https://microservices.io/">微服务架构设计之道</a></li>
+</ul>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2024-02-07</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">2.1k 字 · 5 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/rate-limiting-algorithms/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">限流算法详解：令牌桶、滑动窗口与实现</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/prometheus-monitoring/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Prometheus监控体系：从部署到告警</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#a-deep-comparison-of-event-driven-architecture-eda-and-requestresponse-architecture-rr"><span class="toc-text">A
+Deep Comparison of Event-Driven Architecture (EDA) and Request&#x2F;Response
+Architecture (RR)</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%80%E6%A6%82%E8%BF%B0"><span class="toc-text">一、概述</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BA%8B%E4%BB%B6%E9%A9%B1%E5%8A%A8%E6%9E%B6%E6%9E%84eda"><span class="toc-text">1. 事件驱动架构（EDA）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%AF%B7%E6%B1%82%E5%93%8D%E5%BA%94%E6%9E%B6%E6%9E%84rr"><span class="toc-text">2. 请求&#x2F;响应架构（RR）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%8C%E5%85%AD%E4%B8%AA%E5%85%B3%E9%94%AE%E6%AF%94%E8%BE%83%E5%9B%A0%E7%B4%A0"><span class="toc-text">二、六个关键比较因素</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8F%8D%E5%BA%94%E6%80%A7reactivity"><span class="toc-text">1. 反应性（Reactivity）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%80%A6%E5%90%88%E6%80%A7coupling-in-space-and-time"><span class="toc-text">2. 耦合性（Coupling in
+Space and Time）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%80%E8%87%B4%E6%80%A7consistency"><span class="toc-text">3.
+一致性（Consistency）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8E%86%E5%8F%B2%E7%8A%B6%E6%80%81historical-state"><span class="toc-text">4. 历史状态（Historical
+State）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%9E%B6%E6%9E%84%E7%81%B5%E6%B4%BB%E6%80%A7architectural-flexibility"><span class="toc-text">5.
+架构灵活性（Architectural Flexibility）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E8%AE%BF%E9%97%AE%E5%92%8C%E6%95%B0%E6%8D%AE%E9%87%8D%E7%94%A8data-access-and-reuse"><span class="toc-text">6.
+数据访问和数据重用（Data Access and Reuse）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%89%E6%A1%88%E4%BE%8B%E5%88%86%E6%9E%90"><span class="toc-text">三、案例分析</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9C%BA%E6%99%AF%E6%8F%8F%E8%BF%B0"><span class="toc-text">场景描述</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9C%A8-eda-%E4%B8%AD"><span class="toc-text">1. 在 EDA 中</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9C%A8-rr-%E4%B8%AD"><span class="toc-text">2. 在 RR 中</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%9B%E5%A6%82%E4%BD%95%E9%80%89%E6%8B%A9%E5%90%88%E9%80%82%E7%9A%84%E6%9E%B6%E6%9E%84"><span class="toc-text">四、如何选择合适的架构</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%80%89%E6%8B%A9-eda-%E7%9A%84%E6%83%85%E5%BD%A2"><span class="toc-text">1. 选择 EDA 的情形</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%80%89%E6%8B%A9-rr-%E7%9A%84%E6%83%85%E5%BD%A2"><span class="toc-text">2. 选择 RR 的情形</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%BB%BC%E5%90%88%E8%80%83%E8%99%91"><span class="toc-text">3. 综合考虑</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%94%E7%BB%93%E8%AE%BA"><span class="toc-text">五、结论</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8F%82%E8%80%83%E8%B5%84%E6%96%99"><span class="toc-text">参考资料</span></a></li></ol></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

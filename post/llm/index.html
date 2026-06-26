@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>我的大语言模型学习路径：从调用 API 到理解内部 · zt&#39;s Blog</title>
+  <meta name="description" content="记录一个后端工程师从&#34;会用 ChatGPT API&#34;到理解 Transformer 架构、实现 RAG 系统的学习过程，以及沿途读过的资料和踩过的坑。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/llm/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="我的大语言模型学习路径：从调用 API 到理解内部">
+  <meta property="og:description" content="记录一个后端工程师从&#34;会用 ChatGPT API&#34;到理解 Transformer 架构、实现 RAG 系统的学习过程，以及沿途读过的资料和踩过的坑。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/llm/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2024-03-04T16:00:00.000Z">
+  <meta property="article:modified_time" content="2024-03-04T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="我的大语言模型学习路径：从调用 API 到理解内部">
+  <meta name="twitter:description" content="记录一个后端工程师从&#34;会用 ChatGPT API&#34;到理解 Transformer 架构、实现 RAG 系统的学习过程，以及沿途读过的资料和踩过的坑。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"我的大语言模型学习路径：从调用 API 到理解内部","description":"记录一个后端工程师从\"会用 ChatGPT API\"到理解 Transformer 架构、实现 RAG 系统的学习过程，以及沿途读过的资料和踩过的坑。","datePublished":"2024-03-04T16:00:00.000Z","dateModified":"2024-03-04T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/llm/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"AI","item":"https://withesse.co/categories/AI/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:280">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/AI/">AI</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/llm/"><span class="hash">#</span>llm</a><a class="tag" href="/tags/rag/"><span class="hash">#</span>rag</a><a class="tag" href="/tags/learning-path/"><span class="hash">#</span>learning-path</a><a class="tag" href="/tags/transformer/"><span class="hash">#</span>transformer</a>
+        
+      </div>
+
+      <h1>我的大语言模型学习路径：从调用 API 到理解内部</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2024.03.05</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 4 min</span>
+        </span>
+        <span class="wc"><span class="num">1.8k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%AC%AC%E4%B8%80%E9%98%B6%E6%AE%B5%E5%85%88%E4%BC%9A%E7%94%A8%E5%86%8D%E7%90%86%E8%A7%A3"><span class="toc-text">第一阶段：先会用，再理解</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%AC%AC%E4%BA%8C%E9%98%B6%E6%AE%B5%E7%90%86%E8%A7%A3-token-%E5%92%8C%E4%B8%8A%E4%B8%8B%E6%96%87%E7%AA%97%E5%8F%A3"><span class="toc-text">第二阶段：理解 Token
+和上下文窗口</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%AC%AC%E4%B8%89%E9%98%B6%E6%AE%B5rag-%E7%B3%BB%E7%BB%9F%E5%AE%9E%E7%8E%B0"><span class="toc-text">第三阶段：RAG 系统实现</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%AC%AC%E5%9B%9B%E9%98%B6%E6%AE%B5%E5%9B%9E%E5%A4%B4%E7%90%86%E8%A7%A3-transformer"><span class="toc-text">第四阶段：回头理解
+Transformer</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%B8%A9%E5%9D%91%E8%AE%B0%E5%BD%95"><span class="toc-text">踩坑记录</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8F%82%E8%80%83%E8%B5%84%E6%96%99"><span class="toc-text">参考资料</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <p>2023 年 GPT-3.5 出来后，我花了大概三四个月认真补了一遍 LLM
+相关的知识。这篇文章是学习路径的复盘，不是系统性的教程，更像是”如果重来一次我会怎么安排顺序”的回答。</p>
+<p>我的背景是 Java 后端，没有 ML
+基础，不做模型训练，主要关注工程应用。所以这条路线是偏应用层的，不涉及
+CUDA 编程和模型训练。</p>
+<h2 id="第一阶段先会用再理解">第一阶段：先会用，再理解</h2>
+<p>最开始我犯了一个错误：一上来就想把 Transformer
+的论文啃完，结果看了一周，满脑子是 self-attention
+公式，但不知道这东西能拿来做什么。</p>
+<p>后来调整策略：<strong>先通过实际使用建立直觉，再回头理解原理</strong>。</p>
+<p>第一步是学会调用 OpenAI API，把几个实际的东西跑起来：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">from</span> openai <span class="hljs-keyword">import</span> OpenAI<br><br>client = OpenAI()<br><br><span class="hljs-comment"># 最基础的对话</span><br>response = client.chat.completions.create(<br>    model=<span class="hljs-string">&quot;gpt-3.5-turbo&quot;</span>,<br>    messages=[<br>        &#123;<span class="hljs-string">&quot;role&quot;</span>: <span class="hljs-string">&quot;system&quot;</span>, <span class="hljs-string">&quot;content&quot;</span>: <span class="hljs-string">&quot;你是一个代码审查助手&quot;</span>&#125;,<br>        &#123;<span class="hljs-string">&quot;role&quot;</span>: <span class="hljs-string">&quot;user&quot;</span>, <span class="hljs-string">&quot;content&quot;</span>: <span class="hljs-string">&quot;这段代码有什么问题？\n```java\n...\n```&quot;</span>&#125;<br>    ],<br>    temperature=<span class="hljs-number">0.3</span>,<br>    max_tokens=<span class="hljs-number">1000</span>,<br>)<br><span class="hljs-built_in">print</span>(response.choices[<span class="hljs-number">0</span>].message.content)<br></code></pre></td></tr></table></figure>
+<p>在这个过程中，<code>temperature</code>、<code>max_tokens</code>、<code>top_p</code>
+这些参数通过实验很快有了直觉——<code>temperature=0</code>
+时输出很确定，<code>temperature=1</code>
+时很发散。这种直觉比先读论文再调参要快得多。</p>
+<h2 id="第二阶段理解-token-和上下文窗口">第二阶段：理解 Token
+和上下文窗口</h2>
+<p>这是很多工程师容易跳过但其实很重要的基础概念。</p>
+<p>Token 不等于字符，也不等于词。OpenAI 用的是 Byte Pair
+Encoding（BPE），大概 1 个 token 对应英文 4 个字符，中文则大概 1-2
+个字符对应 1 个 token（因为中文字符本身就比较多）。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">import</span> tiktoken<br><br>enc = tiktoken.encoding_for_model(<span class="hljs-string">&quot;gpt-3.5-turbo&quot;</span>)<br>text = <span class="hljs-string">&quot;用 Java 实现一个线程安全的单例模式&quot;</span><br>tokens = enc.encode(text)<br><span class="hljs-built_in">print</span>(<span class="hljs-string">f&quot;文本：<span class="hljs-subst">&#123;text&#125;</span>&quot;</span>)<br><span class="hljs-built_in">print</span>(<span class="hljs-string">f&quot;Token 数量：<span class="hljs-subst">&#123;<span class="hljs-built_in">len</span>(tokens)&#125;</span>&quot;</span>)<br><span class="hljs-built_in">print</span>(<span class="hljs-string">f&quot;Token IDs：<span class="hljs-subst">&#123;tokens&#125;</span>&quot;</span>)<br><span class="hljs-comment"># Token 数量：17（中文每字约 1.5 token）</span><br></code></pre></td></tr></table></figure>
+<p>理解 token 计费和上下文窗口（context
+window）对工程实现很重要。GPT-3.5 是 4k 或 16k token 的上下文，GPT-4 有
+128k，但不是越大越好——处理超长上下文时，模型对中间内容的”注意力”会下降（所谓”lost
+in the middle”问题），提示词放在最前面或最后面效果通常比放在中间好。</p>
+<h2 id="第三阶段rag-系统实现">第三阶段：RAG 系统实现</h2>
+<p>RAG（Retrieval-Augmented Generation）是 LLM
+工程应用里最实用的模式之一，解决模型知识截止日期和幻觉两个主要问题。</p>
+<p>原理很简单：用户提问 → 从文档库里检索相关片段 → 把片段塞进 prompt →
+让模型基于这些片段回答。</p>
+<p>我用 LangChain 搭了一个内部文档问答系统：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">from</span> langchain.embeddings <span class="hljs-keyword">import</span> OpenAIEmbeddings<br><span class="hljs-keyword">from</span> langchain.vectorstores <span class="hljs-keyword">import</span> Chroma<br><span class="hljs-keyword">from</span> langchain.text_splitter <span class="hljs-keyword">import</span> RecursiveCharacterTextSplitter<br><span class="hljs-keyword">from</span> langchain.chains <span class="hljs-keyword">import</span> RetrievalQA<br><span class="hljs-keyword">from</span> langchain.chat_models <span class="hljs-keyword">import</span> ChatOpenAI<br><span class="hljs-keyword">from</span> langchain.document_loaders <span class="hljs-keyword">import</span> DirectoryLoader<br><br><span class="hljs-comment"># 1. 加载文档</span><br>loader = DirectoryLoader(<span class="hljs-string">&quot;./docs&quot;</span>, glob=<span class="hljs-string">&quot;**/*.md&quot;</span>)<br>documents = loader.load()<br><br><span class="hljs-comment"># 2. 分块（chunk）</span><br>splitter = RecursiveCharacterTextSplitter(<br>    chunk_size=<span class="hljs-number">500</span>,       <span class="hljs-comment"># 每块 500 字符</span><br>    chunk_overlap=<span class="hljs-number">50</span>,     <span class="hljs-comment"># 相邻块重叠 50 字符，防止截断关键信息</span><br>)<br>chunks = splitter.split_documents(documents)<br><br><span class="hljs-comment"># 3. 向量化并存储</span><br>embeddings = OpenAIEmbeddings()<br>vectordb = Chroma.from_documents(<br>    chunks,<br>    embeddings,<br>    persist_directory=<span class="hljs-string">&quot;./chroma_db&quot;</span><br>)<br><br><span class="hljs-comment"># 4. 构建问答链</span><br>qa_chain = RetrievalQA.from_chain_type(<br>    llm=ChatOpenAI(model_name=<span class="hljs-string">&quot;gpt-3.5-turbo&quot;</span>, temperature=<span class="hljs-number">0</span>),<br>    chain_type=<span class="hljs-string">&quot;stuff&quot;</span>,    <span class="hljs-comment"># 把所有检索结果一次性塞入 prompt</span><br>    retriever=vectordb.as_retriever(search_kwargs=&#123;<span class="hljs-string">&quot;k&quot;</span>: <span class="hljs-number">3</span>&#125;),<br>    return_source_documents=<span class="hljs-literal">True</span>,<br>)<br><br><span class="hljs-comment"># 5. 查询</span><br>result = qa_chain(<span class="hljs-string">&quot;我们的 API 如何做认证？&quot;</span>)<br><span class="hljs-built_in">print</span>(result[<span class="hljs-string">&quot;result&quot;</span>])<br><span class="hljs-built_in">print</span>(<span class="hljs-string">&quot;参考文档：&quot;</span>, [doc.metadata[<span class="hljs-string">&quot;source&quot;</span>] <span class="hljs-keyword">for</span> doc <span class="hljs-keyword">in</span> result[<span class="hljs-string">&quot;source_documents&quot;</span>]])<br></code></pre></td></tr></table></figure>
+<p>这个系统做出来之后，真正头疼的不是代码，而是<strong>召回效果</strong>。检索到的文档片段和问题不相关，模型就会胡说。影响召回质量的因素有：分块策略、embedding
+模型选择、检索算法（纯向量 vs
+混合检索）。这个我在另一篇文章（llm-rag-architecture）里详细写了。</p>
+<h2 id="第四阶段回头理解-transformer">第四阶段：回头理解
+Transformer</h2>
+<p>有了前面的实际感受，再读 Transformer 的论文《Attention Is All You
+Need》和相关资料，理解就深了很多。</p>
+<p>Karpathy 的 <a
+target="_blank" rel="noopener" href="https://www.youtube.com/watch?v=kCc8FmEb1nY">Let’s build GPT</a>
+视频是我见过最好的入门材料。他从零开始用 200 行 PyTorch
+实现了一个简化版的
+GPT，过程中解释了每个组件的作用。跟着敲一遍，self-attention
+的直觉一下子就有了。</p>
+<p>核心理解：self-attention 让序列中的每个 token 都能”看到”其他所有
+token，并根据相关性加权汇总信息。这解决了 RNN
+难以处理长距离依赖的问题。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-comment"># self-attention 的核心计算（简化版）</span><br><span class="hljs-keyword">import</span> torch<br><span class="hljs-keyword">import</span> torch.nn.functional <span class="hljs-keyword">as</span> F<br><br><span class="hljs-keyword">def</span> <span class="hljs-title function_">self_attention</span>(<span class="hljs-params">Q, K, V</span>):<br>    <span class="hljs-comment"># Q, K, V: (batch, seq_len, d_k)</span><br>    d_k = Q.size(-<span class="hljs-number">1</span>)<br><br>    <span class="hljs-comment"># 相似度分数</span><br>    scores = torch.matmul(Q, K.transpose(-<span class="hljs-number">2</span>, -<span class="hljs-number">1</span>)) / (d_k ** <span class="hljs-number">0.5</span>)<br><br>    <span class="hljs-comment"># softmax 得到注意力权重（每个 token 对其他 token 的&quot;关注度&quot;）</span><br>    weights = F.softmax(scores, dim=-<span class="hljs-number">1</span>)<br><br>    <span class="hljs-comment"># 加权汇总 Value</span><br>    <span class="hljs-keyword">return</span> torch.matmul(weights, V)<br></code></pre></td></tr></table></figure>
+<h2 id="踩坑记录">踩坑记录</h2>
+<p><strong>踩坑 1：LangChain 版本更新太快，代码一个月就失效</strong></p>
+<p>LangChain 在 2023 年迭代非常激进，API 频繁改动。我写的一个
+demo，两个月后跑不起来了，主要是 <code>langchain.chat_models</code>
+被拆分到 <code>langchain_openai</code> 包里。</p>
+<p>现在的习惯是把 LangChain
+的版本钉死（<code>langchain==0.0.xxx</code>），不主动升级，升级之前先读
+changelog。</p>
+<p><strong>踩坑 2：向量数据库选型想太多</strong></p>
+<p>一开始在 Pinecone、Weaviate、Qdrant、Chroma
+里纠结了很久。实际上内部系统用 Chroma
+已经够了（本地文件存储，不需要部署额外服务），生产用 Elasticsearch
+的向量检索（公司已有 ES，不引入新依赖）。</p>
+<p><strong>踩坑 3：直接用 GPT-4 做原型，成本比预想高很多</strong></p>
+<p>测试阶段没注意 token
+消耗，跑了几个批处理任务，一个月账单超出预期很多。</p>
+<p>现在的习惯：开发和测试用 GPT-3.5，只在效果确实有差距时才切
+GPT-4。或者用本地 Ollama 做开发，上线再切云端模型。</p>
+<p><strong>踩坑 4：embedding 维度不同不能混用</strong></p>
+<p>换了一个 embedding 模型（从 <code>text-embedding-ada-002</code> 换到
+<code>text-embedding-3-small</code>），忘记清空旧的向量库，导致检索时维度不匹配报错。</p>
+<p>不同 embedding
+模型的向量空间不一样，换模型必须重新向量化所有文档。</p>
+<h2 id="参考资料">参考资料</h2>
+<p>这些是我实际读过、觉得有价值的：</p>
+<ul>
+<li><a target="_blank" rel="noopener external nofollow noreferrer" href="https://arxiv.org/abs/1706.03762">Attention Is All You
+Need</a>（原始 Transformer 论文）</li>
+<li><a target="_blank" rel="noopener external nofollow noreferrer" href="https://www.youtube.com/watch?v=kCc8FmEb1nY">Let’s build
+GPT（Karpathy）</a></li>
+<li><a target="_blank" rel="noopener external nofollow noreferrer" href="https://bbycroft.net/llm">LLM Visualization</a>（可视化 GPT
+内部计算过程，直觉神器）</li>
+<li><a target="_blank" rel="noopener external nofollow noreferrer" href="https://course.fast.ai/Lessons/lesson8.html">Practical
+LLMs（FastAI）</a></li>
+<li>OpenAI Cookbook：<a
+target="_blank" rel="noopener" href="https://github.com/openai/openai-cookbook">github.com/openai/openai-cookbook</a></li>
+</ul>
+<p>学 LLM 的体会：工程应用这块变化太快，与其追最新论文，不如先把
+embedding、向量检索、提示工程这几个核心概念搞透，然后结合实际项目做，在实践中发现哪里不够用了再去补。</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2024-03-05</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">1.8k 字 · 4 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/circuit-breaker-pattern/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">熔断器模式：从Hystrix到Sentinel</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/using-ollama-to-deploy-local-llm/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">使用 Ollama 在本地跑大语言模型</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%AC%AC%E4%B8%80%E9%98%B6%E6%AE%B5%E5%85%88%E4%BC%9A%E7%94%A8%E5%86%8D%E7%90%86%E8%A7%A3"><span class="toc-text">第一阶段：先会用，再理解</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%AC%AC%E4%BA%8C%E9%98%B6%E6%AE%B5%E7%90%86%E8%A7%A3-token-%E5%92%8C%E4%B8%8A%E4%B8%8B%E6%96%87%E7%AA%97%E5%8F%A3"><span class="toc-text">第二阶段：理解 Token
+和上下文窗口</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%AC%AC%E4%B8%89%E9%98%B6%E6%AE%B5rag-%E7%B3%BB%E7%BB%9F%E5%AE%9E%E7%8E%B0"><span class="toc-text">第三阶段：RAG 系统实现</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%AC%AC%E5%9B%9B%E9%98%B6%E6%AE%B5%E5%9B%9E%E5%A4%B4%E7%90%86%E8%A7%A3-transformer"><span class="toc-text">第四阶段：回头理解
+Transformer</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%B8%A9%E5%9D%91%E8%AE%B0%E5%BD%95"><span class="toc-text">踩坑记录</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8F%82%E8%80%83%E8%B5%84%E6%96%99"><span class="toc-text">参考资料</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

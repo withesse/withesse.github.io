@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SQLite 架构介绍与源码解析 · zt&#39;s Blog</title>
+  <meta name="description" content="介绍 SQLite 的整体架构与关键模块，并结合源码理解其轻量高效的实现方式。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/sqlite-architecture-explanation-and-code-analysis/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="SQLite 架构介绍与源码解析">
+  <meta property="og:description" content="介绍 SQLite 的整体架构与关键模块，并结合源码理解其轻量高效的实现方式。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/sqlite-architecture-explanation-and-code-analysis/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2024-11-09T07:58:19.000Z">
+  <meta property="article:modified_time" content="2024-11-09T07:58:19.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="SQLite 架构介绍与源码解析">
+  <meta name="twitter:description" content="介绍 SQLite 的整体架构与关键模块，并结合源码理解其轻量高效的实现方式。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"SQLite 架构介绍与源码解析","description":"介绍 SQLite 的整体架构与关键模块，并结合源码理解其轻量高效的实现方式。","datePublished":"2024-11-09T07:58:19.000Z","dateModified":"2024-11-09T07:58:19.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/sqlite-architecture-explanation-and-code-analysis/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Database","item":"https://withesse.co/categories/Database/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:330">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Database/">Database</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/architecture/"><span class="hash">#</span>architecture</a><a class="tag" href="/tags/sqlite/"><span class="hash">#</span>sqlite</a><a class="tag" href="/tags/source-code/"><span class="hash">#</span>source-code</a>
+        
+      </div>
+
+      <h1>SQLite 架构介绍与源码解析</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2024.11.09</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 4 min</span>
+        </span>
+        <span class="wc"><span class="num">1.7k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#sqlite-%E6%80%BB%E4%BD%93%E6%9E%B6%E6%9E%84"><span class="toc-text">SQLite 总体架构</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E7%BB%84%E4%BB%B6%E8%AF%A6%E8%A7%A3"><span class="toc-text">核心组件详解</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%BC%96%E8%AF%91%E5%99%A8"><span class="toc-text">编译器</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%99%9A%E6%8B%9F%E6%9C%BAvdbe"><span class="toc-text">虚拟机（VDBE）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#b-tree-%E6%A8%A1%E5%9D%97"><span class="toc-text">B-Tree 模块</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#pager-%E6%A8%A1%E5%9D%97"><span class="toc-text">Pager 模块</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#os-%E6%8E%A5%E5%8F%A3%E5%B1%82"><span class="toc-text">OS 接口层</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#sqlite-%E5%B7%A5%E4%BD%9C%E6%B5%81%E7%A8%8B"><span class="toc-text">SQLite 工作流程</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90"><span class="toc-text">源码解析</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%BA%90%E4%BB%A3%E7%A0%81%E7%BB%93%E6%9E%84"><span class="toc-text">源代码结构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%B3%E9%94%AE%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84"><span class="toc-text">关键数据结构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%89%A7%E8%A1%8C-sql-%E8%AF%AD%E5%8F%A5%E7%9A%84%E8%BF%87%E7%A8%8B"><span class="toc-text">执行 SQL 语句的过程</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%A4%BA%E4%BE%8B%E6%89%A7%E8%A1%8C%E7%AE%80%E5%8D%95%E7%9A%84-select-%E8%AF%AD%E5%8F%A5"><span class="toc-text">示例：执行简单的 SELECT 语句</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%A7%A3%E6%9E%90%E5%92%8C%E4%BB%A3%E7%A0%81%E7%94%9F%E6%88%90"><span class="toc-text">1. 解析和代码生成</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AD%97%E8%8A%82%E7%A0%81%E6%89%A7%E8%A1%8C"><span class="toc-text">2. 字节码执行</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E5%AD%98%E5%8F%96"><span class="toc-text">3. 数据存取</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <p>SQLite
+是一款广泛使用的嵌入式关系型数据库管理系统，以其轻量级、易用和高效著称。它被广泛应用于移动设备、浏览器、嵌入式系统等场景。本文将详细介绍
+SQLite 的架构，并结合其源码解析，帮助您深入理解其内部工作原理。</p>
+<h2 id="sqlite-总体架构">SQLite 总体架构</h2>
+<p>SQLite 的架构设计可分为以下几个层次：</p>
+<ol type="1">
+<li><strong>编译器（Compiler）</strong>：解析和分析 SQL
+语句，生成中间代码。</li>
+<li><strong>虚拟数据库引擎（Virtual Database Engine,
+VDBE）</strong>：执行编译器生成的中间代码。</li>
+<li><strong>后端存储引擎</strong>：包括 B-Tree 模块、Pager 模块和 OS
+接口层，负责数据的存储和检索。</li>
+</ol>
+<figure>
+<img loading="lazy" decoding="async" src="https://www.sqlite.org/images/arch_overview.png"
+alt="SQLite 架构图" />
+<figcaption aria-hidden="true">SQLite 架构图</figcaption>
+</figure>
+<hr />
+<h2 id="核心组件详解">核心组件详解</h2>
+<h3 id="编译器">编译器</h3>
+<p><strong>功能：</strong></p>
+<ul>
+<li>解析 SQL 语句，将其转换为内部表示（抽象语法树，AST）。</li>
+<li>进行语法和语义检查。</li>
+<li>生成 VDBE 可执行的字节码指令。</li>
+</ul>
+<p><strong>流程：</strong></p>
+<ol type="1">
+<li><strong>词法分析（Lexing）</strong>：将输入的 SQL
+文本分解为标记（tokens）。</li>
+<li><strong>语法分析（Parsing）</strong>：根据 SQLite
+的语法规则，生成抽象语法树。</li>
+<li><strong>语义分析（Analyzing）</strong>：检查语义错误，如表不存在、字段类型不匹配等。</li>
+<li><strong>代码生成（Code Generation）</strong>：将语法树转换为 VDBE
+字节码指令序列。</li>
+</ol>
+<h3 id="虚拟机vdbe">虚拟机（VDBE）</h3>
+<p><strong>功能：</strong></p>
+<ul>
+<li>SQLite 的核心执行引擎，负责执行编译器生成的字节码。</li>
+<li>类似于解释器，逐条执行指令，完成数据库操作。</li>
+</ul>
+<p><strong>特点：</strong></p>
+<ul>
+<li>指令集针对数据库操作进行了优化，如
+<code>OpenRead</code>、<code>Column</code>、<code>SetNumColumns</code>
+等。</li>
+<li>使用栈式计算模型，操作数通常保存在栈中。</li>
+</ul>
+<h3 id="b-tree-模块">B-Tree 模块</h3>
+<p><strong>功能：</strong></p>
+<ul>
+<li>管理数据库文件的逻辑组织，以 B-Tree 结构存储表和索引。</li>
+<li>提供高效的数据插入、删除、查找和遍历操作。</li>
+</ul>
+<p><strong>特点：</strong></p>
+<ul>
+<li>每个表和索引都对应一个 B-Tree。</li>
+<li>支持事务和并发控制。</li>
+</ul>
+<h3 id="pager-模块">Pager 模块</h3>
+<p><strong>功能：</strong></p>
+<ul>
+<li>管理数据库文件的读写，提供页级别的缓存机制。</li>
+<li>实现事务的原子性、一致性、隔离性和持久性（ACID）。</li>
+</ul>
+<p><strong>特点：</strong></p>
+<ul>
+<li>使用缓存页（Cache Page）来减少磁盘 I/O。</li>
+<li>实现了日志（Write-Ahead Logging, WAL）和回滚机制。</li>
+</ul>
+<h3 id="os-接口层">OS 接口层</h3>
+<p><strong>功能：</strong></p>
+<ul>
+<li>抽象底层操作系统的文件和锁机制，提供统一的接口。</li>
+<li>使 SQLite 能够在不同操作系统上运行。</li>
+</ul>
+<p><strong>特点：</strong></p>
+<ul>
+<li>包含文件读写、文件控制、内存分配、时间获取等接口。</li>
+</ul>
+<hr />
+<h2 id="sqlite-工作流程">SQLite 工作流程</h2>
+<ol type="1">
+<li><strong>输入 SQL 语句</strong>：用户输入一条 SQL 语句。</li>
+<li><strong>编译器处理</strong>：编译器解析 SQL，生成 VDBE 字节码。</li>
+<li><strong>执行字节码</strong>：VDBE 虚拟机执行字节码指令。</li>
+<li><strong>调用 B-Tree 和 Pager</strong>：根据指令，调用 B-Tree 和
+Pager 模块进行数据操作。</li>
+<li><strong>数据存取</strong>：通过 OS
+接口层，进行磁盘文件的读写操作。</li>
+<li><strong>返回结果</strong>：将查询结果返回给用户。</li>
+</ol>
+<hr />
+<h2 id="源码解析">源码解析</h2>
+<h3 id="源代码结构">源代码结构</h3>
+<p>SQLite 的源代码主要由以下几个部分组成：</p>
+<ul>
+<li><code>src/</code>：核心源码目录。</li>
+<li><code>vdbe.c</code>：虚拟机实现。</li>
+<li><code>parse.y</code>：SQL 语法解析器的 yacc 源文件。</li>
+<li><code>btree.c</code>：B-Tree 模块实现。</li>
+<li><code>pager.c</code>：Pager 模块实现。</li>
+<li><code>os_unix.c</code>、<code>os_win.c</code>：OS
+接口层的不同平台实现。</li>
+</ul>
+<h3 id="关键数据结构">关键数据结构</h3>
+<h4 id="parse">Parse</h4>
+<p>用于存储解析过程中的上下文信息。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-keyword">typedef</span> <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">Parse</span> &#123;</span><br>    sqlite3 *db;          <span class="hljs-comment">/* The database connection */</span><br>    <span class="hljs-type">int</span> nErr;             <span class="hljs-comment">/* Number of errors seen */</span><br>    Vdbe *pVdbe;          <span class="hljs-comment">/* An engine for executing database bytecode */</span><br>    <span class="hljs-comment">// 其他字段...</span><br>&#125; Parse;<br></code></pre></td></tr></table></figure>
+<h4 id="vdbe">Vdbe</h4>
+<p>表示虚拟机实例。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-keyword">typedef</span> <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">Vdbe</span> &#123;</span><br>    sqlite3 *db;          <span class="hljs-comment">/* The database connection */</span><br>    Op *aOp;              <span class="hljs-comment">/* Array of operations */</span><br>    <span class="hljs-type">int</span> nOp;              <span class="hljs-comment">/* Number of instructions in the program */</span><br>    <span class="hljs-comment">// 其他字段...</span><br>&#125; Vdbe;<br></code></pre></td></tr></table></figure>
+<h4 id="btree">Btree</h4>
+<p>表示一个 B-Tree 对象。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-keyword">typedef</span> <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">Btree</span> &#123;</span><br>    sqlite3 *db;          <span class="hljs-comment">/* The database connection */</span><br>    Pager *pPager;        <span class="hljs-comment">/* The pager associated with this B-Tree */</span><br>    BtShared *pBt;        <span class="hljs-comment">/* Shared data for the B-Tree */</span><br>    <span class="hljs-comment">// 其他字段...</span><br>&#125; Btree;<br></code></pre></td></tr></table></figure>
+<h4 id="pager">Pager</h4>
+<p>用于管理页面缓存和磁盘 I/O。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-keyword">typedef</span> <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">Pager</span> &#123;</span><br>    sqlite3_vfs *pVfs;    <span class="hljs-comment">/* OS interface */</span><br>    <span class="hljs-type">int</span> fd;               <span class="hljs-comment">/* File descriptor */</span><br>    Pgno dbSize;          <span class="hljs-comment">/* Number of pages in the database */</span><br>    <span class="hljs-comment">// 其他字段...</span><br>&#125; Pager;<br></code></pre></td></tr></table></figure>
+<h3 id="执行-sql-语句的过程">执行 SQL 语句的过程</h3>
+<ol type="1">
+<li><p><strong>解析阶段（Parser）</strong></p>
+<ul>
+<li><strong>文件</strong>：<code>parse.y</code></li>
+<li><strong>作用</strong>：使用 LALR(1) 文法规则解析 SQL
+语句，构建抽象语法树（AST）。</li>
+</ul></li>
+<li><p><strong>语义分析和代码生成</strong></p>
+<ul>
+<li><strong>文件</strong>：<code>build.c</code>、<code>expr.c</code>、<code>select.c</code></li>
+<li><strong>作用</strong>：对 AST 进行语义检查，并生成对应的 VDBE
+字节码。</li>
+</ul></li>
+<li><p><strong>字节码执行（VDBE）</strong></p>
+<ul>
+<li><strong>文件</strong>：<code>vdbe.c</code></li>
+<li><strong>作用</strong>：逐条执行字节码指令，完成数据库操作。</li>
+</ul>
+<p><strong>示例：</strong></p>
+<ul>
+<li>指令 <code>OpenRead</code>：打开一个 B-Tree 以供读取。</li>
+<li>指令 <code>Column</code>：从结果集中取出一列数据。</li>
+<li>指令 <code>ResultRow</code>：将结果返回给客户端。</li>
+</ul></li>
+<li><p><strong>存储引擎操作</strong></p>
+<ul>
+<li><p><strong>B-Tree 模块</strong></p>
+<ul>
+<li><strong>文件</strong>：<code>btree.c</code></li>
+<li><strong>作用</strong>：执行对 B-Tree 的增删改查操作。</li>
+</ul></li>
+<li><p><strong>Pager 模块</strong></p>
+<ul>
+<li><strong>文件</strong>：<code>pager.c</code></li>
+<li><strong>作用</strong>：管理页面缓存、事务和日志。</li>
+</ul></li>
+</ul></li>
+<li><p><strong>文件 I/O 操作</strong></p>
+<ul>
+<li><strong>文件</strong>：<code>os_unix.c</code>、<code>os_win.c</code></li>
+<li><strong>作用</strong>：封装底层文件系统的操作，实现跨平台兼容。</li>
+</ul></li>
+</ol>
+<hr />
+<h2 id="示例执行简单的-select-语句">示例：执行简单的 SELECT 语句</h2>
+<p>假设执行以下 SQL 语句：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs sql"><span class="hljs-keyword">SELECT</span> name <span class="hljs-keyword">FROM</span> users <span class="hljs-keyword">WHERE</span> age <span class="hljs-operator">&gt;</span> <span class="hljs-number">30</span>;<br></code></pre></td></tr></table></figure>
+<h3 id="解析和代码生成">1. 解析和代码生成</h3>
+<ul>
+<li><p><strong>解析器</strong>将 SQL 文本转换为语法树。</p></li>
+<li><p><strong>代码生成器</strong>根据语法树生成字节码，例如：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><code class="hljs plaintext">0: OpenRead     0, rootPageOfUsersTable<br>1: Rewind       0<br>2: Column       0, &quot;age&quot;<br>3: GreaterThan  30<br>4: IfNot        Jump to 7<br>5: Column       0, &quot;name&quot;<br>6: ResultRow<br>7: Next         0, Jump to 2<br>8: Close        0<br>9: Halt<br></code></pre></td></tr></table></figure></li>
+</ul>
+<h3 id="字节码执行">2. 字节码执行</h3>
+<ul>
+<li><strong><code>OpenRead</code></strong>：打开 <code>users</code>
+表对应的 B-Tree。</li>
+<li><strong><code>Rewind</code></strong>：将游标指向第一条记录。</li>
+<li><strong>循环执行</strong>：
+<ul>
+<li><strong><code>Column</code></strong>：获取当前记录的
+<code>age</code> 字段。</li>
+<li><strong><code>GreaterThan</code></strong>：判断是否大于 30。</li>
+<li><strong><code>IfNot</code></strong>：如果不满足条件，跳转到
+<code>Next</code>。</li>
+<li><strong><code>Column</code></strong>：获取 <code>name</code>
+字段。</li>
+<li><strong><code>ResultRow</code></strong>：输出结果行。</li>
+<li><strong><code>Next</code></strong>：移动到下一条记录，循环执行。</li>
+</ul></li>
+</ul>
+<h3 id="数据存取">3. 数据存取</h3>
+<ul>
+<li><strong>B-Tree 模块</strong>根据游标位置，读取对应的页面。</li>
+<li><strong>Pager 模块</strong>从缓存或磁盘中读取页面数据。</li>
+<li><strong>OS 接口层</strong>执行实际的文件 I/O 操作。</li>
+</ul>
+<hr />
+<h2 id="总结">总结</h2>
+<p>SQLite
+的架构设计精巧，将数据库操作分解为多个层次，每一层次都有明确的职责。通过编译器、虚拟机和存储引擎的协作，实现了对
+SQL 语句的高效执行。理解 SQLite
+的内部工作原理，有助于我们更好地使用和优化 SQLite 数据库。</p>
+<p><strong>关键点：</strong></p>
+<ul>
+<li><strong>模块化设计</strong>：各模块职责清晰，方便维护和扩展。</li>
+<li><strong>虚拟机执行字节码</strong>：提高了执行效率，便于移植。</li>
+<li><strong>高效的存储引擎</strong>：通过 B-Tree 和 Pager
+模块，实现了高性能的数据存取。</li>
+</ul>
+<hr />
+<p><strong>参考资料：</strong></p>
+<ul>
+<li>SQLite 官方文档：<a
+target="_blank" rel="noopener" href="https://www.sqlite.org">https://www.sqlite.org</a></li>
+<li>SQLite 源代码：<a
+target="_blank" rel="noopener" href="https://www.sqlite.org/download.html">https://www.sqlite.org/download.html</a></li>
+<li>SQlite源码分析<a
+target="_blank" rel="noopener" href="https://huili.github.io/vdbeInt&amp;vdbemem887/whatIsVdbe.html">https://huili.github.io/vdbeInt&amp;vdbemem887/whatIsVdbe.html</a></li>
+</ul>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2024-11-09</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">1.7k 字 · 4 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/mysql-transaction-isolation/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">MySQL事务隔离级别与MVCC实现原理</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/sqlite-cheatsheet/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">SQLite 代码详细讲解与示例</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#sqlite-%E6%80%BB%E4%BD%93%E6%9E%B6%E6%9E%84"><span class="toc-text">SQLite 总体架构</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E7%BB%84%E4%BB%B6%E8%AF%A6%E8%A7%A3"><span class="toc-text">核心组件详解</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%BC%96%E8%AF%91%E5%99%A8"><span class="toc-text">编译器</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%99%9A%E6%8B%9F%E6%9C%BAvdbe"><span class="toc-text">虚拟机（VDBE）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#b-tree-%E6%A8%A1%E5%9D%97"><span class="toc-text">B-Tree 模块</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#pager-%E6%A8%A1%E5%9D%97"><span class="toc-text">Pager 模块</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#os-%E6%8E%A5%E5%8F%A3%E5%B1%82"><span class="toc-text">OS 接口层</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#sqlite-%E5%B7%A5%E4%BD%9C%E6%B5%81%E7%A8%8B"><span class="toc-text">SQLite 工作流程</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90"><span class="toc-text">源码解析</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%BA%90%E4%BB%A3%E7%A0%81%E7%BB%93%E6%9E%84"><span class="toc-text">源代码结构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%B3%E9%94%AE%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84"><span class="toc-text">关键数据结构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%89%A7%E8%A1%8C-sql-%E8%AF%AD%E5%8F%A5%E7%9A%84%E8%BF%87%E7%A8%8B"><span class="toc-text">执行 SQL 语句的过程</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%A4%BA%E4%BE%8B%E6%89%A7%E8%A1%8C%E7%AE%80%E5%8D%95%E7%9A%84-select-%E8%AF%AD%E5%8F%A5"><span class="toc-text">示例：执行简单的 SELECT 语句</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%A7%A3%E6%9E%90%E5%92%8C%E4%BB%A3%E7%A0%81%E7%94%9F%E6%88%90"><span class="toc-text">1. 解析和代码生成</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AD%97%E8%8A%82%E7%A0%81%E6%89%A7%E8%A1%8C"><span class="toc-text">2. 字节码执行</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E5%AD%98%E5%8F%96"><span class="toc-text">3. 数据存取</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

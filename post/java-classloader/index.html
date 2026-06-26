@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Java类加载机制与自定义ClassLoader · zt&#39;s Blog</title>
+  <meta name="description" content="深入解析Java类加载的完整生命周期、双亲委派模型的设计思想，以及自定义ClassLoader实现热加载等高级应用">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/java-classloader/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Java类加载机制与自定义ClassLoader">
+  <meta property="og:description" content="深入解析Java类加载的完整生命周期、双亲委派模型的设计思想，以及自定义ClassLoader实现热加载等高级应用">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/java-classloader/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2024-12-03T16:00:00.000Z">
+  <meta property="article:modified_time" content="2024-12-03T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Java类加载机制与自定义ClassLoader">
+  <meta name="twitter:description" content="深入解析Java类加载的完整生命周期、双亲委派模型的设计思想，以及自定义ClassLoader实现热加载等高级应用">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Java类加载机制与自定义ClassLoader","description":"深入解析Java类加载的完整生命周期、双亲委派模型的设计思想，以及自定义ClassLoader实现热加载等高级应用","datePublished":"2024-12-03T16:00:00.000Z","dateModified":"2024-12-03T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/java-classloader/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Java","item":"https://withesse.co/categories/Java/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:25">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Java/">Java</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/java/"><span class="hash">#</span>java</a><a class="tag" href="/tags/jvm/"><span class="hash">#</span>jvm</a><a class="tag" href="/tags/classloader/"><span class="hash">#</span>classloader</a>
+        
+      </div>
+
+      <h1>Java类加载机制与自定义ClassLoader</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2024.12.04</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          <span class="row gap8" style="align-items:center"><span class="lang-dot" style="background:#E76F00"></span>Java</span>
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 10 min</span>
+        </span>
+        <span class="wc"><span class="num">4.0k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">1. 引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%B1%BB%E7%9A%84%E7%94%9F%E5%91%BD%E5%91%A8%E6%9C%9F"><span class="toc-text">2. 类的生命周期</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8A%A0%E8%BD%BDloading"><span class="toc-text">2.1 加载(Loading)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%AA%8C%E8%AF%81verification"><span class="toc-text">2.2 验证(Verification)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%87%86%E5%A4%87preparation"><span class="toc-text">2.3 准备(Preparation)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%A7%A3%E6%9E%90resolution"><span class="toc-text">2.4 解析(Resolution)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%88%9D%E5%A7%8B%E5%8C%96initialization"><span class="toc-text">2.5 初始化(Initialization)</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8F%8C%E4%BA%B2%E5%A7%94%E6%B4%BE%E6%A8%A1%E5%9E%8B"><span class="toc-text">3. 双亲委派模型</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#classloader%E5%B1%82%E6%AC%A1%E7%BB%93%E6%9E%84"><span class="toc-text">3.1 ClassLoader层次结构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%A7%94%E6%B4%BE%E6%B5%81%E7%A8%8B"><span class="toc-text">3.2 委派流程</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8F%8C%E4%BA%B2%E5%A7%94%E6%B4%BE%E7%9A%84%E6%84%8F%E4%B9%89"><span class="toc-text">3.3 双亲委派的意义</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%89%93%E7%A0%B4%E5%8F%8C%E4%BA%B2%E5%A7%94%E6%B4%BE"><span class="toc-text">3.4 打破双亲委派</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%87%AA%E5%AE%9A%E4%B9%89classloader"><span class="toc-text">4. 自定义ClassLoader</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9F%BA%E6%9C%AC%E5%AE%9E%E7%8E%B0"><span class="toc-text">4.1 基本实现</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%9E%E7%8E%B0%E7%83%AD%E5%8A%A0%E8%BD%BD"><span class="toc-text">4.2 实现热加载</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BD%BF%E7%94%A8%E7%A4%BA%E4%BE%8B"><span class="toc-text">4.3 使用示例</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%B1%BB%E5%8A%A0%E8%BD%BD%E4%B8%8E%E6%A8%A1%E5%9D%97%E5%8C%96"><span class="toc-text">5. 类加载与模块化</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#jdk-9%E6%A8%A1%E5%9D%97%E7%B3%BB%E7%BB%9F%E5%AF%B9%E7%B1%BB%E5%8A%A0%E8%BD%BD%E7%9A%84%E5%BD%B1%E5%93%8D"><span class="toc-text">5.1 JDK
+9模块系统对类加载的影响</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%B1%BB%E5%8A%A0%E8%BD%BD%E5%99%A8%E4%B8%8E%E7%B1%BB%E7%9A%84%E5%94%AF%E4%B8%80%E6%80%A7"><span class="toc-text">5.2 类加载器与类的唯一性</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%B8%B8%E8%A7%81%E9%97%AE%E9%A2%98%E6%8E%92%E6%9F%A5"><span class="toc-text">6. 常见问题排查</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#classnotfoundexception-vs-noclassdeffounderror"><span class="toc-text">6.1
+ClassNotFoundException vs NoClassDefFoundError</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%8E%92%E6%9F%A5%E5%B7%A5%E5%85%B7"><span class="toc-text">6.2 排查工具</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5"><span class="toc-text">7. 最佳实践</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">8. 总结</span></a></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <h2 id="引言">1. 引言</h2>
+<p>Java的类加载机制是JVM运行时环境的基石。每一个Java类从<code>.class</code>文件变为可以在JVM中运行的类对象，都要经历一个严密的加载过程。理解类加载机制不仅有助于排查<code>ClassNotFoundException</code>、<code>NoClassDefFoundError</code>等常见问题，更是实现热部署、模块化、插件系统等高级特性的基础。</p>
+<p>本文将从类的完整生命周期出发，深入分析双亲委派模型的设计思想，并通过实战代码演示如何自定义ClassLoader实现类的热加载。</p>
+<h2 id="类的生命周期">2. 类的生命周期</h2>
+<p>一个Java类在JVM中的完整生命周期包括7个阶段：</p>
+<pre class="mermaid">graph LR
+    L[加载&lt;br/&gt;Loading] --&gt; V[验证&lt;br/&gt;Verification]
+    V --&gt; P[准备&lt;br/&gt;Preparation]
+    P --&gt; R[解析&lt;br/&gt;Resolution]
+    R --&gt; I[初始化&lt;br/&gt;Initialization]
+    I --&gt; U[使用&lt;br/&gt;Using]
+    U --&gt; UL[卸载&lt;br/&gt;Unloading]
+
+    subgraph 连接 Linking
+        V
+        P
+        R
+    end
+
+    style L fill:#90EE90
+    style V fill:#87CEEB
+    style P fill:#87CEEB
+    style R fill:#87CEEB
+    style I fill:#FFD700
+    style U fill:#DDA0DD
+    style UL fill:#FF6347</pre>
+<h3 id="加载loading">2.1 加载(Loading)</h3>
+<p>加载阶段JVM需要完成三件事：</p>
+<ol type="1">
+<li>通过类的全限定名获取定义该类的二进制字节流</li>
+<li>将字节流所代表的静态存储结构转化为方法区的运行时数据结构</li>
+<li>在堆内存中生成一个代表该类的<code>java.lang.Class</code>对象，作为方法区数据的访问入口</li>
+</ol>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">/**</span><br><span class="hljs-comment"> * 类加载的来源不仅限于.class文件</span><br><span class="hljs-comment"> * 可以来自JAR/WAR包、网络、动态生成（代理）、数据库等</span><br><span class="hljs-comment"> */</span><br><span class="hljs-comment">// 来源1: 本地文件系统的.class文件</span><br>Class&lt;?&gt; clazz1 = Class.forName(<span class="hljs-string">&quot;com.example.MyClass&quot;</span>);<br><br><span class="hljs-comment">// 来源2: 从网络加载</span><br><span class="hljs-type">URL</span> <span class="hljs-variable">url</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">URL</span>(<span class="hljs-string">&quot;http://example.com/classes/&quot;</span>);<br><span class="hljs-type">URLClassLoader</span> <span class="hljs-variable">loader</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">URLClassLoader</span>(<span class="hljs-keyword">new</span> <span class="hljs-title class_">URL</span>[]&#123;url&#125;);<br>Class&lt;?&gt; clazz2 = loader.loadClass(<span class="hljs-string">&quot;com.example.RemoteClass&quot;</span>);<br><br><span class="hljs-comment">// 来源3: 动态代理生成的字节码</span><br>Class&lt;?&gt; proxyClass = java.lang.reflect.Proxy.getProxyClass(<br>    MyInterface.class.getClassLoader(),<br>    MyInterface.class<br>);<br></code></pre></td></tr></table></figure>
+<h3 id="验证verification">2.2 验证(Verification)</h3>
+<p>验证阶段确保字节码的正确性和安全性，包括四个子阶段：</p>
+<pre class="mermaid">graph TB
+    V[验证阶段] --&gt; V1[文件格式验证]
+    V --&gt; V2[元数据验证]
+    V --&gt; V3[字节码验证]
+    V --&gt; V4[符号引用验证]
+
+    V1 --&gt; V1a["检查魔数(0xCAFEBABE)&lt;br/&gt;主次版本号、常量池"]
+    V2 --&gt; V2a["类是否有父类&lt;br/&gt;是否继承了final类&lt;br/&gt;接口方法是否实现"]
+    V3 --&gt; V3a["数据流和控制流分析&lt;br/&gt;确保语义合法&lt;br/&gt;StackMapTable验证"]
+    V4 --&gt; V4a["符号引用转直接引用时&lt;br/&gt;检查可访问性"]
+
+    style V fill:#FFD700,stroke:#333,stroke-width:2px</pre>
+<h3 id="准备preparation">2.3 准备(Preparation)</h3>
+<p>为类的静态变量分配内存并设置零值（不是程序中赋的值）：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">PrepareDemo</span> &#123;<br>    <span class="hljs-comment">// 准备阶段: value = 0 (int的零值)</span><br>    <span class="hljs-comment">// 初始化阶段: value = 123 (执行&lt;clinit&gt;)</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> <span class="hljs-type">int</span> <span class="hljs-variable">value</span> <span class="hljs-operator">=</span> <span class="hljs-number">123</span>;<br><br>    <span class="hljs-comment">// 准备阶段: CONSTANT = 456 (编译期常量，ConstantValue属性直接赋值)</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">final</span> <span class="hljs-type">int</span> <span class="hljs-variable">CONSTANT</span> <span class="hljs-operator">=</span> <span class="hljs-number">456</span>;<br><br>    <span class="hljs-comment">// 准备阶段: ref = null (引用类型的零值)</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> <span class="hljs-type">Object</span> <span class="hljs-variable">ref</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">Object</span>();<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="解析resolution">2.4 解析(Resolution)</h3>
+<p>将常量池中的符号引用替换为直接引用。符号引用是用一组符号来描述目标（如类全限定名、字段名、方法名），直接引用是指向目标的指针、偏移量或句柄。</p>
+<h3 id="初始化initialization">2.5 初始化(Initialization)</h3>
+<p>执行类构造器<code>&lt;clinit&gt;()</code>方法，这是类加载过程的最后一步。<code>&lt;clinit&gt;()</code>由编译器自动收集类中所有静态变量赋值语句和静态代码块合并生成。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">InitializationOrder</span> &#123;<br>    <span class="hljs-keyword">static</span> &#123;<br>        System.out.println(<span class="hljs-string">&quot;父类或当前类 static块执行&quot;</span>);<br>        <span class="hljs-comment">// JVM保证&lt;clinit&gt;()方法的线程安全</span><br>    &#125;<br><br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">static</span> <span class="hljs-type">int</span> <span class="hljs-variable">counter</span> <span class="hljs-operator">=</span> initCounter();<br><br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">static</span> <span class="hljs-type">int</span> <span class="hljs-title function_">initCounter</span><span class="hljs-params">()</span> &#123;<br>        System.out.println(<span class="hljs-string">&quot;静态变量初始化&quot;</span>);<br>        <span class="hljs-keyword">return</span> <span class="hljs-number">1</span>;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<p><strong>触发类初始化的6种场景（主动引用）</strong>：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">/**</span><br><span class="hljs-comment"> * 以下6种情况会触发类的初始化（首次主动使用）</span><br><span class="hljs-comment"> */</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">ActiveReferenceDemo</span> &#123;<br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">main</span><span class="hljs-params">(String[] args)</span> <span class="hljs-keyword">throws</span> Exception &#123;<br>        <span class="hljs-comment">// 1. new实例化对象</span><br>        <span class="hljs-type">MyClass</span> <span class="hljs-variable">obj</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">MyClass</span>();<br><br>        <span class="hljs-comment">// 2. 读取或设置类的静态字段（非final编译期常量）</span><br>        <span class="hljs-type">int</span> <span class="hljs-variable">val</span> <span class="hljs-operator">=</span> MyClass.staticField;<br><br>        <span class="hljs-comment">// 3. 调用类的静态方法</span><br>        MyClass.staticMethod();<br><br>        <span class="hljs-comment">// 4. 反射调用</span><br>        Class.forName(<span class="hljs-string">&quot;com.example.MyClass&quot;</span>);<br><br>        <span class="hljs-comment">// 5. 初始化子类时，如果父类未初始化，先初始化父类</span><br>        <span class="hljs-comment">// 初始化ChildClass时，会先初始化ParentClass</span><br><br>        <span class="hljs-comment">// 6. 包含main()方法的主类</span><br>    &#125;<br>&#125;<br><br><span class="hljs-comment">/**</span><br><span class="hljs-comment"> * 以下情况不会触发初始化（被动引用）</span><br><span class="hljs-comment"> */</span><br><span class="hljs-keyword">class</span> <span class="hljs-title class_">PassiveReferenceDemo</span> &#123;<br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">main</span><span class="hljs-params">(String[] args)</span> &#123;<br>        <span class="hljs-comment">// 1. 通过子类引用父类的静态字段，不触发子类初始化</span><br>        <span class="hljs-type">int</span> <span class="hljs-variable">val</span> <span class="hljs-operator">=</span> SubClass.parentStaticField; <span class="hljs-comment">// 只初始化ParentClass</span><br><br>        <span class="hljs-comment">// 2. 定义数组不触发类初始化</span><br>        MyClass[] array = <span class="hljs-keyword">new</span> <span class="hljs-title class_">MyClass</span>[<span class="hljs-number">10</span>]; <span class="hljs-comment">// 不初始化MyClass</span><br><br>        <span class="hljs-comment">// 3. 引用编译期常量不触发初始化</span><br>        <span class="hljs-type">int</span> <span class="hljs-variable">constant</span> <span class="hljs-operator">=</span> MyClass.COMPILE_TIME_CONSTANT; <span class="hljs-comment">// 不初始化MyClass</span><br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="双亲委派模型">3. 双亲委派模型</h2>
+<h3 id="classloader层次结构">3.1 ClassLoader层次结构</h3>
+<pre class="mermaid">graph TB
+    BC[Bootstrap ClassLoader&lt;br/&gt;启动类加载器&lt;br/&gt;加载 JAVA_HOME/lib] --&gt; EC[Extension/Platform ClassLoader&lt;br/&gt;扩展类加载器&lt;br/&gt;加载 JAVA_HOME/lib/ext]
+    EC --&gt; AC[Application ClassLoader&lt;br/&gt;应用类加载器&lt;br/&gt;加载 classpath]
+    AC --&gt; UC1[User ClassLoader 1&lt;br/&gt;自定义类加载器]
+    AC --&gt; UC2[User ClassLoader 2&lt;br/&gt;自定义类加载器]
+
+    style BC fill:#FF6347,color:#fff
+    style EC fill:#FFD700
+    style AC fill:#87CEEB
+    style UC1 fill:#90EE90
+    style UC2 fill:#90EE90</pre>
+<h3 id="委派流程">3.2 委派流程</h3>
+<p>双亲委派的核心思想是：当一个类加载器收到类加载请求时，先委托给父加载器去加载，只有父加载器无法完成时，才自己尝试加载。</p>
+<pre class="mermaid">sequenceDiagram
+    participant App as Application ClassLoader
+    participant Ext as Extension ClassLoader
+    participant Boot as Bootstrap ClassLoader
+
+    App-&gt;&gt;Ext: loadClass("com.example.MyClass")
+    Ext-&gt;&gt;Boot: loadClass("com.example.MyClass")
+    Boot-&gt;&gt;Boot: 在JAVA_HOME/lib中查找
+    Boot--&gt;&gt;Ext: 未找到,返回null
+    Ext-&gt;&gt;Ext: 在JAVA_HOME/lib/ext中查找
+    Ext--&gt;&gt;App: 未找到,返回null
+    App-&gt;&gt;App: 在classpath中查找
+    App--&gt;&gt;App: 找到并加载,返回Class对象</pre>
+<p><code>ClassLoader.loadClass()</code>的核心实现（简化版）：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">/**</span><br><span class="hljs-comment"> * 双亲委派模型的核心实现</span><br><span class="hljs-comment"> * 位于java.lang.ClassLoader</span><br><span class="hljs-comment"> */</span><br><span class="hljs-keyword">protected</span> Class&lt;?&gt; loadClass(String name, <span class="hljs-type">boolean</span> resolve) <span class="hljs-keyword">throws</span> ClassNotFoundException &#123;<br>    <span class="hljs-keyword">synchronized</span> (getClassLoadingLock(name)) &#123;<br>        <span class="hljs-comment">// 1. 检查该类是否已经被加载</span><br>        Class&lt;?&gt; c = findLoadedClass(name);<br><br>        <span class="hljs-keyword">if</span> (c == <span class="hljs-literal">null</span>) &#123;<br>            <span class="hljs-keyword">try</span> &#123;<br>                <span class="hljs-comment">// 2. 委派给父加载器</span><br>                <span class="hljs-keyword">if</span> (parent != <span class="hljs-literal">null</span>) &#123;<br>                    c = parent.loadClass(name, <span class="hljs-literal">false</span>);<br>                &#125; <span class="hljs-keyword">else</span> &#123;<br>                    <span class="hljs-comment">// 没有父加载器，委派给Bootstrap ClassLoader</span><br>                    c = findBootstrapClassOrNull(name);<br>                &#125;<br>            &#125; <span class="hljs-keyword">catch</span> (ClassNotFoundException e) &#123;<br>                <span class="hljs-comment">// 父加载器抛出异常，说明父加载器无法加载</span><br>            &#125;<br><br>            <span class="hljs-keyword">if</span> (c == <span class="hljs-literal">null</span>) &#123;<br>                <span class="hljs-comment">// 3. 父加载器无法加载，自己尝试加载</span><br>                c = findClass(name);<br>            &#125;<br>        &#125;<br><br>        <span class="hljs-keyword">if</span> (resolve) &#123;<br>            resolveClass(c);<br>        &#125;<br>        <span class="hljs-keyword">return</span> c;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="双亲委派的意义">3.3 双亲委派的意义</h3>
+<ol type="1">
+<li><strong>安全性</strong>：防止核心API被篡改。用户无法自定义<code>java.lang.String</code>来替换JDK的实现</li>
+<li><strong>避免重复加载</strong>：确保一个类只被加载一次，避免出现多个不兼容的同名类</li>
+<li><strong>层次分明</strong>：每个加载器有明确的职责范围</li>
+</ol>
+<h3 id="打破双亲委派">3.4 打破双亲委派</h3>
+<p>有些场景需要打破双亲委派模型：</p>
+<pre class="mermaid">graph TB
+    subgraph 打破双亲委派的经典场景
+        S1[SPI机制&lt;br/&gt;ServiceLoader] --&gt; D1["父加载器需要加载子加载器路径的类&lt;br/&gt;如JDBC驱动加载"]
+        S2[OSGi模块化] --&gt; D2["每个Bundle有独立的ClassLoader&lt;br/&gt;实现模块间隔离"]
+        S3[热部署/热加载] --&gt; D3["丢弃旧ClassLoader&lt;br/&gt;创建新ClassLoader重新加载"]
+        S4[Tomcat等容器] --&gt; D4["每个Web应用有独立的ClassLoader&lt;br/&gt;应用间类隔离"]
+    end</pre>
+<h4 id="spi线程上下文类加载器">SPI线程上下文类加载器</h4>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">/**</span><br><span class="hljs-comment"> * JDBC驱动加载是打破双亲委派的典型例子</span><br><span class="hljs-comment"> * java.sql.DriverManager由Bootstrap ClassLoader加载</span><br><span class="hljs-comment"> * 但具体的驱动实现（如MySQL Driver）在classpath中</span><br><span class="hljs-comment"> * 需要通过线程上下文类加载器（Thread Context ClassLoader）来加载</span><br><span class="hljs-comment"> */</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">SPIDemo</span> &#123;<br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">main</span><span class="hljs-params">(String[] args)</span> &#123;<br>        <span class="hljs-comment">// DriverManager使用Thread Context ClassLoader加载驱动</span><br>        <span class="hljs-comment">// 默认的Thread Context ClassLoader是Application ClassLoader</span><br>        ServiceLoader&lt;java.sql.Driver&gt; drivers = ServiceLoader.load(java.sql.Driver.class);<br>        <span class="hljs-keyword">for</span> (java.sql.Driver driver : drivers) &#123;<br>            System.out.println(<span class="hljs-string">&quot;Driver: &quot;</span> + driver.getClass().getName());<br>            System.out.println(<span class="hljs-string">&quot;ClassLoader: &quot;</span> + driver.getClass().getClassLoader());<br>        &#125;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="自定义classloader">4. 自定义ClassLoader</h2>
+<h3 id="基本实现">4.1 基本实现</h3>
+<p>自定义ClassLoader只需继承<code>ClassLoader</code>并重写<code>findClass()</code>方法：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-keyword">import</span> java.io.ByteArrayOutputStream;<br><span class="hljs-keyword">import</span> java.io.IOException;<br><span class="hljs-keyword">import</span> java.io.InputStream;<br><span class="hljs-keyword">import</span> java.nio.file.Files;<br><span class="hljs-keyword">import</span> java.nio.file.Path;<br><span class="hljs-keyword">import</span> java.nio.file.Paths;<br><br><span class="hljs-comment">/**</span><br><span class="hljs-comment"> * 自定义ClassLoader：从指定目录加载.class文件</span><br><span class="hljs-comment"> * 遵循双亲委派模型：重写findClass()而非loadClass()</span><br><span class="hljs-comment"> */</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">FileSystemClassLoader</span> <span class="hljs-keyword">extends</span> <span class="hljs-title class_">ClassLoader</span> &#123;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> Path classDir;<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-title function_">FileSystemClassLoader</span><span class="hljs-params">(Path classDir)</span> &#123;<br>        <span class="hljs-built_in">super</span>(ClassLoader.getSystemClassLoader()); <span class="hljs-comment">// 指定父加载器</span><br>        <span class="hljs-built_in">this</span>.classDir = classDir;<br>    &#125;<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-title function_">FileSystemClassLoader</span><span class="hljs-params">(Path classDir, ClassLoader parent)</span> &#123;<br>        <span class="hljs-built_in">super</span>(parent);<br>        <span class="hljs-built_in">this</span>.classDir = classDir;<br>    &#125;<br><br>    <span class="hljs-meta">@Override</span><br>    <span class="hljs-keyword">protected</span> Class&lt;?&gt; findClass(String name) <span class="hljs-keyword">throws</span> ClassNotFoundException &#123;<br>        <span class="hljs-type">Path</span> <span class="hljs-variable">classFile</span> <span class="hljs-operator">=</span> classDir.resolve(name.replace(<span class="hljs-string">&#x27;.&#x27;</span>, <span class="hljs-string">&#x27;/&#x27;</span>) + <span class="hljs-string">&quot;.class&quot;</span>);<br><br>        <span class="hljs-keyword">if</span> (!Files.exists(classFile)) &#123;<br>            <span class="hljs-keyword">throw</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">ClassNotFoundException</span>(<span class="hljs-string">&quot;Class not found: &quot;</span> + name);<br>        &#125;<br><br>        <span class="hljs-keyword">try</span> &#123;<br>            <span class="hljs-type">byte</span>[] classBytes = Files.readAllBytes(classFile);<br>            <span class="hljs-comment">// defineClass将字节数组转换为Class对象</span><br>            <span class="hljs-keyword">return</span> defineClass(name, classBytes, <span class="hljs-number">0</span>, classBytes.length);<br>        &#125; <span class="hljs-keyword">catch</span> (IOException e) &#123;<br>            <span class="hljs-keyword">throw</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">ClassNotFoundException</span>(<span class="hljs-string">&quot;Failed to load class: &quot;</span> + name, e);<br>        &#125;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="实现热加载">4.2 实现热加载</h3>
+<p>热加载的核心思想是：丢弃旧的ClassLoader，创建新的ClassLoader重新加载修改后的类。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-keyword">import</span> java.nio.file.*;<br><span class="hljs-keyword">import</span> java.lang.reflect.Method;<br><br><span class="hljs-comment">/**</span><br><span class="hljs-comment"> * 热加载引擎</span><br><span class="hljs-comment"> * 监控指定目录的.class文件变化，自动重新加载</span><br><span class="hljs-comment"> *</span><br><span class="hljs-comment"> * 关键原理：</span><br><span class="hljs-comment"> * 1. 同一个ClassLoader实例不能重复加载同一个类</span><br><span class="hljs-comment"> * 2. 不同ClassLoader实例可以各自加载同名类（它们是不同的Class对象）</span><br><span class="hljs-comment"> * 3. 因此热加载需要创建新的ClassLoader实例</span><br><span class="hljs-comment"> */</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">HotReloadEngine</span> &#123;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> Path classDir;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">volatile</span> FileSystemClassLoader currentLoader;<br>    <span class="hljs-keyword">private</span> <span class="hljs-keyword">volatile</span> Object serviceInstance;<br><br>    <span class="hljs-keyword">public</span> <span class="hljs-title function_">HotReloadEngine</span><span class="hljs-params">(Path classDir)</span> &#123;<br>        <span class="hljs-built_in">this</span>.classDir = classDir;<br>        <span class="hljs-built_in">this</span>.currentLoader = <span class="hljs-keyword">new</span> <span class="hljs-title class_">FileSystemClassLoader</span>(classDir);<br>    &#125;<br><br>    <span class="hljs-comment">/**</span><br><span class="hljs-comment">     * 加载/重新加载指定类并创建实例</span><br><span class="hljs-comment">     */</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">synchronized</span> Object <span class="hljs-title function_">reload</span><span class="hljs-params">(String className)</span> <span class="hljs-keyword">throws</span> Exception &#123;<br>        <span class="hljs-comment">// 创建全新的ClassLoader</span><br>        <span class="hljs-type">FileSystemClassLoader</span> <span class="hljs-variable">newLoader</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">FileSystemClassLoader</span>(classDir);<br><br>        <span class="hljs-comment">// 用新ClassLoader加载类</span><br>        Class&lt;?&gt; clazz = newLoader.loadClass(className);<br><br>        <span class="hljs-comment">// 创建新实例</span><br>        <span class="hljs-type">Object</span> <span class="hljs-variable">newInstance</span> <span class="hljs-operator">=</span> clazz.getDeclaredConstructor().newInstance();<br><br>        <span class="hljs-comment">// 替换旧的引用</span><br>        <span class="hljs-built_in">this</span>.currentLoader = newLoader;<br>        <span class="hljs-built_in">this</span>.serviceInstance = newInstance;<br><br>        System.out.println(<span class="hljs-string">&quot;Reloaded: &quot;</span> + className);<br>        System.out.println(<span class="hljs-string">&quot;ClassLoader: &quot;</span> + clazz.getClassLoader());<br><br>        <span class="hljs-comment">// 旧的ClassLoader和Class对象在没有引用后会被GC回收</span><br>        <span class="hljs-keyword">return</span> newInstance;<br>    &#125;<br><br>    <span class="hljs-comment">/**</span><br><span class="hljs-comment">     * 通过反射调用重新加载的类的方法</span><br><span class="hljs-comment">     */</span><br>    <span class="hljs-keyword">public</span> Object <span class="hljs-title function_">invokeMethod</span><span class="hljs-params">(String methodName, Class&lt;?&gt;[] paramTypes, Object[] args)</span><br>            <span class="hljs-keyword">throws</span> Exception &#123;<br>        <span class="hljs-type">Method</span> <span class="hljs-variable">method</span> <span class="hljs-operator">=</span> serviceInstance.getClass().getMethod(methodName, paramTypes);<br>        <span class="hljs-keyword">return</span> method.invoke(serviceInstance, args);<br>    &#125;<br><br>    <span class="hljs-comment">/**</span><br><span class="hljs-comment">     * 监控目录变化，自动热加载</span><br><span class="hljs-comment">     */</span><br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">watchAndReload</span><span class="hljs-params">(String className)</span> <span class="hljs-keyword">throws</span> Exception &#123;<br>        reload(className); <span class="hljs-comment">// 初始加载</span><br><br>        <span class="hljs-type">WatchService</span> <span class="hljs-variable">watchService</span> <span class="hljs-operator">=</span> FileSystems.getDefault().newWatchService();<br>        classDir.register(watchService, StandardWatchEventKinds.ENTRY_MODIFY);<br><br>        System.out.println(<span class="hljs-string">&quot;Watching for changes in: &quot;</span> + classDir);<br><br>        <span class="hljs-keyword">while</span> (<span class="hljs-literal">true</span>) &#123;<br>            <span class="hljs-type">WatchKey</span> <span class="hljs-variable">key</span> <span class="hljs-operator">=</span> watchService.take(); <span class="hljs-comment">// 阻塞等待文件变化</span><br>            <span class="hljs-keyword">for</span> (WatchEvent&lt;?&gt; event : key.pollEvents()) &#123;<br>                <span class="hljs-type">String</span> <span class="hljs-variable">fileName</span> <span class="hljs-operator">=</span> event.context().toString();<br>                <span class="hljs-keyword">if</span> (fileName.endsWith(<span class="hljs-string">&quot;.class&quot;</span>)) &#123;<br>                    System.out.println(<span class="hljs-string">&quot;Detected change: &quot;</span> + fileName);<br>                    Thread.sleep(<span class="hljs-number">200</span>); <span class="hljs-comment">// 等待文件写入完成</span><br>                    reload(className);<br>                &#125;<br>            &#125;<br>            key.reset();<br>        &#125;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="使用示例">4.3 使用示例</h3>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">HotReloadDemo</span> &#123;<br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">main</span><span class="hljs-params">(String[] args)</span> <span class="hljs-keyword">throws</span> Exception &#123;<br>        <span class="hljs-type">Path</span> <span class="hljs-variable">classDir</span> <span class="hljs-operator">=</span> Paths.get(<span class="hljs-string">&quot;/tmp/hot-classes&quot;</span>);<br>        <span class="hljs-type">HotReloadEngine</span> <span class="hljs-variable">engine</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">HotReloadEngine</span>(classDir);<br><br>        <span class="hljs-comment">// 方式1：手动重载</span><br>        <span class="hljs-type">Object</span> <span class="hljs-variable">service</span> <span class="hljs-operator">=</span> engine.reload(<span class="hljs-string">&quot;com.example.MyService&quot;</span>);<br>        <span class="hljs-type">Object</span> <span class="hljs-variable">result</span> <span class="hljs-operator">=</span> engine.invokeMethod(<span class="hljs-string">&quot;process&quot;</span>, <span class="hljs-keyword">new</span> <span class="hljs-title class_">Class</span>[]&#123;String.class&#125;,<br>            <span class="hljs-keyword">new</span> <span class="hljs-title class_">Object</span>[]&#123;<span class="hljs-string">&quot;test&quot;</span>&#125;);<br>        System.out.println(<span class="hljs-string">&quot;Result: &quot;</span> + result);<br><br>        <span class="hljs-comment">// 方式2：自动监听并热加载</span><br>        <span class="hljs-comment">// engine.watchAndReload(&quot;com.example.MyService&quot;);</span><br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="类加载与模块化">5. 类加载与模块化</h2>
+<h3 id="jdk-9模块系统对类加载的影响">5.1 JDK
+9模块系统对类加载的影响</h3>
+<p>JDK 9引入的模块系统（JPMS）对ClassLoader体系做了调整：</p>
+<pre class="mermaid">graph TB
+    subgraph JDK 8
+        BC8[Bootstrap ClassLoader] --&gt; EC8[Extension ClassLoader]
+        EC8 --&gt; AC8[Application ClassLoader]
+    end
+    subgraph JDK 9+
+        BC9[Bootstrap ClassLoader&lt;br/&gt;java.base等核心模块] --&gt; PC9[Platform ClassLoader&lt;br/&gt;取代Extension CL&lt;br/&gt;java.sql, java.xml等]
+        PC9 --&gt; AC9[Application ClassLoader&lt;br/&gt;classpath和模块路径]
+    end
+
+    style BC8 fill:#FF6347,color:#fff
+    style EC8 fill:#FFD700
+    style AC8 fill:#87CEEB
+    style BC9 fill:#FF6347,color:#fff
+    style PC9 fill:#FFD700
+    style AC9 fill:#87CEEB</pre>
+<p>主要变化： -
+<code>Extension ClassLoader</code>被<code>Platform ClassLoader</code>取代
+-
+三个内置ClassLoader都改为继承<code>jdk.internal.loader.BuiltinClassLoader</code>
+-
+模块间的可见性由<code>module-info.java</code>中的<code>exports</code>和<code>requires</code>控制</p>
+<h3 id="类加载器与类的唯一性">5.2 类加载器与类的唯一性</h3>
+<p>在JVM中，一个类的唯一性由<code>ClassLoader + 全限定名</code>共同确定：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-comment">/**</span><br><span class="hljs-comment"> * 演示不同ClassLoader加载的同名类是不同的Class对象</span><br><span class="hljs-comment"> */</span><br><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">ClassIdentityDemo</span> &#123;<br>    <span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">main</span><span class="hljs-params">(String[] args)</span> <span class="hljs-keyword">throws</span> Exception &#123;<br>        <span class="hljs-type">Path</span> <span class="hljs-variable">classDir</span> <span class="hljs-operator">=</span> Paths.get(<span class="hljs-string">&quot;/tmp/classes&quot;</span>);<br><br>        <span class="hljs-comment">// 用两个不同的ClassLoader加载同一个类</span><br>        <span class="hljs-type">FileSystemClassLoader</span> <span class="hljs-variable">loader1</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">FileSystemClassLoader</span>(classDir);<br>        <span class="hljs-type">FileSystemClassLoader</span> <span class="hljs-variable">loader2</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">FileSystemClassLoader</span>(classDir);<br><br>        Class&lt;?&gt; class1 = loader1.loadClass(<span class="hljs-string">&quot;com.example.MyClass&quot;</span>);<br>        Class&lt;?&gt; class2 = loader2.loadClass(<span class="hljs-string">&quot;com.example.MyClass&quot;</span>);<br><br>        System.out.println(<span class="hljs-string">&quot;class1 == class2: &quot;</span> + (class1 == class2));<br>        <span class="hljs-comment">// 输出: false -- 不同ClassLoader加载的是不同的Class</span><br><br>        System.out.println(<span class="hljs-string">&quot;class1 loader: &quot;</span> + class1.getClassLoader());<br>        System.out.println(<span class="hljs-string">&quot;class2 loader: &quot;</span> + class2.getClassLoader());<br><br>        <span class="hljs-type">Object</span> <span class="hljs-variable">obj1</span> <span class="hljs-operator">=</span> class1.getDeclaredConstructor().newInstance();<br>        <span class="hljs-type">Object</span> <span class="hljs-variable">obj2</span> <span class="hljs-operator">=</span> class2.getDeclaredConstructor().newInstance();<br><br>        <span class="hljs-comment">// 以下会抛出ClassCastException</span><br>        <span class="hljs-comment">// 因为class1和class2是不同的类型</span><br>        <span class="hljs-comment">// class1.cast(obj2); // ClassCastException!</span><br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="常见问题排查">6. 常见问题排查</h2>
+<h3 id="classnotfoundexception-vs-noclassdeffounderror">6.1
+ClassNotFoundException vs NoClassDefFoundError</h3>
+<table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 30%" />
+<col style="width: 45%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>异常</th>
+<th>含义</th>
+<th>常见原因</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>ClassNotFoundException</td>
+<td>显式加载类时找不到</td>
+<td><code>Class.forName()</code>或<code>ClassLoader.loadClass()</code>时classpath中无此类</td>
+</tr>
+<tr class="even">
+<td>NoClassDefFoundError</td>
+<td>JVM隐式加载类时失败</td>
+<td>编译时存在但运行时缺失，或类初始化失败（<code>&lt;clinit&gt;()</code>抛异常）</td>
+</tr>
+</tbody>
+</table>
+<h3 id="排查工具">6.2 排查工具</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 查看类的加载来源</span><br>java -verbose:class -jar app.jar 2&gt;&amp;1 | grep <span class="hljs-string">&quot;MyClass&quot;</span><br><br><span class="hljs-comment"># JDK 9+使用统一日志</span><br>java -Xlog:class+load=info -jar app.jar<br><br><span class="hljs-comment"># 查看ClassLoader层次</span><br>jcmd &lt;pid&gt; VM.classloaders<br><br><span class="hljs-comment"># 查看已加载的类统计</span><br>jcmd &lt;pid&gt; VM.classloader_stats<br></code></pre></td></tr></table></figure>
+<h2 id="最佳实践">7. 最佳实践</h2>
+<ol type="1">
+<li><strong>遵循双亲委派</strong>：自定义ClassLoader时重写<code>findClass()</code>而非<code>loadClass()</code>，除非确实需要打破委派。</li>
+<li><strong>注意类加载器泄漏</strong>：Web容器中频繁重部署可能导致ClassLoader无法被GC回收，引发Metaspace
+OOM。确保没有静态引用、线程本地变量或JMX
+Bean持有对旧ClassLoader的引用。</li>
+<li><strong>理解类的唯一性</strong>：两个不同ClassLoader加载的同名类是不兼容的类型，跨ClassLoader传递对象时需使用公共接口或反射。</li>
+<li><strong>热加载时注意状态迁移</strong>：旧类的实例状态不会自动迁移到新类，需要设计状态持久化和恢复机制。</li>
+<li><strong>优先使用标准机制</strong>：JDK
+9+的模块系统、SPI的ServiceLoader在很多场景下可以替代自定义ClassLoader。</li>
+</ol>
+<h2 id="总结">8. 总结</h2>
+<p>Java的类加载机制是JVM架构中精心设计的一部分：</p>
+<ul>
+<li><strong>类的生命周期</strong>包含加载、验证、准备、解析、初始化五个核心阶段，每个阶段都有明确的职责</li>
+<li><strong>双亲委派模型</strong>通过层次化的ClassLoader结构保证了类加载的安全性和一致性</li>
+<li><strong>自定义ClassLoader</strong>通过重写<code>findClass()</code>方法可以从任意来源加载类，是实现热部署、插件系统的基础</li>
+<li><strong>JDK
+9模块系统</strong>在保留ClassLoader机制的基础上增加了模块间的访问控制</li>
+</ul>
+<p>掌握类加载机制，不仅能帮助我们排查日常开发中的类加载问题，更能为实现框架级的高级特性打下坚实的基础。</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2024-12-04</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">4.0k 字 · 10 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/redis-data-structures/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Redis数据结构底层实现详解</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/mysql-query-optimization/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">MySQL查询优化：执行计划分析与SQL重写</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E8%A8%80"><span class="toc-text">1. 引言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%B1%BB%E7%9A%84%E7%94%9F%E5%91%BD%E5%91%A8%E6%9C%9F"><span class="toc-text">2. 类的生命周期</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8A%A0%E8%BD%BDloading"><span class="toc-text">2.1 加载(Loading)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%AA%8C%E8%AF%81verification"><span class="toc-text">2.2 验证(Verification)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%87%86%E5%A4%87preparation"><span class="toc-text">2.3 准备(Preparation)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%A7%A3%E6%9E%90resolution"><span class="toc-text">2.4 解析(Resolution)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%88%9D%E5%A7%8B%E5%8C%96initialization"><span class="toc-text">2.5 初始化(Initialization)</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8F%8C%E4%BA%B2%E5%A7%94%E6%B4%BE%E6%A8%A1%E5%9E%8B"><span class="toc-text">3. 双亲委派模型</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#classloader%E5%B1%82%E6%AC%A1%E7%BB%93%E6%9E%84"><span class="toc-text">3.1 ClassLoader层次结构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%A7%94%E6%B4%BE%E6%B5%81%E7%A8%8B"><span class="toc-text">3.2 委派流程</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8F%8C%E4%BA%B2%E5%A7%94%E6%B4%BE%E7%9A%84%E6%84%8F%E4%B9%89"><span class="toc-text">3.3 双亲委派的意义</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%89%93%E7%A0%B4%E5%8F%8C%E4%BA%B2%E5%A7%94%E6%B4%BE"><span class="toc-text">3.4 打破双亲委派</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%87%AA%E5%AE%9A%E4%B9%89classloader"><span class="toc-text">4. 自定义ClassLoader</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9F%BA%E6%9C%AC%E5%AE%9E%E7%8E%B0"><span class="toc-text">4.1 基本实现</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%9E%E7%8E%B0%E7%83%AD%E5%8A%A0%E8%BD%BD"><span class="toc-text">4.2 实现热加载</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BD%BF%E7%94%A8%E7%A4%BA%E4%BE%8B"><span class="toc-text">4.3 使用示例</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%B1%BB%E5%8A%A0%E8%BD%BD%E4%B8%8E%E6%A8%A1%E5%9D%97%E5%8C%96"><span class="toc-text">5. 类加载与模块化</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#jdk-9%E6%A8%A1%E5%9D%97%E7%B3%BB%E7%BB%9F%E5%AF%B9%E7%B1%BB%E5%8A%A0%E8%BD%BD%E7%9A%84%E5%BD%B1%E5%93%8D"><span class="toc-text">5.1 JDK
+9模块系统对类加载的影响</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%B1%BB%E5%8A%A0%E8%BD%BD%E5%99%A8%E4%B8%8E%E7%B1%BB%E7%9A%84%E5%94%AF%E4%B8%80%E6%80%A7"><span class="toc-text">5.2 类加载器与类的唯一性</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%B8%B8%E8%A7%81%E9%97%AE%E9%A2%98%E6%8E%92%E6%9F%A5"><span class="toc-text">6. 常见问题排查</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#classnotfoundexception-vs-noclassdeffounderror"><span class="toc-text">6.1
+ClassNotFoundException vs NoClassDefFoundError</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%8E%92%E6%9F%A5%E5%B7%A5%E5%85%B7"><span class="toc-text">6.2 排查工具</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5"><span class="toc-text">7. 最佳实践</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">8. 总结</span></a></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>

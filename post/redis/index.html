@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-scheme="dark">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>开发中常见的 Redis 问题及解决方案 · zt&#39;s Blog</title>
+  <meta name="description" content="梳理高并发 Java 系统中常见的 Redis 问题：热 Key、缓存穿透、数据一致性等，以及对应的实战解决方案。">
+  <meta name="author" content="zt">
+  <link rel="canonical" href="https://withesse.co/post/redis/">
+  
+  
+  <!-- self-hosted fonts (declared via @font-face in style.css); preload the two most-used -->
+  <link rel="preload" href="/fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link id="hljs-theme" rel="stylesheet" href="" crossorigin="anonymous"
+        data-dark="/css/hljs-github-dark.css" data-light="/css/hljs-github.css"
+        data-dark-sri="" data-light-sri="">
+  
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="开发中常见的 Redis 问题及解决方案">
+  <meta property="og:description" content="梳理高并发 Java 系统中常见的 Redis 问题：热 Key、缓存穿透、数据一致性等，以及对应的实战解决方案。">
+  <meta property="og:site_name" content="zt&#39;s Blog">
+  <meta property="og:url" content="https://withesse.co/post/redis/">
+  <meta property="og:image" content="https://withesse.co/static/image/avatar.jpg">
+  
+  <meta property="article:published_time" content="2021-05-17T16:00:00.000Z">
+  <meta property="article:modified_time" content="2021-05-17T16:00:00.000Z">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="开发中常见的 Redis 问题及解决方案">
+  <meta name="twitter:description" content="梳理高并发 Java 系统中常见的 Redis 问题：热 Key、缓存穿透、数据一致性等，以及对应的实战解决方案。">
+  <meta name="twitter:image" content="https://withesse.co/static/image/avatar.jpg">
+
+  <link rel="alternate" type="application/atom+xml" href="/atom.xml" title="zt&#39;s Blog">
+
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"开发中常见的 Redis 问题及解决方案","description":"梳理高并发 Java 系统中常见的 Redis 问题：热 Key、缓存穿透、数据一致性等，以及对应的实战解决方案。","datePublished":"2021-05-17T16:00:00.000Z","dateModified":"2021-05-17T16:00:00.000Z","author":{"@type":"Person","name":"zt"},"publisher":{"@type":"Organization","name":"zt's Blog"},"mainEntityOfPage":"https://withesse.co/post/redis/","image":"https://withesse.co/static/image/avatar.jpg"}</script>
+  
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Database","item":"https://withesse.co/categories/Database/"}]}</script>
+  
+
+  <script>(function(){try{var t=localStorage.getItem('zt-theme')||document.documentElement.getAttribute('data-default-scheme')||'dark';document.documentElement.setAttribute('data-theme',t);var hl=document.getElementById('hljs-theme');if(hl){var u=t==='dark'?hl.getAttribute('data-dark'):hl.getAttribute('data-light');var sri=t==='dark'?hl.getAttribute('data-dark-sri'):hl.getAttribute('data-light-sri');if(sri)hl.setAttribute('integrity',sri);else hl.removeAttribute('integrity');if(u)hl.setAttribute('href',u);}}catch(e){}})();</script>
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+<body>
+  <div class="app">
+    <div class="bg-grid"></div>
+    
+<header class="topbar">
+  <div class="wrap wrap-wide topbar-inner">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span class="path">zt<span class="dim">@</span>dev<span class="blink">▊</span></span>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="nav" id="site-nav">
+        
+          
+            <a class="nav-link active" href="/">~/posts</a>
+          
+        
+          
+            <a class="nav-link" href="/categories/">~/categories</a>
+          
+        
+          
+            <a class="nav-link" href="/tags/">~/tags</a>
+          
+        
+          
+            <a class="nav-link" href="/archives/">~/archive</a>
+          
+        
+          
+            <a class="nav-link" href="/collection/">~/collections</a>
+          
+        
+          
+            <a class="nav-link nav-ext" href="https://wiki.withesse.co/" target="_blank" rel="noopener noreferrer">
+              ~/wiki<span style="transform:rotate(-45deg);opacity:.6;display:inline-flex"><svg viewBox="0 0 24 24" width="11" height="11" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+</span>
+            </a>
+          
+        
+          
+            <a class="nav-link" href="/about/">~/about</a>
+          
+        
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="iconbtn" data-search-open title="搜索 (⌘K)" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+
+        </button>
+        <button class="iconbtn" data-theme-toggle data-theme-icon title="切换主题" aria-label="切换主题">
+          <span data-icon="sun"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+</span>
+          <span data-icon="moon" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></g></svg>
+</span>
+        </button>
+        <button class="iconbtn nav-toggle" data-nav-toggle aria-label="菜单" aria-controls="site-nav" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></g></svg>
+
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    
+<main class="wrap wrap-article">
+  <div class="progress" data-progress style="width:0"></div>
+
+  <article class="article fade-in" style="padding-top:28px">
+      <div class="article-head-meta">
+        
+        
+
+<span class="catchain" style="--ch:330">
+  <span class="catdot"></span>
+  <a class="catlink" href="/categories/Database/">Database</a>
+</span>
+
+
+        <span class="faint" style="opacity:.5">·</span>
+        
+        
+          <a class="tag" href="/tags/redis/"><span class="hash">#</span>redis</a><a class="tag" href="/tags/java/"><span class="hash">#</span>java</a>
+        
+      </div>
+
+      <h1>开发中常见的 Redis 问题及解决方案</h1>
+      
+
+      <div class="row gap16 wrapw" style="margin:18px 0 32px;padding-bottom:24px;border-bottom:1px solid var(--border-soft)">
+        <span class="mono faint" style="font-size:13px">2021.05.18</span>
+        <span class="row gap12 mono" style="font-size:13px;color:var(--text-faint);flex-wrap:wrap">
+          <span class="row gap8" style="align-items:center"><span class="lang-dot" style="background:#E76F00"></span>Java</span>
+          <span class="row" style="align-items:center;gap:5px"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g></svg>
+ 4 min</span>
+        </span>
+        <span class="wc"><span class="num">1.4k</span> 字</span>
+      </div>
+
+      
+      <details class="toc-inflow">
+        <summary><span class="mono">// 目录 · contents</span></summary>
+        <nav class="toc"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%83%AD-key-%E9%97%AE%E9%A2%98"><span class="toc-text">1. 热 Key 问题</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%97%AE%E9%A2%98%E6%8F%8F%E8%BF%B0"><span class="toc-text">问题描述</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88"><span class="toc-text">解决方案</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%A4%A7-key-%E9%97%AE%E9%A2%98"><span class="toc-text">2. 大 Key 问题</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%97%AE%E9%A2%98%E6%8F%8F%E8%BF%B0-1"><span class="toc-text">问题描述</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88-1"><span class="toc-text">解决方案</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BC%93%E5%AD%98%E9%9B%AA%E5%B4%A9%E9%97%AE%E9%A2%98"><span class="toc-text">3. 缓存雪崩问题</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%97%AE%E9%A2%98%E6%8F%8F%E8%BF%B0-2"><span class="toc-text">问题描述</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88-2"><span class="toc-text">解决方案</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BC%93%E5%AD%98%E7%A9%BF%E9%80%8F%E9%97%AE%E9%A2%98"><span class="toc-text">4. 缓存穿透问题</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%97%AE%E9%A2%98%E6%8F%8F%E8%BF%B0-3"><span class="toc-text">问题描述</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88-3"><span class="toc-text">解决方案</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BC%93%E5%AD%98%E5%87%BB%E7%A9%BF%E9%97%AE%E9%A2%98"><span class="toc-text">5. 缓存击穿问题</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%97%AE%E9%A2%98%E6%8F%8F%E8%BF%B0-4"><span class="toc-text">问题描述</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88-4"><span class="toc-text">解决方案</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E4%B8%80%E8%87%B4%E6%80%A7%E9%97%AE%E9%A2%98"><span class="toc-text">6. 数据一致性问题</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%97%AE%E9%A2%98%E6%8F%8F%E8%BF%B0-5"><span class="toc-text">问题描述</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88-5"><span class="toc-text">解决方案</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E6%8C%81%E4%B9%85%E5%8C%96%E5%92%8C%E6%81%A2%E5%A4%8D%E9%97%AE%E9%A2%98"><span class="toc-text">7. 数据持久化和恢复问题</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%97%AE%E9%A2%98%E6%8F%8F%E8%BF%B0-6"><span class="toc-text">问题描述</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88-6"><span class="toc-text">解决方案</span></a></li></ol></li></ol></nav>
+      </details>
+      
+
+      <div class="prose">
+        <p>在实际应用中，Redis
+是一种广泛使用的缓存与数据存储解决方案。然而，在使用过程中也会遇到一些棘手的问题，特别是在高并发的
+Java 系统中。本文将介绍常见的 Redis 问题以及相应的 Java
+解决方案，以帮助你在系统开发中更好地应对这些挑战。</p>
+<h2 id="热-key-问题">1. 热 Key 问题</h2>
+<h3 id="问题描述">问题描述</h3>
+<p>热 Key 是指某些键的访问量特别高，导致 Redis
+过载，影响整体性能，甚至引发 Redis 宕机。</p>
+<h3 id="解决方案">解决方案</h3>
+<ul>
+<li><strong>缓存分片</strong>：使用一致性哈希将热点 Key 分布到多个 Redis
+节点上。</li>
+<li><strong>本地缓存 + Redis 缓存</strong>：在高并发下，将热 Key
+缓存到本地缓存（如 Guava Cache 或 Caffeine）中，减少 Redis 访问。</li>
+<li><strong>请求分摊</strong>：使用 Lua
+脚本或分布式锁让多个请求访问同一个 Key 时，只允许一个请求去访问
+Redis，其他请求等待，防止瞬时过载。</li>
+</ul>
+<p><strong>Java 示例：</strong></p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><code class="hljs java">Cache&lt;String, String&gt; localCache = Caffeine.newBuilder()<br>    .maximumSize(<span class="hljs-number">1000</span>)<br>    .expireAfterWrite(<span class="hljs-number">10</span>, TimeUnit.MINUTES)<br>    .build();<br><br><span class="hljs-keyword">public</span> String <span class="hljs-title function_">getFromCache</span><span class="hljs-params">(String key)</span> &#123;<br>    <span class="hljs-type">String</span> <span class="hljs-variable">value</span> <span class="hljs-operator">=</span> localCache.getIfPresent(key);<br>    <span class="hljs-keyword">if</span> (value == <span class="hljs-literal">null</span>) &#123;<br>        value = redisTemplate.opsForValue().get(key);<br>        localCache.put(key, value);<br>    &#125;<br>    <span class="hljs-keyword">return</span> value;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="大-key-问题">2. 大 Key 问题</h2>
+<h3 id="问题描述-1">问题描述</h3>
+<p>大 Key 指存储的数据量过大的 Key，如一个包含数百万个元素的 List 或
+Hash，导致网络传输慢，操作阻塞。</p>
+<h3 id="解决方案-1">解决方案</h3>
+<ul>
+<li><strong>分批操作</strong>：对于大 Key（如 List、Set、Hash），在 Java
+中分批处理（分页获取）。</li>
+<li><strong>避免一次性获取全部数据</strong>：在处理大的 Hash 或 List
+时，使用分页或扫描方式。</li>
+</ul>
+<p><strong>Java 示例：</strong></p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-keyword">public</span> Map&lt;String, String&gt; <span class="hljs-title function_">scanHash</span><span class="hljs-params">(String key)</span> &#123;<br>    Map&lt;String, String&gt; result = <span class="hljs-keyword">new</span> <span class="hljs-title class_">HashMap</span>&lt;&gt;();<br>    Cursor&lt;Map.Entry&lt;Object, Object&gt;&gt; cursor = redisTemplate.opsForHash().scan(key, ScanOptions.scanOptions().count(<span class="hljs-number">1000</span>).build());<br>    cursor.forEachRemaining(entry -&gt; &#123;<br>        result.put(entry.getKey().toString(), entry.getValue().toString());<br>    &#125;);<br>    <span class="hljs-keyword">return</span> result;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="缓存雪崩问题">3. 缓存雪崩问题</h2>
+<h3 id="问题描述-2">问题描述</h3>
+<p>缓存雪崩是指大量缓存同时失效，大量请求涌向数据库，导致数据库过载。</p>
+<h3 id="解决方案-2">解决方案</h3>
+<ul>
+<li><strong>错峰过期</strong>：给缓存的过期时间增加随机性，避免大量缓存同时失效。</li>
+<li><strong>双重缓存机制</strong>：在 Redis
+失效时，使用本地缓存或其他手段作为备用。</li>
+<li><strong>限流与降级</strong>：使用限流技术防止瞬时流量过高，如结合
+<code>Hystrix</code> 或 <code>Sentinel</code> 实现限流与服务降级。</li>
+</ul>
+<p><strong>Java 示例：</strong></p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-type">int</span> <span class="hljs-variable">expiration</span> <span class="hljs-operator">=</span> <span class="hljs-number">60</span> + <span class="hljs-keyword">new</span> <span class="hljs-title class_">Random</span>().nextInt(<span class="hljs-number">30</span>); <span class="hljs-comment">// 设置60到90秒的随机过期时间</span><br>redisTemplate.opsForValue().set(key, value, expiration, TimeUnit.SECONDS);<br></code></pre></td></tr></table></figure>
+<h2 id="缓存穿透问题">4. 缓存穿透问题</h2>
+<h3 id="问题描述-3">问题描述</h3>
+<p>缓存穿透是指大量请求查询不存在的
+Key，导致这些请求绕过缓存直接访问数据库，增大数据库压力。</p>
+<h3 id="解决方案-3">解决方案</h3>
+<ul>
+<li><strong>布隆过滤器</strong>：使用布隆过滤器提前过滤掉不存在的
+Key。</li>
+<li><strong>空结果缓存</strong>：对于查询不存在的
+Key，缓存一个空值，避免每次都去查询数据库。</li>
+</ul>
+<p><strong>Java 示例：</strong></p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><code class="hljs java">BloomFilter&lt;String&gt; bloomFilter = BloomFilter.create(Funnels.stringFunnel(Charsets.UTF_8), <span class="hljs-number">1000000</span>, <span class="hljs-number">0.01</span>);<br><br><span class="hljs-keyword">public</span> String <span class="hljs-title function_">getFromCacheWithBloomFilter</span><span class="hljs-params">(String key)</span> &#123;<br>    <span class="hljs-keyword">if</span> (!bloomFilter.mightContain(key)) &#123;<br>        <span class="hljs-keyword">return</span> <span class="hljs-literal">null</span>; <span class="hljs-comment">// 直接返回，减少无效请求</span><br>    &#125;<br>    <span class="hljs-type">String</span> <span class="hljs-variable">value</span> <span class="hljs-operator">=</span> redisTemplate.opsForValue().get(key);<br>    <span class="hljs-keyword">return</span> value;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="缓存击穿问题">5. 缓存击穿问题</h2>
+<h3 id="问题描述-4">问题描述</h3>
+<p>缓存击穿是指某些热点 Key
+在过期的瞬间，导致大量请求同时访问数据库，造成数据库瞬时过载。</p>
+<h3 id="解决方案-4">解决方案</h3>
+<ul>
+<li><strong>提前刷新缓存</strong>：在缓存即将过期时，提前刷新热点
+Key。</li>
+<li><strong>互斥锁机制</strong>：在缓存失效时，使用分布式锁控制只允许一个请求去更新缓存，其他请求等待。</li>
+</ul>
+<p><strong>Java 示例：</strong></p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-keyword">public</span> String <span class="hljs-title function_">getWithMutex</span><span class="hljs-params">(String key)</span> &#123;<br>    <span class="hljs-type">String</span> <span class="hljs-variable">value</span> <span class="hljs-operator">=</span> redisTemplate.opsForValue().get(key);<br>    <span class="hljs-keyword">if</span> (value == <span class="hljs-literal">null</span>) &#123;<br>        <span class="hljs-type">boolean</span> <span class="hljs-variable">lock</span> <span class="hljs-operator">=</span> redisTemplate.opsForValue().setIfAbsent(<span class="hljs-string">&quot;lock:&quot;</span> + key, <span class="hljs-string">&quot;1&quot;</span>, <span class="hljs-number">10</span>, TimeUnit.SECONDS);<br>        <span class="hljs-keyword">if</span> (lock) &#123;<br>            <span class="hljs-keyword">try</span> &#123;<br>                value = getFromDB(key); <span class="hljs-comment">// 查询数据库</span><br>                redisTemplate.opsForValue().set(key, value, <span class="hljs-number">60</span>, TimeUnit.SECONDS);<br>            &#125; <span class="hljs-keyword">finally</span> &#123;<br>                redisTemplate.delete(<span class="hljs-string">&quot;lock:&quot;</span> + key); <span class="hljs-comment">// 释放锁</span><br>            &#125;<br>        &#125; <span class="hljs-keyword">else</span> &#123;<br>            <span class="hljs-comment">// 如果没有获取到锁，等待缓存更新</span><br>            Thread.sleep(<span class="hljs-number">100</span>);<br>            <span class="hljs-keyword">return</span> redisTemplate.opsForValue().get(key);<br>        &#125;<br>    &#125;<br>    <span class="hljs-keyword">return</span> value;<br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="数据一致性问题">6. 数据一致性问题</h2>
+<h3 id="问题描述-5">问题描述</h3>
+<p>在某些高并发的场景下，缓存和数据库的数据可能出现不一致的情况。</p>
+<h3 id="解决方案-5">解决方案</h3>
+<ul>
+<li><strong>缓存更新策略</strong>：
+<ul>
+<li><strong>先删后写</strong>：先删除缓存，再更新数据库，以避免数据不一致。</li>
+<li><strong>延时双删</strong>：在更新数据库后，延时一段时间再次删除缓存，确保缓存中的脏数据不会影响读取。</li>
+</ul></li>
+<li><strong>事务保证</strong>：使用 Redis
+和数据库的事务来保证原子性（如使用 Redis 事务或消息队列同步数据）。</li>
+</ul>
+<p><strong>Java 示例：</strong></p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs java"><span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">updateData</span><span class="hljs-params">(String key, String value)</span> &#123;<br>    redisTemplate.delete(key); <span class="hljs-comment">// 先删缓存</span><br>    updateDB(key, value); <span class="hljs-comment">// 更新数据库</span><br>    Thread.sleep(<span class="hljs-number">500</span>); <span class="hljs-comment">// 延时500ms，等待可能的并发读</span><br>    redisTemplate.delete(key); <span class="hljs-comment">// 再次删除缓存，防止并发中脏数据读到</span><br>&#125;<br></code></pre></td></tr></table></figure>
+<h2 id="数据持久化和恢复问题">7. 数据持久化和恢复问题</h2>
+<h3 id="问题描述-6">问题描述</h3>
+<p>如果 Redis
+宕机或重启，可能会丢失未持久化的数据，导致缓存丢失，影响业务稳定性。</p>
+<h3 id="解决方案-6">解决方案</h3>
+<ul>
+<li>AOF 持久化：开启 AOF
+持久化，确保数据操作日志被记录下来，以防止数据丢失。</li>
+<li><strong>定期备份和恢复</strong>：使用 RDB 备份和恢复机制，定期将
+Redis 数据快照备份到磁盘。</li>
+</ul>
+<hr />
+<p>以上是 Java 应用中使用 Redis
+时可能遇到的常见问题以及相应的解决方案。通过合理的设计和策略，可以有效应对这些挑战，确保
+Redis 在高并发应用中的稳定性和高性能。</p>
+
+      </div>
+
+      <div class="article-foot">
+        <div class="af-meta">
+          <div><span class="k">作者 · author</span><span class="v">zt</span></div>
+          <div><span class="k">发布 · date</span><span class="v">2021-05-18</span></div>
+          <div><span class="k">篇幅 · length</span><span class="v">1.4k 字 · 4 min</span></div>
+          <div><span class="k">许可 · license</span><span class="v lic">CC BY-SA 4.0</span></div>
+        </div>
+      </div>
+
+      
+
+<section class="comments">
+  <div class="eyebrow mb16"><span class="prompt">$</span> echo "comments" · 评论</div>
+  
+    <div id="waline" class="waline"></div>
+    <script>
+      (function () {
+        var CSS = "/css/waline.css";
+        var JS = "/js/waline.umd.js";
+        var OPTS = {"serverURL":"https://comments.withesse.co/","meta":["nick","mail","link"],"requiredMeta":["nick"],"lang":"zh-CN","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo"],"dark":"html[data-theme='dark']","wordLimit":0,"pageSize":10};
+        var SERVER = (OPTS.serverURL || '').replace(/\/+$/, '');
+        var el = document.getElementById('waline');
+        var io = null;
+        var loaded = false;
+        function cleanup() {
+          if (io) { io.disconnect(); io = null; }
+          window.removeEventListener('scroll', onNear);
+          window.removeEventListener('resize', onNear);
+        }
+        function fallback() {
+          if (el) el.innerHTML = '<div class="cmt-unavailable">评论服务暂时不可用，请稍后再试。<br><span class="mono faint">Comments are temporarily unavailable.</span></div>';
+        }
+        function mount() {
+          if (!window.Waline || !window.Waline.init) { fallback(); return; }
+          // Health check: mount Waline only if the comment API actually answers,
+          // so a down/misconfigured server shows a friendly note, not a dead form.
+          var api = SERVER + '/api/comment?path=' + encodeURIComponent(window.location.pathname) + '&pageSize=1&page=1';
+          var done = false;
+          var t = setTimeout(function () { if (!done) { done = true; fallback(); } }, 6000);
+          fetch(api, { method: 'GET', headers: { Accept: 'application/json' } })
+            .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+            .then(function () {
+              if (done) return; done = true; clearTimeout(t);
+              window.__waline = window.Waline.init(
+                Object.assign({}, OPTS, { el: '#waline', path: window.location.pathname })
+              );
+            })
+            .catch(function () { if (done) return; done = true; clearTimeout(t); fallback(); });
+        }
+        function load() {
+          if (loaded || !el) return;
+          loaded = true;
+          cleanup();
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = CSS;
+          document.head.appendChild(link);
+          var s = document.createElement('script');
+          s.src = JS;
+          s.onload = mount;
+          s.onerror = fallback;
+          document.head.appendChild(s);
+        }
+        // exposed so the loader can be triggered/tested directly
+        window.__loadComments = load;
+        function near() {
+          if (!el) return false;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          return el.getBoundingClientRect().top < vh + 600;
+        }
+        function onNear() { if (near()) load(); }
+        // Primary: lazy-load when the section approaches the viewport.
+        if ('IntersectionObserver' in window && el) {
+          io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) { if (e.isIntersecting) load(); });
+          }, { rootMargin: '600px' });
+          io.observe(el);
+        }
+        // Fallbacks: scroll/resize, plus an immediate check for short pages.
+        window.addEventListener('scroll', onNear, { passive: true });
+        window.addEventListener('resize', onNear);
+        onNear();
+      })();
+    </script>
+    <noscript>请启用 JavaScript 查看评论 / Please enable JavaScript to view the comments.</noscript>
+  
+</section>
+
+
+
+      <div class="row between gap16 wrapw" style="margin-top:28px">
+        
+          <a class="btn" href="/post/ddd-other-resources/" style="max-width:48%">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g></svg>
+ <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">DDD 落地的那些障碍：我踩过的坑和还没解决的问题</span>
+          </a>
+        
+        
+          <a class="btn" href="/post/cache-strategies/" style="max-width:48%">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">缓存策略深度解析：穿透、击穿与雪崩的防护</span> <svg viewBox="0 0 24 24" width="14" height="14" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g></svg>
+
+          </a>
+        
+      </div>
+  </article>
+</main>
+
+
+<aside class="toc-floating">
+  <nav class="toc" data-toc>
+    <div class="toc-title">// 目录 · contents</div>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%83%AD-key-%E9%97%AE%E9%A2%98"><span class="toc-text">1. 热 Key 问题</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%97%AE%E9%A2%98%E6%8F%8F%E8%BF%B0"><span class="toc-text">问题描述</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88"><span class="toc-text">解决方案</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%A4%A7-key-%E9%97%AE%E9%A2%98"><span class="toc-text">2. 大 Key 问题</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%97%AE%E9%A2%98%E6%8F%8F%E8%BF%B0-1"><span class="toc-text">问题描述</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88-1"><span class="toc-text">解决方案</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BC%93%E5%AD%98%E9%9B%AA%E5%B4%A9%E9%97%AE%E9%A2%98"><span class="toc-text">3. 缓存雪崩问题</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%97%AE%E9%A2%98%E6%8F%8F%E8%BF%B0-2"><span class="toc-text">问题描述</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88-2"><span class="toc-text">解决方案</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BC%93%E5%AD%98%E7%A9%BF%E9%80%8F%E9%97%AE%E9%A2%98"><span class="toc-text">4. 缓存穿透问题</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%97%AE%E9%A2%98%E6%8F%8F%E8%BF%B0-3"><span class="toc-text">问题描述</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88-3"><span class="toc-text">解决方案</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BC%93%E5%AD%98%E5%87%BB%E7%A9%BF%E9%97%AE%E9%A2%98"><span class="toc-text">5. 缓存击穿问题</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%97%AE%E9%A2%98%E6%8F%8F%E8%BF%B0-4"><span class="toc-text">问题描述</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88-4"><span class="toc-text">解决方案</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E4%B8%80%E8%87%B4%E6%80%A7%E9%97%AE%E9%A2%98"><span class="toc-text">6. 数据一致性问题</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%97%AE%E9%A2%98%E6%8F%8F%E8%BF%B0-5"><span class="toc-text">问题描述</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88-5"><span class="toc-text">解决方案</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E6%8C%81%E4%B9%85%E5%8C%96%E5%92%8C%E6%81%A2%E5%A4%8D%E9%97%AE%E9%A2%98"><span class="toc-text">7. 数据持久化和恢复问题</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%97%AE%E9%A2%98%E6%8F%8F%E8%BF%B0-6"><span class="toc-text">问题描述</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88-6"><span class="toc-text">解决方案</span></a></li></ol></li></ol>
+  </nav>
+</aside>
+
+
+    
+<footer class="footer">
+  <div class="wrap wrap-wide footer-inner">
+    <div>© 2026 zt — designed and developed by Claude.</div>
+    <div class="social">
+      
+        
+        <a href="https://github.com/withesse" title="GitHub" target=&#34;_blank&#34; rel=&#34;noopener noreferrer&#34;>
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C7.2 3.3 6.1 3.6 6.1 3.6a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.7 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></g></svg>
+
+        </a>
+        
+      
+        
+        <span class="social-off" title="Twitter / X · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4.5c-.7.5-1.5.8-2.4 1a4.1 4.1 0 0 0-7 3.7A11.6 11.6 0 0 1 4 4.9a4.1 4.1 0 0 0 1.3 5.5c-.7 0-1.3-.2-1.8-.5a4.1 4.1 0 0 0 3.3 4 4.1 4.1 0 0 1-1.9.1 4.1 4.1 0 0 0 3.8 2.9A8.3 8.3 0 0 1 2 18.6 11.7 11.7 0 0 0 8.3 20c7.5 0 11.7-6.4 11.5-12.1.8-.6 1.5-1.3 2.1-2.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Medium · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="12" r="4.5"/><ellipse cx="15.5" cy="12" rx="2" ry="4.5"/><line x1="20.5" y1="7.8" x2="20.5" y2="16.2"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="Telegram · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8c-1 .4-1 1.8.1 2.1l4.6 1.4 1.8 5.3c.3.8 1.3 1 1.9.3l2.5-2.6 4.7 3.4c.7.5 1.7.1 1.9-.8L23 5.7c.2-1-.7-1.7-1.5-1.2z"/></g></svg>
+</span>
+        
+      
+        
+        <span class="social-off" title="WeChat · 未设置" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4C5.1 4 2 6.7 2 10c0 1.9 1 3.5 2.6 4.7L4 17l2.6-1.3c.8.2 1.6.3 2.4.3h.5"/><path d="M22 15.5c0-2.8-2.7-5-6-5s-6 2.2-6 5 2.7 5 6 5c.7 0 1.4-.1 2-.3L20 21l-.5-1.8c1.5-.9 2.5-2.2 2.5-3.7z"/></g></svg>
+</span>
+        
+      
+        
+        <a href="/atom.xml" title="RSS / Atom">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none"/></g></svg>
+
+        </a>
+        
+      
+    </div>
+  </div>
+</footer>
+
+  </div>
+  <div class="search-overlay hidden" id="search-overlay" role="dialog" aria-modal="true" aria-label="站内搜索" data-index="/search-index.json">
+  <div class="search-box">
+    <div class="search-input-row">
+      <span class="accent"><svg viewBox="0 0 24 24" width="18" height="18" style="display:block" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g></svg>
+</span>
+      <input class="search-input" type="text" placeholder="搜索文章、标签、分类… / grep posts" autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+      <button class="kbd" type="button" data-search-close aria-label="关闭搜索">ESC</button>
+    </div>
+    <div class="search-results" role="listbox" aria-label="搜索结果"></div>
+    <div class="search-foot mono">
+      <span data-search-count>最近文章</span>
+      <span class="row gap12">
+        <span><span class="kbd">↑↓</span> 选择</span>
+        <span><span class="kbd">↵</span> 打开</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+  
+<script src="/js/app.js" defer></script>
+
+</body>
+</html>
